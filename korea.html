@@ -1174,9 +1174,9 @@
 
   async function checkGeminiConfigured(){
     try {
-      const r = await callAi({ action: "foliage" });
-      if (r.ok === false) {
-        document.getElementById("ai-key-notice").innerHTML = `<div class="ai-result">${esc(r.message)}</div>`;
+      const r = await callAi({ action: "status" });
+      if (r.geminiConfigured === false) {
+        document.getElementById("ai-key-notice").innerHTML = `<div class="ai-result">${esc(r.geminiNotice || "AI功能未啟用")}</div>`;
       }
     } catch (e) { /* silent - button clicks will surface errors */ }
   }

@@ -126,6 +126,15 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
 
   try {
+    if (action === "status") {
+      return json({
+        ok: true,
+        geminiConfigured: !!apiKey,
+        placesConfigured: !!Deno.env.get("GOOGLE_PLACES_API_KEY"),
+        geminiNotice: apiKey ? null : NOT_CONFIGURED_MSG,
+      });
+    }
+
     if (action === "weather") {
       const weather = await fetchWeather();
       let summary = "";
