@@ -1,0 +1,203 @@
+// Supabase Edge Function: ai-assistant
+// Proxies Gemini + Google Places calls so the browser never sees the API keys.
+// Actions: 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo'
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const SEOUL_LAT = 37.5665;
+const SEOUL_LON = 126.9780;
+const TRIP_DATES = ["2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28"];
+const PHOTO_CACHE_MAX_AGE_DAYS = 90;
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
+async function fetchWeather() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${SEOUL_LAT}&longitude=${SEOUL_LON}` +
+    `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
+    `&timezone=Asia%2FSeoul&start_date=${TRIP_DATES[0]}&end_date=${TRIP_DATES[TRIP_DATES.length - 1]}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Open-Meteo error ${res.status}`);
+  const data = await res.json();
+  const inForecastRange = Array.isArray(data?.daily?.time) && data.daily.time.length > 0;
+  return { inForecastRange, daily: data?.daily ?? null };
+}
+
+async function callGemini(apiKey: string, prompt: string): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  return text || "（AI冇回覆內容）";
+}
+
+const NOT_CONFIGURED_MSG =
+  "🔧 AI功能未啟用：仲未設定 GEMINI_API_KEY。呢個功能需要喺 Supabase Edge Function 嘅 secret 度加返個Gemini API Key先可以用（Dashboard → Project Settings → Edge Functions → Secrets）。";
+const PHOTO_NOT_CONFIGURED_MSG =
+  "📷 相片功能未啟用：仲未設定 GOOGLE_PLACES_API_KEY。加返做Edge Function嘅secret先可以搵真實地點相片。";
+
+// ---------- Supabase REST helpers (service role, server-side only) ----------
+function sbAdminHeaders() {
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+}
+async function getCachedPhotos(query: string) {
+  const url = Deno.env.get("SUPABASE_URL");
+  const res = await fetch(`${url}/rest/v1/place_photo_cache?query=eq.${encodeURIComponent(query)}&select=photos,fetched_at`, {
+    headers: sbAdminHeaders(),
+  });
+  if (!res.ok) return null;
+  const rows = await res.json();
+  const row = rows[0];
+  if (!row) return null;
+  const ageDays = (Date.now() - new Date(row.fetched_at).getTime()) / 86400000;
+  if (ageDays > PHOTO_CACHE_MAX_AGE_DAYS) return null;
+  return row.photos;
+}
+async function saveCachedPhotos(query: string, photos: string[]) {
+  const url = Deno.env.get("SUPABASE_URL");
+  await fetch(`${url}/rest/v1/place_photo_cache?on_conflict=query`, {
+    method: "POST",
+    headers: { ...sbAdminHeaders(), Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify({ query, photos, fetched_at: new Date().toISOString() }),
+  });
+}
+
+async function searchPlacePhotos(query: string, apiKey: string): Promise<string[]> {
+  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query + " 서울")}&inputtype=textquery&fields=place_id&key=${apiKey}`;
+  const findRes = await fetch(findUrl);
+  const findData = await findRes.json();
+  const placeId = findData?.candidates?.[0]?.place_id;
+  if (!placeId) return [];
+
+  const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=photos&key=${apiKey}`;
+  const detailsRes = await fetch(detailsUrl);
+  const detailsData = await detailsRes.json();
+  const photoRefs: string[] = (detailsData?.result?.photos ?? []).slice(0, 3).map((p: any) => p.photo_reference);
+
+  const resolvedUrls: string[] = [];
+  for (const ref of photoRefs) {
+    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=640&photo_reference=${ref}&key=${apiKey}`;
+    const photoRes = await fetch(photoUrl, { redirect: "follow" });
+    if (photoRes.ok) resolvedUrls.push(photoRes.url); // final googleusercontent.com CDN URL, no key needed to view
+    await photoRes.body?.cancel();
+  }
+  return resolvedUrls;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
+  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const action = body?.action;
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+
+  try {
+    if (action === "weather") {
+      const weather = await fetchWeather();
+      let summary = "";
+      if (weather.inForecastRange) {
+        const lines = weather.daily.time.map((d: string, i: number) =>
+          `${d}: ${weather.daily.temperature_2m_min[i]}–${weather.daily.temperature_2m_max[i]}°C，降雨機率${weather.daily.precipitation_probability_max[i]}%`
+        );
+        summary = "首爾未來預報（真實數據）：\n" + lines.join("\n");
+      } else {
+        summary = "而家距離出發日仲遠，Open-Meteo暫時未有呢幾日嘅短期預報（一般得16日內），下面沿用歷史同期平均值作參考，出發前一週請再check。";
+      }
+      if (apiKey) {
+        try {
+          const prompt = `你係一個廣東話旅遊助理。根據以下首爾天氣資料，用廣東話（香港口語）寫一段簡短（3-4句）嘅穿搭同行程提示俾一家七口嘅家庭旅行團參考，包括姨姨（長者，唔可以行樓梯）：\n${summary}`;
+          const aiText = await callGemini(apiKey, prompt);
+          return json({ ok: true, raw: weather, summary, aiSummary: aiText });
+        } catch (e) {
+          return json({ ok: true, raw: weather, summary, aiSummary: null, aiError: String(e) });
+        }
+      }
+      return json({ ok: true, raw: weather, summary, aiSummary: null, aiNotice: NOT_CONFIGURED_MSG });
+    }
+
+    if (action === "foliage") {
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const prompt = `你係一個廣東話旅遊助理。用戶10月23-28日去首爾賞紅葉銀杏（包括南怡島、首爾林、曹溪寺）。請用廣東話（香港口語）簡短講吓：\n1. 一般嚟講呢段時間銀杏／楓葉大約去到咩程度（用你所知嘅歷年規律推斷，唔使假裝有即時數據）\n2. 提醒用戶你冇即時上網能力，實際情況要去南怡島官網／Naver Blog／首爾市公園局網站做最後確認\n3. 語氣親切，300字以內`;
+      const aiText = await callGemini(apiKey, prompt);
+      return json({ ok: true, aiSummary: aiText });
+    }
+
+    if (action === "ask") {
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const itinerary = body?.itinerary;
+      const question = (body?.question ?? "").toString().slice(0, 1000);
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）睇緊佢哋10月23-28日嘅首爾行程JSON。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n行程JSON（節錄，只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(itinerary)?.slice(0, 6000)}\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
+      const aiText = await callGemini(apiKey, prompt);
+      return json({ ok: true, aiSummary: aiText });
+    }
+
+    if (action === "suggest") {
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const itinerary = body?.itinerary;
+      const question = (body?.question ?? "").toString().slice(0, 1000);
+      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路），並喺transitBefore講清楚點樣由上一個景點過去。\n\n用戶要求：${question || "檢視成個行程，建議1-3個增加或移除景點的調整"}\n\n現有行程JSON（dayId對應每一日）：\n${JSON.stringify(itinerary)?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
+      const aiText = await callGemini(apiKey, prompt);
+      let parsed: any = null;
+      try {
+        const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        parsed = null;
+      }
+      if (parsed && Array.isArray(parsed.changes)) {
+        return json({ ok: true, notes: parsed.notes ?? "", changes: parsed.changes });
+      }
+      return json({ ok: true, aiSummary: aiText, changes: [] });
+    }
+
+    if (action === "place-photo") {
+      const query = (body?.query ?? "").toString().trim();
+      if (!query) return json({ error: "Missing query" }, 400);
+
+      const cached = await getCachedPhotos(query);
+      if (cached) return json({ ok: true, photos: cached, cached: true });
+
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+
+      try {
+        const photos = await searchPlacePhotos(query, placesKey);
+        if (photos.length) await saveCachedPhotos(query, photos);
+        return json({ ok: true, photos, cached: false });
+      } catch (e) {
+        return json({ ok: false, message: "搵相片失敗：" + String(e) });
+      }
+    }
+
+    return json({ error: "Unknown action" }, 400);
+  } catch (e) {
+    return json({ error: String(e) }, 500);
+  }
+});
