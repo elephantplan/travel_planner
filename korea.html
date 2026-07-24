@@ -37,7 +37,7 @@
     color:var(--ink);
     font-family:'Noto Sans KR', sans-serif;
     -webkit-font-smoothing:antialiased;
-    padding-bottom:60px;
+    padding-bottom:100px;
     background-image:
       radial-gradient(circle at 12% 8%, rgba(189,143,42,0.06), transparent 40%),
       radial-gradient(circle at 90% 25%, rgba(162,63,41,0.05), transparent 35%);
@@ -46,6 +46,7 @@
   .mono{font-family:'IBM Plex Mono', monospace;}
   a{color:inherit;}
   .wrap{max-width:520px;margin:0 auto;padding:0 18px;}
+  button{font-family:inherit;}
 
   /* ---------- SIGNATURE: GINKGO LEAF NUMBER MARKER ---------- */
   .leafnum{
@@ -140,6 +141,26 @@
     border:1px solid var(--line);
   }
 
+  /* ---------- OVERVIEW MAP (all days combined) ---------- */
+  .overview-map-block{padding:16px 0 4px;}
+  .overview-map{height:260px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;}
+  .overview-legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+  .legend-chip{
+    display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
+    padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);
+    color:var(--ink-soft);cursor:pointer;user-select:none;
+  }
+  .legend-chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .legend-chip.off{opacity:.4;}
+  .daymap-cap{font-size:11px;color:var(--ink-soft);margin-top:6px;line-height:1.5;}
+  .daymap-tap{
+    position:absolute;inset:0;z-index:401;
+    background:rgba(42,36,30,0.28);
+    color:#FFFCF3;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    cursor:pointer;text-align:center;padding:10px;
+  }
+
   /* ---------- STICKY DAY NAV ---------- */
   .daynav{
     position:sticky;top:0;z-index:50;
@@ -148,24 +169,11 @@
     border-bottom:1px solid var(--line);
     padding:10px 0;
   }
-  .daynav-scroll{
-    display:flex;gap:8px;
-    overflow-x:auto;
-    padding:0 18px;
-    scrollbar-width:none;
-  }
+  .daynav-scroll{display:flex;gap:8px;overflow-x:auto;padding:0 18px;scrollbar-width:none;}
   .daynav-scroll::-webkit-scrollbar{display:none;}
   .daypill{
-    flex:0 0 auto;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:12px;
-    padding:8px 13px;
-    border-radius:20px;
-    background:var(--card);
-    border:1px solid var(--line);
-    color:var(--ink-soft);
-    white-space:nowrap;
-    text-decoration:none;
+    flex:0 0 auto;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 13px;border-radius:20px;
+    background:var(--card);border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;text-decoration:none;
   }
   .daypill b{color:var(--ink);font-family:'Noto Sans KR',sans-serif;font-weight:700;margin-left:4px;}
   .daypill.active{background:var(--ink);border-color:var(--ink);color:var(--paper);}
@@ -173,16 +181,11 @@
 
   /* ---------- SECTION GENERIC ---------- */
   section{padding:26px 0;}
-  .section-title{
-    font-size:19px;font-weight:700;margin:0 0 4px;
-  }
+  .section-title{font-size:19px;font-weight:700;margin:0 0 4px;}
   .section-sub{color:var(--ink-soft);font-size:13px;margin:0 0 16px;}
 
   /* ---------- INFO CARDS ---------- */
-  .info-card{
-    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px;
-  }
+  .info-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
   .info-card .k{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase;}
   .info-card .v{font-size:20px;font-weight:700;margin-top:4px;font-family:'Noto Serif KR',serif;}
   .info-card .d{font-size:12px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
@@ -198,27 +201,13 @@
   .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
 
   .clothing-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
-  .clothing-list li{
-    background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;
-  }
+  .clothing-list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;}
   .clothing-list li .ico{font-size:16px;}
 
   /* ---------- DAY SECTION ---------- */
-  .day{
-    padding-top:34px;
-    scroll-margin-top:64px;
-  }
-  .day-head{
-    display:flex;align-items:baseline;gap:10px;margin-bottom:4px;
-  }
-  .day-num{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:12px;color:var(--gold);
-    border:1px solid var(--gold);
-    border-radius:20px;
-    padding:3px 10px;
-  }
+  .day{padding-top:34px;scroll-margin-top:64px;}
+  .day-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;}
+  .day-num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:3px 10px;}
   .day-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
   .day h2{font-size:21px;margin:6px 0 4px;}
   .day-desc{font-size:13px;color:var(--ink-soft);margin:0 0 6px;line-height:1.6;}
@@ -229,116 +218,120 @@
 
   /* ---------- ROUTE MAP ---------- */
   .daymap-wrap{margin-bottom:18px;}
-  .daymap{
-    height:220px;width:100%;border-radius:var(--radius);border:1px solid var(--line);
-    background:var(--card);position:relative;overflow:hidden;
-  }
+  .daymap{height:220px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;}
   .daymap .leafnum{box-shadow:0 0 0 2px #FFFCF3;}
-  .daymap-tap{
-    position:absolute;inset:0;z-index:401;
-    background:rgba(42,36,30,0.28);
-    color:#FFFCF3;font-size:12px;font-weight:700;
-    display:flex;align-items:center;justify-content:center;gap:6px;
-    cursor:pointer;text-align:center;padding:10px;
-  }
-  .daymap-cap{font-size:11px;color:var(--ink-soft);margin-top:6px;line-height:1.5;}
 
   /* timeline */
   .timeline{position:relative;padding-left:0;}
   .stop{position:relative;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;}
-  .stop-card{
-    flex:1 1 auto;min-width:0;
-    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px 14px 12px;
-  }
+  .stop-card{flex:1 1 auto;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 12px;}
   .stop-marker{flex:0 0 auto;margin-top:4px;}
   .stop-time{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
   .stop-title{font-size:16px;font-weight:700;margin:3px 0 2px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
   .stop-title .kr{font-size:12px;color:var(--ink-soft);font-weight:400;}
   .stop-desc{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:4px 0 8px;}
-  .maplink{
-    display:inline-flex;align-items:center;gap:5px;
-    font-size:12px;font-weight:700;color:var(--sky);
-    text-decoration:none;
-    background:var(--sky-soft);
-    padding:6px 11px;border-radius:20px;
-  }
-  .eatbox{
-    margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;
-    font-size:12.5px;color:#6E2A1B;line-height:1.55;
-  }
+  .maplink{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--sky);text-decoration:none;background:var(--sky-soft);padding:6px 11px;border-radius:20px;}
+  .eatbox{margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#6E2A1B;line-height:1.55;}
   .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;}
   .access-row{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
 
-  /* ---------- NIECE PICK + RATING/BOOKING/HOURS META ---------- */
-  .niecepick{
-    display:inline-flex;align-items:center;gap:4px;
-    font-size:10.5px;font-weight:700;color:var(--niece);
-    background:var(--niece-soft);border:1px solid #E3B7CC;
-    padding:3px 9px;border-radius:20px;
-    white-space:nowrap;
-  }
+  .niecepick{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--niece);background:var(--niece-soft);border:1px solid #E3B7CC;padding:3px 9px;border-radius:20px;white-space:nowrap;}
   .eat-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
-  .meta-chip{
-    font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;
-    background:var(--card);border:1px solid var(--line);color:var(--ink-soft);
-    display:inline-flex;align-items:center;gap:4px;
-  }
+  .meta-chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);display:inline-flex;align-items:center;gap:4px;}
   .meta-chip.rating{color:var(--gold);border-color:var(--gold-soft);background:var(--gold-soft);}
   .meta-chip.book{color:var(--sky);border-color:var(--sky-soft);background:var(--sky-soft);}
   .meta-chip.book.warn{color:var(--maple);border-color:var(--maple-soft);background:var(--maple-soft);}
   .meta-chip.hours{color:var(--moss);border-color:var(--moss-soft);background:var(--moss-soft);}
 
-  /* ---------- FOOD QUICK-REFERENCE LIST ---------- */
   .food-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
-  .food-card{
-    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:12px 14px;
-  }
+  .food-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;}
   .food-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
   .food-tags{display:flex;gap:6px;flex-wrap:wrap;}
   .food-name{font-size:14px;font-weight:700;}
   .food-name .kr{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-left:4px;}
   .food-must{font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;}
 
-  /* ---------- NEARBY TIP ---------- */
-  .tip-box{
-    margin-top:10px;background:var(--moss-soft);border-radius:10px;padding:9px 11px;
-    font-size:12.5px;color:#33422A;line-height:1.55;
-  }
+  .tip-box{margin-top:10px;background:var(--moss-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#33422A;line-height:1.55;}
   .tip-box b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;color:var(--moss);}
 
-  /* connector between stops */
-  .connector{
-    position:relative;
-    margin:-4px 0 14px 36px;
-    padding:8px 12px 8px 14px;
-    font-size:12px;color:var(--ink-soft);
-    display:flex;align-items:center;gap:8px;
-  }
+  .connector{position:relative;margin:-4px 0 14px 36px;padding:8px 12px 8px 14px;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
   .connector .icon{font-size:14px;}
   .connector b{color:var(--ink);font-weight:700;}
 
-  footer{
-    padding:30px 0 10px;text-align:center;color:var(--ink-soft);font-size:11.5px;line-height:1.8;
-  }
+  footer{padding:30px 0 10px;text-align:center;color:var(--ink-soft);font-size:11.5px;line-height:1.8;}
   footer .brand{font-family:'Noto Serif KR',serif;font-size:14px;color:var(--ink);margin-bottom:6px;}
-
   hr.div{border:none;border-top:1px solid var(--line);margin:0;}
+
+  /* ---------- EDIT MODE ---------- */
+  .field-input, .field-textarea{
+    width:100%;font-family:inherit;font-size:13px;color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;margin:2px 0;
+  }
+  .field-textarea{resize:vertical;min-height:44px;}
+  .field-row{display:flex;gap:6px;align-items:center;margin:2px 0;}
+  .field-row label{font-size:10px;color:var(--ink-soft);flex:0 0 44px;font-family:'IBM Plex Mono',monospace;}
+  .stop-edit-tools{display:flex;gap:6px;margin-top:8px;}
+  .btn-sm{font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);cursor:pointer;}
+  .btn-sm.danger{color:var(--maple);border-color:var(--maple-soft);}
+  .btn-sm.primary{color:var(--moss);border-color:var(--moss-soft);}
+  .add-stop-btn{width:100%;margin:6px 0 0;padding:10px;border:1.5px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--ink-soft);font-size:13px;font-weight:700;cursor:pointer;}
+
+  /* ---------- FLOATING CONTROL BAR ---------- */
+  .control-bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:60;
+    background:rgba(243,236,217,0.97);backdrop-filter:blur(6px);
+    border-top:1px solid var(--line);
+    padding:10px 18px calc(10px + env(safe-area-inset-bottom));
+    display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
+  }
+  .control-btn{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:9px 16px;border-radius:20px;
+    border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;
+  }
+  .control-btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line);}
+  .control-btn.save{background:var(--moss);border-color:var(--moss);}
+  .save-status{font-size:11px;color:var(--ink-soft);align-self:center;}
+
+  /* ---------- MODAL (history / diff) ---------- */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(20,17,13,.55);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
+  .modal-sheet{background:var(--paper);width:100%;max-width:520px;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
+  .modal-title{font-size:17px;font-weight:700;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;}
+  .modal-close{background:none;border:none;font-size:18px;color:var(--ink-soft);cursor:pointer;}
+  .version-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;}
+  .version-item .vtop{display:flex;justify-content:space-between;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
+  .version-item .vsummary{margin-top:4px;font-size:13px;}
+  .version-item .vactions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .src-chip{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;}
+  .src-chip.manual{background:var(--sky-soft);color:var(--sky);}
+  .src-chip.ai-suggestion{background:var(--niece-soft);color:var(--niece);}
+  .src-chip.seed{background:var(--moss-soft);color:var(--moss);}
+  .src-chip.restore{background:var(--gold-soft);color:var(--gold);}
+  .diff-add{background:#DDEFD1;color:#2C4A1E;}
+  .diff-del{background:#F5D9D2;color:#6E2A1B;text-decoration:line-through;}
+  .diff-block{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:pre-wrap;line-height:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;}
+
+  /* ---------- AI PANEL ---------- */
+  .ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .ai-ask-row{display:flex;gap:8px;margin-top:10px;}
+  .ai-ask-row input{flex:1;padding:9px 11px;border-radius:20px;border:1px solid var(--line);font-size:13px;font-family:inherit;}
+  .ai-result{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;}
+  .ai-change-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;}
+  .ai-change-top{display:flex;justify-content:space-between;gap:8px;align-items:center;}
+  .ai-loading{font-size:12px;color:var(--ink-soft);}
 
   @media (max-width:360px){
     .hero h1{font-size:24px;}
     .stamp{width:70px;height:70px;}
   }
-
   @media print{
     *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body{padding-bottom:0;}
     .daynav{position:static;backdrop-filter:none;}
+    .control-bar{display:none;}
     .stop{page-break-inside:avoid;break-inside:avoid;}
     .stop-card{page-break-inside:avoid;break-inside:avoid;}
     a.maplink{text-decoration:underline;}
-    .daymap-wrap{display:none;}
+    .daymap-wrap,.overview-map-block{display:none;}
   }
 </style>
 </head>
@@ -349,26 +342,18 @@
   <div class="hero-leafbg"></div>
   <div class="wrap">
     <div class="hero-top">
-      <div>
-        <div class="eyebrow">Family Field Journal · Seoul</div>
-      </div>
+      <div><div class="eyebrow">Family Field Journal · Seoul</div></div>
       <div class="stamp"><b>23→28</b><span>Oct 2026</span></div>
     </div>
-    <h1>首爾秋楓銀杏行</h1>
+    <h1 id="hero-title">首爾秋楓銀杏行</h1>
     <span class="washi">🍁 7 人家庭旅行手冊</span>
-    <p class="sub">2026.10.23（五）— 2026.10.28（三）｜UH Seoul Central Suite</p>
+    <p class="sub" id="hero-sub">2026.10.23（五）— 2026.10.28（三）｜UH Seoul Central Suite</p>
 
     <div class="ticket">
       <div class="ticket-row">
-        <div>
-          <div class="ticket-city">HKG</div>
-          <div class="ticket-code">香港國際機場</div>
-        </div>
+        <div><div class="ticket-city">HKG</div><div class="ticket-code">香港國際機場</div></div>
         <div class="ticket-plane">✈</div>
-        <div style="text-align:right">
-          <div class="ticket-city">ICN</div>
-          <div class="ticket-code">仁川國際機場</div>
-        </div>
+        <div style="text-align:right"><div class="ticket-city">ICN</div><div class="ticket-code">仁川國際機場</div></div>
       </div>
       <div class="ticket-divider"></div>
       <div class="ticket-meta">
@@ -378,18 +363,24 @@
       </div>
     </div>
 
-    <div class="hero-tags">
-      <span class="tag">🍁 紅葉銀杏主題</span>
-      <span class="tag">🚫🪜 姨姨行動考量・全程避開樓梯</span>
-      <span class="tag">🏨 UH Seoul Central Suite・中區武橋路</span>
-    </div>
+    <div class="hero-tags" id="hero-tags"></div>
   </div>
+</div>
+
+<!-- ================= OVERVIEW MAP (all days) ================= -->
+<div class="wrap overview-map-block">
+  <h2 class="section-title" style="margin-bottom:2px;">🗺 全程總覽地圖</h2>
+  <p class="section-sub">6日行程一次過睇晒，撳圖例可以個別開關某一日嘅路線</p>
+  <div class="overview-map" id="overview-map"></div>
+  <div class="overview-legend" id="overview-legend"></div>
+  <p class="daymap-cap">示意路線圖，非精確導航；南怡島（Day3）距離市中心較遠，比例上會壓縮顯示。</p>
 </div>
 
 <!-- ================= STICKY NAV ================= -->
 <div class="daynav">
   <div class="daynav-scroll" id="daynavScroll">
     <a class="daypill" href="#overview">須知</a>
+    <a class="daypill" href="#ai-panel">🤖 AI</a>
     <a class="daypill" href="#day1">D1 <b>抵達</b></a>
     <a class="daypill" href="#day2">D2 <b>古宮</b></a>
     <a class="daypill" href="#day3">D3 <b>南怡島</b></a>
@@ -405,814 +396,33 @@
   <section id="overview">
     <h2 class="section-title">出發前必讀</h2>
     <p class="section-sub">天氣、穿搭、無障礙規劃同埋日程微調重點</p>
-
-    <div class="info-card" style="margin-bottom:14px;">
-      <div class="k">Accommodation</div>
-      <div class="v" style="font-size:16px;">UH Seoul Central Suite</div>
-      <div class="d">首爾中區武橋路17-27（3–10樓）／步行約6分鐘可達市廳站、乙支路入口站；步行約10分鐘達明洞、光化門。地理位置非常中心，本手冊大部份路線皆以此為起點。</div>
-      <div class="eat-meta">
-        <span class="meta-chip hours">🕒 Check-in 約15:00／Check-out 約11:00（服務式公寓一般慣例，實際請以訂房確認為準）</span>
-      </div>
-      <div class="d" style="margin-top:6px;">⚠️ 因凌晨00:25先抵達，同最後一日下午先出發，建議出發前直接聯絡酒店確認「凌晨提早check-in」及「延遲退房寄存行李」安排，避免夜半在大堂久等。</div>
-      <a class="maplink" style="margin-top:10px;" href="https://map.naver.com/p/search/UH%20서울%20센트럴%20스위트" target="_blank" rel="noopener">📍 在 Naver Map 開啟酒店</a>
-    </div>
-
-    <h3 style="font-size:15px;margin:20px 0 2px;">🌤 10月下旬首爾天氣參考</h3>
-    <p class="section-sub" style="margin-bottom:6px;">以下為歷年同期平均值，僅供準備衣物參考；出發前一週請務必查看即時預報。</p>
-    <table class="weather-table">
-      <tr><th>日期</th><th>日間高溫</th><th>清晨低溫</th><th>概況</th></tr>
-      <tr><td>10/23–24</td><td class="hi">19°C</td><td class="lo">9°C</td><td>晴朗乾爽</td></tr>
-      <tr><td>10/25–26</td><td class="hi">18°C</td><td class="lo">8°C</td><td>大致晴，早晚涼</td></tr>
-      <tr><td>10/27–28</td><td class="hi">17°C</td><td class="lo">6°C</td><td>日夜溫差最大</td></tr>
-    </table>
-
-    <h3 style="font-size:15px;margin:22px 0 2px;">🧥 穿搭建議</h3>
-    <ul class="clothing-list">
-      <li><span class="ico">👕</span><div><b>洋蔥式多層次穿搭</b> — 日間長袖襯衫／薄針織衫即可，早晚需要一件輕薄羽絨或風衣外套。</div></li>
-      <li><span class="ico">🧣</span><div><b>圍巾／薄手套</b> — 晚上南山、南怡島江邊風大，長輩尤其建議準備。</div></li>
-      <li><span class="ico">👟</span><div><b>防滑好走鞋</b> — 多個景點為石板路或碎石路（南怡島、北村），建議避免高跟鞋或硬底鞋。</div></li>
-      <li><span class="ico">🕶</span><div><b>太陽眼鏡</b> — 秋日陽光角度低，戶外行走時間長，建議攜帶。</div></li>
-      <li><span class="ico">💧</span><div><b>護唇膏／保濕乳</b> — 韓國秋季空氣乾燥，早晚溫差大皮膚容易乾。</div></li>
-    </ul>
-
-    <h3 style="font-size:15px;margin:22px 0 2px;">🚫🪜 無障礙圖例（姨姨專用）</h3>
-    <p class="section-sub" style="margin-bottom:6px;">姨姨不能行樓梯，以下標記會出現在每個地點旁，方便快速判斷路線是否合適。</p>
-    <div class="legend">
-      <div class="legend-item"><span class="legend-dot" style="background:var(--moss)"></span> <b>可全程避開樓梯</b>：平路／斜坡／電梯／手扶梯可達</div>
-      <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span> <b>需留意局部路段</b>：建議改行電梯出口或由家人陪同繞道</div>
-      <div class="legend-item"><span class="legend-dot" style="background:var(--maple)"></span> <b>建議搭的士代步</b>：該段步行對長輩負擔較大，直接叫車最省力</div>
-    </div>
-    <p class="section-sub" style="margin-top:12px;">💡 小提醒：首爾地鐵站出口不一定全部設有電梯，出發前可在 Naver Map／官方App 搜尋站名 + 「엘리베이터」確認電梯出口位置，再決定使用哪一個出口。</p>
-
-    <h3 style="font-size:15px;margin:24px 0 2px;">🍁 銀杏／楓葉時機提醒</h3>
-    <p class="section-sub" style="margin-bottom:6px;">往年首爾市區銀杏（首爾林一帶）平均約於 <b>10/28 前後</b>轉黃最盛，南怡島楓葉銀杏則約於 <b>10/28–11/7</b> 達到最佳觀賞期。本行程南怡島安排在 10/25，屬轉色初期，銀杏大道已會泛黃但未必達滿版金黃，實際情況視當年氣溫而定，屬於「賞楓早鳥」而非保證滿開，請家人心理有個預期；最後一日（10/28）的曹溪寺古銀杏樹，屆時反而較貼近歷年最盛期。</p>
-
-    <h3 style="font-size:15px;margin:24px 0 2px;">🗓 日程調動重要提醒</h3>
-    <p class="section-sub" style="margin-bottom:6px;">核對咗2026年10月嘅實際星期後發現：<b>德壽宮逢星期一休館／돌담길不開放</b>，而10月26日正正係星期一。所以已經將原本 Day4（德壽宮／明洞／鷺梁津）同 Day5（延南洞／聖水洞）嘅內容對調，德壽宮改喺星期二（10/27）先去，避免撲空。下面D4／D5嘅日期同景點已經按呢個新次序排好。</p>
-
-    <h3 style="font-size:15px;margin:24px 0 2px;">🍽 表妹美食清單 × 全程對照</h3>
-    <p class="section-sub" style="margin-bottom:6px;">表妹提供的10項美食清單，其實已經全部安排落每日行程入面（合共9個落腳點，因為鷺梁津果度同時滿足兩項），下面用<span class="niecepick" style="vertical-align:middle;">💌 表妹清單</span>標記逐一對應，並附上參考評分、營業時間同訂位提示，方便出發前心裡有數。評分為 Naver／大眾食評整合參考值，出發前建議再核實一次即時評分同營業時間。</p>
-    <div class="food-list">
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 Artist bakery</span><span class="badge note">Day 2</span></div>
-        <div class="food-name">Artist Bakery 安國店 <span class="kr">아티스트 베이커리</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.3</span>
-          <span class="meta-chip hours">🕒 08:00–20:00 全年無休</span>
-          <span class="meta-chip book warn">🎫 CatchTable現場排隊・不可遙距取號</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 Mil Toast</span><span class="badge note">Day 2</span></div>
-        <div class="food-name">Mil Toast House 益善洞 <span class="kr">밀 토스트집</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.2</span>
-          <span class="meta-chip hours">🕒 08:00–22:00 全年無休</span>
-          <span class="meta-chip book">🎫 免預約・現場取號</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 橋村炸雞</span><span class="badge note">Day 3</span></div>
-        <div class="food-name">橋村炸雞 外送 <span class="kr">교촌치킨</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.1（連鎖・穩定水準）</span>
-          <span class="meta-chip hours">🕒 外送App一般至深夜，以App實際顯示為準</span>
-          <span class="meta-chip book">📱 外送App落單・免訂位</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 風川鰻魚</span><span class="badge note">Day 4</span></div>
-        <div class="food-name">風川鰻魚 延南店 <span class="kr">풍천장어 연남점</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.3</span>
-          <span class="meta-chip hours">🕒 11:30–22:20（休息15:30–16:30）</span>
-          <span class="meta-chip book warn">📅 可Naver預約，7人建議提前一兩日先約位</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 Beton</span><span class="badge note">Day 4</span></div>
-        <div class="food-name">Beton 聖水旗艦店 <span class="kr">베통 성수</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.3</span>
-          <span class="meta-chip hours">🕒 09:00–18:30（Last Order 18:00）</span>
-          <span class="meta-chip book">🎫 免預約・現場排隊</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 炸醬麵</span><span class="badge note">Day 5</span></div>
-        <div class="food-name">山東餃子 明洞店 <span class="kr">산동교자</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.0</span>
-          <span class="meta-chip hours">🕒 11:00–21:30（休息15:30–17:00・逢星期日休）</span>
-          <span class="meta-chip book warn">☎ 7人建議先電話劃位</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="food-tags"><span class="niecepick">💌 路梁津海鮮市場</span><span class="niecepick">💌 鮑魚粥</span></span><span class="badge note">Day 5</span></div>
-        <div class="food-name">鷺梁津水產市場 진주식당 <span class="kr">노량진 진주식당</span></div>
-        <div class="food-must">表妹清單其中兩項都對應呢一站：市場本身「路梁津海鮮市場」（正式漢字名「鷺梁津」），同埋店內招牌收尾「鮑魚粥」（전복죽）。</div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.2</span>
-          <span class="meta-chip hours">🕒 市場道小賣：24小時／진주식당：11:30–22:30</span>
-          <span class="meta-chip book warn">📅 建議必先Naver預約，人氣極高不接受即場</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 海鮮煎餅</span><span class="badge note">Day 6</span></div>
-        <div class="food-name">순희네빈대떡（廣藏市場）<span class="kr">광장시장</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.1</span>
-          <span class="meta-chip hours">🕒 約10:00–21:00（各檔口略有不同，公眾假期休）</span>
-          <span class="meta-chip book">🎫 市場檔口・免預約現場排隊</span>
-        </div>
-      </div>
-      <div class="food-card">
-        <div class="food-card-top"><span class="niecepick">💌 孔陵一隻雞</span><span class="badge note">Day 6</span></div>
-        <div class="food-name">孔陵一隻雞 東大門店 <span class="kr">공릉닭한마리</span></div>
-        <div class="eat-meta">
-          <span class="meta-chip rating">⭐ 4.2</span>
-          <span class="meta-chip hours">🕒 約11:00–22:00（分店定休日與本店未必相同，建議出發前先電話確認）</span>
-          <span class="meta-chip book">🎫 免預約，晚市較旺・午市到訪較少候位</span>
-        </div>
-      </div>
+    <div id="overview-body">
+      <p class="section-sub">載入緊行程資料…</p>
     </div>
   </section>
 
   <hr class="div">
 
-  <!-- ================= DAY 1 ================= -->
-  <div class="day" id="day1">
-    <div class="day-head">
-      <span class="day-num">DAY 1</span>
-      <span class="day-date mono">10月23日（五）</span>
+  <!-- ================= AI 助手 ================= -->
+  <section id="ai-panel">
+    <h2 class="section-title">🤖 AI 旅程助手</h2>
+    <p class="section-sub">用最新資訊 check 天氣同紅葉情報，或者叫 AI 建議行程調整（撳「套用」會直接更新落去，並自動存低歷史版本）</p>
+    <div id="ai-key-notice"></div>
+    <div class="ai-actions">
+      <button class="btn-sm" id="btn-ai-weather">🌤 check最新天氣</button>
+      <button class="btn-sm" id="btn-ai-foliage">🍁 check紅葉情報</button>
+      <button class="btn-sm" id="btn-ai-suggest">💡 建議行程調整</button>
     </div>
-    <h2>啟程・夜航抵首爾</h2>
-    <p class="day-desc">今日以交通為主，沒有安排景點。抵達酒店已是凌晨，建議直接休息，養精蓄銳迎接明天的古宮之旅。</p>
-    <div class="day-badges">
-      <span class="badge note">✈ 夜機抵達</span>
-      <span class="badge">🛌 無行程・純休息</span>
+    <div class="ai-ask-row">
+      <input type="text" id="ai-question" placeholder="或者自己打嘢問，例如：幫我Day3加多個景點">
+      <button class="btn-sm primary" id="btn-ai-ask">問AI</button>
     </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">19:00（暫定）</div>
-          <div class="stop-title">香港國際機場出發</div>
-          <div class="stop-desc">建議提前3小時到機場辦理登機及托運行李，7人同行建議提早集合。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">✈️</span>飛行約 <b>3.5 小時</b></div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">00:25（10/24）</div>
-          <div class="stop-title">抵達仁川國際機場 <span class="kr">인천국제공항</span></div>
-          <div class="stop-desc">入境、提取行李及通關預計需 40–60 分鐘。深夜時段機場人流較少，惟長輩建議先在到達大堂稍作休息，等候齊人再一起移動。</div>
-          <div class="access-row"><span class="badge">🟢 機場全線設有電梯／手扶梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚌</span>機場往市區約 <b>60–75 分鐘</b>（AREX直達列車 或 機場豪華巴士）</div>
-
-      <div class="stop rest">
-        <div class="stop-marker"><span class="leafnum rest">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 02:00–02:30</div>
-          <div class="stop-title">抵達 UH Seoul Central Suite</div>
-          <div class="stop-desc">深夜時段建議直接搭乘機場豪華巴士（座位固定、行李空間大，適合7人+行李），或由酒店協助預約接送車，比轉乘地鐵更省心。Check-in 後儘快休息。</div>
-          <div class="access-row"><span class="badge">🟢 酒店設有電梯直達房間樓層</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
+    <div id="ai-output"></div>
+  </section>
 
   <hr class="div">
 
-  <!-- ================= DAY 2 ================= -->
-  <div class="day" id="day2">
-    <div class="day-head">
-      <span class="day-num">DAY 2</span>
-      <span class="day-date mono">10月24日（六）</span>
-    </div>
-    <h2>古宮慢遊・北村・南山夜景</h2>
-    <p class="day-desc">凌晨才抵達，今天不用早起。景點集中在酒店步行可達的中心老城區，路線平坦，長輩不用走太遠。</p>
-    <div class="day-badges">
-      <span class="badge">🚶 步行為主，全程平路</span>
-      <span class="badge note">🥐 早午茶：Artist Bakery</span>
-      <span class="badge note">🍞 下午茶：Mil Toast</span>
-    </div>
-
-    <div class="daymap-wrap">
-      <div class="daymap" id="map-day2" data-points='[[37.5657,126.9784,"酒店"],[37.5764,126.9859,"1 Artist Bakery"],[37.5796,126.9770,"2 景福宮"],[37.5726,126.9768,"3 光化門廣場"],[37.5824,126.9832,"4 北村"],[37.5722,126.9910,"5 Mil Toast"],[37.5512,126.9882,"6 N首爾塔"],[37.5636,126.9834,"7 明洞"]]'></div>
-      <div class="daymap-cap">示意路線圖（非精確導航），可見全日集中喺古宮＋北村一帶，收尾先搭車去南山。實際步行請以下方各站 Naver Map 連結為準。</div>
-    </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">10:30 起（睡到自然醒）</div>
-          <div class="stop-title">酒店悠閒早晨</div>
-          <div class="stop-desc">不設鬧鐘，讓長輩充分休息調整時差，10:30後再出發。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>的士約 <b>10 分鐘</b>／地鐵約 <b>15–18 分鐘</b>（建議直接叫車，較省時）</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 11:15</div>
-          <div class="stop-title">Artist Bakery 安國店 <span class="kr">아티스트 베이커리</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">首爾最火紅的鹽可頌專賣店，由「倫敦貝果博物館」創辦人打造。安國站1號出口即到，鄰近景福宮。</div>
-          <div class="eatbox"><b>必點推介</b>原味鹽可頌（플레인 소금빵）／松露鹽可頌／蒜香牛油鹽可頌
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.3</span>
-              <span class="meta-chip hours">🕒 08:00–20:00 全年無休</span>
-              <span class="meta-chip book warn">🎫 CatchTable現場取號・不可遙距排隊，麵包售完即截龍</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/아티스트베이커리%20안국점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖，無需上落樓梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>，平坦大路</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 12:15</div>
-          <div class="stop-title">景福宮 <span class="kr">경복궁</span></div>
-          <div class="stop-desc">朝鮮王朝正宮，爸爸首爾初體驗必訪地標。主要遊覽動線（光化門—勤政殿—慶會樓）皆為平坦廣場及石板路。守衛交接儀式約10:00／13:00／15:30，建議查詢當日場次時間。</div>
-          <div class="eat-meta">
-            <span class="meta-chip hours">🕒 9–10月 09:00–18:00（入場截止17:00）</span>
-            <span class="meta-chip book warn">📅 逢星期二休宮，10/24為星期六，開放</span>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/경복궁" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 主要路徑平坦，光化門及興禮門皆為無階梯通道</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>5 分鐘</b></div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">4</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 14:00</div>
-          <div class="stop-title">光化門廣場</div>
-          <div class="stop-desc">世宗大王與李舜臣將軍銅像所在的開闊廣場，適合全家拍照，地面平整好走。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 24小時開放的戶外廣場</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/광화문광장" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 全開放式廣場，無階梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>12 分鐘</b>，經北村平緩街道</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">5</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 14:40</div>
-          <div class="stop-title">北村韓屋村（平緩觀景點）</div>
-          <div class="stop-desc">建議走「桂洞路」一帶緩坡街道拍照，<b>避開北村8景／2景的階梯打卡點</b>。若姨姨想休息，可在路口韓屋咖啡廳等候，其他人步行10分鐘內折返。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 村落全日開放，個別韓屋設施開放時間各異</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/북촌한옥마을" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge warn">🟡 部分觀景台有階梯，建議只走桂洞路平緩段</span></div>
-          <div class="tip-box"><b>順路一提</b>桂洞路口對面即是「三清洞」咖啡街，同樣平路，若時間充裕可加10分鐘散步；往益善洞方向亦會經過安國站，不用刻意繞路。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b></div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">6</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 15:30</div>
-          <div class="stop-title">Mil Toast House 益善洞 <span class="kr">밀 토스트집</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">益善洞韓屋咖啡街的人氣蒸麵包吐司店，鐘路3街站4號出口步行可達，適合下午茶稍作休息。</div>
-          <div class="eatbox"><b>必點推介</b>舒芙蕾法式吐司／栗子蒸包（밤 찐빵）／玉米蒸包
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.2</span>
-              <span class="meta-chip hours">🕒 08:00–22:00 全年無休（Last Order 21:30）</span>
-              <span class="meta-chip book">🎫 免預約・假日建議先掃碼取號等候</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/밀토스트집%20익선점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖，無階梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>返回酒店休息約 <b>15 分鐘</b>（的士／地鐵皆可）</div>
-
-      <div class="stop rest">
-        <div class="stop-marker"><span class="leafnum rest">7</span></div>
-        <div class="stop-card">
-          <div class="stop-time">16:30–18:00</div>
-          <div class="stop-title">酒店午休</div>
-          <div class="stop-desc">長輩可留在房間休息，年輕人可自行到附近明洞逛逛，晚上一起出發看夜景。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚌</span>南山循環巴士（無台階低地台巴士）約 <b>20 分鐘</b></div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">8</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 18:30</div>
-          <div class="stop-title">N首爾塔 <span class="kr">N서울타워</span></div>
-          <div class="stop-desc">建議從明洞搭乘南山循環巴士（02／03號）直達塔下，<b>比纜車更適合姨姨</b>，全程無需行樓梯；再乘電梯直上展望台看首爾夜景與初秋南山。</div>
-          <div class="eatbox"><b>拍照重點</b>愛情鎖牆＋展望台360°夜景，建議日落前上塔（約17:40左右日落，可同時看到黃昏及夜景）。</div>
-          <div class="eat-meta">
-            <span class="meta-chip hours">🕒 展望台 平日10:00–22:30／週末10:00–23:00</span>
-            <span class="meta-chip hours">🕒 南山循環巴士 10:00–23:00</span>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/N서울타워" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 循環巴士無台階＋塔內電梯直達展望台</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚌</span>循環巴士＋步行返回明洞約 <b>20 分鐘</b></div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">9</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 20:00</div>
-          <div class="stop-title">明洞晚餐＋自由活動</div>
-          <div class="stop-desc">明洞街道平坦好走，餐廳選擇多，可依當晚喜好自由選擇；長輩可提早回酒店休息。</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <hr class="div">
-
-  <!-- ================= DAY 3 ================= -->
-  <div class="day" id="day3">
-    <div class="day-head">
-      <span class="day-num">DAY 3</span>
-      <span class="day-date mono">10月25日（日）</span>
-    </div>
-    <h2>南怡島紅葉銀杏全日遊</h2>
-    <p class="day-desc">今天是全程重點：南怡島的楓葉銀杏大道。全日在外，建議輕裝出發，穿好走的鞋子。</p>
-    <div class="day-badges">
-      <span class="badge warn">🍁 全程行程重點日</span>
-      <span class="badge note">🚆 需搭火車，來回約3小時車程</span>
-      <span class="badge">🍗 晚餐：橋村炸雞外送到酒店</span>
-    </div>
-
-    <div class="daymap-wrap">
-      <div class="daymap" id="map-day3" data-points='[[37.5804,127.0466,"1 清涼里站"],[37.7904,127.5262,"2 南怡島"]]'></div>
-      <div class="daymap-cap">南怡島喺加平，實際係去到首爾東北方約60公里外嘅獨立一天來回小旅行，唔屬於市內散步範圍，示意圖只反映相對方向同距離感。</div>
-    </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">08:30</div>
-          <div class="stop-title">酒店出發</div>
-          <div class="stop-desc">建議準備簡單早餐／麵包在車上享用，7人出遊建議預留較多集合緩衝時間。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>的士約 <b>15–20 分鐘</b>往清涼里／龍山站</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">09:00</div>
-          <div class="stop-title">搭乘 ITX-青春 列車</div>
-          <div class="stop-desc">建議事先於Korail網站或App訂票（尤其週日楓葉季一位難求）。車程約60分鐘直達加平站，車站設有電梯，無需使用樓梯。</div>
-          <a class="maplink" href="https://map.naver.com/p/search/청량리역" target="_blank" rel="noopener">📍 Naver Map 導航（清涼里站）</a>
-          <div class="access-row"><span class="badge">🟢 主要車站均設電梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>加平站轉的士／接駁車約 <b>10 分鐘</b>往南怡島碼頭</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 10:30</div>
-          <div class="stop-title">南怡島 <span class="kr">남이섬</span></div>
-          <div class="stop-desc">碼頭與渡輪之間為緩坡棧道，非樓梯，5分鐘即可抵達島上。島內主要道路皆為平坦碎石路／柏油路，園方設有電動代步車及單車租借（建議提前致電或於官網查詢當日供應狀況，為姨姨預留一台）。</div>
-          <div class="eatbox"><b>賞楓銀杏重點</b>中央銀杏大道（메타세쿼이아길／은행나무길）為全島最經典打卡點，建議上午光線較柔和時前往拍照。<br><b style="margin-top:6px;">🍁 心理準備</b>南怡島官方歷年統計楓葉銀杏最佳觀賞期約在 10/28–11/7，今天（10/25）屬轉色初期，銀杏大道會開始泛黃但未必滿版金黃，效果視當年氣溫可能提早或延後，仍值得一去但毋須抱着「一定滿開」的期望。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 入園08:00–21:00（售票截止20:30），全年無休</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/남이섬" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 碼頭為緩坡非樓梯</span><span class="badge">🟡 部分小徑碎石路，建議代步車</span></div>
-        </div>
-      </div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">4</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 13:00</div>
-          <div class="stop-title">島上午餐</div>
-          <div class="stop-desc">島內餐廳選擇多元（烤雞、部隊鍋、烏冬等），建議選擇靠近中央廣場、桌椅座位的餐廳，方便長輩用餐。</div>
-        </div>
-      </div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">5</span></div>
-        <div class="stop-card">
-          <div class="stop-time">14:00–16:00</div>
-          <div class="stop-title">自由漫遊／拍照時光</div>
-          <div class="stop-desc">可依體力分組：年輕人可租單車環島，長輩與姨姨可搭代步車慢慢逛，江邊長椅眾多，方便隨時休息。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚆</span>原路折返首爾，車程連轉車約 <b>1.5–2 小時</b></div>
-
-      <div class="stop rest">
-        <div class="stop-marker"><span class="leafnum rest">6</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 18:30</div>
-          <div class="stop-title">返回酒店休息</div>
-          <div class="stop-desc">全日在外走動較多，晚餐建議不再外出，直接叫外送，讓大家好好休息。</div>
-        </div>
-      </div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">7</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 19:30</div>
-          <div class="stop-title">橋村炸雞 外送到酒店 <span class="kr">교촌치킨</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">全國連鎖品牌，可用外送App（配送用韓國電話號碼或請酒店前台協助落單）直接送到房間，長輩不用再出門，是全日走動後最輕鬆的晚餐選擇。</div>
-          <div class="eatbox"><b>必點推介</b>蜂蜜綠茶炸雞（허니콤보）／原味醬燒炸雞（교촌오리지날）
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.1（連鎖水準穩定）</span>
-              <span class="meta-chip hours">🕒 外送App一般至深夜，以App實際顯示為準</span>
-              <span class="meta-chip book">📱 外送App落單・免訂位</span>
-            </div>
-          </div>
-          <div class="access-row"><span class="badge">🟢 房內用餐，零走動</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <hr class="div">
-
-  <!-- ================= DAY 4 (原Day5內容，改為10/26以避開德壽宮週一休館) ================= -->
-  <div class="day" id="day4">
-    <div class="day-head">
-      <span class="day-num">DAY 4</span>
-      <span class="day-date mono">10月26日（一）</span>
-    </div>
-    <h2>延南洞鰻魚・聖水洞銀杏散策</h2>
-    <p class="day-desc">今天走地鐵2號線一圈：先到延南洞吃碳烤鰻魚，再原線搭到聖水洞看銀杏、逛設計感咖啡廳，全程不需轉車。今天特意排喺星期一，因為德壽宮週一休館，所以呢日行程完全唔涉及要開門嘅古宮設施。</p>
-    <div class="day-badges">
-      <span class="badge">🚇 地鐵2號線一線到底，無需轉乘</span>
-      <span class="badge note">🐟 午餐：風川鰻魚</span>
-      <span class="badge note">🥐 下午茶：Beton 聖水旗艦店</span>
-    </div>
-
-    <div class="daymap-wrap">
-      <div class="daymap" id="map-day4" data-points='[[37.5657,126.9784,"酒店"],[37.5657,126.9236,"1 風川鰻魚"],[37.5615,126.9257,"2 京義線林蔭道"],[37.5443,127.0374,"3 首爾林"],[37.5445,127.0559,"4 Beton聖水"]]'></div>
-      <div class="daymap-cap">示意路線圖：全日沿地鐵2號線由西（延南洞）走到東（聖水洞），一條直線唔走回頭路。</div>
-    </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">10:00</div>
-          <div class="stop-title">酒店出發</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚇</span>地鐵2號線約 <b>25–30 分鐘</b>（市廳站方向轉乘至弘大入口站，站內設電梯）</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 11:30</div>
-          <div class="stop-title">風川鰻魚 延南店 <span class="kr">풍천장어 연남점</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">弘大入口站2號出口步行約7分鐘，現殺炭火白燒鰻魚人氣名店，全程有店員代烤，無需自己動手。11:30開店即到可避免排隊。</div>
-          <div class="eatbox"><b>必點推介</b>炭火烤白鰻（兩隻）＋宴會麵（잔치국수）作配餐，鰻魚肥美無腥味，連平常不吃海鮮的人都會喜歡。
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.3</span>
-              <span class="meta-chip hours">🕒 11:30–22:20（休息15:30–16:30）</span>
-              <span class="meta-chip book warn">📅 可Naver預約，7人建議提前一兩日先約位</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/풍천장어%20연남점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>延南洞散步約 <b>20 分鐘</b>，鐵道公園全為平路</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">13:00–13:40</div>
-          <div class="stop-title">延南洞散步／京義線林蔭道</div>
-          <div class="stop-desc">舊鐵道改建的帶狀公園，平坦好走，兩旁咖啡廳林立，適合飯後散步消化。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 24小時開放的戶外步道公園</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/연남동%20경의선숲길" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 全平路林蔭步道</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚇</span>弘大入口站搭2號線直達聖水站，約 <b>30 分鐘</b>，無需轉車</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">4</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 14:40</div>
-          <div class="stop-title">首爾林 銀杏路 <span class="kr">서울숲</span></div>
-          <div class="stop-desc">首爾市區內最著名的銀杏大道之一，公園步道全為平坦鋪面，設有大量長椅，是全程對長輩最友善的賞銀杏地點，媽媽、姨姨可以慢慢散步拍照。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 公園 05:30–21:30 全年無休（園內昆蟲植物園逢週一休，但唔影響戶外銀杏散步）</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/서울숲" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 公園步道全平坦，多長椅可休息</span></div>
-          <div class="tip-box"><b>順路一提</b>公園南側連接首爾林碼頭，天氣好時可散步至漢江邊吹風；往聖水洞商圈方向沿途本身就會經過連南路一帶的文青小店，不用刻意繞路找。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>往聖水洞商圈</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">5</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 16:00</div>
-          <div class="stop-title">Beton 聖水旗艦店 <span class="kr">베통 성수 플래그십</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">首爾人氣鹽可頌／鹽麵包專門店，聖水洞旗艦店空間寬敞，可內用坐下享用下午茶。</div>
-          <div class="eatbox"><b>必點推介</b>原味鹽可頌／松露鹽可頌／玉米奶油鹽可頌，建議一到就先點餐，人多時需稍等候。
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.3</span>
-              <span class="meta-chip hours">🕒 09:00–18:30（Last Order 18:00）</span>
-              <span class="meta-chip book">🎫 免預約・現場排隊，旗艦店座位較多輪候較快</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/베통%20성수" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖，設有座位</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚇</span>地鐵約 <b>15–20 分鐘</b>返回酒店一帶</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">6</span></div>
-        <div class="stop-card">
-          <div class="stop-time">晚上</div>
-          <div class="stop-title">自由晚餐／酒店周邊</div>
-          <div class="stop-desc">今天走動較多，建議晚餐選擇酒店附近餐廳，早點休息。</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <hr class="div">
-
-  <!-- ================= DAY 5 (原Day4內容，改為10/27因德壽宮週一休館) ================= -->
-  <div class="day" id="day5">
-    <div class="day-head">
-      <span class="day-num">DAY 5</span>
-      <span class="day-date mono">10月27日（二）</span>
-    </div>
-    <h2>德壽宮銀杏・明洞・鷺梁津海鮮夜</h2>
-    <p class="day-desc">上午在酒店附近散步賞銀杏及購物，傍晚移動到鷺梁津水產市場，親手選海鮮、即場加工做成豐盛海鮮宴，以鮑魚粥作結。</p>
-    <div class="day-badges">
-      <span class="badge">🚶 上午酒店步行圈</span>
-      <span class="badge note">🍜 午餐：山東餃子明洞店（炸醬麵）</span>
-      <span class="badge warn">🦞 晚餐：鷺梁津水產市場</span>
-    </div>
-
-    <div class="daymap-wrap">
-      <div class="daymap" id="map-day5" data-points='[[37.5657,126.9784,"酒店"],[37.5651,126.9752,"1 德壽宮돌담길"],[37.5658,126.9784,"2 首爾廣場"],[37.5636,126.9838,"3 山東餃子"],[37.5636,126.9834,"4 明洞"],[37.5127,126.9409,"5 鷺梁津"]]'></div>
-      <div class="daymap-cap">示意路線圖：上午喺酒店周邊步行圈打轉，落單去鷺梁津先過江，一睇就明點解建議叫的士唔轉地鐵。</div>
-    </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">09:30</div>
-          <div class="stop-title">酒店出發</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>6 分鐘</b>，酒店近在咫尺</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 09:40</div>
-          <div class="stop-title">德壽宮石牆路 <span class="kr">덕수궁 돌담길</span></div>
-          <div class="stop-desc">媽媽、姨姨賞花銀杏重點行程。沿宮牆而行的散步道，寬闊平坦、全程無階梯，10月下旬銀杏開始泛黃，是首爾市區最著名的秋日散步路線之一。</div>
-          <div class="eat-meta">
-            <span class="meta-chip hours">🕒 5–10月 09:00–20:30</span>
-            <span class="meta-chip book warn">📅 逢星期一休館不開放，10/27為星期二，開放</span>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/덕수궁%20돌담길" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 全程平坦人行道</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>5 分鐘</b></div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 10:30</div>
-          <div class="stop-title">首爾廣場・清溪川散步</div>
-          <div class="stop-desc">市廳前草坪廣場及清溪川步道，皆為平緩無障礙設計，適合悠閒散步曬秋日陽光。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 24小時開放的戶外空間</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/청계천" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 無階梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>往明洞</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">4</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 12:00</div>
-          <div class="stop-title">山東餃子 明洞店 <span class="kr">산동교자</span></div>
-          <div><span class="niecepick">💌 表妹清單・炸醬麵</span></div>
-          <div class="stop-desc">明洞區人氣中式料理老店，招牌炸醬麵及手工水餃廣受遊客歡迎，用餐環境為平地舖面，方便7人同桌。</div>
-          <div class="eatbox"><b>必點推介</b>炸醬麵（짜장면）／手工水餃（교자）／糖醋肉（탕수육）
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.0</span>
-              <span class="meta-chip hours">🕒 11:00–21:30（休息15:30–17:00）</span>
-              <span class="meta-chip book warn">☎ 7人同枱建議先電話留座；10/27為星期二正常營業</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/산동교자%20명동점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🛍️</span>明洞步行商圈，隨意逛</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">5</span></div>
-        <div class="stop-card">
-          <div class="stop-time">13:00–15:30</div>
-          <div class="stop-title">明洞購物時光</div>
-          <div class="stop-desc">明洞主街全為平坦行人專用區，無需擔心階梯問題，長輩可在街邊咖啡廳稍坐，年輕人自由逛街後匯合。</div>
-          <div class="access-row"><span class="badge">🟢 行人專用步行街，無階梯</span></div>
-          <div class="tip-box"><b>順路一提</b>時間充裕的話，明洞聖堂（明洞大聖堂）步行約8分鐘，紅磚哥德式建築＋小庭園同樣平路可達，屋頂花園09:00–18:30開放；不想逛街的長輩可留在此區咖啡廳休息，不用跟着走。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>建議直接叫的士約 <b>20–25 分鐘</b>往鷺梁津（晚市時段路程較長，不建議轉乘地鐵）</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">6</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 16:30</div>
-          <div class="stop-title">鷺梁津水產市場 <span class="kr">노량진수산시장</span></div>
-          <div><span class="food-tags"><span class="niecepick">💌 路梁津海鮮市場</span><span class="niecepick">💌 鮑魚粥</span></span></div>
-          <div class="stop-desc">韓國最大的水產批發市場，室內為平層結構並設有電梯，可先逛市場選購生猛海鮮（鮑魚、帝王蟹、比目魚等），再拿到樓上食堂付「上菜費」現場加工享用。</div>
-          <div class="eatbox"><b>推薦食堂</b>진주식당（5樓）— 提供모듬회+초밥+튀김+매운탕的套餐，最後以<b>鮑魚粥（전복죽）</b>作結，是全日最豐盛的一餐，也是姨姨、媽媽都會喜歡的溫暖收尾。
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.2</span>
-              <span class="meta-chip hours">🕒 市場道小賣24小時／진주식당約11:30–22:30</span>
-              <span class="meta-chip book warn">📅 極高人氣，務必提前Naver預約，否則當日可能無法即場入座</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/노량진수산시장" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 市場室內設電梯，全平層</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>的士返回酒店約 <b>20–25 分鐘</b></div>
-    </div>
-  </div>
-
-  <hr class="div">
-
-  <!-- ================= DAY 6 ================= -->
-  <div class="day" id="day6">
-    <div class="day-head">
-      <span class="day-num">DAY 6</span>
-      <span class="day-date mono">10月28日（三）</span>
-    </div>
-    <h2>曹溪寺千年銀杏・廣藏市場早市・賦歸</h2>
-    <p class="day-desc">最後一天不再只是「食完就返酒店」：早上加插市中心一站僅3分鐘車程的曹溪寺／仁寺洞賞銀杏，再原線一站站往東走食廣藏市場同一隻雞，全程走一條直線，不走回頭路，中午回酒店取行李，悠閒前往機場。</p>
-    <div class="day-badges">
-      <span class="badge">🚇 地鐵1號線一線到底，無需轉乘</span>
-      <span class="badge">🍁 加插銀杏古樹作旅程尾聲</span>
-      <span class="badge note">🥟 早午餐：廣藏市場＋孔陵一隻雞</span>
-    </div>
-
-    <div class="daymap-wrap">
-      <div class="daymap" id="map-day6" data-points='[[37.5657,126.9784,"酒店"],[37.5734,126.9822,"1 曹溪寺"],[37.5701,126.9995,"2 廣藏市場"],[37.5711,127.0096,"3 孔陵一隻雞"]]'></div>
-      <div class="daymap-cap">示意路線圖：全部沿地鐵1號線一路向東，由市廳經鐘閣去到鐘路5街／東大門，唔使走回頭路。</div>
-    </div>
-
-    <div class="timeline">
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">1</span></div>
-        <div class="stop-card">
-          <div class="stop-time">09:00</div>
-          <div class="stop-title">酒店寄存行李後出發</div>
-          <div class="stop-desc">建議先在酒店辦理延遲退房或寄存大件行李，輕裝出門，回程直接取行李去機場。市廳站設電梯，出門步行約5分鐘即達。</div>
-          <div class="access-row"><span class="badge">🟢 市廳站設電梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚇</span>地鐵1號線約 <b>5 分鐘</b>（市廳站→鐘閣站，1站直達，站內設電梯）</div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">2</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 09:20</div>
-          <div class="stop-title">曹溪寺＋仁寺洞 <span class="kr">조계사・인사동</span></div>
-          <div class="stop-desc">鐘閣站2號出口步行約3分鐘。曹溪寺是市中心少見的都市古剎，大雄殿前有一株樹齡數百年的高大銀杏樹，秋末滿樹金黃時是首爾市內隱藏的賞銀杏名點，且遊人比南怡島、首爾林少得多，適合作全程賞銀杏的安靜收尾。寺內庭院為平坦石地及木棧道，沒有樓梯。逛完可沿仁寺洞街步行10分鐘感受傳統工藝品店。</div>
-          <div class="eatbox"><b>拍照重點</b>大雄殿前銀杏樹＋傳統瓦頂殿宇同框，建議上午光線由東側射入時最好看；10/28正值銀杏平均最盛期附近，是全程「賭銀杏」勝算最高的一站。</div>
-          <div class="eat-meta"><span class="meta-chip hours">🕒 寺院庭院一般日間開放（約07:00–21:00），法會期間可能局部管制</span></div>
-          <a class="maplink" href="https://map.naver.com/p/search/조계사" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 寺內庭院全平坦，無樓梯</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚇</span>鐘閣站搭1號線約 <b>6 分鐘</b>直達鐘路5街站，無需轉車</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">3</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 10:15</div>
-          <div class="stop-title">廣藏市場 <span class="kr">광장시장</span></div>
-          <div><span class="niecepick">💌 表妹清單・海鮮煎餅</span></div>
-          <div class="stop-desc">韓國第一座常設市場，鐘路5街站8號出口步行約2分鐘。10點後人潮仍不算多，適合悠閒逛食。市場走道較窄且人多，建議分成2–3小組錯開時間逛，方便照顧長輩。</div>
-          <div class="eatbox"><b>必點推介</b>순희네빈대떡的<b>海鮮煎餅／綠豆煎餅（빈대떡）</b>，配上市場名物<b>麻藥飯卷（마약김밥）</b>，是最經典的市場組合。
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.1</span>
-              <span class="meta-chip hours">🕒 約10:00–21:00（各檔口略有不同）</span>
-              <span class="meta-chip book">🎫 市場檔口・免預約現場排隊</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/순희네빈대떡" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge warn">🟡 市場走道較窄，建議分組錯峰</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚶</span>步行約 <b>8 分鐘</b>往東大門一隻雞街</div>
-
-      <div class="stop eat">
-        <div class="stop-marker"><span class="leafnum eat">4</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 11:30</div>
-          <div class="stop-title">孔陵一隻雞 東大門店 <span class="kr">공릉닭한마리</span></div>
-          <div><span class="niecepick">💌 表妹清單</span></div>
-          <div class="stop-desc">東大門站9號出口／鍾路五街站5號出口步行約5分鐘，一鍋熱騰騰雞湯作為旅程最後一頓正餐，暖胃又暖心。午市時段到訪一般比晚市少候位。</div>
-          <div class="eatbox"><b>必點推介</b>一隻雞（닭한마리）煮好後加點刀削麵（칼국수），最後以<b>海苔雞蛋粥</b>作完美收尾。
-            <div class="eat-meta">
-              <span class="meta-chip rating">⭐ 4.2</span>
-              <span class="meta-chip hours">🕒 約11:00–22:00（分店定休日建議提前電話確認）</span>
-              <span class="meta-chip book">🎫 免預約，晚市較旺・午市到訪候位較少</span>
-            </div>
-          </div>
-          <a class="maplink" href="https://map.naver.com/p/search/공릉닭한마리%20동대문점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
-          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚕</span>的士返回酒店約 <b>15–20 分鐘</b></div>
-
-      <div class="stop rest">
-        <div class="stop-marker"><span class="leafnum rest">5</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 13:00</div>
-          <div class="stop-title">酒店取行李・退房</div>
-          <div class="stop-desc">建議預留充裕時間讓長輩從容整理行李，避免最後一刻趕急。</div>
-        </div>
-      </div>
-
-      <div class="connector"><span class="icon">🚌</span>機場豪華巴士／AREX約 <b>60–75 分鐘</b></div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">6</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 15:30–16:00</div>
-          <div class="stop-title">前往仁川國際機場</div>
-          <div class="stop-desc">回程航班暫以傍晚時段估算，實際請以電子機票為準；建議預留至少3小時辦理退稅、托運及登機手續。</div>
-        </div>
-      </div>
-
-      <div class="stop">
-        <div class="stop-marker"><span class="leafnum">7</span></div>
-        <div class="stop-card">
-          <div class="stop-time">約 19:00（暫定）</div>
-          <div class="stop-title">飛返香港 ✈</div>
-          <div class="stop-desc">旅程結束，帶著滿滿的秋葉銀杏回憶回家！</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div id="days-root"><p class="section-sub" style="padding:20px 0;">載入緊行程…</p></div>
 
   <footer>
     <div class="brand">首爾秋楓銀杏行 · 家庭旅行手冊</div>
@@ -1220,95 +430,663 @@
     部分Naver Map連結為關鍵字搜尋，若無法直接開啟App，請於Naver Map內手動搜尋店名。<br>
     餐廳評分為整合Naver／大眾食評的參考值，訂位狀態亦會隨時間變動，出發前建議再核實一次。<br>
     地圖為示意路線圖，座標為約略位置，實際步行導航請以各站Naver Map連結為準；地圖需要網絡連線方能載入。<br>
+    行程內容由家庭成員共同編輯，全部更改都會自動存低版本歷史，可以隨時查閱同還原。<br>
     祝 7 位家庭成員旅途愉快，秋日賞楓銀杏平安順心 🍁🍂
   </footer>
-
 </div>
 
+<!-- ================= FLOATING CONTROL BAR ================= -->
+<div class="control-bar">
+  <button class="control-btn ghost" id="btn-history">🕓 歷史紀錄</button>
+  <button class="control-btn ghost" id="btn-edit-toggle">✏️ 編輯模式</button>
+  <button class="control-btn save" id="btn-save" style="display:none;">💾 儲存</button>
+  <span class="save-status" id="save-status"></span>
+</div>
+
+<div id="modal-root"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/diff@5.2.0/dist/diff.js"></script>
 <script>
-  // Highlight active day pill based on scroll position
-  const sections = [...document.querySelectorAll('section, .day')].filter(s => s.id);
-  const pills = [...document.querySelectorAll('.daypill')];
+(function(){
+  "use strict";
 
-  function setActive(){
-    let current = sections[0]?.id;
-    const offset = 80;
-    for(const sec of sections){
-      const rect = sec.getBoundingClientRect();
-      if(rect.top - offset <= 0) current = sec.id;
-    }
-    pills.forEach(p => {
-      const match = p.getAttribute('href') === '#' + current;
-      p.classList.toggle('active', match);
-      if(match){
-        p.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
-      }
-    });
-  }
-  document.addEventListener('scroll', () => window.requestAnimationFrame(setActive), {passive:true});
-  setActive();
+  // ---------- CONFIG ----------
+  const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
+  const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
+  const DAY_COLORS = { day2:"#3E5C6E", day3:"#556B41", day4:"#A23F29", day5:"#93315C", day6:"#BD8F2A" };
+  const DAY_LABELS = { day1:"抵達", day2:"古宮", day3:"南怡島", day4:"聖水洞", day5:"德壽宮", day6:"銀杏尾聲" };
 
-  // ---------- Day route schematic maps (Leaflet + OpenStreetMap) ----------
-  function leafDivIcon(label){
-    return L.divIcon({
-      className: '',
-      html: '<div class="leafnum sm">' + label + '</div>',
-      iconSize: [20,20],
-      iconAnchor: [10,10]
-    });
+  function sbHeaders(extra){
+    return Object.assign({
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+      "Content-Type": "application/json",
+    }, extra || {});
   }
 
-  document.querySelectorAll('.daymap').forEach(el => {
-    let points;
-    try{ points = JSON.parse(el.dataset.points); }catch(e){ return; }
-    if(!points || !points.length) return;
-    if(typeof L === 'undefined'){
-      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--ink-soft);padding:12px;text-align:center;">地圖暫時無法載入（需要網絡連線），請直接使用下方各站 Naver Map 連結導航。</div>';
-      return;
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------- STATE ----------
+  let state = {
+    snapshot: null,      // current in-memory itinerary data (mutated by edit mode)
+    editMode: false,
+    editedBy: localStorage.getItem("seoul_trip_name") || "",
+  };
+
+  function getEditedBy(){
+    if (state.editedBy) return state.editedBy;
+    const name = prompt("你係邊個？（俾大家喺歷史紀錄度睇到係邊個改嘅）") || "匿名";
+    state.editedBy = name;
+    localStorage.setItem("seoul_trip_name", name);
+    return name;
+  }
+
+  // ==================================================================
+  // DATA LAYER
+  // ==================================================================
+  async function fetchLatestVersion(){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=*&order=created_at.desc&limit=1`, {
+      headers: sbHeaders()
+    });
+    if (!res.ok) throw new Error("讀取行程失敗 " + res.status);
+    const rows = await res.json();
+    return rows[0] || null;
+  }
+
+  async function fetchAllVersions(){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=id,created_at,edited_by,source,summary&order=created_at.desc`, {
+      headers: sbHeaders()
+    });
+    if (!res.ok) throw new Error("讀取歷史失敗 " + res.status);
+    return res.json();
+  }
+
+  async function fetchVersionSnapshot(id){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?id=eq.${id}&select=snapshot`, {
+      headers: sbHeaders()
+    });
+    if (!res.ok) throw new Error("讀取版本失敗 " + res.status);
+    const rows = await res.json();
+    return rows[0]?.snapshot || null;
+  }
+
+  async function saveVersion(snapshot, source, summary){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
+      method: "POST",
+      headers: sbHeaders({ "Prefer": "return=representation" }),
+      body: JSON.stringify({
+        edited_by: getEditedBy(),
+        source, summary,
+        snapshot
+      })
+    });
+    if (!res.ok) throw new Error("儲存失敗 " + res.status + " " + (await res.text()));
+    return res.json();
+  }
+
+  // ==================================================================
+  // RENDER: HERO
+  // ==================================================================
+  function renderHero(meta){
+    if (!meta) return;
+    document.getElementById("hero-title").textContent = meta.title || "首爾秋楓銀杏行";
+    document.getElementById("hero-sub").textContent = meta.dateRangeSub || "";
+    document.getElementById("hero-tags").innerHTML = (meta.hotelTags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
+  }
+
+  // ==================================================================
+  // RENDER: OVERVIEW
+  // ==================================================================
+  function renderOverview(d){
+    const acc = d.accommodation || {};
+    const foodCardsHtml = (d.foodCards || []).map(f => `
+      <div class="food-card">
+        <div class="food-card-top">
+          <span class="food-tags">${(f.niecepicks||[]).map(np=>`<span class="niecepick">${esc(np)}</span>`).join("")}</span>
+          <span class="badge note">${esc(f.day)}</span>
+        </div>
+        <div class="food-name">${f.name}</div>
+        ${f.must ? `<div class="food-must">${esc(f.must)}</div>` : ""}
+        <div class="eat-meta">${(f.chips||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>
+      </div>
+    `).join("");
+
+    document.getElementById("overview-body").innerHTML = `
+      <div class="info-card" style="margin-bottom:14px;">
+        <div class="k">Accommodation</div>
+        <div class="v" style="font-size:16px;">${esc(acc.name)}</div>
+        <div class="d">${esc(acc.desc)}</div>
+        <div class="eat-meta"><span class="meta-chip hours">${esc(acc.hoursChip)}</span></div>
+        ${acc.warning ? `<div class="d" style="margin-top:6px;">${esc(acc.warning)}</div>` : ""}
+        ${acc.mapUrl ? `<a class="maplink" style="margin-top:10px;" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 在 Naver Map 開啟酒店</a>` : ""}
+      </div>
+
+      <h3 style="font-size:15px;margin:20px 0 2px;">🌤 10月下旬首爾天氣參考</h3>
+      <p class="section-sub" style="margin-bottom:6px;">以下為歷年同期平均值，僅供準備衣物參考；出發前一週請務必查看即時預報（可用上面AI助手嘅「check最新天氣」）。</p>
+      <table class="weather-table">
+        <tr><th>日期</th><th>日間高溫</th><th>清晨低溫</th><th>概況</th></tr>
+        ${(d.weatherRows||[]).map(r=>`<tr><td>${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
+      </table>
+
+      <h3 style="font-size:15px;margin:22px 0 2px;">🧥 穿搭建議</h3>
+      <ul class="clothing-list">
+        ${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}
+      </ul>
+
+      <h3 style="font-size:15px;margin:22px 0 2px;">🚫🪜 無障礙圖例（姨姨專用）</h3>
+      <p class="section-sub" style="margin-bottom:6px;">姨姨不能行樓梯，以下標記會出現在每個地點旁，方便快速判斷路線是否合適。</p>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--moss)"></span> ${esc((d.accessLegend||[])[0]||"")}</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span> ${esc((d.accessLegend||[])[1]||"")}</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--maple)"></span> ${esc((d.accessLegend||[])[2]||"")}</div>
+      </div>
+      <p class="section-sub" style="margin-top:12px;">${d.elevatorTip||""}</p>
+
+      <h3 style="font-size:15px;margin:24px 0 2px;">🍁 銀杏／楓葉時機提醒</h3>
+      <p class="section-sub" style="margin-bottom:6px;">${d.foliageNote||""}</p>
+
+      <h3 style="font-size:15px;margin:24px 0 2px;">🗓 日程調動重要提醒</h3>
+      <p class="section-sub" style="margin-bottom:6px;">${d.scheduleSwapNote||""}</p>
+
+      <h3 style="font-size:15px;margin:24px 0 2px;">🍽 表妹美食清單 × 全程對照</h3>
+      <p class="section-sub" style="margin-bottom:6px;">下面用 <span class="niecepick" style="vertical-align:middle;">💌 表妹清單</span> 標記逐一對應，並附上參考評分、營業時間同訂位提示。評分為整合Naver／大眾食評的參考值，出發前建議再核實一次。</p>
+      <div class="food-list">${foodCardsHtml}</div>
+    `;
+  }
+
+  // ==================================================================
+  // RENDER: STOP / CONNECTOR / DAY
+  // ==================================================================
+  function stopMarkup(item){
+    const kindClass = item.type === "eat" ? "eat" : item.type === "rest" ? "rest" : "";
+    const niecepickHtml = (item.niecepick && item.niecepick.length)
+      ? `<div>${item.niecepick.map(np=>`<span class="niecepick">${esc(np)}</span>`).join("")}</div>` : "";
+    const eatMetaHtml = (item.eatMeta && item.eatMeta.length)
+      ? `<div class="eat-meta">${item.eatMeta.map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>` : "";
+    let bodyExtra = "";
+    if (item.eatboxHtml) {
+      bodyExtra += `<div class="eatbox">${item.eatboxHtml}${eatMetaHtml}</div>`;
+    } else {
+      bodyExtra += eatMetaHtml;
     }
-    try{
-    const map = L.map(el, {
-      dragging:false, touchZoom:false, scrollWheelZoom:false,
-      doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false
+    const mapHtml = item.mapUrl ? `<a class="maplink" href="${esc(item.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 導航</a>` : "";
+    const accessHtml = (item.accessBadges && item.accessBadges.length)
+      ? `<div class="access-row">${item.accessBadges.map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>` : "";
+    const tipHtml = item.tip ? `<div class="tip-box">${esc(item.tip)}</div>` : "";
+
+    return `
+      <div class="stop-card">
+        <div class="stop-time">${esc(item.time)}</div>
+        <div class="stop-title">${esc(item.title)} ${item.kr ? `<span class="kr">${esc(item.kr)}</span>` : ""}</div>
+        ${niecepickHtml}
+        ${item.desc ? `<div class="stop-desc">${esc(item.desc)}</div>` : ""}
+        ${bodyExtra}
+        ${mapHtml}
+        ${accessHtml}
+        ${tipHtml}
+      </div>
+    `;
+  }
+
+  function stopEditMarkup(dayId, idx, item){
+    return `
+      <div class="stop-card">
+        <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
+        <div class="field-row"><label>類型</label>
+          <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type" style="width:auto;">
+            <option value="normal" ${item.type==="normal"?"selected":""}>一般</option>
+            <option value="eat" ${item.type==="eat"?"selected":""}>餐飲</option>
+            <option value="rest" ${item.type==="rest"?"selected":""}>休息</option>
+          </select>
+        </div>
+        <div class="field-row"><label>名稱</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}"></div>
+        <div class="field-row"><label>韓文</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="kr" value="${esc(item.kr)}"></div>
+        <div class="field-row" style="align-items:flex-start;"><label>描述</label><textarea class="field-textarea" data-day="${dayId}" data-idx="${idx}" data-field="desc">${esc(item.desc)}</textarea></div>
+        <div class="stop-edit-tools">
+          <button class="btn-sm danger" data-action="remove-stop" data-day="${dayId}" data-idx="${idx}">🗑 移除呢個</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function connectorMarkup(item){
+    return `<div class="connector">${item.html}</div>`;
+  }
+
+  function newBlankStop(){
+    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"" };
+  }
+
+  function renderDaySection(day){
+    const itemsHtml = day.items.map((item, idx) => {
+      if (item.kind === "connector") return connectorMarkup(item);
+      return state.editMode ? stopEditMarkup(day.id, idx, item) : stopMarkup(item);
+    }).join("");
+    const mapBlock = day.mapPoints ? `
+      <div class="daymap-wrap">
+        <div class="daymap" id="map-${day.id}" data-points='${JSON.stringify(day.mapPoints)}'></div>
+        <p class="daymap-cap">${esc(day.mapCap||"")}</p>
+      </div>` : "";
+    const addBtn = state.editMode ? `<button class="add-stop-btn" data-action="add-stop" data-day="${day.id}">+ 新增景點到呢一日</button>` : "";
+
+    return `
+      <div class="day" id="${day.id}">
+        <div class="day-head">
+          <span class="day-num">${esc(day.num)}</span>
+          <span class="day-date mono">${esc(day.date)}</span>
+        </div>
+        <h2>${esc(day.title)}</h2>
+        <p class="day-desc">${esc(day.desc)}</p>
+        <div class="day-badges">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
+        ${mapBlock}
+        <div class="timeline">${itemsHtml}</div>
+        ${addBtn}
+      </div>
+    `;
+  }
+
+  function renderDays(){
+    const root = document.getElementById("days-root");
+    const days = state.snapshot.days;
+    root.innerHTML = days.map((day, i) => renderDaySection(day) + (i < days.length - 1 ? '<hr class="div">' : "")).join("");
+    if (!state.editMode) initDayMaps();
+    bindEditHandlers();
+  }
+
+  function renderAll(){
+    renderHero(state.snapshot.meta);
+    renderOverview(state.snapshot);
+    renderDays();
+    if (!state.editMode) initOverviewMap();
+  }
+
+  // ==================================================================
+  // EDIT MODE
+  // ==================================================================
+  function bindEditHandlers(){
+    document.querySelectorAll("#days-root [data-field]").forEach(el => {
+      el.addEventListener("input", () => {
+        const dayId = el.dataset.day, idx = +el.dataset.idx, field = el.dataset.field;
+        const day = state.snapshot.days.find(d => d.id === dayId);
+        if (day) day.items[idx][field] = el.value;
+      });
     });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    const latlngs = points.map(p => [p[0], p[1]]);
-    L.polyline(latlngs, {color:'#BD8F2A', weight:3, dashArray:'2 7', opacity:.9}).addTo(map);
-
-    points.forEach(p => {
-      const isHotel = /^酒店$/.test(p[2]);
-      const numMatch = p[2].match(/^\d+/);
-      const label = isHotel ? '🏨' : (numMatch ? numMatch[0] : '·');
-      L.marker([p[0], p[1]], {icon: leafDivIcon(label)})
-        .addTo(map)
-        .bindPopup(p[2]);
+    document.querySelectorAll('[data-action="remove-stop"]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const dayId = btn.dataset.day, idx = +btn.dataset.idx;
+        const day = state.snapshot.days.find(d => d.id === dayId);
+        if (day && confirm("確定要移除呢個景點？")) {
+          day.items.splice(idx, 1);
+          renderDays();
+        }
+      });
     });
+    document.querySelectorAll('[data-action="add-stop"]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const day = state.snapshot.days.find(d => d.id === btn.dataset.day);
+        if (day) { day.items.push(newBlankStop()); renderDays(); }
+      });
+    });
+  }
 
-    map.fitBounds(latlngs, {padding:[24,24]});
+  document.getElementById("btn-edit-toggle").addEventListener("click", () => {
+    state.editMode = !state.editMode;
+    document.getElementById("btn-edit-toggle").textContent = state.editMode ? "👁 睇返正常版" : "✏️ 編輯模式";
+    document.getElementById("btn-save").style.display = state.editMode ? "inline-block" : "none";
+    renderDays();
+  });
 
-    const tap = document.createElement('div');
-    tap.className = 'daymap-tap';
-    tap.innerHTML = '👆 點擊以自由查看地圖（可拖曳／縮放）';
-    el.style.position = 'relative';
-    el.appendChild(tap);
-    tap.addEventListener('click', () => {
-      map.dragging.enable();
-      map.touchZoom.enable();
-      map.scrollWheelZoom.enable();
-      map.doubleClickZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      tap.remove();
-    }, {once:true});
-    }catch(e){
-      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--ink-soft);padding:12px;text-align:center;">地圖暫時無法載入，請直接使用下方各站 Naver Map 連結導航。</div>';
+  document.getElementById("btn-save").addEventListener("click", async () => {
+    const statusEl = document.getElementById("save-status");
+    statusEl.textContent = "儲存緊…";
+    try {
+      await saveVersion(state.snapshot, "manual", "手動編輯更新");
+      statusEl.textContent = "✅ 已儲存 " + new Date().toLocaleTimeString("zh-HK");
+    } catch (e) {
+      statusEl.textContent = "❌ 儲存失敗：" + e.message;
     }
   });
+
+  // ==================================================================
+  // VERSION HISTORY + DIFF + RESTORE
+  // ==================================================================
+  function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+
+  async function openHistoryModal(){
+    const root = document.getElementById("modal-root");
+    root.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal-sheet">
+      <div class="modal-title">🕓 歷史紀錄 <button class="modal-close" id="modal-close">✕</button></div>
+      <p class="section-sub">揀兩個版本可以比較內容差異；還原會建立一個新版本，唔會刪走中間嘅紀錄。</p>
+      <div id="version-list"><p class="ai-loading">載入緊…</p></div>
+    </div></div>`;
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    document.getElementById("modal-bg").addEventListener("click", (e) => { if (e.target.id === "modal-bg") closeModal(); });
+
+    try {
+      const versions = await fetchAllVersions();
+      const listEl = document.getElementById("version-list");
+      listEl.innerHTML = versions.map(v => `
+        <div class="version-item">
+          <div class="vtop">
+            <span>${new Date(v.created_at).toLocaleString("zh-HK")} · ${esc(v.edited_by)}</span>
+            <span class="src-chip ${esc(v.source)}">${esc(v.source)}</span>
+          </div>
+          <div class="vsummary">${esc(v.summary || "（無摘要）")}</div>
+          <div class="vactions">
+            <label class="btn-sm"><input type="checkbox" class="v-compare-check" value="${v.id}" style="margin-right:4px;">比較</label>
+            <button class="btn-sm" data-action="view-version" data-id="${v.id}">睇呢個版本</button>
+            <button class="btn-sm primary" data-action="restore-version" data-id="${v.id}">還原到呢個版本</button>
+          </div>
+        </div>
+      `).join("") + `<button class="btn-sm" id="btn-do-compare" style="width:100%;margin-top:6px;">比較已選嘅兩個版本</button><div id="diff-area"></div>`;
+
+      listEl.querySelectorAll('[data-action="view-version"]').forEach(btn => {
+        btn.addEventListener("click", async () => {
+          try {
+            const snap = await fetchVersionSnapshot(btn.dataset.id);
+            alert("「" + (snap?.meta?.title||"") + "」呢個版本共有 " + (snap?.days?.length||0) + " 日行程。撳「還原到呢個版本」可以將佢變返做目前版本。");
+          } catch (e) { alert("讀取失敗：" + e.message); }
+        });
+      });
+      listEl.querySelectorAll('[data-action="restore-version"]').forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("確定要還原到呢個版本？（會建立一個新嘅『還原』版本，原本嘅歷史都會keep低）")) return;
+          try {
+            const snap = await fetchVersionSnapshot(btn.dataset.id);
+            if (!snap) return alert("讀取唔到呢個版本");
+            await saveVersion(snap, "restore", "還原到較早版本（#" + btn.dataset.id + "）");
+            state.snapshot = snap;
+            closeModal();
+            renderAll();
+          } catch (e) { alert("還原失敗：" + e.message); }
+        });
+      });
+      document.getElementById("btn-do-compare").addEventListener("click", async () => {
+        const ids = [...listEl.querySelectorAll(".v-compare-check:checked")].map(c => c.value);
+        const diffArea = document.getElementById("diff-area");
+        if (ids.length !== 2) { diffArea.innerHTML = '<p class="section-sub">請剛好揀兩個版本。</p>'; return; }
+        diffArea.innerHTML = '<p class="ai-loading">比較緊…</p>';
+        try {
+          const [snapA, snapB] = await Promise.all([fetchVersionSnapshot(ids[0]), fetchVersionSnapshot(ids[1])]);
+          const daysA = (snapA?.days || []).map(d => ({ id: d.id, title: d.title, items: d.items }));
+          const daysB = (snapB?.days || []).map(d => ({ id: d.id, title: d.title, items: d.items }));
+          if (typeof Diff === "undefined") throw new Error("比較工具未能載入（需要網絡連線）");
+          const parts = Diff.diffJson(daysA, daysB);
+          diffArea.innerHTML = '<div class="diff-block">' + parts.map(p => {
+            const cls = p.added ? "diff-add" : p.removed ? "diff-del" : "";
+            return `<span class="${cls}">${esc(p.value)}</span>`;
+          }).join("") + "</div>";
+        } catch (e) {
+          diffArea.innerHTML = `<p class="section-sub">比較失敗：${esc(e.message)}</p>`;
+        }
+      });
+    } catch (e) {
+      document.getElementById("version-list").innerHTML = `<p class="section-sub">載入失敗：${esc(e.message)}</p>`;
+    }
+  }
+  document.getElementById("btn-history").addEventListener("click", openHistoryModal);
+
+  // ==================================================================
+  // AI ASSISTANT
+  // ==================================================================
+  async function callAi(payload){
+    const res = await fetch(FUNCTIONS_URL, {
+      method: "POST",
+      headers: sbHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  }
+
+  function renderAiNotice(msg){
+    document.getElementById("ai-output").innerHTML = `<div class="ai-result">${esc(msg)}</div>`;
+  }
+  function renderAiText(text){
+    document.getElementById("ai-output").innerHTML = `<div class="ai-result">${esc(text)}</div>`;
+  }
+  function setAiLoading(){
+    document.getElementById("ai-output").innerHTML = `<p class="ai-loading">AI 諗緊…</p>`;
+  }
+
+  document.getElementById("btn-ai-weather").addEventListener("click", async () => {
+    setAiLoading();
+    try {
+      const r = await callAi({ action: "weather" });
+      let html = `<div class="ai-result">${esc(r.summary || "")}</div>`;
+      if (r.aiSummary) html += `<div class="ai-result">${esc(r.aiSummary)}</div>`;
+      else if (r.aiNotice) html += `<div class="ai-result">${esc(r.aiNotice)}</div>`;
+      document.getElementById("ai-output").innerHTML = html;
+    } catch (e) { renderAiNotice("讀取天氣失敗：" + e.message); }
+  });
+
+  document.getElementById("btn-ai-foliage").addEventListener("click", async () => {
+    setAiLoading();
+    try {
+      const r = await callAi({ action: "foliage" });
+      renderAiText(r.aiSummary || r.message || "冇回覆");
+    } catch (e) { renderAiNotice("讀取紅葉情報失敗：" + e.message); }
+  });
+
+  function renderSuggestChanges(notes, changes){
+    let html = notes ? `<div class="ai-result">${esc(notes)}</div>` : "";
+    if (!changes.length) {
+      html += `<div class="ai-result">AI 暫時冇提出具體建議。</div>`;
+    } else {
+      html += changes.map((c, i) => `
+        <div class="ai-change-card">
+          <div class="ai-change-top">
+            <span class="badge note">${esc(c.dayId)} · ${esc(c.op)}</span>
+            <button class="btn-sm primary" data-action="apply-change" data-idx="${i}">✅ 套用</button>
+          </div>
+          <div class="food-must">${esc(c.reason || "")}</div>
+        </div>
+      `).join("");
+    }
+    document.getElementById("ai-output").innerHTML = html;
+
+    document.querySelectorAll('[data-action="apply-change"]').forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const c = changes[+btn.dataset.idx];
+        applyAiChange(c);
+        btn.textContent = "✅ 已套用同儲存";
+        btn.disabled = true;
+        try {
+          await saveVersion(state.snapshot, "ai-suggestion", c.reason || ("AI建議：" + c.op + " " + c.dayId));
+        } catch (e) {
+          alert("已套用落畫面，但儲存去DB失敗：" + e.message);
+        }
+      });
+    });
+  }
+
+  function applyAiChange(c){
+    const day = state.snapshot.days.find(d => d.id === c.dayId);
+    if (!day) return;
+    if (c.op === "add" && c.stop) {
+      day.items.push(Object.assign(newBlankStop(), c.stop, { kind: "stop" }));
+    } else if (c.op === "remove" && c.matchTitle) {
+      day.items = day.items.filter(it => !(it.kind === "stop" && it.title === c.matchTitle));
+    } else if (c.op === "edit" && c.matchTitle && c.stop) {
+      day.items = day.items.map(it => (it.kind === "stop" && it.title === c.matchTitle) ? Object.assign({}, it, c.stop, { kind: "stop" }) : it);
+    }
+    if (!state.editMode) renderDays(); else renderDays();
+  }
+
+  document.getElementById("btn-ai-suggest").addEventListener("click", async () => {
+    setAiLoading();
+    try {
+      const question = document.getElementById("ai-question").value;
+      const r = await callAi({ action: "suggest", question, itinerary: state.snapshot });
+      if (r.ok === false) return renderAiNotice(r.message);
+      renderSuggestChanges(r.notes, r.changes || []);
+    } catch (e) { renderAiNotice("建議行程調整失敗：" + e.message); }
+  });
+
+  document.getElementById("btn-ai-ask").addEventListener("click", async () => {
+    const question = document.getElementById("ai-question").value.trim();
+    if (!question) return;
+    setAiLoading();
+    try {
+      const r = await callAi({ action: "ask", question, itinerary: state.snapshot });
+      if (r.ok === false) return renderAiNotice(r.message);
+      renderAiText(r.aiSummary || "冇回覆");
+    } catch (e) { renderAiNotice("問AI失敗：" + e.message); }
+  });
+
+  // ==================================================================
+  // MAPS (Leaflet + OpenStreetMap)
+  // ==================================================================
+  function leafDivIcon(label, color){
+    return L.divIcon({
+      className: "",
+      html: `<div class="leafnum sm" style="background:${color || 'var(--gold)'};">${esc(label)}</div>`,
+      iconSize: [20, 20], iconAnchor: [10, 10]
+    });
+  }
+
+  function mountFallback(el, msg){
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--ink-soft);padding:12px;text-align:center;">${esc(msg)}</div>`;
+  }
+
+  function initDayMaps(){
+    document.querySelectorAll(".daymap").forEach(el => {
+      let points;
+      try { points = JSON.parse(el.dataset.points); } catch { return; }
+      if (!points || !points.length) return;
+      if (typeof L === "undefined") return mountFallback(el, "地圖暫時無法載入（需要網絡連線），請直接使用下方各站 Naver Map 連結導航。");
+      try {
+        const map = L.map(el, { dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
+        const latlngs = points.map(p => [p[0], p[1]]);
+        L.polyline(latlngs, { color:"#BD8F2A", weight:3, dashArray:"2 7", opacity:.9 }).addTo(map);
+        points.forEach(p => {
+          const isHotel = /^酒店$/.test(p[2]);
+          const numMatch = p[2].match(/^\d+/);
+          const label = isHotel ? "🏨" : (numMatch ? numMatch[0] : "·");
+          L.marker([p[0], p[1]], { icon: leafDivIcon(label) }).addTo(map).bindPopup(p[2]);
+        });
+        map.fitBounds(latlngs, { padding:[24,24] });
+        const tap = document.createElement("div");
+        tap.className = "daymap-tap";
+        tap.innerHTML = "👆 點擊以自由查看地圖（可拖曳／縮放）";
+        el.style.position = "relative";
+        el.appendChild(tap);
+        tap.addEventListener("click", () => {
+          map.dragging.enable(); map.touchZoom.enable(); map.scrollWheelZoom.enable();
+          map.doubleClickZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
+          tap.remove();
+        }, { once:true });
+      } catch (e) { mountFallback(el, "地圖暫時無法載入，請直接使用下方各站 Naver Map 連結導航。"); }
+    });
+  }
+
+  function initOverviewMap(){
+    const el = document.getElementById("overview-map");
+    const legendEl = document.getElementById("overview-legend");
+    const days = state.snapshot.days.filter(d => d.mapPoints && d.mapPoints.length);
+    if (typeof L === "undefined") return mountFallback(el, "總覽地圖暫時無法載入（需要網絡連線）。");
+    try {
+      const map = L.map(el, { dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
+
+      const allLatLngs = [];
+      const layers = {};
+      days.forEach(day => {
+        const color = DAY_COLORS[day.id] || "#888";
+        const latlngs = day.mapPoints.map(p => [p[0], p[1]]);
+        const group = L.layerGroup();
+        L.polyline(latlngs, { color, weight:3, dashArray:"2 6", opacity:.9 }).addTo(group);
+        day.mapPoints.forEach(p => {
+          const isHotel = /^酒店$/.test(p[2]);
+          const numMatch = p[2].match(/^\d+/);
+          const label = isHotel ? "🏨" : (numMatch ? numMatch[0] : "·");
+          L.marker([p[0], p[1]], { icon: leafDivIcon(label, color) }).addTo(group).bindPopup(`${DAY_LABELS[day.id]||day.id}：${p[2]}`);
+        });
+        group.addTo(map);
+        layers[day.id] = group;
+        allLatLngs.push(...latlngs);
+      });
+      if (allLatLngs.length) map.fitBounds(allLatLngs, { padding:[20,20] });
+
+      legendEl.innerHTML = days.map(day => `
+        <span class="legend-chip" data-day="${day.id}">
+          <span class="dot" style="background:${DAY_COLORS[day.id]||'#888'};"></span>${esc(day.num)} ${esc(DAY_LABELS[day.id]||"")}
+        </span>
+      `).join("");
+      legendEl.querySelectorAll(".legend-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          const g = layers[chip.dataset.day];
+          if (map.hasLayer(g)) { map.removeLayer(g); chip.classList.add("off"); }
+          else { map.addLayer(g); chip.classList.remove("off"); }
+        });
+      });
+
+      const tap = document.createElement("div");
+      tap.className = "daymap-tap";
+      tap.innerHTML = "👆 點擊以自由查看地圖（可拖曳／縮放）";
+      el.style.position = "relative";
+      el.appendChild(tap);
+      tap.addEventListener("click", () => {
+        map.dragging.enable(); map.touchZoom.enable(); map.scrollWheelZoom.enable();
+        map.doubleClickZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
+        tap.remove();
+      }, { once:true });
+    } catch (e) { mountFallback(el, "總覽地圖暫時無法載入。"); }
+  }
+
+  // ---------- ACTIVE NAV PILL ON SCROLL ----------
+  function setupNavHighlight(){
+    const sections = [...document.querySelectorAll("section, .day")].filter(s => s.id);
+    const pills = [...document.querySelectorAll(".daypill")];
+    function setActive(){
+      let current = sections[0]?.id;
+      const offset = 80;
+      for (const sec of sections) {
+        const rect = sec.getBoundingClientRect();
+        if (rect.top - offset <= 0) current = sec.id;
+      }
+      pills.forEach(p => {
+        const match = p.getAttribute("href") === "#" + current;
+        p.classList.toggle("active", match);
+        if (match) p.scrollIntoView({ behavior:"smooth", inline:"center", block:"nearest" });
+      });
+    }
+    document.addEventListener("scroll", () => window.requestAnimationFrame(setActive), { passive:true });
+    setActive();
+  }
+
+  // ==================================================================
+  // BOOT
+  // ==================================================================
+  async function boot(){
+    try {
+      const row = await fetchLatestVersion();
+      if (!row) throw new Error("資料庫入面未有任何行程版本");
+      state.snapshot = row.snapshot;
+      renderAll();
+      setupNavHighlight();
+      checkGeminiConfigured();
+    } catch (e) {
+      document.getElementById("overview-body").innerHTML = `<div class="info-card"><div class="d">❌ 載入行程失敗：${esc(e.message)}<br>請檢查網絡連線，或重新整理頁面。</div></div>`;
+      document.getElementById("days-root").innerHTML = "";
+    }
+  }
+
+  async function checkGeminiConfigured(){
+    try {
+      const r = await callAi({ action: "foliage" });
+      if (r.ok === false) {
+        document.getElementById("ai-key-notice").innerHTML = `<div class="ai-result">${esc(r.message)}</div>`;
+      }
+    } catch (e) { /* silent - button clicks will surface errors */ }
+  }
+
+  boot();
+})();
 </script>
 
 </body>
