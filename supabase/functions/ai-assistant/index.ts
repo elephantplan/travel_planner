@@ -49,6 +49,14 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
   return text || "（AI冇回覆內容）";
 }
 
+function friendlyGeminiError(e: unknown): string {
+  const msg = String(e);
+  if (msg.includes("429")) {
+    return "⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。";
+  }
+  return "🔧 AI暫時無法回覆：" + msg.slice(0, 200);
+}
+
 const NOT_CONFIGURED_MSG =
   "🔧 AI功能未啟用：仲未設定 GEMINI_API_KEY。呢個功能需要喺 Supabase Edge Function 嘅 secret 度加返個Gemini API Key先可以用（Dashboard → Project Settings → Edge Functions → Secrets）。";
 const PHOTO_NOT_CONFIGURED_MSG =
@@ -135,7 +143,7 @@ Deno.serve(async (req) => {
           const aiText = await callGemini(apiKey, prompt);
           return json({ ok: true, raw: weather, summary, aiSummary: aiText });
         } catch (e) {
-          return json({ ok: true, raw: weather, summary, aiSummary: null, aiError: String(e) });
+          return json({ ok: true, raw: weather, summary, aiSummary: null, aiNotice: friendlyGeminiError(e) });
         }
       }
       return json({ ok: true, raw: weather, summary, aiSummary: null, aiNotice: NOT_CONFIGURED_MSG });
@@ -144,8 +152,12 @@ Deno.serve(async (req) => {
     if (action === "foliage") {
       if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const prompt = `你係一個廣東話旅遊助理。用戶10月23-28日去首爾賞紅葉銀杏（包括南怡島、首爾林、曹溪寺）。請用廣東話（香港口語）簡短講吓：\n1. 一般嚟講呢段時間銀杏／楓葉大約去到咩程度（用你所知嘅歷年規律推斷，唔使假裝有即時數據）\n2. 提醒用戶你冇即時上網能力，實際情況要去南怡島官網／Naver Blog／首爾市公園局網站做最後確認\n3. 語氣親切，300字以內`;
-      const aiText = await callGemini(apiKey, prompt);
-      return json({ ok: true, aiSummary: aiText });
+      try {
+        const aiText = await callGemini(apiKey, prompt);
+        return json({ ok: true, aiSummary: aiText });
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
     }
 
     if (action === "ask") {
@@ -153,8 +165,12 @@ Deno.serve(async (req) => {
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
       const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）睇緊佢哋10月23-28日嘅首爾行程JSON。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n行程JSON（節錄，只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(itinerary)?.slice(0, 6000)}\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
-      const aiText = await callGemini(apiKey, prompt);
-      return json({ ok: true, aiSummary: aiText });
+      try {
+        const aiText = await callGemini(apiKey, prompt);
+        return json({ ok: true, aiSummary: aiText });
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
     }
 
     if (action === "suggest") {
@@ -163,7 +179,12 @@ Deno.serve(async (req) => {
       const question = (body?.question ?? "").toString().slice(0, 1000);
       const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
       const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路），並喺transitBefore講清楚點樣由上一個景點過去。\n\n用戶要求：${question || "檢視成個行程，建議1-3個增加或移除景點的調整"}\n\n現有行程JSON（dayId對應每一日）：\n${JSON.stringify(itinerary)?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
-      const aiText = await callGemini(apiKey, prompt);
+      let aiText: string;
+      try {
+        aiText = await callGemini(apiKey, prompt);
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
       let parsed: any = null;
       try {
         const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
