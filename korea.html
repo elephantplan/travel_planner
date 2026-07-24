@@ -235,6 +235,42 @@
   .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'Space Mono',monospace;text-transform:uppercase;}
   .access-row{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
 
+  /* ---------- NIECE PICK + RATING/BOOKING META ---------- */
+  .niecepick{
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:10.5px;font-weight:700;color:#8A1E4D;
+    background:#F9DCE8;border:1px solid #EFB8CF;
+    padding:3px 9px;border-radius:20px;
+    white-space:nowrap;
+  }
+  .eat-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .meta-chip{
+    font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;
+    background:var(--card);border:1px solid var(--line);color:var(--ink-soft);
+    display:inline-flex;align-items:center;gap:4px;
+  }
+  .meta-chip.rating{color:var(--gold);border-color:var(--gold-soft);background:var(--gold-soft);}
+  .meta-chip.book{color:var(--sky);border-color:var(--sky-soft);background:var(--sky-soft);}
+  .meta-chip.book.warn{color:var(--maple);border-color:var(--maple-soft);background:var(--maple-soft);}
+
+  /* ---------- FOOD QUICK-REFERENCE LIST ---------- */
+  .food-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
+  .food-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 14px;
+  }
+  .food-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+  .food-name{font-size:14px;font-weight:700;}
+  .food-name .kr{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-left:4px;}
+  .food-must{font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;}
+
+  /* ---------- NEARBY TIP ---------- */
+  .tip-box{
+    margin-top:10px;background:var(--pine-soft);border-radius:10px;padding:9px 11px;
+    font-size:12.5px;color:#2F4A3A;line-height:1.55;
+  }
+  .tip-box b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'Space Mono',monospace;text-transform:uppercase;color:var(--pine);}
+
   /* connector between stops */
   .connector{
     position:relative;
@@ -313,7 +349,7 @@
     <a class="daypill" href="#day3">D3 <b>南怡島</b></a>
     <a class="daypill" href="#day4">D4 <b>德壽宮</b></a>
     <a class="daypill" href="#day5">D5 <b>聖水洞</b></a>
-    <a class="daypill" href="#day6">D6 <b>賦歸</b></a>
+    <a class="daypill" href="#day6">D6 <b>銀杏尾聲</b></a>
   </div>
 </div>
 
@@ -357,6 +393,87 @@
       <div class="legend-item"><span class="legend-dot" style="background:var(--maple)"></span> <b>建議搭的士代步</b>：該段步行對長輩負擔較大，直接叫車最省力</div>
     </div>
     <p class="section-sub" style="margin-top:12px;">💡 小提醒：首爾地鐵站出口不一定全部設有電梯，出發前可在 Naver Map／官方App 搜尋站名 + 「엘리베이터」確認電梯出口位置，再決定使用哪一個出口。</p>
+
+    <h3 style="font-size:15px;margin:24px 0 2px;">🍁 銀杏／楓葉時機提醒</h3>
+    <p class="section-sub" style="margin-bottom:6px;">往年首爾市區銀杏（德壽宮、首爾林）平均約於 <b>10/28 前後</b>轉黃最盛，南怡島楓葉銀杏則約於 <b>10/28–11/7</b> 達到最佳觀賞期。本行程南怡島安排在 10/25，屬轉色初期，銀杏大道已會泛黃但未必達滿版金黃，實際情況視當年氣溫而定，屬於「賞楓早鳥」而非保證滿開，請家人心理有個預期；若最後一天（10/28）天氣許可，德壽宮石牆路一帶屆時應接近最佳狀態。</p>
+
+    <h3 style="font-size:15px;margin:24px 0 2px;">🍽 表妹美食清單 × 全程對照</h3>
+    <p class="section-sub" style="margin-bottom:6px;">表妹提供的10項美食清單，其實已經全部安排落每日行程入面，下面用<span class="niecepick" style="vertical-align:middle;">💌 表妹清單</span>標記逐一對應，並附上參考評分同訂位提示，方便出發前心裡有數。評分為 Naver／大眾食評整合參考值，出發前建議再核實一次即時評分。</p>
+    <div class="food-list">
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・Artist bakery</span><span class="badge note">Day 2</span></div>
+        <div class="food-name">Artist Bakery 安國店 <span class="kr">아티스트 베이커리</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.3</span>
+          <span class="meta-chip book warn">🎫 CatchTable現場排隊・不可遙距取號</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・Mil Toast</span><span class="badge note">Day 2</span></div>
+        <div class="food-name">Mil Toast House 益善洞 <span class="kr">밀 토스트집</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.2</span>
+          <span class="meta-chip book">🎫 免預約・現場取號</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・橋村炸雞</span><span class="badge note">Day 3</span></div>
+        <div class="food-name">橋村炸雞 外送 <span class="kr">교촌치킨</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.1（連鎖・穩定水準）</span>
+          <span class="meta-chip book">📱 外送App落單・免訂位</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・炸醬麵</span><span class="badge note">Day 4</span></div>
+        <div class="food-name">山東餃子 明洞店 <span class="kr">산동교자</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.0</span>
+          <span class="meta-chip book warn">☎ 7人建議先電話劃位</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・路梁津海鮮市場＋鮑魚粥</span><span class="badge note">Day 4</span></div>
+        <div class="food-name">鷺梁津水產市場 진주식당 <span class="kr">노량진 진주식당</span></div>
+        <div class="food-must">表妹清單寫「路梁津」，即市場正式漢字名「鷺梁津」，同一地方。</div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.2</span>
+          <span class="meta-chip book warn">📅 建議必先Naver預約，人氣極高不接受即場</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・風川鰻魚</span><span class="badge note">Day 5</span></div>
+        <div class="food-name">風川鰻魚 延南店 <span class="kr">풍천장어 연남점</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.3</span>
+          <span class="meta-chip book warn">📅 建議Naver預約，7人請預先致電劃位</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・Beton</span><span class="badge note">Day 5</span></div>
+        <div class="food-name">Beton 聖水旗艦店 <span class="kr">베통 성수</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.3</span>
+          <span class="meta-chip book">🎫 免預約・現場排隊</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・海鮮煎餅</span><span class="badge note">Day 6</span></div>
+        <div class="food-name">순희네빈대떡（廣藏市場）<span class="kr">광장시장</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.1</span>
+          <span class="meta-chip book">🎫 市場檔口・免預約現場排隊</span>
+        </div>
+      </div>
+      <div class="food-card">
+        <div class="food-card-top"><span class="niecepick">💌 表妹清單・孔陵一隻雞</span><span class="badge note">Day 6</span></div>
+        <div class="food-name">孔陵一隻雞 東大門店 <span class="kr">공릉닭한마리</span></div>
+        <div class="eat-meta">
+          <span class="meta-chip rating">⭐ 4.2</span>
+          <span class="meta-chip book">🎫 免預約，晚市較旺・午市到訪較少候位</span>
+        </div>
+      </div>
+    </div>
   </section>
 
   <hr class="div">
@@ -438,8 +555,14 @@
         <div class="stop-card">
           <div class="stop-time">約 11:15</div>
           <div class="stop-title">Artist Bakery 安國店 <span class="kr">아티스트 베이커리</span></div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
           <div class="stop-desc">首爾最火紅的鹽可頌專賣店，由「倫敦貝果博物館」創辦人打造。安國站1號出口即到，鄰近景福宮。</div>
-          <div class="eatbox"><b>必點推介</b>原味鹽可頌（플레인 소금빵）／松露鹽可頌／蒜香牛油鹽可頌 — 建議一開店或提早用 CatchTable 排隊，週末人潮較多。</div>
+          <div class="eatbox"><b>必點推介</b>原味鹽可頌（플레인 소금빵）／松露鹽可頌／蒜香牛油鹽可頌
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.3</span>
+              <span class="meta-chip book warn">🎫 CatchTable現場取號・不可遙距排隊，麵包售完即截龍</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/아티스트베이커리%20안국점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖，無需上落樓梯</span></div>
         </div>
@@ -478,6 +601,7 @@
           <div class="stop-desc">建議走「桂洞路」一帶緩坡街道拍照，<b>避開北村8景／2景的階梯打卡點</b>。若姨姨想休息，可在路口韓屋咖啡廳等候，其他人步行10分鐘內折返。</div>
           <a class="maplink" href="https://map.naver.com/p/search/북촌한옥마을" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge warn">🟡 部分觀景台有階梯，建議只走桂洞路平緩段</span></div>
+          <div class="tip-box"><b>順路一提</b>桂洞路口對面即是「三清洞」咖啡街，同樣平路，若時間充裕可加10分鐘散步；往益善洞方向亦會經過安國站，不用刻意繞路。</div>
         </div>
       </div>
 
@@ -487,8 +611,14 @@
         <div class="stop-card">
           <div class="stop-time">約 15:30</div>
           <div class="stop-title">Mil Toast House 益善洞 <span class="kr">밀 토스트집</span></div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
           <div class="stop-desc">益善洞韓屋咖啡街的人氣蒸麵包吐司店，鐘路3街站4號出口步行可達，適合下午茶稍作休息。</div>
-          <div class="eatbox"><b>必點推介</b>舒芙蕾法式吐司／栗子蒸包（밤 찐빵）／玉米蒸包 ｜ 假日建議先掃碼取號等候。</div>
+          <div class="eatbox"><b>必點推介</b>舒芙蕾法式吐司／栗子蒸包（밤 찐빵）／玉米蒸包
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.2</span>
+              <span class="meta-chip book">🎫 免預約・假日建議先掃碼取號等候</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/밀토스트집%20익선점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖，無階梯</span></div>
         </div>
@@ -573,7 +703,7 @@
           <div class="stop-time">約 10:30</div>
           <div class="stop-title">南怡島 <span class="kr">남이섬</span></div>
           <div class="stop-desc">碼頭與渡輪之間為緩坡棧道，非樓梯，5分鐘即可抵達島上。島內主要道路皆為平坦碎石路／柏油路，園方設有電動代步車及單車租借（建議提前致電或於官網查詢當日供應狀況，為姨姨預留一台）。</div>
-          <div class="eatbox"><b>賞楓銀杏重點</b>中央銀杏大道（메타세쿼이아길／은행나무길）為全島最經典打卡點，10月下旬正值轉色期，建議上午光線較柔和時前往拍照。</div>
+          <div class="eatbox"><b>賞楓銀杏重點</b>中央銀杏大道（메타세쿼이아길／은행나무길）為全島最經典打卡點，建議上午光線較柔和時前往拍照。<br><b style="margin-top:6px;">🍁 心理準備</b>南怡島官方歷年統計楓葉銀杏最佳觀賞期約在 10/28–11/7，今天（10/25）屬轉色初期，銀杏大道會開始泛黃但未必滿版金黃，效果視當年氣溫可能提早或延後，仍值得一去但毋須抱着「一定滿開」的期望。</div>
           <a class="maplink" href="https://map.naver.com/p/search/남이섬" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 碼頭為緩坡非樓梯</span><span class="badge">🟡 部分小徑碎石路，建議代步車</span></div>
         </div>
@@ -609,8 +739,14 @@
         <div class="stop-card">
           <div class="stop-time">約 19:30</div>
           <div class="stop-title">橋村炸雞 外送到酒店 <span class="kr">교촌치킨</span></div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
           <div class="stop-desc">全國連鎖品牌，可用外送App（配送用韓國電話號碼或請酒店前台協助落單）直接送到房間，長輩不用再出門，是全日走動後最輕鬆的晚餐選擇。</div>
-          <div class="eatbox"><b>必點推介</b>蜂蜜綠茶炸雞（허니콤보）／原味醬燒炸雞（교촌오리지날）</div>
+          <div class="eatbox"><b>必點推介</b>蜂蜜綠茶炸雞（허니콤보）／原味醬燒炸雞（교촌오리지날）
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.1（連鎖水準穩定）</span>
+              <span class="meta-chip book">📱 外送App落單・免訂位</span>
+            </div>
+          </div>
           <div class="access-row"><span class="badge">🟢 房內用餐，零走動</span></div>
         </div>
       </div>
@@ -671,8 +807,14 @@
         <div class="stop-card">
           <div class="stop-time">約 12:00</div>
           <div class="stop-title">山東餃子 明洞店 <span class="kr">산동교자</span></div>
+          <div><span class="niecepick">💌 表妹清單・炸醬麵</span></div>
           <div class="stop-desc">明洞區人氣中式料理老店，招牌炸醬麵及手工水餃廣受遊客歡迎，用餐環境為平地舖面，方便7人同桌。</div>
-          <div class="eatbox"><b>必點推介</b>炸醬麵（짜장면）／手工水餃（교자）／糖醋肉（탕수육）</div>
+          <div class="eatbox"><b>必點推介</b>炸醬麵（짜장면）／手工水餃（교자）／糖醋肉（탕수육）
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.0</span>
+              <span class="meta-chip book warn">☎ 7人同枱建議先電話留座</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/산동교자%20명동점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
         </div>
@@ -686,6 +828,7 @@
           <div class="stop-title">明洞購物時光</div>
           <div class="stop-desc">明洞主街全為平坦行人專用區，無需擔心階梯問題，長輩可在街邊咖啡廳稍坐，年輕人自由逛街後匯合。</div>
           <div class="access-row"><span class="badge">🟢 行人專用步行街，無階梯</span></div>
+          <div class="tip-box"><b>順路一提</b>時間充裕的話，明洞聖堂（明洞大聖堂）步行約8分鐘，紅磚哥德式建築＋小庭園同樣平路可達；不想逛街的長輩可留在此區咖啡廳休息，不用跟着走。</div>
         </div>
       </div>
 
@@ -695,8 +838,14 @@
         <div class="stop-card">
           <div class="stop-time">約 16:30</div>
           <div class="stop-title">鷺梁津水產市場 <span class="kr">노량진수산시장</span></div>
+          <div><span class="niecepick">💌 表妹清單・路梁津海鮮市場＋鮑魚粥</span></div>
           <div class="stop-desc">韓國最大的水產批發市場，室內為平層結構並設有電梯，可先逛市場選購生猛海鮮（鮑魚、帝王蟹、比目魚等），再拿到樓上食堂付「上菜費」現場加工享用。</div>
-          <div class="eatbox"><b>推薦食堂</b>진주식당（5樓）— 提供모듬회+초밥+튀김+매운탕的套餐，最後以<b>鮑魚粥（전복죽）</b>作結，是全日最豐盛的一餐，也是姨姨、媽媽都會喜歡的溫暖收尾。</div>
+          <div class="eatbox"><b>推薦食堂</b>진주식당（5樓）— 提供모듬회+초밥+튀김+매운탕的套餐，最後以<b>鮑魚粥（전복죽）</b>作結，是全日最豐盛的一餐，也是姨姨、媽媽都會喜歡的溫暖收尾。
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.2</span>
+              <span class="meta-chip book warn">📅 極高人氣，務必提前Naver預約，否則當日可能無法即場入座</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/노량진수산시장" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 市場室內設電梯，全平層</span></div>
         </div>
@@ -736,8 +885,14 @@
         <div class="stop-card">
           <div class="stop-time">約 11:30</div>
           <div class="stop-title">風川鰻魚 延南店 <span class="kr">풍천장어 연남점</span></div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
           <div class="stop-desc">弘大入口站2號出口步行約7分鐘，現殺炭火白燒鰻魚人氣名店，全程有店員代烤，無需自己動手。11:30開店即到可避免排隊。</div>
-          <div class="eatbox"><b>必點推介</b>炭火烤白鰻（兩隻）＋宴會麵（잔치국수）作配餐，鰻魚肥美無腥味，連平常不吃海鮮的人都會喜歡。</div>
+          <div class="eatbox"><b>必點推介</b>炭火烤白鰻（兩隻）＋宴會麵（잔치국수）作配餐，鰻魚肥美無腥味，連平常不吃海鮮的人都會喜歡。
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.3</span>
+              <span class="meta-chip book warn">📅 可Naver預約，7人建議提前一兩日先約位</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/풍천장어%20연남점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
         </div>
@@ -764,6 +919,7 @@
           <div class="stop-desc">首爾市區內最著名的銀杏大道之一，公園步道全為平坦鋪面，設有大量長椅，是全程對長輩最友善的賞銀杏地點，媽媽、姨姨可以慢慢散步拍照。</div>
           <a class="maplink" href="https://map.naver.com/p/search/서울숲" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 公園步道全平坦，多長椅可休息</span></div>
+          <div class="tip-box"><b>順路一提</b>公園南側連接首爾林碼頭，天氣好時可散步至漢江邊吹風；往聖水洞商圈方向沿途本身就會經過連南路一帶的文青小店，不用刻意繞路找。</div>
         </div>
       </div>
 
@@ -773,8 +929,14 @@
         <div class="stop-card">
           <div class="stop-time">約 16:00</div>
           <div class="stop-title">Beton 聖水旗艦店 <span class="kr">베통 성수 플래그십</span></div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
           <div class="stop-desc">首爾人氣鹽可頌／鹽麵包專門店，聖水洞旗艦店空間寬敞，可內用坐下享用下午茶。</div>
-          <div class="eatbox"><b>必點推介</b>原味鹽可頌／松露鹽可頌／玉米奶油鹽可頌，建議一到就先點餐，人多時需稍等候。</div>
+          <div class="eatbox"><b>必點推介</b>原味鹽可頌／松露鹽可頌／玉米奶油鹽可頌，建議一到就先點餐，人多時需稍等候。
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.3</span>
+              <span class="meta-chip book">🎫 免預約・現場排隊，旗艦店座位較多輪候較快</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/베통%20성수" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖，設有座位</span></div>
         </div>
@@ -800,10 +962,11 @@
       <span class="day-num">DAY 6</span>
       <span class="day-date mono">10月28日（三）</span>
     </div>
-    <h2>廣藏市場早市・賦歸</h2>
-    <p class="day-desc">最後一天行程刻意安排輕鬆：早上到廣藏市場吃地道小食及一隻雞作結，中午回酒店取行李，悠閒前往機場。</p>
+    <h2>曹溪寺千年銀杏・廣藏市場早市・賦歸</h2>
+    <p class="day-desc">最後一天不再只是「食完就返酒店」：早上加插市中心一站僅3分鐘車程的曹溪寺／仁寺洞賞銀杏，再原線一站站往東走食廣藏市場同一隻雞，全程走一條直線，不走回頭路，中午回酒店取行李，悠閒前往機場。</p>
     <div class="day-badges">
-      <span class="badge">🧳 賦歸日，行程從簡</span>
+      <span class="badge">🚇 地鐵1號線一線到底，無需轉乘</span>
+      <span class="badge">🍁 加插銀杏古樹作旅程尾聲</span>
       <span class="badge note">🥟 早午餐：廣藏市場＋孔陵一隻雞</span>
     </div>
 
@@ -812,18 +975,38 @@
         <div class="stop-card">
           <div class="stop-time">09:00</div>
           <div class="stop-title">酒店寄存行李後出發</div>
-          <div class="stop-desc">建議先在酒店辦理延遲退房或寄存大件行李，輕裝前往鐘路覓食，回程直接取行李去機場。</div>
+          <div class="stop-desc">建議先在酒店辦理延遲退房或寄存大件行李，輕裝出門，回程直接取行李去機場。市廳站設電梯，出門步行約5分鐘即達。</div>
+          <div class="access-row"><span class="badge">🟢 市廳站設電梯</span></div>
         </div>
       </div>
 
-      <div class="connector"><span class="icon">🚇</span>地鐵約 <b>12–15 分鐘</b>（市廳站→鐘路5街站，站內設電梯）</div>
+      <div class="connector"><span class="icon">🚇</span>地鐵1號線約 <b>5 分鐘</b>（市廳站→鐘閣站，1站直達，站內設電梯）</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 09:20</div>
+          <div class="stop-title">曹溪寺＋仁寺洞 <span class="kr">조계사・인사동</span></div>
+          <div class="stop-desc">鐘閣站2號出口步行約3分鐘。曹溪寺是市中心少見的都市古剎，大雄殿前有一株樹齡數百年的高大銀杏樹，秋末滿樹金黃時是首爾市內隱藏的賞銀杏名點，且遊人比南怡島、首爾林少得多，適合作全程賞銀杏的安靜收尾。寺內庭院為平坦石地及木棧道，沒有樓梯。逛完可沿仁寺洞街步行10分鐘感受傳統工藝品店。</div>
+          <div class="eatbox"><b>拍照重點</b>大雄殿前銀杏樹＋傳統瓦頂殿宇同框，建議上午光線由東側射入時最好看；10/28正值銀杏平均最盛期附近，是全程「賭銀杏」勝算最高的一站。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/조계사" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 寺內庭院全平坦，無樓梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚇</span>鐘閣站搭1號線約 <b>6 分鐘</b>直達鐘路5街站，無需轉車</div>
 
       <div class="stop eat">
         <div class="stop-card">
-          <div class="stop-time">約 09:30</div>
+          <div class="stop-time">約 10:15</div>
           <div class="stop-title">廣藏市場 <span class="kr">광장시장</span></div>
-          <div class="stop-desc">韓國第一座常設市場，早上人潮較少，適合悠閒逛食。市場走道較窄且人多，建議分成2–3小組錯開時間逛，方便照顧長輩。</div>
-          <div class="eatbox"><b>必點推介</b>순희네빈대떡的<b>海鮮煎餅／綠豆煎餅（빈대떡）</b>，配上市場名物<b>麻藥飯卷（마약김밥）</b>，是最經典的市場組合。</div>
+          <div><span class="niecepick">💌 表妹清單・海鮮煎餅</span></div>
+          <div class="stop-desc">韓國第一座常設市場，鐘路5街站8號出口步行約2分鐘。10點後人潮仍不算多，適合悠閒逛食。市場走道較窄且人多，建議分成2–3小組錯開時間逛，方便照顧長輩。</div>
+          <div class="eatbox"><b>必點推介</b>순희네빈대떡的<b>海鮮煎餅／綠豆煎餅（빈대떡）</b>，配上市場名物<b>麻藥飯卷（마약김밥）</b>，是最經典的市場組合。
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.1</span>
+              <span class="meta-chip book">🎫 市場檔口・免預約現場排隊</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/순희네빈대떡" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge warn">🟡 市場走道較窄，建議分組錯峰</span></div>
         </div>
@@ -833,10 +1016,16 @@
 
       <div class="stop eat">
         <div class="stop-card">
-          <div class="stop-time">約 11:00</div>
+          <div class="stop-time">約 11:30</div>
           <div class="stop-title">孔陵一隻雞 東大門店 <span class="kr">공릉닭한마리</span></div>
-          <div class="stop-desc">東大門站9號出口／鍾路五街站5號出口步行約5分鐘，一鍋熱騰騰雞湯作為旅程最後一頓正餐，暖胃又暖心。</div>
-          <div class="eatbox"><b>必點推介</b>一隻雞（닭한마리）煮好後加點刀削麵（칼국수），最後以<b>海苔雞蛋粥</b>作完美收尾。</div>
+          <div><span class="niecepick">💌 表妹清單</span></div>
+          <div class="stop-desc">東大門站9號出口／鍾路五街站5號出口步行約5分鐘，一鍋熱騰騰雞湯作為旅程最後一頓正餐，暖胃又暖心。午市時段到訪一般比晚市少候位。</div>
+          <div class="eatbox"><b>必點推介</b>一隻雞（닭한마리）煮好後加點刀削麵（칼국수），最後以<b>海苔雞蛋粥</b>作完美收尾。
+            <div class="eat-meta">
+              <span class="meta-chip rating">⭐ 4.2</span>
+              <span class="meta-chip book">🎫 免預約，晚市較旺・午市到訪候位較少</span>
+            </div>
+          </div>
           <a class="maplink" href="https://map.naver.com/p/search/공릉닭한마리%20동대문점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
           <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
         </div>
@@ -876,6 +1065,7 @@
     <div class="brand">首爾秋楓銀杏行 · 家庭旅行手冊</div>
     地址、營業時間及Naver Map連結僅供參考，出發前請再次確認最新資訊。<br>
     部分Naver Map連結為關鍵字搜尋，若無法直接開啟App，請於Naver Map內手動搜尋店名。<br>
+    餐廳評分為整合Naver／大眾食評的參考值，訂位狀態亦會隨時間變動，出發前建議再核實一次。<br>
     祝 7 位家庭成員旅途愉快，秋日賞楓銀杏平安順心 🍁🍂
   </footer>
 
