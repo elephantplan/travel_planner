@@ -10,49 +10,50 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
-    --paper:#F3ECD9;
-    --paper-deep:#EAE0C2;
-    --card:#FFFDF7;
-    --ink:#2A241E;
-    --ink-soft:#6E6255;
-    --line:#DED2AF;
-    --gold:#BD8F2A;
-    --gold-soft:#F0DFAE;
-    --maple:#A23F29;
-    --maple-soft:#EFD7C8;
-    --moss:#556B41;
-    --moss-soft:#DEE6CC;
-    --sky:#3E5C6E;
-    --sky-soft:#D9E3E6;
-    --niece:#93315C;
-    --niece-soft:#F5DBE7;
-    --stamp:#9A3222;
+    --ink:#17140F;
+    --card:#231E17;
+    --card-2:#2B241C;
+    --text:#EDE6D8;
+    --text-soft:#A79C89;
+    --line:#3C3527;
+    --gold:#E0B563;
+    --gold-soft:#332A18;
+    --maple:#E2916D;
+    --maple-soft:#33231B;
+    --moss:#A8C787;
+    --moss-soft:#242E1C;
+    --sky:#8EC0E4;
+    --sky-soft:#1E2C38;
+    --niece:#EFA8CC;
+    --niece-soft:#332232;
+    --stamp:#E2704F;
     --radius:16px;
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
   body{
     margin:0;
-    background:var(--paper);
-    color:var(--ink);
+    background:var(--ink);
+    color:var(--text);
     font-family:'Noto Sans KR', sans-serif;
     -webkit-font-smoothing:antialiased;
     padding-bottom:100px;
     background-image:
-      radial-gradient(circle at 12% 8%, rgba(189,143,42,0.06), transparent 40%),
-      radial-gradient(circle at 90% 25%, rgba(162,63,41,0.05), transparent 35%);
+      radial-gradient(circle at 15% 0%, rgba(224,181,99,0.08), transparent 40%),
+      radial-gradient(circle at 90% 20%, rgba(226,112,79,0.06), transparent 35%);
   }
   h1,h2,h3,.display{font-family:'Noto Serif KR', serif;}
   .mono{font-family:'IBM Plex Mono', monospace;}
   a{color:inherit;}
   .wrap{max-width:520px;margin:0 auto;padding:0 18px;}
   button{font-family:inherit;}
+  img{max-width:100%;}
 
   /* ---------- SIGNATURE: GINKGO LEAF NUMBER MARKER ---------- */
   .leafnum{
     display:inline-flex;align-items:center;justify-content:center;
     width:26px;height:26px;flex:0 0 auto;
-    background:var(--gold);color:#FFFCF3;
+    background:var(--gold);color:#231A08;
     font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
     clip-path: polygon(50% 0%, 88% 16%, 100% 52%, 78% 100%, 50% 84%, 22% 100%, 0% 52%, 12% 16%);
   }
@@ -60,17 +61,17 @@
   .leafnum.eat{background:var(--maple);}
   .leafnum.rest{background:var(--moss);}
 
-  /* ---------- HERO / FIELD JOURNAL COVER ---------- */
+  /* ---------- HERO / LANTERN NIGHT JOURNAL ---------- */
   .hero{
-    background:var(--paper-deep);
-    border-bottom:3px double var(--ink);
+    background:linear-gradient(180deg,#1D1811 0%, #221C14 100%);
+    border-bottom:1px solid var(--line);
     padding:28px 0 24px;
     position:relative;
     overflow:hidden;
   }
   .hero-leafbg{
     position:absolute; right:-40px; bottom:-50px; width:220px;height:220px;
-    background:var(--gold);opacity:.12;
+    background:var(--gold);opacity:.08;
     clip-path: polygon(50% 0%, 88% 16%, 100% 52%, 78% 100%, 50% 84%, 22% 100%, 0% 52%, 12% 16%);
     transform:rotate(12deg);
   }
@@ -90,7 +91,7 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     color:var(--stamp);transform:rotate(-8deg);
     font-family:'IBM Plex Mono',monospace;
-    mix-blend-mode:multiply;
+    box-shadow:0 0 22px rgba(226,112,79,0.28);
   }
   .stamp b{font-size:15px;letter-spacing:.01em;line-height:1.1;}
   .stamp span{font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
@@ -100,20 +101,22 @@
     margin:2px 0 8px;
     font-weight:700;
     position:relative;z-index:1;
+    color:var(--text);
   }
   .washi{
     display:inline-block;
-    background:repeating-linear-gradient(45deg, var(--gold-soft), var(--gold-soft) 7px, #E4CE8E 7px, #E4CE8E 14px);
-    color:#5B4415;
+    background:repeating-linear-gradient(45deg, var(--gold-soft), var(--gold-soft) 7px, #3E3018 7px, #3E3018 14px);
+    color:var(--gold);
     font-size:11.5px;font-weight:700;
     padding:5px 12px;
     transform:rotate(-1.5deg);
-    box-shadow:0 2px 5px rgba(0,0,0,.1);
+    box-shadow:0 2px 8px rgba(0,0,0,.35);
     margin:0 0 14px;
+    border:1px solid var(--line);
   }
   .hero p.sub{
     margin:0 0 18px;
-    color:var(--ink-soft);
+    color:var(--text-soft);
     font-size:13.5px;
     position:relative;z-index:1;
   }
@@ -125,37 +128,37 @@
     position:relative;z-index:1;
   }
   .ticket-row{display:flex;justify-content:space-between;align-items:flex-start;}
-  .ticket-city{font-size:20px;font-weight:700;font-family:'Noto Serif KR',serif;}
+  .ticket-city{font-size:20px;font-weight:700;font-family:'Noto Serif KR',serif;color:var(--text);}
   .ticket-code{font-family:'IBM Plex Mono',monospace;color:var(--gold);font-size:11px;margin-top:2px;}
   .ticket-plane{color:var(--maple);font-size:18px;margin:0 10px;align-self:center;}
   .ticket-divider{border-top:1px dashed var(--line);margin:14px 0;}
-  .ticket-meta{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
-  .ticket-meta div b{display:block;color:var(--ink);font-size:12.5px;margin-top:3px;font-family:'Noto Sans KR',sans-serif;font-weight:700;}
+  .ticket-meta{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-soft);}
+  .ticket-meta div b{display:block;color:var(--text);font-size:12.5px;margin-top:3px;font-family:'Noto Sans KR',sans-serif;font-weight:700;}
   .hero-tags{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;position:relative;z-index:1;}
   .tag{
     font-size:11px;
     padding:5px 10px;
     border-radius:20px;
     background:var(--card);
-    color:var(--ink-soft);
+    color:var(--text-soft);
     border:1px solid var(--line);
   }
 
   /* ---------- OVERVIEW MAP (all days combined) ---------- */
-  .overview-map-block{padding:16px 0 4px;}
-  .overview-map{height:260px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;}
+  .overview-map-block{padding-top:6px;}
+  .overview-map{height:260px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;filter:saturate(.85) brightness(.92);}
   .overview-legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
   .legend-chip{
     display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
     padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);
-    color:var(--ink-soft);cursor:pointer;user-select:none;
+    color:var(--text-soft);cursor:pointer;user-select:none;
   }
   .legend-chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
   .legend-chip.off{opacity:.4;}
-  .daymap-cap{font-size:11px;color:var(--ink-soft);margin-top:6px;line-height:1.5;}
+  .daymap-cap{font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5;}
   .daymap-tap{
     position:absolute;inset:0;z-index:401;
-    background:rgba(42,36,30,0.28);
+    background:rgba(10,8,5,0.45);
     color:#FFFCF3;font-size:12px;font-weight:700;
     display:flex;align-items:center;justify-content:center;gap:6px;
     cursor:pointer;text-align:center;padding:10px;
@@ -164,7 +167,7 @@
   /* ---------- STICKY DAY NAV ---------- */
   .daynav{
     position:sticky;top:0;z-index:50;
-    background:rgba(243,236,217,0.96);
+    background:rgba(23,20,15,0.94);
     backdrop-filter:blur(6px);
     border-bottom:1px solid var(--line);
     padding:10px 0;
@@ -173,44 +176,44 @@
   .daynav-scroll::-webkit-scrollbar{display:none;}
   .daypill{
     flex:0 0 auto;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 13px;border-radius:20px;
-    background:var(--card);border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;text-decoration:none;
+    background:var(--card);border:1px solid var(--line);color:var(--text-soft);white-space:nowrap;text-decoration:none;
   }
-  .daypill b{color:var(--ink);font-family:'Noto Sans KR',sans-serif;font-weight:700;margin-left:4px;}
-  .daypill.active{background:var(--ink);border-color:var(--ink);color:var(--paper);}
-  .daypill.active b{color:var(--paper);}
+  .daypill b{color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:700;margin-left:4px;}
+  .daypill.active{background:var(--gold);border-color:var(--gold);color:#231A08;}
+  .daypill.active b{color:#231A08;}
 
   /* ---------- SECTION GENERIC ---------- */
   section{padding:26px 0;}
-  .section-title{font-size:19px;font-weight:700;margin:0 0 4px;}
-  .section-sub{color:var(--ink-soft);font-size:13px;margin:0 0 16px;}
+  .section-title{font-size:19px;font-weight:700;margin:0 0 4px;color:var(--text);}
+  .section-sub{color:var(--text-soft);font-size:13px;margin:0 0 16px;}
 
   /* ---------- INFO CARDS ---------- */
   .info-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
-  .info-card .k{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase;}
-  .info-card .v{font-size:20px;font-weight:700;margin-top:4px;font-family:'Noto Serif KR',serif;}
-  .info-card .d{font-size:12px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
+  .info-card .k{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-soft);letter-spacing:.05em;text-transform:uppercase;}
+  .info-card .v{font-size:20px;font-weight:700;margin-top:4px;font-family:'Noto Serif KR',serif;color:var(--text);}
+  .info-card .d{font-size:12px;color:var(--text-soft);margin-top:4px;line-height:1.5;}
 
   .weather-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
-  .weather-table th,.weather-table td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line);}
-  .weather-table th{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);font-weight:400;text-transform:uppercase;}
+  .weather-table th,.weather-table td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line);color:var(--text);}
+  .weather-table th{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-soft);font-weight:400;text-transform:uppercase;}
   .weather-table td.hi{color:var(--maple);font-weight:700;}
   .weather-table td.lo{color:var(--sky);font-weight:700;}
 
   .legend{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
-  .legend-item{display:flex;align-items:center;gap:10px;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
+  .legend-item{display:flex;align-items:center;gap:10px;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--text);}
   .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
 
   .clothing-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
-  .clothing-list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;}
+  .clothing-list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;color:var(--text);}
   .clothing-list li .ico{font-size:16px;}
 
   /* ---------- DAY SECTION ---------- */
   .day{padding-top:34px;scroll-margin-top:64px;}
   .day-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;}
   .day-num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:3px 10px;}
-  .day-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
-  .day h2{font-size:21px;margin:6px 0 4px;}
-  .day-desc{font-size:13px;color:var(--ink-soft);margin:0 0 6px;line-height:1.6;}
+  .day-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-soft);}
+  .day h2{font-size:21px;margin:6px 0 4px;color:var(--text);}
+  .day-desc{font-size:13px;color:var(--text-soft);margin:0 0 6px;line-height:1.6;}
   .day-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
   .badge{font-size:11px;padding:4px 9px;border-radius:20px;background:var(--moss-soft);color:var(--moss);font-weight:700;}
   .badge.warn{background:var(--maple-soft);color:var(--maple);}
@@ -218,26 +221,35 @@
 
   /* ---------- ROUTE MAP ---------- */
   .daymap-wrap{margin-bottom:18px;}
-  .daymap{height:220px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;}
-  .daymap .leafnum{box-shadow:0 0 0 2px #FFFCF3;}
+  .daymap{height:220px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;filter:saturate(.85) brightness(.92);}
+  .daymap .leafnum{box-shadow:0 0 0 2px #17140F;}
+
+  /* ---------- STOP PHOTO ---------- */
+  .stop-photo{margin:-14px -14px 10px;border-radius:var(--radius) var(--radius) 0 0;overflow:hidden;position:relative;}
+  .stop-photo img{width:100%;height:170px;object-fit:cover;display:block;background:var(--card-2);}
+  .photo-refresh-btn{position:absolute;bottom:8px;right:8px;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:20px;background:rgba(10,8,5,.6);color:#FFFCF3;border:1px solid rgba(255,255,255,.25);cursor:pointer;}
+  .stop-photo-empty{margin-bottom:10px;}
+  .photo-picker{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
+  .photo-picker img{width:100%;height:76px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;}
+  .photo-picker img:hover{border-color:var(--gold);}
 
   /* timeline */
   .timeline{position:relative;padding-left:0;}
   .stop{position:relative;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;}
   .stop-card{flex:1 1 auto;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 12px;}
   .stop-marker{flex:0 0 auto;margin-top:4px;}
-  .stop-time{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
-  .stop-title{font-size:16px;font-weight:700;margin:3px 0 2px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
-  .stop-title .kr{font-size:12px;color:var(--ink-soft);font-weight:400;}
-  .stop-desc{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:4px 0 8px;}
+  .stop-time{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-soft);}
+  .stop-title{font-size:16px;font-weight:700;margin:3px 0 2px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text);}
+  .stop-title .kr{font-size:12px;color:var(--text-soft);font-weight:400;}
+  .stop-desc{font-size:13px;color:var(--text-soft);line-height:1.6;margin:4px 0 8px;}
   .maplink{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--sky);text-decoration:none;background:var(--sky-soft);padding:6px 11px;border-radius:20px;}
-  .eatbox{margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#6E2A1B;line-height:1.55;}
-  .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;}
+  .eatbox{margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#F0C7B2;line-height:1.55;}
+  .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;color:var(--maple);}
   .access-row{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
 
-  .niecepick{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--niece);background:var(--niece-soft);border:1px solid #E3B7CC;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+  .niecepick{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--niece);background:var(--niece-soft);border:1px solid #4A2E42;padding:3px 9px;border-radius:20px;white-space:nowrap;}
   .eat-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
-  .meta-chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);display:inline-flex;align-items:center;gap:4px;}
+  .meta-chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--card-2);border:1px solid var(--line);color:var(--text-soft);display:inline-flex;align-items:center;gap:4px;}
   .meta-chip.rating{color:var(--gold);border-color:var(--gold-soft);background:var(--gold-soft);}
   .meta-chip.book{color:var(--sky);border-color:var(--sky-soft);background:var(--sky-soft);}
   .meta-chip.book.warn{color:var(--maple);border-color:var(--maple-soft);background:var(--maple-soft);}
@@ -247,77 +259,83 @@
   .food-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;}
   .food-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
   .food-tags{display:flex;gap:6px;flex-wrap:wrap;}
-  .food-name{font-size:14px;font-weight:700;}
-  .food-name .kr{font-size:11.5px;color:var(--ink-soft);font-weight:400;margin-left:4px;}
-  .food-must{font-size:12px;color:var(--ink-soft);line-height:1.5;margin-top:2px;}
+  .food-name{font-size:14px;font-weight:700;color:var(--text);}
+  .food-name .kr{font-size:11.5px;color:var(--text-soft);font-weight:400;margin-left:4px;}
+  .food-must{font-size:12px;color:var(--text-soft);line-height:1.5;margin-top:2px;}
 
-  .tip-box{margin-top:10px;background:var(--moss-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#33422A;line-height:1.55;}
+  .tip-box{margin-top:10px;background:var(--moss-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#CBE0B3;line-height:1.55;}
   .tip-box b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;color:var(--moss);}
 
-  .connector{position:relative;margin:-4px 0 14px 36px;padding:8px 12px 8px 14px;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
+  .connector{position:relative;margin:-4px 0 14px 36px;padding:8px 12px 8px 14px;font-size:12px;color:var(--text-soft);display:flex;align-items:center;gap:8px;}
   .connector .icon{font-size:14px;}
-  .connector b{color:var(--ink);font-weight:700;}
+  .connector b{color:var(--text);font-weight:700;}
 
-  footer{padding:30px 0 10px;text-align:center;color:var(--ink-soft);font-size:11.5px;line-height:1.8;}
-  footer .brand{font-family:'Noto Serif KR',serif;font-size:14px;color:var(--ink);margin-bottom:6px;}
+  footer{padding:30px 0 10px;text-align:center;color:var(--text-soft);font-size:11.5px;line-height:1.8;}
+  footer .brand{font-family:'Noto Serif KR',serif;font-size:14px;color:var(--text);margin-bottom:6px;}
   hr.div{border:none;border-top:1px solid var(--line);margin:0;}
 
-  /* ---------- EDIT MODE ---------- */
+  /* ---------- EDIT MODE (accordion, mobile-friendly) ---------- */
+  .stop-view-row{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .stop-view-row .info{flex:1 1 auto;min-width:0;}
+  .stop-view-row .chev{flex:0 0 auto;font-size:18px;color:var(--text-soft);transition:transform .15s;}
+  .stop-view-row.expanded .chev{transform:rotate(180deg);}
   .field-input, .field-textarea{
-    width:100%;font-family:inherit;font-size:13px;color:var(--ink);
-    border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff;margin:2px 0;
+    width:100%;font-family:inherit;font-size:16px;color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;padding:12px 12px;background:#FFFCF3;margin:4px 0;
   }
-  .field-textarea{resize:vertical;min-height:44px;}
-  .field-row{display:flex;gap:6px;align-items:center;margin:2px 0;}
-  .field-row label{font-size:10px;color:var(--ink-soft);flex:0 0 44px;font-family:'IBM Plex Mono',monospace;}
-  .stop-edit-tools{display:flex;gap:6px;margin-top:8px;}
-  .btn-sm{font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);cursor:pointer;}
+  .field-textarea{resize:vertical;min-height:70px;}
+  .field-row{display:flex;flex-direction:column;gap:2px;margin:8px 0;}
+  .field-row label{font-size:11px;color:var(--text-soft);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;}
+  .field-row select.field-input{padding:12px;}
+  .stop-edit-body{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;}
+  .stop-edit-tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .btn-sm{font-size:12px;font-weight:700;padding:8px 13px;border-radius:20px;border:1px solid var(--line);background:var(--card-2);color:var(--text-soft);cursor:pointer;}
   .btn-sm.danger{color:var(--maple);border-color:var(--maple-soft);}
   .btn-sm.primary{color:var(--moss);border-color:var(--moss-soft);}
-  .add-stop-btn{width:100%;margin:6px 0 0;padding:10px;border:1.5px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--ink-soft);font-size:13px;font-weight:700;cursor:pointer;}
+  .add-stop-btn{width:100%;margin:6px 0 0;padding:14px;border:1.5px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--text-soft);font-size:14px;font-weight:700;cursor:pointer;}
 
   /* ---------- FLOATING CONTROL BAR ---------- */
   .control-bar{
     position:fixed;left:0;right:0;bottom:0;z-index:60;
-    background:rgba(243,236,217,0.97);backdrop-filter:blur(6px);
+    background:rgba(23,20,15,0.96);backdrop-filter:blur(6px);
     border-top:1px solid var(--line);
     padding:10px 18px calc(10px + env(safe-area-inset-bottom));
     display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
   }
   .control-btn{
     font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:9px 16px;border-radius:20px;
-    border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;
+    border:1px solid var(--gold);background:var(--gold);color:#231A08;cursor:pointer;
   }
-  .control-btn.ghost{background:var(--card);color:var(--ink);border-color:var(--line);}
-  .control-btn.save{background:var(--moss);border-color:var(--moss);}
-  .save-status{font-size:11px;color:var(--ink-soft);align-self:center;}
+  .control-btn.ghost{background:var(--card);color:var(--text);border-color:var(--line);}
+  .control-btn.save{background:var(--moss);border-color:var(--moss);color:#132009;}
+  .save-status{font-size:11px;color:var(--text-soft);align-self:center;}
 
   /* ---------- MODAL (history / diff) ---------- */
-  .modal-backdrop{position:fixed;inset:0;background:rgba(20,17,13,.55);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
-  .modal-sheet{background:var(--paper);width:100%;max-width:520px;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
-  .modal-title{font-size:17px;font-weight:700;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;}
-  .modal-close{background:none;border:none;font-size:18px;color:var(--ink-soft);cursor:pointer;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(5,4,2,.65);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
+  .modal-sheet{background:var(--ink);border-top:1px solid var(--line);width:100%;max-width:520px;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
+  .modal-title{font-size:17px;font-weight:700;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;color:var(--text);}
+  .modal-close{background:none;border:none;font-size:18px;color:var(--text-soft);cursor:pointer;}
   .version-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;}
-  .version-item .vtop{display:flex;justify-content:space-between;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);}
-  .version-item .vsummary{margin-top:4px;font-size:13px;}
+  .version-item .vtop{display:flex;justify-content:space-between;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-soft);}
+  .version-item .vsummary{margin-top:4px;font-size:13px;color:var(--text);}
   .version-item .vactions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
   .src-chip{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;}
   .src-chip.manual{background:var(--sky-soft);color:var(--sky);}
   .src-chip.ai-suggestion{background:var(--niece-soft);color:var(--niece);}
   .src-chip.seed{background:var(--moss-soft);color:var(--moss);}
   .src-chip.restore{background:var(--gold-soft);color:var(--gold);}
-  .diff-add{background:#DDEFD1;color:#2C4A1E;}
-  .diff-del{background:#F5D9D2;color:#6E2A1B;text-decoration:line-through;}
-  .diff-block{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:pre-wrap;line-height:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;}
+  .diff-add{background:#243420;color:#BFE3A0;}
+  .diff-del{background:#3A241D;color:#E8A897;text-decoration:line-through;}
+  .diff-block{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:pre-wrap;line-height:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;color:var(--text);}
 
   /* ---------- AI PANEL ---------- */
   .ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
   .ai-ask-row{display:flex;gap:8px;margin-top:10px;}
-  .ai-ask-row input{flex:1;padding:9px 11px;border-radius:20px;border:1px solid var(--line);font-size:13px;font-family:inherit;}
-  .ai-result{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;}
+  .ai-ask-row input{flex:1;padding:11px 13px;border-radius:20px;border:1px solid var(--line);font-size:14px;font-family:inherit;background:#FFFCF3;color:var(--ink);}
+  .ai-result{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--text);}
   .ai-change-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;}
   .ai-change-top{display:flex;justify-content:space-between;gap:8px;align-items:center;}
-  .ai-loading{font-size:12px;color:var(--ink-soft);}
+  .ai-loading{font-size:12px;color:var(--text-soft);}
 
   @media (max-width:360px){
     .hero h1{font-size:24px;}
@@ -367,15 +385,6 @@
   </div>
 </div>
 
-<!-- ================= OVERVIEW MAP (all days) ================= -->
-<div class="wrap overview-map-block">
-  <h2 class="section-title" style="margin-bottom:2px;">🗺 全程總覽地圖</h2>
-  <p class="section-sub">6日行程一次過睇晒，撳圖例可以個別開關某一日嘅路線</p>
-  <div class="overview-map" id="overview-map"></div>
-  <div class="overview-legend" id="overview-legend"></div>
-  <p class="daymap-cap">示意路線圖，非精確導航；南怡島（Day3）距離市中心較遠，比例上會壓縮顯示。</p>
-</div>
-
 <!-- ================= STICKY NAV ================= -->
 <div class="daynav">
   <div class="daynav-scroll" id="daynavScroll">
@@ -420,6 +429,15 @@
     <div id="ai-output"></div>
   </section>
 
+  <!-- ================= OVERVIEW MAP (all days) ================= -->
+  <section class="overview-map-block">
+    <h2 class="section-title" style="margin-bottom:2px;">🗺 全程總覽地圖</h2>
+    <p class="section-sub">6日行程一次過睇晒，撳圖例可以個別開關某一日嘅路線</p>
+    <div class="overview-map" id="overview-map"></div>
+    <div class="overview-legend" id="overview-legend"></div>
+    <p class="daymap-cap">示意路線圖，非精確導航；南怡島（Day3）距離市中心較遠，比例上會壓縮顯示。</p>
+  </section>
+
   <hr class="div">
 
   <div id="days-root"><p class="section-sub" style="padding:20px 0;">載入緊行程…</p></div>
@@ -430,6 +448,7 @@
     部分Naver Map連結為關鍵字搜尋，若無法直接開啟App，請於Naver Map內手動搜尋店名。<br>
     餐廳評分為整合Naver／大眾食評的參考值，訂位狀態亦會隨時間變動，出發前建議再核實一次。<br>
     地圖為示意路線圖，座標為約略位置，實際步行導航請以各站Naver Map連結為準；地圖需要網絡連線方能載入。<br>
+    地點相片由 Google Places 搜尋提供，僅供參考觀感，如未搵到相或功能未啟用會顯示提示。<br>
     行程內容由家庭成員共同編輯，全部更改都會自動存低版本歷史，可以隨時查閱同還原。<br>
     祝 7 位家庭成員旅途愉快，秋日賞楓銀杏平安順心 🍁🍂
   </footer>
@@ -455,7 +474,7 @@
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
-  const DAY_COLORS = { day2:"#3E5C6E", day3:"#556B41", day4:"#A23F29", day5:"#93315C", day6:"#BD8F2A" };
+  const DAY_COLORS = { day2:"#8EC0E4", day3:"#A8C787", day4:"#E2916D", day5:"#EFA8CC", day6:"#E0B563" };
   const DAY_LABELS = { day1:"抵達", day2:"古宮", day3:"南怡島", day4:"聖水洞", day5:"德壽宮", day6:"銀杏尾聲" };
 
   function sbHeaders(extra){
@@ -475,6 +494,7 @@
     snapshot: null,      // current in-memory itinerary data (mutated by edit mode)
     editMode: false,
     editedBy: localStorage.getItem("seoul_trip_name") || "",
+    expanded: new Set(), // "dayId:idx" keys currently expanded in edit mode
   };
 
   function getEditedBy(){
@@ -565,19 +585,19 @@
         ${acc.mapUrl ? `<a class="maplink" style="margin-top:10px;" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 在 Naver Map 開啟酒店</a>` : ""}
       </div>
 
-      <h3 style="font-size:15px;margin:20px 0 2px;">🌤 10月下旬首爾天氣參考</h3>
+      <h3 style="font-size:15px;margin:20px 0 2px;color:var(--text);">🌤 10月下旬首爾天氣參考</h3>
       <p class="section-sub" style="margin-bottom:6px;">以下為歷年同期平均值，僅供準備衣物參考；出發前一週請務必查看即時預報（可用上面AI助手嘅「check最新天氣」）。</p>
       <table class="weather-table">
         <tr><th>日期</th><th>日間高溫</th><th>清晨低溫</th><th>概況</th></tr>
         ${(d.weatherRows||[]).map(r=>`<tr><td>${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
       </table>
 
-      <h3 style="font-size:15px;margin:22px 0 2px;">🧥 穿搭建議</h3>
+      <h3 style="font-size:15px;margin:22px 0 2px;color:var(--text);">🧥 穿搭建議</h3>
       <ul class="clothing-list">
         ${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}
       </ul>
 
-      <h3 style="font-size:15px;margin:22px 0 2px;">🚫🪜 無障礙圖例（姨姨專用）</h3>
+      <h3 style="font-size:15px;margin:22px 0 2px;color:var(--text);">🚫🪜 無障礙圖例（姨姨專用）</h3>
       <p class="section-sub" style="margin-bottom:6px;">姨姨不能行樓梯，以下標記會出現在每個地點旁，方便快速判斷路線是否合適。</p>
       <div class="legend">
         <div class="legend-item"><span class="legend-dot" style="background:var(--moss)"></span> ${esc((d.accessLegend||[])[0]||"")}</div>
@@ -586,23 +606,37 @@
       </div>
       <p class="section-sub" style="margin-top:12px;">${d.elevatorTip||""}</p>
 
-      <h3 style="font-size:15px;margin:24px 0 2px;">🍁 銀杏／楓葉時機提醒</h3>
+      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🍁 銀杏／楓葉時機提醒</h3>
       <p class="section-sub" style="margin-bottom:6px;">${d.foliageNote||""}</p>
 
-      <h3 style="font-size:15px;margin:24px 0 2px;">🗓 日程調動重要提醒</h3>
+      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🗓 日程調動重要提醒</h3>
       <p class="section-sub" style="margin-bottom:6px;">${d.scheduleSwapNote||""}</p>
 
-      <h3 style="font-size:15px;margin:24px 0 2px;">🍽 表妹美食清單 × 全程對照</h3>
+      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🍽 表妹美食清單 × 全程對照</h3>
       <p class="section-sub" style="margin-bottom:6px;">下面用 <span class="niecepick" style="vertical-align:middle;">💌 表妹清單</span> 標記逐一對應，並附上參考評分、營業時間同訂位提示。評分為整合Naver／大眾食評的參考值，出發前建議再核實一次。</p>
       <div class="food-list">${foodCardsHtml}</div>
     `;
   }
 
   // ==================================================================
+  // RENDER: STOP PHOTO
+  // ==================================================================
+  function photoBlockHtml(item, dayId, idx){
+    if (item.photoUrl) {
+      return `<div class="stop-photo">
+        <img src="${esc(item.photoUrl)}" alt="${esc(item.title)}" loading="lazy">
+        <button class="photo-refresh-btn" data-action="find-photo" data-day="${dayId}" data-idx="${idx}">🔄 換相</button>
+      </div>`;
+    }
+    return `<div class="stop-photo-empty">
+      <button class="btn-sm" data-action="find-photo" data-day="${dayId}" data-idx="${idx}">📷 幫我搵呢度嘅相</button>
+    </div>`;
+  }
+
+  // ==================================================================
   // RENDER: STOP / CONNECTOR / DAY
   // ==================================================================
-  function stopMarkup(item){
-    const kindClass = item.type === "eat" ? "eat" : item.type === "rest" ? "rest" : "";
+  function stopMarkup(item, dayId, idx){
     const niecepickHtml = (item.niecepick && item.niecepick.length)
       ? `<div>${item.niecepick.map(np=>`<span class="niecepick">${esc(np)}</span>`).join("")}</div>` : "";
     const eatMetaHtml = (item.eatMeta && item.eatMeta.length)
@@ -620,6 +654,7 @@
 
     return `
       <div class="stop-card">
+        ${photoBlockHtml(item, dayId, idx)}
         <div class="stop-time">${esc(item.time)}</div>
         <div class="stop-title">${esc(item.title)} ${item.kr ? `<span class="kr">${esc(item.kr)}</span>` : ""}</div>
         ${niecepickHtml}
@@ -633,22 +668,35 @@
   }
 
   function stopEditMarkup(dayId, idx, item){
+    const key = dayId + ":" + idx;
+    const isExpanded = state.expanded.has(key);
+    const typeLabel = item.type === "eat" ? "🍽 餐飲" : item.type === "rest" ? "🛌 休息" : "📍 一般";
     return `
       <div class="stop-card">
-        <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
-        <div class="field-row"><label>類型</label>
-          <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type" style="width:auto;">
-            <option value="normal" ${item.type==="normal"?"selected":""}>一般</option>
-            <option value="eat" ${item.type==="eat"?"selected":""}>餐飲</option>
-            <option value="rest" ${item.type==="rest"?"selected":""}>休息</option>
-          </select>
+        <div class="stop-view-row ${isExpanded ? "expanded" : ""}" data-action="toggle-expand" data-key="${key}">
+          <div class="info">
+            <div class="stop-time">${esc(item.time) || "（未設時間）"}</div>
+            <div class="stop-title">${esc(item.title) || "（未命名）"} <span class="kr">${typeLabel}</span></div>
+          </div>
+          <div class="chev">⌄</div>
         </div>
-        <div class="field-row"><label>名稱</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}"></div>
-        <div class="field-row"><label>韓文</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="kr" value="${esc(item.kr)}"></div>
-        <div class="field-row" style="align-items:flex-start;"><label>描述</label><textarea class="field-textarea" data-day="${dayId}" data-idx="${idx}" data-field="desc">${esc(item.desc)}</textarea></div>
-        <div class="stop-edit-tools">
-          <button class="btn-sm danger" data-action="remove-stop" data-day="${dayId}" data-idx="${idx}">🗑 移除呢個</button>
-        </div>
+        ${isExpanded ? `
+        <div class="stop-edit-body">
+          <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
+          <div class="field-row"><label>類型</label>
+            <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type">
+              <option value="normal" ${item.type==="normal"?"selected":""}>一般</option>
+              <option value="eat" ${item.type==="eat"?"selected":""}>餐飲</option>
+              <option value="rest" ${item.type==="rest"?"selected":""}>休息</option>
+            </select>
+          </div>
+          <div class="field-row"><label>名稱</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}"></div>
+          <div class="field-row"><label>韓文</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="kr" value="${esc(item.kr)}"></div>
+          <div class="field-row"><label>描述</label><textarea class="field-textarea" data-day="${dayId}" data-idx="${idx}" data-field="desc">${esc(item.desc)}</textarea></div>
+          <div class="stop-edit-tools">
+            <button class="btn-sm danger" data-action="remove-stop" data-day="${dayId}" data-idx="${idx}">🗑 移除呢個景點</button>
+          </div>
+        </div>` : ""}
       </div>
     `;
   }
@@ -658,13 +706,13 @@
   }
 
   function newBlankStop(){
-    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"" };
+    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"", photoUrl:"" };
   }
 
   function renderDaySection(day){
     const itemsHtml = day.items.map((item, idx) => {
       if (item.kind === "connector") return connectorMarkup(item);
-      return state.editMode ? stopEditMarkup(day.id, idx, item) : stopMarkup(item);
+      return state.editMode ? stopEditMarkup(day.id, idx, item) : stopMarkup(item, day.id, idx);
     }).join("");
     const mapBlock = day.mapPoints ? `
       <div class="daymap-wrap">
@@ -694,7 +742,7 @@
     const days = state.snapshot.days;
     root.innerHTML = days.map((day, i) => renderDaySection(day) + (i < days.length - 1 ? '<hr class="div">' : "")).join("");
     if (!state.editMode) initDayMaps();
-    bindEditHandlers();
+    bindStopHandlers();
   }
 
   function renderAll(){
@@ -705,9 +753,9 @@
   }
 
   // ==================================================================
-  // EDIT MODE
+  // EDIT MODE + PHOTO PICKER (shared handlers, bound after every render)
   // ==================================================================
-  function bindEditHandlers(){
+  function bindStopHandlers(){
     document.querySelectorAll("#days-root [data-field]").forEach(el => {
       el.addEventListener("input", () => {
         const dayId = el.dataset.day, idx = +el.dataset.idx, field = el.dataset.field;
@@ -715,8 +763,16 @@
         if (day) day.items[idx][field] = el.value;
       });
     });
+    document.querySelectorAll('[data-action="toggle-expand"]').forEach(row => {
+      row.addEventListener("click", () => {
+        const key = row.dataset.key;
+        if (state.expanded.has(key)) state.expanded.delete(key); else state.expanded.add(key);
+        renderDays();
+      });
+    });
     document.querySelectorAll('[data-action="remove-stop"]').forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const dayId = btn.dataset.day, idx = +btn.dataset.idx;
         const day = state.snapshot.days.find(d => d.id === dayId);
         if (day && confirm("確定要移除呢個景點？")) {
@@ -728,7 +784,43 @@
     document.querySelectorAll('[data-action="add-stop"]').forEach(btn => {
       btn.addEventListener("click", () => {
         const day = state.snapshot.days.find(d => d.id === btn.dataset.day);
-        if (day) { day.items.push(newBlankStop()); renderDays(); }
+        if (day) {
+          day.items.push(newBlankStop());
+          state.expanded.add(day.id + ":" + (day.items.length - 1));
+          renderDays();
+        }
+      });
+    });
+    document.querySelectorAll('[data-action="find-photo"]').forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const dayId = btn.dataset.day, idx = +btn.dataset.idx;
+        const day = state.snapshot.days.find(d => d.id === dayId);
+        const item = day.items[idx];
+        const container = btn.parentElement;
+        btn.textContent = "搵緊…";
+        btn.disabled = true;
+        try {
+          const r = await callAi({ action: "place-photo", query: item.kr || item.title });
+          if (r.ok === false) {
+            container.innerHTML = `<p class="section-sub">${esc(r.message)}</p>`;
+            return;
+          }
+          if (!r.photos || !r.photos.length) {
+            container.innerHTML = `<p class="section-sub">📷 搵唔到「${esc(item.title)}」相關相片，可以人手上網搵幾張相自己貼link。</p>`;
+            return;
+          }
+          container.innerHTML = `<div class="photo-picker">${r.photos.map(url=>`<img src="${esc(url)}" data-url="${esc(url)}">`).join("")}</div><p class="section-sub" style="margin-top:6px;">撳一張相就會揀返嗰張，自動儲存。</p>`;
+          container.querySelectorAll("img").forEach(img => {
+            img.addEventListener("click", async () => {
+              item.photoUrl = img.dataset.url;
+              try { await saveVersion(state.snapshot, "manual", "更新相片：" + item.title); } catch (err) { /* still show locally even if save fails */ }
+              renderDays();
+            });
+          });
+        } catch (err) {
+          container.innerHTML = `<p class="section-sub">搵相失敗：${esc(err.message)}</p>`;
+        }
       });
     });
   }
@@ -882,6 +974,7 @@
             <span class="badge note">${esc(c.dayId)} · ${esc(c.op)}</span>
             <button class="btn-sm primary" data-action="apply-change" data-idx="${i}">✅ 套用</button>
           </div>
+          ${c.stop?.transitBefore ? `<div class="food-must">🧭 ${esc(c.stop.transitBefore)}</div>` : ""}
           <div class="food-must">${esc(c.reason || "")}</div>
         </div>
       `).join("");
@@ -907,13 +1000,16 @@
     const day = state.snapshot.days.find(d => d.id === c.dayId);
     if (!day) return;
     if (c.op === "add" && c.stop) {
+      if (c.stop.transitBefore) {
+        day.items.push({ kind: "connector", html: `<span class="icon">🧭</span>${esc(c.stop.transitBefore)}` });
+      }
       day.items.push(Object.assign(newBlankStop(), c.stop, { kind: "stop" }));
     } else if (c.op === "remove" && c.matchTitle) {
       day.items = day.items.filter(it => !(it.kind === "stop" && it.title === c.matchTitle));
     } else if (c.op === "edit" && c.matchTitle && c.stop) {
       day.items = day.items.map(it => (it.kind === "stop" && it.title === c.matchTitle) ? Object.assign({}, it, c.stop, { kind: "stop" }) : it);
     }
-    if (!state.editMode) renderDays(); else renderDays();
+    renderDays();
   }
 
   document.getElementById("btn-ai-suggest").addEventListener("click", async () => {
@@ -949,7 +1045,7 @@
   }
 
   function mountFallback(el, msg){
-    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--ink-soft);padding:12px;text-align:center;">${esc(msg)}</div>`;
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--text-soft);padding:12px;text-align:center;">${esc(msg)}</div>`;
   }
 
   function initDayMaps(){
@@ -962,7 +1058,7 @@
         const map = L.map(el, { dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
         const latlngs = points.map(p => [p[0], p[1]]);
-        L.polyline(latlngs, { color:"#BD8F2A", weight:3, dashArray:"2 7", opacity:.9 }).addTo(map);
+        L.polyline(latlngs, { color:"#E0B563", weight:3, dashArray:"2 7", opacity:.9 }).addTo(map);
         points.forEach(p => {
           const isHotel = /^酒店$/.test(p[2]);
           const numMatch = p[2].match(/^\d+/);
