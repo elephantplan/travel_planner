@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>首爾秋楓銀杏行 ｜ 10.23–10.28 家庭旅行手冊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B1A1F;
+    --ink-soft:#514F58;
+    --paper:#FAF9F6;
+    --card:#FFFFFF;
+    --gold:#C8892E;
+    --gold-soft:#F3E2C2;
+    --maple:#A23B2E;
+    --maple-soft:#F3DAD5;
+    --pine:#4C6B58;
+    --pine-soft:#DCE7E0;
+    --line:#E6E2D8;
+    --sky:#3E5C76;
+    --sky-soft:#DCE5EE;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans TC', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  h1,h2,h3,.display{font-family:'Noto Serif TC', serif;}
+  .mono{font-family:'Space Mono', monospace;}
+  a{color:inherit;}
+  .wrap{max-width:520px;margin:0 auto;padding:0 18px;}
+
+  /* ---------- HERO / BOARDING PASS ---------- */
+  .hero{
+    background:linear-gradient(180deg,#1B1A1F 0%, #26232C 100%);
+    color:#F3EFE6;
+    padding:34px 0 26px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::after{
+    content:"";
+    position:absolute;
+    right:-60px;top:-60px;
+    width:220px;height:220px;
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(200,137,46,0.35), transparent 70%);
+  }
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:.18em;
+    color:var(--gold);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .hero h1{
+    font-size:30px;
+    line-height:1.25;
+    margin:0 0 6px;
+    font-weight:700;
+  }
+  .hero p.sub{
+    margin:0 0 22px;
+    color:#C9C5BC;
+    font-size:14px;
+  }
+  .pass{
+    background:#211F26;
+    border:1px solid #3A3742;
+    border-radius:18px;
+    padding:18px 18px 14px;
+    position:relative;
+  }
+  .pass::before,.pass::after{
+    content:"";
+    position:absolute;
+    width:22px;height:22px;
+    background:var(--paper);
+    border-radius:50%;
+    top:50%;
+    transform:translateY(-50%);
+  }
+  .pass::before{left:-11px;}
+  .pass::after{right:-11px;}
+  .pass-row{display:flex;justify-content:space-between;align-items:flex-start;}
+  .pass-city{font-size:22px;font-weight:700;font-family:'Noto Serif TC',serif;}
+  .pass-code{font-family:'Space Mono',monospace;color:var(--gold);font-size:12px;margin-top:2px;}
+  .pass-plane{color:var(--gold);font-size:20px;margin:0 10px;align-self:center;}
+  .pass-divider{
+    border-top:1px dashed #46424E;
+    margin:16px 0;
+  }
+  .pass-meta{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;color:#B7B2A9;}
+  .pass-meta div b{display:block;color:#F3EFE6;font-size:13px;margin-top:3px;font-family:'Noto Sans TC',sans-serif;font-weight:700;}
+  .hero-tags{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .tag{
+    font-size:11px;
+    padding:5px 10px;
+    border-radius:20px;
+    background:#2E2B34;
+    color:#D8D3C8;
+    border:1px solid #423E49;
+  }
+
+  /* ---------- STICKY DAY NAV ---------- */
+  .daynav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(250,249,246,0.96);
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+    padding:10px 0;
+  }
+  .daynav-scroll{
+    display:flex;gap:8px;
+    overflow-x:auto;
+    padding:0 18px;
+    scrollbar-width:none;
+  }
+  .daynav-scroll::-webkit-scrollbar{display:none;}
+  .daypill{
+    flex:0 0 auto;
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    padding:8px 13px;
+    border-radius:20px;
+    background:var(--card);
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+    white-space:nowrap;
+    text-decoration:none;
+  }
+  .daypill b{color:var(--ink);font-family:'Noto Sans TC',sans-serif;font-weight:700;margin-left:4px;}
+  .daypill.active{background:var(--ink);border-color:var(--ink);color:#F3EFE6;}
+  .daypill.active b{color:#F3EFE6;}
+
+  /* ---------- SECTION GENERIC ---------- */
+  section{padding:26px 0;}
+  .section-title{
+    font-size:19px;font-weight:700;margin:0 0 4px;
+  }
+  .section-sub{color:var(--ink-soft);font-size:13px;margin:0 0 16px;}
+
+  /* ---------- INFO CARDS (weather / clothing / access legend) ---------- */
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .info-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;
+  }
+  .info-card .k{font-family:'Space Mono',monospace;font-size:10px;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase;}
+  .info-card .v{font-size:20px;font-weight:700;margin-top:4px;}
+  .info-card .d{font-size:12px;color:var(--ink-soft);margin-top:4px;line-height:1.5;}
+
+  .weather-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+  .weather-table th,.weather-table td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line);}
+  .weather-table th{font-family:'Space Mono',monospace;font-size:10px;color:var(--ink-soft);font-weight:400;text-transform:uppercase;}
+  .weather-table td.hi{color:var(--maple);font-weight:700;}
+  .weather-table td.lo{color:var(--sky);font-weight:700;}
+
+  .legend{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+  .legend-item{display:flex;align-items:center;gap:10px;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+
+  .clothing-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .clothing-list li{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;
+  }
+  .clothing-list li .ico{font-size:16px;}
+
+  /* ---------- DAY SECTION ---------- */
+  .day{
+    padding-top:34px;
+    scroll-margin-top:64px;
+  }
+  .day-head{
+    display:flex;align-items:baseline;gap:10px;margin-bottom:4px;
+  }
+  .day-num{
+    font-family:'Space Mono',monospace;
+    font-size:12px;color:var(--gold);
+    border:1px solid var(--gold);
+    border-radius:20px;
+    padding:3px 10px;
+  }
+  .day-date{font-family:'Space Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .day h2{font-size:22px;margin:6px 0 4px;}
+  .day-desc{font-size:13px;color:var(--ink-soft);margin:0 0 6px;line-height:1.6;}
+  .day-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
+  .badge{font-size:11px;padding:4px 9px;border-radius:20px;background:var(--pine-soft);color:var(--pine);font-weight:700;}
+  .badge.warn{background:var(--maple-soft);color:var(--maple);}
+  .badge.note{background:var(--sky-soft);color:var(--sky);}
+
+  /* timeline */
+  .timeline{position:relative;padding-left:22px;}
+  .timeline::before{
+    content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;
+    background:repeating-linear-gradient(to bottom, var(--line) 0 6px, transparent 6px 11px);
+  }
+  .stop{position:relative;margin-bottom:14px;}
+  .stop::before{
+    content:"";position:absolute;left:-22px;top:6px;width:11px;height:11px;border-radius:50%;
+    background:var(--card);border:2px solid var(--ink);
+  }
+  .stop.eat::before{border-color:var(--maple);}
+  .stop.rest::before{border-color:var(--pine);}
+  .stop-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 14px 12px;
+  }
+  .stop-time{font-family:'Space Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .stop-title{font-size:16px;font-weight:700;margin:3px 0 2px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .stop-title .kr{font-size:12px;color:var(--ink-soft);font-weight:400;}
+  .stop-desc{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:4px 0 8px;}
+  .maplink{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:12px;font-weight:700;color:var(--sky);
+    text-decoration:none;
+    background:var(--sky-soft);
+    padding:6px 11px;border-radius:20px;
+  }
+  .eatbox{
+    margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;
+    font-size:12.5px;color:#7A2D22;line-height:1.55;
+  }
+  .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'Space Mono',monospace;text-transform:uppercase;}
+  .access-row{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
+
+  /* connector between stops */
+  .connector{
+    position:relative;
+    margin:-4px 0 14px 0;
+    padding:8px 12px 8px 14px;
+    font-size:12px;color:var(--ink-soft);
+    display:flex;align-items:center;gap:8px;
+  }
+  .connector .icon{font-size:14px;}
+  .connector b{color:var(--ink);font-weight:700;}
+
+  footer{
+    padding:30px 0 10px;text-align:center;color:var(--ink-soft);font-size:11.5px;line-height:1.8;
+  }
+  footer .brand{font-family:'Noto Serif TC',serif;font-size:14px;color:var(--ink);margin-bottom:6px;}
+
+  hr.div{border:none;border-top:1px solid var(--line);margin:0;}
+
+  @media (max-width:360px){
+    .hero h1{font-size:26px;}
+  }
+
+  @media print{
+    *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body{padding-bottom:0;}
+    .daynav{position:static;backdrop-filter:none;}
+    .stop{page-break-inside:avoid;break-inside:avoid;}
+    .stop-card{page-break-inside:avoid;break-inside:avoid;}
+    a.maplink{text-decoration:underline;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= HERO ================= -->
+<div class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Family Trip Journal · Seoul</div>
+    <h1>首爾秋楓銀杏行<br>7 人家庭旅行手冊</h1>
+    <p class="sub">2026.10.23（五）— 2026.10.28（三）｜UH Seoul Central Suite</p>
+
+    <div class="pass">
+      <div class="pass-row">
+        <div>
+          <div class="pass-city">HKG</div>
+          <div class="pass-code">香港國際機場</div>
+        </div>
+        <div class="pass-plane">✈</div>
+        <div style="text-align:right">
+          <div class="pass-city">ICN</div>
+          <div class="pass-code">仁川國際機場</div>
+        </div>
+      </div>
+      <div class="pass-divider"></div>
+      <div class="pass-meta">
+        <div>出發<b>10/23（五）約19:00</b></div>
+        <div style="text-align:center">同行<b>7 位家庭成員</b></div>
+        <div style="text-align:right">抵達<b>10/24（六）00:25</b></div>
+      </div>
+    </div>
+
+    <div class="hero-tags">
+      <span class="tag">🍁 紅葉銀杏主題</span>
+      <span class="tag">🚫🪜 姨姨行動考量・全程避開樓梯</span>
+      <span class="tag">🏨 UH Seoul Central Suite・中區武橋路</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= STICKY NAV ================= -->
+<div class="daynav">
+  <div class="daynav-scroll" id="daynavScroll">
+    <a class="daypill" href="#overview">須知</a>
+    <a class="daypill" href="#day1">D1 <b>抵達</b></a>
+    <a class="daypill" href="#day2">D2 <b>古宮</b></a>
+    <a class="daypill" href="#day3">D3 <b>南怡島</b></a>
+    <a class="daypill" href="#day4">D4 <b>德壽宮</b></a>
+    <a class="daypill" href="#day5">D5 <b>聖水洞</b></a>
+    <a class="daypill" href="#day6">D6 <b>賦歸</b></a>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW / PRACTICAL INFO ================= -->
+  <section id="overview">
+    <h2 class="section-title">出發前必讀</h2>
+    <p class="section-sub">天氣、穿搭與無障礙行程規劃重點</p>
+
+    <div class="info-card" style="margin-bottom:14px;">
+      <div class="k">Accommodation</div>
+      <div class="v" style="font-size:16px;">UH Seoul Central Suite</div>
+      <div class="d">首爾中區武橋路17-27（3–10樓）／步行約6分鐘可達市廳站、乙支路入口站；步行約10分鐘達明洞、光化門。地理位置非常中心，本手冊大部份路線皆以此為起點。</div>
+      <a class="maplink" style="margin-top:10px;" href="https://map.naver.com/p/search/UH%20서울%20센트럴%20스위트" target="_blank" rel="noopener">📍 在 Naver Map 開啟酒店</a>
+    </div>
+
+    <h3 style="font-size:15px;margin:20px 0 2px;">🌤 10月下旬首爾天氣參考</h3>
+    <p class="section-sub" style="margin-bottom:6px;">以下為歷年同期平均值，僅供準備衣物參考；出發前一週請務必查看即時預報。</p>
+    <table class="weather-table">
+      <tr><th>日期</th><th>日間高溫</th><th>清晨低溫</th><th>概況</th></tr>
+      <tr><td>10/23–24</td><td class="hi">19°C</td><td class="lo">9°C</td><td>晴朗乾爽</td></tr>
+      <tr><td>10/25–26</td><td class="hi">18°C</td><td class="lo">8°C</td><td>大致晴，早晚涼</td></tr>
+      <tr><td>10/27–28</td><td class="hi">17°C</td><td class="lo">6°C</td><td>日夜溫差最大</td></tr>
+    </table>
+
+    <h3 style="font-size:15px;margin:22px 0 2px;">🧥 穿搭建議</h3>
+    <ul class="clothing-list">
+      <li><span class="ico">👕</span><div><b>洋蔥式多層次穿搭</b> — 日間長袖襯衫／薄針織衫即可，早晚需要一件輕薄羽絨或風衣外套。</div></li>
+      <li><span class="ico">🧣</span><div><b>圍巾／薄手套</b> — 晚上南山、南怡島江邊風大，長輩尤其建議準備。</div></li>
+      <li><span class="ico">👟</span><div><b>防滑好走鞋</b> — 多個景點為石板路或碎石路（南怡島、北村），建議避免高跟鞋或硬底鞋。</div></li>
+      <li><span class="ico">🕶</span><div><b>太陽眼鏡</b> — 秋日陽光角度低，戶外行走時間長，建議攜帶。</div></li>
+      <li><span class="ico">💧</span><div><b>護唇膏／保濕乳</b> — 韓國秋季空氣乾燥，早晚溫差大皮膚容易乾。</div></li>
+    </ul>
+
+    <h3 style="font-size:15px;margin:22px 0 2px;">🚫🪜 無障礙圖例（姨姨專用）</h3>
+    <p class="section-sub" style="margin-bottom:6px;">姨姨不能行樓梯，以下標記會出現在每個地點旁，方便快速判斷路線是否合適。</p>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background:var(--pine)"></span> <b>可全程避開樓梯</b>：平路／斜坡／電梯／手扶梯可達</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span> <b>需留意局部路段</b>：建議改行電梯出口或由家人陪同繞道</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--maple)"></span> <b>建議搭的士代步</b>：該段步行對長輩負擔較大，直接叫車最省力</div>
+    </div>
+    <p class="section-sub" style="margin-top:12px;">💡 小提醒：首爾地鐵站出口不一定全部設有電梯，出發前可在 Naver Map／官方App 搜尋站名 + 「엘리베이터」確認電梯出口位置，再決定使用哪一個出口。</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- ================= DAY 1 ================= -->
+  <div class="day" id="day1">
+    <div class="day-head">
+      <span class="day-num">DAY 1</span>
+      <span class="day-date mono">10月23日（五）</span>
+    </div>
+    <h2>啟程・夜航抵首爾</h2>
+    <p class="day-desc">今日以交通為主，沒有安排景點。抵達酒店已是凌晨，建議直接休息，養精蓄銳迎接明天的古宮之旅。</p>
+    <div class="day-badges">
+      <span class="badge note">✈ 夜機抵達</span>
+      <span class="badge">🛌 無行程・純休息</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">19:00（暫定）</div>
+          <div class="stop-title">香港國際機場出發</div>
+          <div class="stop-desc">建議提前3小時到機場辦理登機及托運行李，7人同行建議提早集合。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">✈️</span>飛行約 <b>3.5 小時</b></div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">00:25（10/24）</div>
+          <div class="stop-title">抵達仁川國際機場 <span class="kr">인천국제공항</span></div>
+          <div class="stop-desc">入境、提取行李及通關預計需 40–60 分鐘。深夜時段機場人流較少，惟長輩建議先在到達大堂稍作休息，等候齊人再一起移動。</div>
+          <div class="access-row"><span class="badge">🟢 機場全線設有電梯／手扶梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚌</span>機場往市區約 <b>60–75 分鐘</b>（AREX直達列車 或 機場豪華巴士）</div>
+
+      <div class="stop rest">
+        <div class="stop-card">
+          <div class="stop-time">約 02:00–02:30</div>
+          <div class="stop-title">抵達 UH Seoul Central Suite</div>
+          <div class="stop-desc">深夜時段建議直接搭乘機場豪華巴士（座位固定、行李空間大，適合7人+行李），或由酒店協助預約接送車，比轉乘地鐵更省心。Check-in 後儘快休息。</div>
+          <div class="access-row"><span class="badge">🟢 酒店設有電梯直達房間樓層</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- ================= DAY 2 ================= -->
+  <div class="day" id="day2">
+    <div class="day-head">
+      <span class="day-num">DAY 2</span>
+      <span class="day-date mono">10月24日（六）</span>
+    </div>
+    <h2>古宮慢遊・北村・南山夜景</h2>
+    <p class="day-desc">凌晨才抵達，今天不用早起。景點集中在酒店步行可達的中心老城區，路線平坦，長輩不用走太遠。</p>
+    <div class="day-badges">
+      <span class="badge">🚶 步行為主，全程平路</span>
+      <span class="badge note">🥐 早午茶：Artist Bakery</span>
+      <span class="badge note">🍞 下午茶：Mil Toast</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">10:30 起（睡到自然醒）</div>
+          <div class="stop-title">酒店悠閒早晨</div>
+          <div class="stop-desc">不設鬧鐘，讓長輩充分休息調整時差，10:30後再出發。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>的士約 <b>10 分鐘</b>／地鐵約 <b>15–18 分鐘</b>（建議直接叫車，較省時）</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 11:15</div>
+          <div class="stop-title">Artist Bakery 安國店 <span class="kr">아티스트 베이커리</span></div>
+          <div class="stop-desc">首爾最火紅的鹽可頌專賣店，由「倫敦貝果博物館」創辦人打造。安國站1號出口即到，鄰近景福宮。</div>
+          <div class="eatbox"><b>必點推介</b>原味鹽可頌（플레인 소금빵）／松露鹽可頌／蒜香牛油鹽可頌 — 建議一開店或提早用 CatchTable 排隊，週末人潮較多。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/아티스트베이커리%20안국점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖，無需上落樓梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>，平坦大路</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 12:15</div>
+          <div class="stop-title">景福宮 <span class="kr">경복궁</span></div>
+          <div class="stop-desc">朝鮮王朝正宮，爸爸首爾初體驗必訪地標。主要遊覽動線（光化門—勤政殿—慶會樓）皆為平坦廣場及石板路。守衛交接儀式約10:00／13:00／15:30，建議查詢當日場次時間。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/경복궁" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 主要路徑平坦，光化門及興禮門皆為無階梯通道</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>5 分鐘</b></div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 14:00</div>
+          <div class="stop-title">光化門廣場</div>
+          <div class="stop-desc">世宗大王與李舜臣將軍銅像所在的開闊廣場，適合全家拍照，地面平整好走。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/광화문광장" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 全開放式廣場，無階梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>12 分鐘</b>，經北村平緩街道</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 14:40</div>
+          <div class="stop-title">北村韓屋村（平緩觀景點）</div>
+          <div class="stop-desc">建議走「桂洞路」一帶緩坡街道拍照，<b>避開北村8景／2景的階梯打卡點</b>。若姨姨想休息，可在路口韓屋咖啡廳等候，其他人步行10分鐘內折返。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/북촌한옥마을" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge warn">🟡 部分觀景台有階梯，建議只走桂洞路平緩段</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b></div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 15:30</div>
+          <div class="stop-title">Mil Toast House 益善洞 <span class="kr">밀 토스트집</span></div>
+          <div class="stop-desc">益善洞韓屋咖啡街的人氣蒸麵包吐司店，鐘路3街站4號出口步行可達，適合下午茶稍作休息。</div>
+          <div class="eatbox"><b>必點推介</b>舒芙蕾法式吐司／栗子蒸包（밤 찐빵）／玉米蒸包 ｜ 假日建議先掃碼取號等候。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/밀토스트집%20익선점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖，無階梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>返回酒店休息約 <b>15 分鐘</b>（的士／地鐵皆可）</div>
+
+      <div class="stop rest">
+        <div class="stop-card">
+          <div class="stop-time">16:30–18:00</div>
+          <div class="stop-title">酒店午休</div>
+          <div class="stop-desc">長輩可留在房間休息，年輕人可自行到附近明洞逛逛，晚上一起出發看夜景。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚌</span>南山循環巴士（無台階低地台巴士）約 <b>20 分鐘</b></div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 18:30</div>
+          <div class="stop-title">N首爾塔 <span class="kr">N서울타워</span></div>
+          <div class="stop-desc">建議從明洞搭乘南山循環巴士（02／03號）直達塔下，<b>比纜車更適合姨姨</b>，全程無需行樓梯；再乘電梯直上展望台看首爾夜景與初秋南山。</div>
+          <div class="eatbox"><b>拍照重點</b>愛情鎖牆＋展望台360°夜景，建議日落前上塔（約17:40左右日落，可同時看到黃昏及夜景）。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/N서울타워" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 循環巴士無台階＋塔內電梯直達展望台</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚌</span>循環巴士＋步行返回明洞約 <b>20 分鐘</b></div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 20:00</div>
+          <div class="stop-title">明洞晚餐＋自由活動</div>
+          <div class="stop-desc">明洞街道平坦好走，餐廳選擇多，可依當晚喜好自由選擇；長輩可提早回酒店休息。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- ================= DAY 3 ================= -->
+  <div class="day" id="day3">
+    <div class="day-head">
+      <span class="day-num">DAY 3</span>
+      <span class="day-date mono">10月25日（日）</span>
+    </div>
+    <h2>南怡島紅葉銀杏全日遊</h2>
+    <p class="day-desc">今天是全程重點：南怡島的楓葉銀杏大道。全日在外，建議輕裝出發，穿好走的鞋子。</p>
+    <div class="day-badges">
+      <span class="badge warn">🍁 全程行程重點日</span>
+      <span class="badge note">🚆 需搭火車，來回約3小時車程</span>
+      <span class="badge">🍗 晚餐：橋村炸雞外送到酒店</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">08:30</div>
+          <div class="stop-title">酒店出發</div>
+          <div class="stop-desc">建議準備簡單早餐／麵包在車上享用，7人出遊建議預留較多集合緩衝時間。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>的士約 <b>15–20 分鐘</b>往清涼里／龍山站</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">09:00</div>
+          <div class="stop-title">搭乘 ITX-青春 列車</div>
+          <div class="stop-desc">建議事先於Korail網站或App訂票（尤其週日楓葉季一位難求）。車程約60分鐘直達加平站，車站設有電梯，無需使用樓梯。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/청량리역" target="_blank" rel="noopener">📍 Naver Map 導航（清涼里站）</a>
+          <div class="access-row"><span class="badge">🟢 主要車站均設電梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>加平站轉的士／接駁車約 <b>10 分鐘</b>往南怡島碼頭</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 10:30</div>
+          <div class="stop-title">南怡島 <span class="kr">남이섬</span></div>
+          <div class="stop-desc">碼頭與渡輪之間為緩坡棧道，非樓梯，5分鐘即可抵達島上。島內主要道路皆為平坦碎石路／柏油路，園方設有電動代步車及單車租借（建議提前致電或於官網查詢當日供應狀況，為姨姨預留一台）。</div>
+          <div class="eatbox"><b>賞楓銀杏重點</b>中央銀杏大道（메타세쿼이아길／은행나무길）為全島最經典打卡點，10月下旬正值轉色期，建議上午光線較柔和時前往拍照。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/남이섬" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 碼頭為緩坡非樓梯</span><span class="badge">🟡 部分小徑碎石路，建議代步車</span></div>
+        </div>
+      </div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 13:00</div>
+          <div class="stop-title">島上午餐</div>
+          <div class="stop-desc">島內餐廳選擇多元（烤雞、部隊鍋、烏冬等），建議選擇靠近中央廣場、桌椅座位的餐廳，方便長輩用餐。</div>
+        </div>
+      </div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">14:00–16:00</div>
+          <div class="stop-title">自由漫遊／拍照時光</div>
+          <div class="stop-desc">可依體力分組：年輕人可租單車環島，長輩與姨姨可搭代步車慢慢逛，江邊長椅眾多，方便隨時休息。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚆</span>原路折返首爾，車程連轉車約 <b>1.5–2 小時</b></div>
+
+      <div class="stop rest">
+        <div class="stop-card">
+          <div class="stop-time">約 18:30</div>
+          <div class="stop-title">返回酒店休息</div>
+          <div class="stop-desc">全日在外走動較多，晚餐建議不再外出，直接叫外送，讓大家好好休息。</div>
+        </div>
+      </div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 19:30</div>
+          <div class="stop-title">橋村炸雞 外送到酒店 <span class="kr">교촌치킨</span></div>
+          <div class="stop-desc">全國連鎖品牌，可用外送App（配送用韓國電話號碼或請酒店前台協助落單）直接送到房間，長輩不用再出門，是全日走動後最輕鬆的晚餐選擇。</div>
+          <div class="eatbox"><b>必點推介</b>蜂蜜綠茶炸雞（허니콤보）／原味醬燒炸雞（교촌오리지날）</div>
+          <div class="access-row"><span class="badge">🟢 房內用餐，零走動</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- ================= DAY 4 ================= -->
+  <div class="day" id="day4">
+    <div class="day-head">
+      <span class="day-num">DAY 4</span>
+      <span class="day-date mono">10月26日（一）</span>
+    </div>
+    <h2>德壽宮銀杏・明洞・鷺梁津海鮮夜</h2>
+    <p class="day-desc">上午在酒店附近散步賞銀杏及購物，傍晚移動到鷺梁津水產市場，親手選海鮮、即場加工做成豐盛海鮮宴，以鮑魚粥作結。</p>
+    <div class="day-badges">
+      <span class="badge">🚶 上午酒店步行圈</span>
+      <span class="badge note">🍜 午餐：山東餃子明洞店（炸醬麵）</span>
+      <span class="badge warn">🦞 晚餐：鷺梁津水產市場</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">09:30</div>
+          <div class="stop-title">酒店出發</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>6 分鐘</b>，酒店近在咫尺</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 09:40</div>
+          <div class="stop-title">德壽宮石牆路 <span class="kr">덕수궁 돌담길</span></div>
+          <div class="stop-desc">媽媽、姨姨賞花銀杏重點行程。沿宮牆而行的散步道，寬闊平坦、全程無階梯，10月下旬銀杏開始泛黃，是首爾市區最著名的秋日散步路線之一。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/덕수궁%20돌담길" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 全程平坦人行道</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>5 分鐘</b></div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 10:30</div>
+          <div class="stop-title">首爾廣場・清溪川散步</div>
+          <div class="stop-desc">市廳前草坪廣場及清溪川步道，皆為平緩無障礙設計，適合悠閒散步曬秋日陽光。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/청계천" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 無階梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>往明洞</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 12:00</div>
+          <div class="stop-title">山東餃子 明洞店 <span class="kr">산동교자</span></div>
+          <div class="stop-desc">明洞區人氣中式料理老店，招牌炸醬麵及手工水餃廣受遊客歡迎，用餐環境為平地舖面，方便7人同桌。</div>
+          <div class="eatbox"><b>必點推介</b>炸醬麵（짜장면）／手工水餃（교자）／糖醋肉（탕수육）</div>
+          <a class="maplink" href="https://map.naver.com/p/search/산동교자%20명동점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🛍️</span>明洞步行商圈，隨意逛</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">13:00–15:30</div>
+          <div class="stop-title">明洞購物時光</div>
+          <div class="stop-desc">明洞主街全為平坦行人專用區，無需擔心階梯問題，長輩可在街邊咖啡廳稍坐，年輕人自由逛街後匯合。</div>
+          <div class="access-row"><span class="badge">🟢 行人專用步行街，無階梯</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>建議直接叫的士約 <b>20–25 分鐘</b>往鷺梁津（晚市時段路程較長，不建議轉乘地鐵）</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 16:30</div>
+          <div class="stop-title">鷺梁津水產市場 <span class="kr">노량진수산시장</span></div>
+          <div class="stop-desc">韓國最大的水產批發市場，室內為平層結構並設有電梯，可先逛市場選購生猛海鮮（鮑魚、帝王蟹、比目魚等），再拿到樓上食堂付「上菜費」現場加工享用。</div>
+          <div class="eatbox"><b>推薦食堂</b>진주식당（5樓）— 提供모듬회+초밥+튀김+매운탕的套餐，最後以<b>鮑魚粥（전복죽）</b>作結，是全日最豐盛的一餐，也是姨姨、媽媽都會喜歡的溫暖收尾。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/노량진수산시장" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 市場室內設電梯，全平層</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>的士返回酒店約 <b>20–25 分鐘</b></div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- ================= DAY 5 ================= -->
+  <div class="day" id="day5">
+    <div class="day-head">
+      <span class="day-num">DAY 5</span>
+      <span class="day-date mono">10月27日（二）</span>
+    </div>
+    <h2>延南洞鰻魚・聖水洞銀杏散策</h2>
+    <p class="day-desc">今天走地鐵2號線一圈：先到延南洞吃碳烤鰻魚，再原線搭到聖水洞看銀杏、逛設計感咖啡廳，全程不需轉車。</p>
+    <div class="day-badges">
+      <span class="badge">🚇 地鐵2號線一線到底，無需轉乘</span>
+      <span class="badge note">🐟 午餐：風川鰻魚</span>
+      <span class="badge note">🥐 下午茶：Beton 聖水旗艦店</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">10:00</div>
+          <div class="stop-title">酒店出發</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚇</span>地鐵2號線約 <b>25–30 分鐘</b>（市廳站方向轉乘至弘大入口站，站內設電梯）</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 11:30</div>
+          <div class="stop-title">風川鰻魚 延南店 <span class="kr">풍천장어 연남점</span></div>
+          <div class="stop-desc">弘大入口站2號出口步行約7分鐘，現殺炭火白燒鰻魚人氣名店，全程有店員代烤，無需自己動手。11:30開店即到可避免排隊。</div>
+          <div class="eatbox"><b>必點推介</b>炭火烤白鰻（兩隻）＋宴會麵（잔치국수）作配餐，鰻魚肥美無腥味，連平常不吃海鮮的人都會喜歡。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/풍천장어%20연남점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>延南洞散步約 <b>20 分鐘</b>，鐵道公園全為平路</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">13:00–13:40</div>
+          <div class="stop-title">延南洞散步／京義線林蔭道</div>
+          <div class="stop-desc">舊鐵道改建的帶狀公園，平坦好走，兩旁咖啡廳林立，適合飯後散步消化。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/연남동%20경의선숲길" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 全平路林蔭步道</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚇</span>弘大入口站搭2號線直達聖水站，約 <b>30 分鐘</b>，無需轉車</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 14:40</div>
+          <div class="stop-title">首爾林 銀杏路 <span class="kr">서울숲</span></div>
+          <div class="stop-desc">首爾市區內最著名的銀杏大道之一，公園步道全為平坦鋪面，設有大量長椅，是全程對長輩最友善的賞銀杏地點，媽媽、姨姨可以慢慢散步拍照。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/서울숲" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 公園步道全平坦，多長椅可休息</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>10 分鐘</b>往聖水洞商圈</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 16:00</div>
+          <div class="stop-title">Beton 聖水旗艦店 <span class="kr">베통 성수 플래그십</span></div>
+          <div class="stop-desc">首爾人氣鹽可頌／鹽麵包專門店，聖水洞旗艦店空間寬敞，可內用坐下享用下午茶。</div>
+          <div class="eatbox"><b>必點推介</b>原味鹽可頌／松露鹽可頌／玉米奶油鹽可頌，建議一到就先點餐，人多時需稍等候。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/베통%20성수" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖，設有座位</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚇</span>地鐵約 <b>15–20 分鐘</b>返回酒店一帶</div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">晚上</div>
+          <div class="stop-title">自由晚餐／酒店周邊</div>
+          <div class="stop-desc">今天走動較多，建議晚餐選擇酒店附近餐廳，早點休息，為明日賦歸做準備。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- ================= DAY 6 ================= -->
+  <div class="day" id="day6">
+    <div class="day-head">
+      <span class="day-num">DAY 6</span>
+      <span class="day-date mono">10月28日（三）</span>
+    </div>
+    <h2>廣藏市場早市・賦歸</h2>
+    <p class="day-desc">最後一天行程刻意安排輕鬆：早上到廣藏市場吃地道小食及一隻雞作結，中午回酒店取行李，悠閒前往機場。</p>
+    <div class="day-badges">
+      <span class="badge">🧳 賦歸日，行程從簡</span>
+      <span class="badge note">🥟 早午餐：廣藏市場＋孔陵一隻雞</span>
+    </div>
+
+    <div class="timeline">
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">09:00</div>
+          <div class="stop-title">酒店寄存行李後出發</div>
+          <div class="stop-desc">建議先在酒店辦理延遲退房或寄存大件行李，輕裝前往鐘路覓食，回程直接取行李去機場。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚇</span>地鐵約 <b>12–15 分鐘</b>（市廳站→鐘路5街站，站內設電梯）</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 09:30</div>
+          <div class="stop-title">廣藏市場 <span class="kr">광장시장</span></div>
+          <div class="stop-desc">韓國第一座常設市場，早上人潮較少，適合悠閒逛食。市場走道較窄且人多，建議分成2–3小組錯開時間逛，方便照顧長輩。</div>
+          <div class="eatbox"><b>必點推介</b>순희네빈대떡的<b>海鮮煎餅／綠豆煎餅（빈대떡）</b>，配上市場名物<b>麻藥飯卷（마약김밥）</b>，是最經典的市場組合。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/순희네빈대떡" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge warn">🟡 市場走道較窄，建議分組錯峰</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚶</span>步行約 <b>8 分鐘</b>往東大門一隻雞街</div>
+
+      <div class="stop eat">
+        <div class="stop-card">
+          <div class="stop-time">約 11:00</div>
+          <div class="stop-title">孔陵一隻雞 東大門店 <span class="kr">공릉닭한마리</span></div>
+          <div class="stop-desc">東大門站9號出口／鍾路五街站5號出口步行約5分鐘，一鍋熱騰騰雞湯作為旅程最後一頓正餐，暖胃又暖心。</div>
+          <div class="eatbox"><b>必點推介</b>一隻雞（닭한마리）煮好後加點刀削麵（칼국수），最後以<b>海苔雞蛋粥</b>作完美收尾。</div>
+          <a class="maplink" href="https://map.naver.com/p/search/공릉닭한마리%20동대문점" target="_blank" rel="noopener">📍 Naver Map 導航</a>
+          <div class="access-row"><span class="badge">🟢 地面店舖</span></div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚕</span>的士返回酒店約 <b>15–20 分鐘</b></div>
+
+      <div class="stop rest">
+        <div class="stop-card">
+          <div class="stop-time">約 13:00</div>
+          <div class="stop-title">酒店取行李・退房</div>
+          <div class="stop-desc">建議預留充裕時間讓長輩從容整理行李，避免最後一刻趕急。</div>
+        </div>
+      </div>
+
+      <div class="connector"><span class="icon">🚌</span>機場豪華巴士／AREX約 <b>60–75 分鐘</b></div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 15:30–16:00</div>
+          <div class="stop-title">前往仁川國際機場</div>
+          <div class="stop-desc">回程航班暫以傍晚時段估算，實際請以電子機票為準；建議預留至少3小時辦理退稅、托運及登機手續。</div>
+        </div>
+      </div>
+
+      <div class="stop">
+        <div class="stop-card">
+          <div class="stop-time">約 19:00（暫定）</div>
+          <div class="stop-title">飛返香港 ✈</div>
+          <div class="stop-desc">旅程結束，帶著滿滿的秋葉銀杏回憶回家！</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="brand">首爾秋楓銀杏行 · 家庭旅行手冊</div>
+    地址、營業時間及Naver Map連結僅供參考，出發前請再次確認最新資訊。<br>
+    部分Naver Map連結為關鍵字搜尋，若無法直接開啟App，請於Naver Map內手動搜尋店名。<br>
+    祝 7 位家庭成員旅途愉快，秋日賞楓銀杏平安順心 🍁🍂
+  </footer>
+
+</div>
+
+<script>
+  // Highlight active day pill based on scroll position
+  const sections = [...document.querySelectorAll('section, .day')].filter(s => s.id);
+  const pills = [...document.querySelectorAll('.daypill')];
+
+  function setActive(){
+    let current = sections[0]?.id;
+    const offset = 80;
+    for(const sec of sections){
+      const rect = sec.getBoundingClientRect();
+      if(rect.top - offset <= 0) current = sec.id;
+    }
+    pills.forEach(p => {
+      const match = p.getAttribute('href') === '#' + current;
+      p.classList.toggle('active', match);
+      if(match){
+        p.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+      }
+    });
+  }
+  document.addEventListener('scroll', () => window.requestAnimationFrame(setActive), {passive:true});
+  setActive();
+</script>
+
+</body>
+</html>
