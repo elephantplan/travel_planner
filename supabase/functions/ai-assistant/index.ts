@@ -25,7 +25,7 @@ async function fetchWeather() {
     `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
     `&timezone=Asia%2FSeoul&start_date=${TRIP_DATES[0]}&end_date=${TRIP_DATES[TRIP_DATES.length - 1]}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Open-Meteo error ${res.status}`);
+  if (!res.ok) return { inForecastRange: false, daily: null };
   const data = await res.json();
   const inForecastRange = Array.isArray(data?.daily?.time) && data.daily.time.length > 0;
   return { inForecastRange, daily: data?.daily ?? null };
