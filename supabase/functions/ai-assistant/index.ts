@@ -139,23 +139,41 @@ function dmRef(p: any): string | null {
 
 async function transitBetween(from: any, to: any, apiKey: string) {
   const o = dmRef(from), d = dmRef(to);
-  if (!o || !d) return null;
+  if (!o || !d) return { error: "呢兩個地點冇足夠資料（冇 Google 地點或座標）去計交通。" };
   const out: Record<string, { text: string; value: number }> = {};
+  let lastProblem = "";
   for (const mode of ["walking", "transit"]) {
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json` +
       `?origins=${encodeURIComponent(o)}&destinations=${encodeURIComponent(d)}` +
       `&mode=${mode}&language=zh-TW&region=kr&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
+    // Google reports failures in the body, not the HTTP status
+    if (data?.status && data.status !== "OK") {
+      lastProblem = `${data.status}${data.error_message ? ": " + data.error_message : ""}`;
+      continue;
+    }
     const el = data?.rows?.[0]?.elements?.[0];
     if (el?.status === "OK" && el.duration) out[mode] = { text: el.duration.text, value: el.duration.value };
+    else if (el?.status && el.status !== "OK") lastProblem = `element ${el.status}`;
   }
   const walk = out.walking, tr = out.transit;
   // under ~15 minutes on foot, walking is simply the better answer
   if (walk && walk.value <= 900) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
   if (tr) return { mode: "metro", text: `地鐵／巴士約 ${Math.max(1, Math.round(tr.value / 60))} 分鐘` };
   if (walk) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
-  return null;
+
+  let hint = lastProblem || "Google 冇俾到路線資料";
+  if (lastProblem.startsWith("REQUEST_DENIED")) {
+    hint = `Google 拒絕咗呢個請求（${lastProblem}）。通常係個 API key 冇批准用 Distance Matrix API：` +
+           `去 Google Cloud Console → APIs & Services → Credentials → 揀返條 key → API restrictions，加埋「Distance Matrix API」，` +
+           `同埋確認 Distance Matrix API 已經 Enable 咗。`;
+  } else if (lastProblem.startsWith("OVER_QUERY_LIMIT")) {
+    hint = "Distance Matrix 用量超咗限額或者未開啟計費。";
+  } else if (lastProblem.startsWith("ZERO_RESULTS") || lastProblem.startsWith("element ZERO_RESULTS")) {
+    hint = "Google 搵唔到呢兩點之間嘅路線（可能太遠或者跨海）。";
+  }
+  return { error: hint };
 }
 
 Deno.serve(async (req) => {
@@ -282,8 +300,8 @@ Deno.serve(async (req) => {
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
       try {
         const r = await transitBetween(body?.from, body?.to, placesKey);
-        if (!r) return json({ ok: false, message: "計唔到呢兩點之間嘅交通。" });
-        return json({ ok: true, mode: r.mode, text: r.text });
+        if (!r || (r as any).error) return json({ ok: false, message: (r as any)?.error || "計唔到呢兩點之間嘅交通。" });
+        return json({ ok: true, mode: (r as any).mode, text: (r as any).text });
       } catch (e) {
         return json({ ok: false, message: "計交通失敗：" + String(e) });
       }

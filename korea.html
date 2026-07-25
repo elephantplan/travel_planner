@@ -363,6 +363,7 @@ img{max-width:100%;}
 .seg-text .icon{font-size:14px;}
 .seg-note{font-size:12.5px;color:var(--ink-faint);}
 .seg-note.warn{color:var(--warn);font-weight:600;}
+.seg-why{display:block;margin-top:3px;font-weight:400;font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
 .seg.stale .seg-rail::before{
   background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);
 }
@@ -644,6 +645,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+  // some older records have markup baked into plain-text fields; show the words, not the tags
+  function plain(s){
+    return String(s == null ? "" : s).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  }
   const $ = sel => document.querySelector(sel);
 
   // ---------- state ----------
@@ -805,6 +810,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     day.items = fromUnits(units);
     render();
 
+    let why = "";
     for (const i of todo){
       const from = stopRef(units[i-1].stop), to = stopRef(units[i].stop);
       let done = false;
@@ -812,12 +818,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         try {
           const r = await callAi({ action:"transit", from, to });
           if (r && r.ok !== false && r.text){ units[i].seg = buildSeg(r.mode || "walk", r.text); done = true; }
-        } catch (_){ /* leave it flagged rather than showing a wrong number */ }
+          else if (r && r.message) why = r.message;
+        } catch (e){ why = e.message; }   // leave it flagged rather than show a wrong number
       }
       if (!done) units[i].seg.checking = false;
       day.items = fromUnits(units);
       render();
     }
+    if (why) state.transitProblem = why;
+    render();
     await saveNow("更新咗交通時間");
   }
 
@@ -1031,7 +1040,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const showSeg = u.seg && !(i === 0 && u.stop);
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
-      u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認</span>` :
+      u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
       u.seg.html;
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg.html)}">
@@ -1041,7 +1050,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
 
-    const named = (s.title || "").trim();
+    const named = plain(s.title);
     const thumb = s.photoUrl
       ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
       : "";
@@ -1062,7 +1071,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
               ${thumb}
               <div class="stopbody">
                 <div class="stoptime">${esc(s.time) || "未定時間"}</div>
-                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(s.title) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(s.kr)}</span>` : ""}</div>
+                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
@@ -1085,7 +1094,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="editor" data-editor="${i}">
         <div class="field">
           <label>名 — 打字會搵返 Google 地圖真實地點</label>
-          <input class="input" data-f="title" value="${esc(s.title)}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+          <input class="input" data-f="title" value="${esc(plain(s.title))}" placeholder="例如：南山谷韓屋村" autocomplete="off">
           <div class="suggest" data-suggest></div>
         </div>
         <div class="row2">
