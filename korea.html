@@ -555,6 +555,21 @@
     return res.json();
   }
 
+  let autosaveTimer = null;
+  function scheduleAutosave(summary){
+    clearTimeout(autosaveTimer);
+    const statusEl = document.getElementById("save-status");
+    if (statusEl) statusEl.textContent = "⏳ 打緊字…";
+    autosaveTimer = setTimeout(async () => {
+      try {
+        await saveVersion(state.snapshot, "manual", summary || "手動編輯更新");
+        if (statusEl) { statusEl.textContent = "✅ 已自動儲存"; setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000); }
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "⚠️ 儲存失敗，請撳「儲存」";
+      }
+    }, 900);
+  }
+
   // ==================================================================
   // RENDER: HERO
   // ==================================================================
@@ -689,11 +704,6 @@
         </div>
         ${isExpanded ? `
         <div class="stop-edit-body">
-          <div class="field-row">
-            <label>🔍 搜尋Google地圖真實地點（打字揀一個，會自動填名同攞相）</label>
-            <input class="field-input place-search-input" data-day="${dayId}" data-idx="${idx}" placeholder="例如：南山谷韓屋村" autocomplete="off">
-            <div class="place-search-results" data-day="${dayId}" data-idx="${idx}"></div>
-          </div>
           <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
           <div class="field-row"><label>類型</label>
             <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type">
@@ -702,10 +712,16 @@
               <option value="rest" ${item.type==="rest"?"selected":""}>休息</option>
             </select>
           </div>
-          <div class="field-row"><label>名稱</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}"></div>
+          <div class="field-row">
+            <label>名稱（打字會自動搜尋Google地圖真實地點，揀一個就自動填地址同攞相）</label>
+            <input class="field-input place-search-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}" autocomplete="off">
+            <div class="place-search-results" data-day="${dayId}" data-idx="${idx}"></div>
+          </div>
           <div class="field-row"><label>韓文</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="kr" value="${esc(item.kr)}"></div>
           <div class="field-row"><label>描述</label><textarea class="field-textarea" data-day="${dayId}" data-idx="${idx}" data-field="desc">${esc(item.desc)}</textarea></div>
           <div class="stop-edit-tools">
+            <button class="btn-sm" data-action="move-stop" data-day="${dayId}" data-idx="${idx}" data-dir="-1">⬆️ 上移</button>
+            <button class="btn-sm" data-action="move-stop" data-day="${dayId}" data-idx="${idx}" data-dir="1">⬇️ 下移</button>
             <button class="btn-sm danger" data-action="remove-stop" data-day="${dayId}" data-idx="${idx}">🗑 移除呢個景點</button>
           </div>
         </div>` : ""}
@@ -767,12 +783,58 @@
   // ==================================================================
   // EDIT MODE + PHOTO PICKER (shared handlers, bound after every render)
   // ==================================================================
+  // group a day's flat items array into movable units: a connector immediately
+  // followed by a stop travels together as one unit (so "move" keeps the
+  // transit note attached to the stop it describes).
+  function groupIntoUnits(items){
+    const units = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === "connector" && items[i+1] && items[i+1].kind === "stop") {
+        units.push([items[i], items[i+1]]);
+        i++;
+      } else {
+        units.push([items[i]]);
+      }
+    }
+    return units;
+  }
+  function moveStopUnit(day, stopIdx, direction){
+    const oldItems = day.items;
+    const units = groupIntoUnits(oldItems);
+    let flatPos = 0, unitIdx = -1;
+    for (let u = 0; u < units.length; u++) {
+      if (stopIdx >= flatPos && stopIdx < flatPos + units[u].length) { unitIdx = u; break; }
+      flatPos += units[u].length;
+    }
+    const targetIdx = unitIdx + direction;
+    if (unitIdx === -1 || targetIdx < 0 || targetIdx >= units.length) return false;
+    const tmp = units[unitIdx];
+    units[unitIdx] = units[targetIdx];
+    units[targetIdx] = tmp;
+    const newItems = units.flat();
+    // keep the same stop card expanded/collapsed after its position changes
+    const remapped = new Set();
+    state.expanded.forEach(key => {
+      const sep = key.indexOf(":");
+      const kDay = key.slice(0, sep), kIdx = +key.slice(sep + 1);
+      if (kDay !== day.id) { remapped.add(key); return; }
+      const newIdx = newItems.indexOf(oldItems[kIdx]);
+      remapped.add(newIdx === -1 ? key : (day.id + ":" + newIdx));
+    });
+    state.expanded = remapped;
+    day.items = newItems;
+    return true;
+  }
+
   function bindStopHandlers(){
     document.querySelectorAll("#days-root [data-field]").forEach(el => {
       el.addEventListener("input", () => {
         const dayId = el.dataset.day, idx = +el.dataset.idx, field = el.dataset.field;
         const day = state.snapshot.days.find(d => d.id === dayId);
-        if (day) day.items[idx][field] = el.value;
+        if (day) {
+          day.items[idx][field] = el.value;
+          scheduleAutosave("編輯咗「" + (day.items[idx].title || "景點") + "」");
+        }
       });
     });
     document.querySelectorAll('[data-action="toggle-expand"]').forEach(row => {
@@ -783,22 +845,36 @@
       });
     });
     document.querySelectorAll('[data-action="remove-stop"]').forEach(btn => {
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const dayId = btn.dataset.day, idx = +btn.dataset.idx;
         const day = state.snapshot.days.find(d => d.id === dayId);
         if (day && confirm("確定要移除呢個景點？")) {
+          const removedTitle = day.items[idx].title || "景點";
           day.items.splice(idx, 1);
+          try { await saveVersion(state.snapshot, "manual", "移除咗「" + removedTitle + "」"); } catch (err) { /* still show locally even if save fails */ }
+          renderDays();
+        }
+      });
+    });
+    document.querySelectorAll('[data-action="move-stop"]').forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const dayId = btn.dataset.day, idx = +btn.dataset.idx, dir = +btn.dataset.dir;
+        const day = state.snapshot.days.find(d => d.id === dayId);
+        if (day && moveStopUnit(day, idx, dir)) {
+          try { await saveVersion(state.snapshot, "manual", "調整景點次序"); } catch (err) { /* still show locally even if save fails */ }
           renderDays();
         }
       });
     });
     document.querySelectorAll('[data-action="add-stop"]').forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const day = state.snapshot.days.find(d => d.id === btn.dataset.day);
         if (day) {
           day.items.push(newBlankStop());
           state.expanded.add(day.id + ":" + (day.items.length - 1));
+          try { await saveVersion(state.snapshot, "manual", "新增咗一個新景點"); } catch (err) { /* still show locally even if save fails */ }
           renderDays();
         }
       });
@@ -838,6 +914,7 @@
           container.querySelectorAll("img").forEach(img => {
             img.addEventListener("click", async () => {
               item.photoUrl = img.dataset.url;
+              clearTimeout(autosaveTimer);
               try { await saveVersion(state.snapshot, "manual", "更新相片：" + item.title); } catch (err) { /* still show locally even if save fails */ }
               renderDays();
             });
@@ -875,6 +952,7 @@
                 item.placeId = chosen.placeId;
                 item.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(chosen.name)}`;
                 resultsEl.innerHTML = `<p class="section-sub">已選擇「${esc(chosen.name)}」，幫緊你搵相片…</p>`;
+                clearTimeout(autosaveTimer);
                 try {
                   const pr = await callAi({ action: "place-photo", placeId: chosen.placeId });
                   if (pr.ok !== false && pr.photos && pr.photos.length) item.photoUrl = pr.photos[0];
