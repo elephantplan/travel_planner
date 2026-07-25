@@ -3,473 +3,617 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>首爾秋楓銀杏行 ｜ 10.23–10.28 家庭旅行手冊</title>
+<meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1014" media="(prefers-color-scheme: dark)">
+<title>首爾秋楓銀杏行 ｜ 10.23–10.28</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root{
-    --ink:#17140F;
-    --card:#231E17;
-    --card-2:#2B241C;
-    --text:#EDE6D8;
-    --text-soft:#A79C89;
-    --line:#3C3527;
-    --gold:#E0B563;
-    --gold-soft:#332A18;
-    --maple:#E2916D;
-    --maple-soft:#33231B;
-    --moss:#A8C787;
-    --moss-soft:#242E1C;
-    --sky:#8EC0E4;
-    --sky-soft:#1E2C38;
-    --niece:#EFA8CC;
-    --niece-soft:#332232;
-    --stamp:#E2704F;
-    --radius:16px;
+/* ============================================================
+   SEOUL TRANSIT DIAGRAM — design tokens
+   The trip is a transit system: each day is a line, each stop a
+   station, each connector a segment whose stroke encodes the mode.
+   ============================================================ */
+:root{
+  color-scheme: light dark;
+
+  --paper:#F4F5F7;
+  --surface:#FFFFFF;
+  --surface-2:#EAEDF2;
+  --ink:#14171C;
+  --ink-soft:#5C6472;
+  --ink-faint:#949CAA;
+  --rule:#DDE2E9;
+  --rule-soft:#EBEEF2;
+  --shadow-1:0 1px 2px rgba(20,23,28,.05), 0 6px 16px -10px rgba(20,23,28,.16);
+  --shadow-2:0 2px 6px rgba(20,23,28,.08), 0 18px 40px -18px rgba(20,23,28,.28);
+
+  /* Seoul Metro line colours, one per day */
+  --d1:#8A94A6;  /* 抵達 — night flight, off-network */
+  --d2:#0FA958;  /* 古宮 — line 2 green */
+  --d3:#00A5DE;  /* 南怡島 — line 4 blue */
+  --d4:#EF7C1C;  /* 聖水洞 — line 3 orange */
+  --d5:#9B6FB0;  /* 德壽宮 — line 5 purple */
+  --d6:#BB8336;  /* 銀杏尾聲 — line 9 gold */
+
+  --ok:#0E9E52;
+  --ok-bg:#E7F6ED;
+  --warn:#C96A10;
+  --warn-bg:#FDF0E1;
+  --danger:#CE4034;
+  --danger-bg:#FBEBE9;
+  --niece:#C93B92;
+  --niece-bg:#FCEBF5;
+  --info:#1D7FC4;
+  --info-bg:#E7F2FB;
+
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:18px;
+  --r-xl:26px;
+
+  --rail-w:30px;
+  --tap:44px;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1014;
+    --surface:#161A20;
+    --surface-2:#1E232B;
+    --ink:#E9ECF1;
+    --ink-soft:#98A1B0;
+    --ink-faint:#6C7686;
+    --rule:#272D37;
+    --rule-soft:#1E232B;
+    --shadow-1:0 1px 2px rgba(0,0,0,.5), 0 6px 16px -10px rgba(0,0,0,.7);
+    --shadow-2:0 2px 6px rgba(0,0,0,.55), 0 18px 40px -18px rgba(0,0,0,.85);
+    --d1:#98A2B4;
+    --d2:#2ABE72;
+    --d3:#38B8E8;
+    --d4:#F79240;
+    --d5:#B287C5;
+    --d6:#D2A055;
+    --ok:#3CC177; --ok-bg:#12291C;
+    --warn:#E5964A; --warn-bg:#2C2013;
+    --danger:#E8695C; --danger-bg:#2E1917;
+    --niece:#EC81C0; --niece-bg:#2C1727;
+    --info:#54AEEA; --info-bg:#122534;
   }
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{
-    margin:0;
-    background:var(--ink);
-    color:var(--text);
-    font-family:'Noto Sans KR', sans-serif;
-    -webkit-font-smoothing:antialiased;
-    padding-bottom:100px;
-    background-image:
-      radial-gradient(circle at 15% 0%, rgba(224,181,99,0.08), transparent 40%),
-      radial-gradient(circle at 90% 20%, rgba(226,112,79,0.06), transparent 35%);
-  }
-  h1,h2,h3,.display{font-family:'Noto Serif KR', serif;}
-  .mono{font-family:'IBM Plex Mono', monospace;}
-  a{color:inherit;}
-  .wrap{max-width:520px;margin:0 auto;padding:0 18px;}
-  button{font-family:inherit;}
-  img{max-width:100%;}
+}
+:root[data-theme="dark"]{
+  --paper:#0D1014;
+  --surface:#161A20;
+  --surface-2:#1E232B;
+  --ink:#E9ECF1;
+  --ink-soft:#98A1B0;
+  --ink-faint:#6C7686;
+  --rule:#272D37;
+  --rule-soft:#1E232B;
+  --shadow-1:0 1px 2px rgba(0,0,0,.5), 0 6px 16px -10px rgba(0,0,0,.7);
+  --shadow-2:0 2px 6px rgba(0,0,0,.55), 0 18px 40px -18px rgba(0,0,0,.85);
+  --d1:#98A2B4;
+  --d2:#2ABE72;
+  --d3:#38B8E8;
+  --d4:#F79240;
+  --d5:#B287C5;
+  --d6:#D2A055;
+  --ok:#3CC177; --ok-bg:#12291C;
+  --warn:#E5964A; --warn-bg:#2C2013;
+  --danger:#E8695C; --danger-bg:#2E1917;
+  --niece:#EC81C0; --niece-bg:#2C1727;
+  --info:#54AEEA; --info-bg:#122534;
+}
 
-  /* ---------- SIGNATURE: GINKGO LEAF NUMBER MARKER ---------- */
-  .leafnum{
-    display:inline-flex;align-items:center;justify-content:center;
-    width:26px;height:26px;flex:0 0 auto;
-    background:var(--gold);color:#231A08;
-    font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
-    clip-path: polygon(50% 0%, 88% 16%, 100% 52%, 78% 100%, 50% 84%, 22% 100%, 0% 52%, 12% 16%);
-  }
-  .leafnum.sm{width:20px;height:20px;font-size:9.5px;}
-  .leafnum.eat{background:var(--maple);}
-  .leafnum.rest{background:var(--moss);}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Noto Sans TC','Hiragino Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+  overflow-wrap:break-word;
+}
+:focus-visible{outline:2.5px solid var(--d3);outline-offset:2px;border-radius:4px;}
+button{font-family:inherit;color:inherit;}
+img{max-width:100%;}
 
-  /* ---------- HERO / LANTERN NIGHT JOURNAL ---------- */
-  .hero{
-    background:linear-gradient(180deg,#1D1811 0%, #221C14 100%);
-    border-bottom:1px solid var(--line);
-    padding:28px 0 24px;
-    position:relative;
-    overflow:hidden;
-  }
-  .hero-leafbg{
-    position:absolute; right:-40px; bottom:-50px; width:220px;height:220px;
-    background:var(--gold);opacity:.08;
-    clip-path: polygon(50% 0%, 88% 16%, 100% 52%, 78% 100%, 50% 84%, 22% 100%, 0% 52%, 12% 16%);
-    transform:rotate(12deg);
-  }
-  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;position:relative;z-index:1;}
-  .eyebrow{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:10.5px;
-    letter-spacing:.16em;
-    color:var(--moss);
-    text-transform:uppercase;
-    margin-bottom:8px;
-  }
-  .stamp{
-    flex:0 0 auto;
-    width:82px;height:82px;
-    border:2px dashed var(--stamp);border-radius:50%;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    color:var(--stamp);transform:rotate(-8deg);
-    font-family:'IBM Plex Mono',monospace;
-    box-shadow:0 0 22px rgba(226,112,79,0.28);
-  }
-  .stamp b{font-size:15px;letter-spacing:.01em;line-height:1.1;}
-  .stamp span{font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;}
-  .hero h1{
-    font-size:28px;
-    line-height:1.3;
-    margin:2px 0 8px;
-    font-weight:700;
-    position:relative;z-index:1;
-    color:var(--text);
-  }
-  .washi{
-    display:inline-block;
-    background:repeating-linear-gradient(45deg, var(--gold-soft), var(--gold-soft) 7px, #3E3018 7px, #3E3018 14px);
-    color:var(--gold);
-    font-size:11.5px;font-weight:700;
-    padding:5px 12px;
-    transform:rotate(-1.5deg);
-    box-shadow:0 2px 8px rgba(0,0,0,.35);
-    margin:0 0 14px;
-    border:1px solid var(--line);
-  }
-  .hero p.sub{
-    margin:0 0 18px;
-    color:var(--text-soft);
-    font-size:13.5px;
-    position:relative;z-index:1;
-  }
-  .ticket{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:16px 16px 12px;
-    position:relative;z-index:1;
-  }
-  .ticket-row{display:flex;justify-content:space-between;align-items:flex-start;}
-  .ticket-city{font-size:20px;font-weight:700;font-family:'Noto Serif KR',serif;color:var(--text);}
-  .ticket-code{font-family:'IBM Plex Mono',monospace;color:var(--gold);font-size:11px;margin-top:2px;}
-  .ticket-plane{color:var(--maple);font-size:18px;margin:0 10px;align-self:center;}
-  .ticket-divider{border-top:1px dashed var(--line);margin:14px 0;}
-  .ticket-meta{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-soft);}
-  .ticket-meta div b{display:block;color:var(--text);font-size:12.5px;margin-top:3px;font-family:'Noto Sans KR',sans-serif;font-weight:700;}
-  .hero-tags{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;position:relative;z-index:1;}
-  .tag{
-    font-size:11px;
-    padding:5px 10px;
-    border-radius:20px;
-    background:var(--card);
-    color:var(--text-soft);
-    border:1px solid var(--line);
-  }
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.disp{font-family:'Bricolage Grotesque','Noto Sans TC',system-ui,sans-serif;font-optical-sizing:auto;}
 
-  /* ---------- OVERVIEW MAP (all days combined) ---------- */
-  .overview-map-block{padding-top:6px;}
-  .overview-map{height:260px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;filter:saturate(.85) brightness(.92);}
-  .overview-legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
-  .legend-chip{
-    display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;
-    padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--card);
-    color:var(--text-soft);cursor:pointer;user-select:none;
-  }
-  .legend-chip .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
-  .legend-chip.off{opacity:.4;}
-  .daymap-cap{font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5;}
-  .daymap-tap{
-    position:absolute;inset:0;z-index:401;
-    background:rgba(10,8,5,0.45);
-    color:#FFFCF3;font-size:12px;font-weight:700;
-    display:flex;align-items:center;justify-content:center;gap:6px;
-    cursor:pointer;text-align:center;padding:10px;
-  }
+.wrap{max-width:720px;margin:0 auto;padding:0 16px;}
 
-  /* ---------- STICKY DAY NAV ---------- */
-  .daynav{
-    position:sticky;top:0;z-index:50;
-    background:rgba(23,20,15,0.94);
-    backdrop-filter:blur(6px);
-    border-bottom:1px solid var(--line);
-    padding:10px 0;
-  }
-  .daynav-scroll{display:flex;gap:8px;overflow-x:auto;padding:0 18px;scrollbar-width:none;}
-  .daynav-scroll::-webkit-scrollbar{display:none;}
-  .daypill{
-    flex:0 0 auto;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 13px;border-radius:20px;
-    background:var(--card);border:1px solid var(--line);color:var(--text-soft);white-space:nowrap;text-decoration:none;
-  }
-  .daypill b{color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:700;margin-left:4px;}
-  .daypill.active{background:var(--gold);border-color:var(--gold);color:#231A08;}
-  .daypill.active b{color:#231A08;}
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:saturate(180%) blur(14px);
+  -webkit-backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--rule);
+}
+.topbar-inner{max-width:720px;margin:0 auto;padding:8px 16px 0;}
+.brandrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:6px;}
+.brandmark{display:flex;align-items:baseline;gap:8px;min-width:0;}
+.brandmark .sys{
+  font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
+}
+.brandmark .ko{font-size:12px;color:var(--ink-faint);}
+.iconbtn{
+  width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;
+  border:1px solid var(--rule);border-radius:11px;background:var(--surface);
+  cursor:pointer;font-size:15px;line-height:1;
+}
+.iconbtn:active{transform:scale(.94);}
 
-  /* ---------- SECTION GENERIC ---------- */
-  section{padding:26px 0;}
-  .section-title{font-size:19px;font-weight:700;margin:0 0 4px;color:var(--text);}
-  .section-sub{color:var(--text-soft);font-size:13px;margin:0 0 16px;}
+/* segmented day switcher — the line selector */
+.lines{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;scrollbar-width:none;scroll-behavior:smooth;}
+.lines::-webkit-scrollbar{display:none;}
+.linebtn{
+  flex:0 0 auto;display:flex;align-items:center;gap:7px;
+  padding:7px 13px 7px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--rule);background:var(--surface);
+  font-size:13px;font-weight:500;color:var(--ink-soft);
+  white-space:nowrap;transition:border-color .15s, color .15s, background .15s;
+}
+.linebtn .bullet{
+  width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+  background:var(--lc,var(--ink-faint));
+}
+.linebtn .lbl{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;letter-spacing:.04em;}
+.linebtn[aria-selected="true"]{
+  color:var(--ink);border-color:var(--lc,var(--ink));
+  background:color-mix(in srgb, var(--lc,var(--ink)) 11%, var(--surface));
+}
+.linebtn[aria-selected="true"] .bullet{box-shadow:0 0 0 3px color-mix(in srgb, var(--lc) 26%, transparent);}
 
-  /* ---------- INFO CARDS ---------- */
-  .info-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
-  .info-card .k{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-soft);letter-spacing:.05em;text-transform:uppercase;}
-  .info-card .v{font-size:20px;font-weight:700;margin-top:4px;font-family:'Noto Serif KR',serif;color:var(--text);}
-  .info-card .d{font-size:12px;color:var(--text-soft);margin-top:4px;line-height:1.5;}
+/* ---------- hero / route board ---------- */
+.hero{padding:26px 0 6px;}
+.eyebrow{
+  font-family:'Bricolage Grotesque',sans-serif;font-size:11.5px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);
+}
+.hero h1{
+  font-family:'Noto Sans TC',sans-serif;font-weight:900;
+  font-size:clamp(30px,8.6vw,42px);line-height:1.14;letter-spacing:-.02em;
+  margin:8px 0 10px;
+}
+.hero-meta{
+  display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
+  font-size:13px;color:var(--ink-soft);
+}
+.hero-meta b{font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;}
 
-  .weather-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
-  .weather-table th,.weather-table td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line);color:var(--text);}
-  .weather-table th{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-soft);font-weight:400;text-transform:uppercase;}
-  .weather-table td.hi{color:var(--maple);font-weight:700;}
-  .weather-table td.lo{color:var(--sky);font-weight:700;}
+/* The signature: a route board. Each row is a day = a line. */
+.board{margin:22px 0 6px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--surface);overflow:hidden;}
+.board-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 15px;border-bottom:1px solid var(--rule);
+}
+.board-head .t{font-family:'Bricolage Grotesque',sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);}
+.board-row{
+  display:grid;grid-template-columns:52px 20px 1fr auto;align-items:center;gap:11px;
+  width:100%;padding:12px 15px;border:0;border-top:1px solid var(--rule-soft);
+  background:transparent;text-align:left;cursor:pointer;
+}
+.board-row:first-of-type{border-top:0;}
+.board-row:active{background:var(--surface-2);}
+.board-row .dcode{
+  font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:.08em;color:var(--lc);text-transform:uppercase;
+}
+.board-row .track{position:relative;height:100%;min-height:30px;}
+.board-row .track::before{
+  content:"";position:absolute;left:50%;top:-13px;bottom:-13px;width:4px;
+  transform:translateX(-50%);background:var(--lc);border-radius:2px;
+}
+.board-row:first-of-type .track::before{top:50%;border-radius:2px 2px 0 0;}
+.board-row:last-of-type .track::before{bottom:50%;border-radius:0 0 2px 2px;}
+.board-row .track::after{
+  content:"";position:absolute;left:50%;top:50%;width:11px;height:11px;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:var(--surface);border:3px solid var(--lc);
+}
+.board-row .stack{min-width:0;}
+.board-row .name{display:block;font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.35;}
+.board-row .sub{display:block;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);margin-top:2px;}
+.board-row .count{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
 
-  .legend{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
-  .legend-item{display:flex;align-items:center;gap:10px;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--text);}
-  .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+/* ---------- generic section ---------- */
+.sec{padding:26px 0 4px;}
+.sec-title{
+  font-family:'Noto Sans TC',sans-serif;font-weight:900;font-size:19px;
+  letter-spacing:-.01em;margin:0 0 3px;
+}
+.sec-sub{font-size:13px;color:var(--ink-soft);margin:0 0 14px;line-height:1.6;}
+.sec h3{font-size:15px;font-weight:700;margin:22px 0 4px;}
+.rule{border:0;border-top:1px solid var(--rule);margin:24px 0 0;}
 
-  .clothing-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
-  .clothing-list li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:10px;align-items:flex-start;color:var(--text);}
-  .clothing-list li .ico{font-size:16px;}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:15px;}
+.panel + .panel{margin-top:10px;}
+.panel .k{
+  font-family:'Bricolage Grotesque',sans-serif;font-size:10.5px;font-weight:700;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);
+}
+.panel .v{font-size:16px;font-weight:700;margin-top:3px;}
+.panel .d{font-size:13px;color:var(--ink-soft);margin-top:5px;line-height:1.6;}
 
-  /* ---------- DAY SECTION ---------- */
-  .day{padding-top:34px;scroll-margin-top:64px;}
-  .day-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;}
-  .day-num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:3px 10px;}
-  .day-date{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-soft);}
-  .day h2{font-size:21px;margin:6px 0 4px;color:var(--text);}
-  .day-desc{font-size:13px;color:var(--text-soft);margin:0 0 6px;line-height:1.6;}
-  .day-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
-  .badge{font-size:11px;padding:4px 9px;border-radius:20px;background:var(--moss-soft);color:var(--moss);font-weight:700;}
-  .badge.warn{background:var(--maple-soft);color:var(--maple);}
-  .badge.note{background:var(--sky-soft);color:var(--sky);}
+/* chips — class names must match values stored in the itinerary data */
+.badge,.meta-chip,.niecepick{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11.5px;font-weight:600;line-height:1.45;
+  padding:4px 10px;border-radius:14px;max-width:100%;
+  border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-soft);
+}
+.badge.note{background:var(--info-bg);border-color:transparent;color:var(--info);}
+.badge.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn);}
+.meta-chip.rating{background:var(--warn-bg);border-color:transparent;color:var(--warn);}
+.meta-chip.hours{background:var(--ok-bg);border-color:transparent;color:var(--ok);}
+.meta-chip.book{background:var(--info-bg);border-color:transparent;color:var(--info);}
+.meta-chip.book.warn{background:var(--danger-bg);color:var(--danger);}
+.niecepick{background:var(--niece-bg);border-color:transparent;color:var(--niece);}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
 
-  /* ---------- ROUTE MAP ---------- */
-  .daymap-wrap{margin-bottom:18px;}
-  .daymap{height:220px;width:100%;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);position:relative;overflow:hidden;filter:saturate(.85) brightness(.92);}
-  .daymap .leafnum{box-shadow:0 0 0 2px #17140F;}
+.wtable{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.wtable th{
+  font-family:'Bricolage Grotesque',sans-serif;font-size:10.5px;font-weight:700;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);
+  text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);
+}
+.wtable td{padding:8px 9px;border-bottom:1px solid var(--rule-soft);}
+.wtable td.hi{color:var(--warn);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.wtable td.lo{color:var(--info);font-weight:700;font-family:'JetBrains Mono',monospace;}
 
-  /* ---------- STOP PHOTO ---------- */
-  .stop-photo{margin:-14px -14px 10px;border-radius:var(--radius) var(--radius) 0 0;overflow:hidden;position:relative;}
-  .stop-photo img{width:100%;height:170px;object-fit:cover;display:block;background:var(--card-2);}
-  .photo-refresh-btn{position:absolute;bottom:8px;right:8px;font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:20px;background:rgba(10,8,5,.6);color:#FFFCF3;border:1px solid rgba(255,255,255,.25);cursor:pointer;}
-  .stop-photo-empty{margin-bottom:10px;}
-  .photo-picker{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
-  .photo-picker img{width:100%;height:76px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;}
-  .photo-picker img:hover, .photo-picker img.selected{border-color:var(--gold);}
+.clist{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:9px;}
+.clist li{display:flex;gap:10px;font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
+.clist .ico{flex:0 0 auto;font-size:16px;line-height:1.4;}
+.clist b{color:var(--ink);}
 
-  /* ---------- PLACE SEARCH (autocomplete) ---------- */
-  .place-search-results{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
-  .place-search-item{background:#FFFCF3;border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer;}
-  .place-search-item:active{background:var(--gold-soft);}
-  .place-search-item .name{font-size:13px;font-weight:700;color:var(--ink);}
-  .place-search-item .addr{font-size:11px;color:#6b6252;margin-top:1px;}
+.legend{display:flex;flex-direction:column;gap:7px;margin-top:8px;}
+.legend-item{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
 
-  /* timeline */
-  .timeline{position:relative;padding-left:0;}
-  .stop{position:relative;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;}
-  .stop-card{flex:1 1 auto;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 12px;}
-  .stop-marker{flex:0 0 auto;margin-top:4px;}
-  .stop-time{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-soft);}
-  .stop-title{font-size:16px;font-weight:700;margin:3px 0 2px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text);}
-  .stop-title .kr{font-size:12px;color:var(--text-soft);font-weight:400;}
-  .stop-desc{font-size:13px;color:var(--text-soft);line-height:1.6;margin:4px 0 8px;}
-  .maplink{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--sky);text-decoration:none;background:var(--sky-soft);padding:6px 11px;border-radius:20px;}
-  .eatbox{margin-top:10px;background:var(--maple-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#F0C7B2;line-height:1.55;}
-  .eatbox b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;color:var(--maple);}
-  .access-row{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
+.foodgrid{display:flex;flex-direction:column;gap:9px;margin-top:12px;}
+.foodcard{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 14px;}
+.foodcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:5px;}
+.foodcard .fname{font-size:14.5px;font-weight:700;}
+.foodcard .fname .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
+.foodcard .fmust{font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
 
-  .niecepick{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;color:var(--niece);background:var(--niece-soft);border:1px solid #4A2E42;padding:3px 9px;border-radius:20px;white-space:nowrap;}
-  .eat-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
-  .meta-chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--card-2);border:1px solid var(--line);color:var(--text-soft);display:inline-flex;align-items:center;gap:4px;}
-  .meta-chip.rating{color:var(--gold);border-color:var(--gold-soft);background:var(--gold-soft);}
-  .meta-chip.book{color:var(--sky);border-color:var(--sky-soft);background:var(--sky-soft);}
-  .meta-chip.book.warn{color:var(--maple);border-color:var(--maple-soft);background:var(--maple-soft);}
-  .meta-chip.hours{color:var(--moss);border-color:var(--moss-soft);background:var(--moss-soft);}
+/* ---------- day header ---------- */
+.dayhead{padding:24px 0 4px;}
+.dayhead .kicker{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
+.dayhead .dno{
+  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:12px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--lc);
+}
+.dayhead .kline{flex:1 1 auto;height:4px;border-radius:2px;background:var(--lc);opacity:.9;}
+.dayhead .date{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);}
+.dayhead h2{
+  font-family:'Noto Sans TC',sans-serif;font-weight:900;
+  font-size:clamp(24px,6.6vw,32px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
+}
+.dayhead .intro{font-size:13.5px;color:var(--ink-soft);line-height:1.65;margin:0;}
+.dayhead .chiprow{margin-top:11px;}
 
-  .food-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;}
-  .food-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;}
-  .food-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
-  .food-tags{display:flex;gap:6px;flex-wrap:wrap;}
-  .food-name{font-size:14px;font-weight:700;color:var(--text);}
-  .food-name .kr{font-size:11.5px;color:var(--text-soft);font-weight:400;margin-left:4px;}
-  .food-must{font-size:12px;color:var(--text-soft);line-height:1.5;margin-top:2px;}
+.maptoggle{
+  display:flex;align-items:center;gap:7px;margin-top:14px;
+  padding:9px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--rule);background:var(--surface);
+  font-size:13px;font-weight:600;color:var(--ink-soft);
+}
+.maptoggle .chev{transition:transform .2s;font-size:11px;}
+.maptoggle[aria-expanded="true"] .chev{transform:rotate(180deg);}
+.mapbox{
+  height:230px;margin-top:11px;border-radius:var(--r-lg);overflow:hidden;
+  border:1px solid var(--rule);background:var(--surface-2);
+}
+.mapbox.tall{height:300px;}
+.mapcap{font-size:11.5px;color:var(--ink-faint);margin:7px 2px 0;line-height:1.55;}
+.mapfallback{display:grid;place-items:center;height:100%;padding:20px;text-align:center;font-size:12.5px;color:var(--ink-faint);}
+.leaflet-container{background:var(--surface-2);font:inherit;}
+.mapnode{
+  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  color:#fff;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);
+}
 
-  .tip-box{margin-top:10px;background:var(--moss-soft);border-radius:10px;padding:9px 11px;font-size:12.5px;color:#CBE0B3;line-height:1.55;}
-  .tip-box b{display:block;font-size:11px;letter-spacing:.04em;margin-bottom:2px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;color:var(--moss);}
+/* ---------- the line: stops + segments ---------- */
+.line{margin-top:18px;}
+.unit{position:relative;}
+.unit.lifted{position:relative;z-index:30;}
+.unit.lifted .stopcard{box-shadow:var(--shadow-2);border-color:var(--lc);}
+.unit.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
-  .connector{position:relative;margin:-4px 0 14px 36px;padding:8px 12px 8px 14px;font-size:12px;color:var(--text-soft);display:flex;align-items:center;gap:8px;}
-  .connector .icon{font-size:14px;}
-  .connector b{color:var(--text);font-weight:700;}
+/* segment between two stations; stroke encodes the transit mode */
+.seg{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:stretch;min-height:42px;}
+.seg-rail{position:relative;}
+/* the stroke of a segment says how you get there: on foot, by train, bus or car */
+.seg-rail::before{
+  content:"";position:absolute;left:calc(var(--rail-w)/2);top:0;bottom:0;
+  transform:translateX(-50%);width:4px;background:var(--lc);
+}
+.seg[data-mode="walk"] .seg-rail::before{
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 4px, transparent 4px 9px);
+}
+.seg[data-mode="bus"] .seg-rail::before{
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 12px, transparent 12px 20px);
+}
+.seg[data-mode="taxi"] .seg-rail::before{
+  width:9px;
+  background:linear-gradient(90deg, var(--lc) 0 3px, transparent 3px 6px, var(--lc) 6px 9px);
+}
+.seg[data-mode="air"] .seg-rail::before{
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 2px, transparent 2px 8px);opacity:.7;
+}
+.seg-text{
+  font-size:12.5px;color:var(--ink-soft);padding:9px 0 9px 4px;line-height:1.5;
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+}
+.seg-text b{color:var(--ink);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.seg-text .icon{font-size:14px;}
 
-  footer{padding:30px 0 10px;text-align:center;color:var(--text-soft);font-size:11.5px;line-height:1.8;}
-  footer .brand{font-family:'Noto Serif KR',serif;font-size:14px;color:var(--text);margin-bottom:6px;}
-  hr.div{border:none;border-top:1px solid var(--line);margin:0;}
+/* a station */
+.stop{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:start;}
+.stop-rail{position:relative;align-self:stretch;}
+.stop-rail::before{
+  content:"";position:absolute;left:calc(var(--rail-w)/2);top:0;bottom:0;
+  transform:translateX(-50%);width:4px;background:var(--lc);
+}
+.unit:first-child .stop-rail::before{top:26px;}
+.unit:last-child .stop-rail::before{bottom:calc(100% - 26px);}
+.node{
+  position:absolute;left:calc(var(--rail-w)/2);top:26px;transform:translate(-50%,-50%);
+  width:13px;height:13px;border-radius:50%;background:var(--lc);
+  border:2.5px solid var(--paper);box-sizing:content-box;z-index:2;
+}
+/* a meal is a major stop — drawn like an interchange station */
+.node[data-type="eat"]{width:15px;height:15px;background:var(--paper);border:4px solid var(--lc);}
+.node[data-type="rest"]{width:8px;height:8px;opacity:.75;}
 
-  /* ---------- EDIT MODE (accordion, mobile-friendly) ---------- */
-  .stop-view-row{display:flex;align-items:center;gap:8px;cursor:pointer;}
-  .stop-view-row .info{flex:1 1 auto;min-width:0;}
-  .stop-view-row .chev{flex:0 0 auto;font-size:18px;color:var(--text-soft);transition:transform .15s;}
-  .stop-view-row.expanded .chev{transform:rotate(180deg);}
-  .field-input, .field-textarea{
-    width:100%;font-family:inherit;font-size:16px;color:var(--ink);
-    border:1px solid var(--line);border-radius:10px;padding:12px 12px;background:#FFFCF3;margin:4px 0;
-  }
-  .field-textarea{resize:vertical;min-height:70px;}
-  .field-row{display:flex;flex-direction:column;gap:2px;margin:8px 0;}
-  .field-row label{font-size:11px;color:var(--text-soft);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em;}
-  .field-row select.field-input{padding:12px;}
-  .stop-edit-body{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;}
-  .stop-edit-tools{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
-  .btn-sm{font-size:12px;font-weight:700;padding:8px 13px;border-radius:20px;border:1px solid var(--line);background:var(--card-2);color:var(--text-soft);cursor:pointer;}
-  .btn-sm.danger{color:var(--maple);border-color:var(--maple-soft);}
-  .btn-sm.primary{color:var(--moss);border-color:var(--moss-soft);}
-  .add-stop-btn{width:100%;margin:6px 0 0;padding:14px;border:1.5px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--text-soft);font-size:14px;font-weight:700;cursor:pointer;}
+.stopcard{
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
+  margin:0 0 4px 4px;overflow:hidden;box-shadow:var(--shadow-1);
+  transition:border-color .15s, box-shadow .15s;
+}
+.stopmain{display:flex;gap:12px;padding:12px;cursor:pointer;align-items:flex-start;text-align:left;width:100%;border:0;background:transparent;}
+.thumb{
+  flex:0 0 auto;width:76px;height:76px;border-radius:var(--r-md);overflow:hidden;
+  background:var(--surface-2);position:relative;
+}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+/* when a stop has no photo we show no box at all — the row just gets shorter.
+   while editing, the summary collapses to photo + time + name so the form stays reachable */
+.stopcard.open .stopdesc,
+.stopcard.open .stopmain .chiprow,
+.stopcard.open .eatbox,
+.stopcard.open .tipbox,
+.stopcard.open .stopfoot{display:none;}
+.stopcard.open{border-color:var(--lc);}
+.unit{scroll-margin-top:112px;}
+.stopbody{flex:1 1 auto;min-width:0;}
+.stoptime{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);letter-spacing:.02em;}
+.stopname{font-size:15.5px;font-weight:700;line-height:1.35;margin:1px 0 0;}
+.stopname .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
+.stopname.unnamed{color:var(--ink-faint);font-weight:500;font-style:italic;}
+.stopdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:4px;}
+.stopcard .chiprow{margin-top:7px;}
+.eatbox{
+  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
+  background:var(--warn-bg);font-size:12.5px;line-height:1.55;color:var(--ink);
+}
+.eatbox b{
+  display:block;font-family:'Bricolage Grotesque',sans-serif;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--warn);margin-bottom:2px;
+}
+.tipbox{
+  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
+  background:var(--ok-bg);font-size:12.5px;line-height:1.55;color:var(--ink);
+}
+.tipbox b{
+  display:block;font-family:'Bricolage Grotesque',sans-serif;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ok);margin-bottom:2px;
+}
+.stopfoot{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px 12px;}
+.maplink{
+  display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+  color:var(--info);background:var(--info-bg);padding:6px 11px;border-radius:999px;
+  text-decoration:none;
+}
+.draghandle{
+  position:absolute;top:0;right:0;width:46px;height:46px;display:grid;place-items:center;
+  color:var(--ink-faint);font-size:15px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+}
+.draghandle:active{cursor:grabbing;}
+.stopcard{position:relative;}
 
-  /* ---------- FLOATING CONTROL BAR ---------- */
-  .control-bar{
-    position:fixed;left:0;right:0;bottom:0;z-index:60;
-    background:rgba(23,20,15,0.96);backdrop-filter:blur(6px);
-    border-top:1px solid var(--line);
-    padding:10px 18px calc(10px + env(safe-area-inset-bottom));
-    display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
-  }
-  .control-btn{
-    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:9px 16px;border-radius:20px;
-    border:1px solid var(--gold);background:var(--gold);color:#231A08;cursor:pointer;
-  }
-  .control-btn.ghost{background:var(--card);color:var(--text);border-color:var(--line);}
-  .control-btn.save{background:var(--moss);border-color:var(--moss);color:#132009;}
-  .save-status{font-size:11px;color:var(--text-soft);align-self:center;}
+/* expanded editor */
+.editor{border-top:1px solid var(--rule);padding:13px 12px 14px;background:var(--surface-2);}
+.field{margin-bottom:11px;}
+.field:last-child{margin-bottom:0;}
+.field label{
+  display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px;
+}
+.input,.textarea,.select{
+  width:100%;font-family:inherit;font-size:16px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:11px 12px;line-height:1.5;
+}
+.textarea{resize:vertical;min-height:74px;}
+.select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px;}
+.input:focus,.textarea:focus,.select:focus{outline:2px solid var(--lc,var(--d3));outline-offset:-1px;border-color:transparent;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 
-  /* ---------- MODAL (history / diff) ---------- */
-  .modal-backdrop{position:fixed;inset:0;background:rgba(5,4,2,.65);z-index:100;display:flex;align-items:flex-end;justify-content:center;}
-  .modal-sheet{background:var(--ink);border-top:1px solid var(--line);width:100%;max-width:520px;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
-  .modal-title{font-size:17px;font-weight:700;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;color:var(--text);}
-  .modal-close{background:none;border:none;font-size:18px;color:var(--text-soft);cursor:pointer;}
-  .version-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:12.5px;}
-  .version-item .vtop{display:flex;justify-content:space-between;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-soft);}
-  .version-item .vsummary{margin-top:4px;font-size:13px;color:var(--text);}
-  .version-item .vactions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
-  .src-chip{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:10px;}
-  .src-chip.manual{background:var(--sky-soft);color:var(--sky);}
-  .src-chip.ai-suggestion{background:var(--niece-soft);color:var(--niece);}
-  .src-chip.seed{background:var(--moss-soft);color:var(--moss);}
-  .src-chip.restore{background:var(--gold-soft);color:var(--gold);}
-  .diff-add{background:#243420;color:#BFE3A0;}
-  .diff-del{background:#3A241D;color:#E8A897;text-decoration:line-through;}
-  .diff-block{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:pre-wrap;line-height:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;color:var(--text);}
+.suggest{margin-top:5px;display:flex;flex-direction:column;gap:5px;}
+.suggest-item{
+  text-align:left;width:100%;cursor:pointer;
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:9px 11px;
+}
+.suggest-item:active{background:var(--surface-2);}
+.suggest-item .n{font-size:13.5px;font-weight:700;}
+.suggest-item .a{font-size:11.5px;color:var(--ink-faint);margin-top:1px;}
+.hint{font-size:11.5px;color:var(--ink-faint);margin:5px 2px 0;line-height:1.5;}
 
-  /* ---------- AI PANEL ---------- */
-  .ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-  .ai-ask-row{display:flex;gap:8px;margin-top:10px;}
-  .ai-ask-row input{flex:1;padding:11px 13px;border-radius:20px;border:1px solid var(--line);font-size:14px;font-family:inherit;background:#FFFCF3;color:var(--ink);}
-  .ai-result{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--text);}
-  .ai-change-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;}
-  .ai-change-top{display:flex;justify-content:space-between;gap:8px;align-items:center;}
-  .ai-loading{font-size:12px;color:var(--text-soft);}
+.editor-tools{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft);
+}
+.btn:active{transform:scale(.97);}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 32%,transparent);}
+.btn.wide{width:100%;justify-content:center;}
+.addstop{
+  width:100%;margin-top:12px;padding:14px;cursor:pointer;
+  border:1.5px dashed var(--rule);border-radius:var(--r-lg);background:transparent;
+  color:var(--ink-soft);font-size:13.5px;font-weight:700;
+}
+.addstop:active{background:var(--surface);}
 
-  @media (max-width:360px){
-    .hero h1{font-size:24px;}
-    .stamp{width:70px;height:70px;}
-  }
-  @media print{
-    *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body{padding-bottom:0;}
-    .daynav{position:static;backdrop-filter:none;}
-    .control-bar{display:none;}
-    .stop{page-break-inside:avoid;break-inside:avoid;}
-    .stop-card{page-break-inside:avoid;break-inside:avoid;}
-    a.maplink{text-decoration:underline;}
-    .daymap-wrap,.overview-map-block{display:none;}
-  }
+.photogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;}
+.photogrid img{width:100%;height:70px;object-fit:cover;border-radius:var(--r-sm);cursor:pointer;border:2px solid transparent;display:block;}
+.photogrid img.on{border-color:var(--lc,var(--d3));}
+
+/* ---------- floating dock ---------- */
+.dock{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;
+  display:flex;gap:8px;align-items:center;justify-content:center;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top, var(--paper) 62%, transparent);
+  pointer-events:none;
+}
+.dock > *{pointer-events:auto;}
+.dockbtn{
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  font-size:13px;font-weight:700;padding:11px 17px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink);
+  box-shadow:var(--shadow-1);
+}
+.dockbtn.accent{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.dockbtn:active{transform:scale(.96);}
+.savestate{
+  position:fixed;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:61;
+  font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px;
+  background:var(--ink);color:var(--paper);box-shadow:var(--shadow-1);
+  opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;
+}
+.savestate.on{opacity:1;}
+
+/* ---------- sheet + modal ---------- */
+.scrim{position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);backdrop-filter:blur(3px);}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:81;
+  max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  background:var(--paper);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  box-shadow:var(--shadow-2);
+  padding:8px 16px calc(22px + env(safe-area-inset-bottom));
+  animation:rise .26s cubic-bezier(.2,.8,.3,1);
+}
+.sheet-wide{max-width:720px;margin:0 auto;}
+@keyframes rise{from{transform:translateY(14px);opacity:.4;}to{transform:none;opacity:1;}}
+.grabber{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:0 auto 12px;}
+.sheet h3{font-size:17px;font-weight:900;margin:0 0 3px;}
+.sheet .sec-sub{margin-bottom:12px;}
+.sheet-close{position:absolute;top:14px;right:16px;}
+
+.aibtns{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;}
+.askrow{display:flex;gap:7px;}
+.askrow .input{flex:1 1 auto;}
+.ai-out{margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+.ai-msg{
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
+}
+.ai-change{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--lc,var(--d3));border-radius:var(--r-md);padding:12px 13px;}
+.ai-change .op{
+  font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+}
+.ai-change .ttl{font-size:14.5px;font-weight:700;margin:3px 0;}
+.ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+
+.vlist{display:flex;flex-direction:column;gap:7px;}
+.vrow{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:11px 12px;}
+.vrow .who{font-size:13.5px;font-weight:700;}
+.vrow .when{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);}
+.vrow .sum{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:3px;}
+.vrow .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;}
+.vrow input[type=checkbox]{width:19px;height:19px;flex:0 0 auto;margin-top:3px;accent-color:var(--d3);}
+.diff{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px;max-height:52vh;overflow:auto;margin-top:11px;}
+.diff ins{background:var(--ok-bg);color:var(--ok);text-decoration:none;}
+.diff del{background:var(--danger-bg);color:var(--danger);}
+
+.daypick{display:flex;flex-direction:column;gap:6px;}
+.daypick button{
+  display:grid;grid-template-columns:20px 52px 1fr;align-items:center;gap:11px;
+  padding:13px 14px;border-radius:var(--r-md);cursor:pointer;text-align:left;
+  border:1px solid var(--rule);background:var(--surface);font-size:14px;font-weight:600;
+}
+.daypick button:disabled{opacity:.42;cursor:default;}
+.daypick .bullet{width:11px;height:11px;border-radius:50%;background:var(--lc);}
+.daypick .dcode{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--lc);}
+
+footer{padding:34px 0 18px;font-size:11.5px;color:var(--ink-faint);line-height:1.85;}
+footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bottom:7px;}
+
+.loading{padding:40px 0;text-align:center;color:var(--ink-faint);font-size:13.5px;}
+.errbox{
+  background:var(--danger-bg);border:1px solid color-mix(in srgb,var(--danger) 25%,transparent);
+  border-radius:var(--r-md);padding:14px;font-size:13.5px;color:var(--danger);line-height:1.6;
+}
+
+@media (min-width:560px){
+  :root{--rail-w:34px;}
+  .thumb{width:96px;height:96px;}
+  .mapbox{height:280px;}
+  .mapbox.tall{height:380px;}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;transition-duration:.001ms !important;}
+  html{scroll-behavior:auto;}
+}
 </style>
 </head>
 <body>
 
-<!-- ================= HERO ================= -->
-<div class="hero">
-  <div class="hero-leafbg"></div>
-  <div class="wrap">
-    <div class="hero-top">
-      <div><div class="eyebrow">Family Field Journal · Seoul</div></div>
-      <div class="stamp"><b>23→28</b><span>Oct 2026</span></div>
-    </div>
-    <h1 id="hero-title">首爾秋楓銀杏行</h1>
-    <span class="washi">🍁 7 人家庭旅行手冊</span>
-    <p class="sub" id="hero-sub">2026.10.23（五）— 2026.10.28（三）｜UH Seoul Central Suite</p>
-
-    <div class="ticket">
-      <div class="ticket-row">
-        <div><div class="ticket-city">HKG</div><div class="ticket-code">香港國際機場</div></div>
-        <div class="ticket-plane">✈</div>
-        <div style="text-align:right"><div class="ticket-city">ICN</div><div class="ticket-code">仁川國際機場</div></div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brandrow">
+      <div class="brandmark">
+        <span class="sys">Seoul</span>
+        <span class="ko">서울 · 가을</span>
       </div>
-      <div class="ticket-divider"></div>
-      <div class="ticket-meta">
-        <div>出發<b>10/23（五）約19:00</b></div>
-        <div style="text-align:center">同行<b>7 位家庭成員</b></div>
-        <div style="text-align:right">抵達<b>10/24（六）00:25</b></div>
-      </div>
+      <button class="iconbtn" id="btn-theme" aria-label="切換深淺色">◐</button>
     </div>
-
-    <div class="hero-tags" id="hero-tags"></div>
+    <div class="lines" id="lines" role="tablist" aria-label="揀日子"></div>
   </div>
+</header>
+
+<main class="wrap" id="app">
+  <p class="loading">載入緊行程…</p>
+</main>
+
+<div class="dock">
+  <button class="dockbtn" id="btn-history">🕓 歷史</button>
+  <button class="dockbtn accent" id="btn-ai">✨ AI 助手</button>
 </div>
-
-<!-- ================= STICKY NAV ================= -->
-<div class="daynav">
-  <div class="daynav-scroll" id="daynavScroll">
-    <a class="daypill" href="#overview">須知</a>
-    <a class="daypill" href="#ai-panel">🤖 AI</a>
-    <a class="daypill" href="#day1">D1 <b>抵達</b></a>
-    <a class="daypill" href="#day2">D2 <b>古宮</b></a>
-    <a class="daypill" href="#day3">D3 <b>南怡島</b></a>
-    <a class="daypill" href="#day4">D4 <b>聖水洞</b></a>
-    <a class="daypill" href="#day5">D5 <b>德壽宮</b></a>
-    <a class="daypill" href="#day6">D6 <b>銀杏尾聲</b></a>
-  </div>
-</div>
-
-<div class="wrap">
-
-  <!-- ================= OVERVIEW / PRACTICAL INFO ================= -->
-  <section id="overview">
-    <h2 class="section-title">出發前必讀</h2>
-    <p class="section-sub">天氣、穿搭、無障礙規劃同埋日程微調重點</p>
-    <div id="overview-body">
-      <p class="section-sub">載入緊行程資料…</p>
-    </div>
-  </section>
-
-  <hr class="div">
-
-  <!-- ================= AI 助手 ================= -->
-  <section id="ai-panel">
-    <h2 class="section-title">🤖 AI 旅程助手</h2>
-    <p class="section-sub">用最新資訊 check 天氣同紅葉情報，或者叫 AI 建議行程調整（撳「套用」會直接更新落去，並自動存低歷史版本）</p>
-    <div id="ai-key-notice"></div>
-    <div class="ai-actions">
-      <button class="btn-sm" id="btn-ai-weather">🌤 check最新天氣</button>
-      <button class="btn-sm" id="btn-ai-foliage">🍁 check紅葉情報</button>
-      <button class="btn-sm" id="btn-ai-suggest">💡 建議行程調整</button>
-    </div>
-    <div class="ai-ask-row">
-      <input type="text" id="ai-question" placeholder="或者自己打嘢問，例如：幫我Day3加多個景點">
-      <button class="btn-sm primary" id="btn-ai-ask">問AI</button>
-    </div>
-    <div id="ai-output"></div>
-  </section>
-
-  <!-- ================= OVERVIEW MAP (all days) ================= -->
-  <section class="overview-map-block">
-    <h2 class="section-title" style="margin-bottom:2px;">🗺 全程總覽地圖</h2>
-    <p class="section-sub">6日行程一次過睇晒，撳圖例可以個別開關某一日嘅路線</p>
-    <div class="overview-map" id="overview-map"></div>
-    <div class="overview-legend" id="overview-legend"></div>
-    <p class="daymap-cap">示意路線圖，非精確導航；南怡島（Day3）距離市中心較遠，比例上會壓縮顯示。</p>
-  </section>
-
-  <hr class="div">
-
-  <div id="days-root"><p class="section-sub" style="padding:20px 0;">載入緊行程…</p></div>
-
-  <footer>
-    <div class="brand">首爾秋楓銀杏行 · 家庭旅行手冊</div>
-    地址、營業時間及Naver Map連結僅供參考，出發前請再次確認最新資訊，公眾假期前後尤其建議先致電核實。<br>
-    部分Naver Map連結為關鍵字搜尋，若無法直接開啟App，請於Naver Map內手動搜尋店名。<br>
-    餐廳評分為整合Naver／大眾食評的參考值，訂位狀態亦會隨時間變動，出發前建議再核實一次。<br>
-    地圖為示意路線圖，座標為約略位置，實際步行導航請以各站Naver Map連結為準；地圖需要網絡連線方能載入。<br>
-    地點相片由 Google Places 搜尋提供，僅供參考觀感，如未搵到相或功能未啟用會顯示提示。<br>
-    行程內容由家庭成員共同編輯，全部更改都會自動存低版本歷史，可以隨時查閱同還原。<br>
-    祝 7 位家庭成員旅途愉快，秋日賞楓銀杏平安順心 🍁🍂
-  </footer>
-</div>
-
-<!-- ================= FLOATING CONTROL BAR ================= -->
-<div class="control-bar">
-  <button class="control-btn ghost" id="btn-history">🕓 歷史紀錄</button>
-  <button class="control-btn ghost" id="btn-edit-toggle">✏️ 編輯模式</button>
-  <button class="control-btn save" id="btn-save" style="display:none;">💾 儲存</button>
-  <span class="save-status" id="save-status"></span>
-</div>
-
-<div id="modal-root"></div>
+<div class="savestate" id="savestate"></div>
+<div id="layer"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/diff@5.2.0/dist/diff.js"></script>
@@ -477,827 +621,983 @@
 (function(){
   "use strict";
 
-  // ---------- CONFIG ----------
+  // ---------- config ----------
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
-  const DAY_COLORS = { day2:"#8EC0E4", day3:"#A8C787", day4:"#E2916D", day5:"#EFA8CC", day6:"#E0B563" };
-  const DAY_LABELS = { day1:"抵達", day2:"古宮", day3:"南怡島", day4:"聖水洞", day5:"德壽宮", day6:"銀杏尾聲" };
+  const DAY_COLORS = { day1:"var(--d1)", day2:"var(--d2)", day3:"var(--d3)", day4:"var(--d4)", day5:"var(--d5)", day6:"var(--d6)" };
+  const DAY_HEX    = { day1:"#8A94A6", day2:"#0FA958", day3:"#00A5DE", day4:"#EF7C1C", day5:"#9B6FB0", day6:"#BB8336" };
+  const DAY_SHORT  = { day1:"抵達", day2:"古宮", day3:"南怡島", day4:"聖水洞", day5:"德壽宮", day6:"銀杏" };
 
   function sbHeaders(extra){
     return Object.assign({
       "apikey": SUPABASE_ANON_KEY,
       "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-      "Content-Type": "application/json",
+      "Content-Type": "application/json"
     }, extra || {});
   }
-
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+  const $ = sel => document.querySelector(sel);
 
-  // ---------- STATE ----------
-  let state = {
-    snapshot: null,      // current in-memory itinerary data (mutated by edit mode)
-    editMode: false,
+  // ---------- state ----------
+  const state = {
+    snapshot: null,
+    view: "overview",              // "overview" | dayId
+    open: new Set(),               // "dayId:unitIndex" currently expanded
+    mapsOpen: new Set(),           // dayIds whose map is expanded
     editedBy: localStorage.getItem("seoul_trip_name") || "",
-    expanded: new Set(), // "dayId:idx" keys currently expanded in edit mode
+    readOnlyLabel: null            // set when previewing an old version
   };
 
   function getEditedBy(){
     if (state.editedBy) return state.editedBy;
-    const name = prompt("你係邊個？（俾大家喺歷史紀錄度睇到係邊個改嘅）") || "匿名";
+    const name = prompt("你叫咩名？（等大家喺歷史紀錄度知道邊個改過）") || "匿名";
     state.editedBy = name;
     localStorage.setItem("seoul_trip_name", name);
     return name;
   }
 
+  // ---------- theme ----------
+  function applyTheme(t){
+    if (t === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", t);
+    localStorage.setItem("seoul_theme", t);
+  }
+  applyTheme(localStorage.getItem("seoul_theme") || "auto");
+  $("#btn-theme").addEventListener("click", () => {
+    const cur = localStorage.getItem("seoul_theme") || "auto";
+    applyTheme(cur === "auto" ? "light" : cur === "light" ? "dark" : "auto");
+    render();
+  });
+
   // ==================================================================
-  // DATA LAYER
+  // DATA
   // ==================================================================
   async function fetchLatestVersion(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=*&order=created_at.desc&limit=1`, {
-      headers: sbHeaders()
-    });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=*&order=created_at.desc&limit=1`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取行程失敗 " + res.status);
-    const rows = await res.json();
-    return rows[0] || null;
+    return (await res.json())[0] || null;
   }
-
   async function fetchAllVersions(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=id,created_at,edited_by,source,summary&order=created_at.desc`, {
-      headers: sbHeaders()
-    });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=id,created_at,edited_by,source,summary&order=created_at.desc`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取歷史失敗 " + res.status);
     return res.json();
   }
-
   async function fetchVersionSnapshot(id){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?id=eq.${id}&select=snapshot`, {
-      headers: sbHeaders()
-    });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?id=eq.${id}&select=snapshot`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取版本失敗 " + res.status);
-    const rows = await res.json();
-    return rows[0]?.snapshot || null;
+    return (await res.json())[0]?.snapshot || null;
   }
-
   async function saveVersion(snapshot, source, summary){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
       method: "POST",
       headers: sbHeaders({ "Prefer": "return=representation" }),
-      body: JSON.stringify({
-        edited_by: getEditedBy(),
-        source, summary,
-        snapshot
-      })
+      body: JSON.stringify({ edited_by: getEditedBy(), source, summary, snapshot })
     });
     if (!res.ok) throw new Error("儲存失敗 " + res.status + " " + (await res.text()));
     return res.json();
   }
+  async function callAi(payload){
+    const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(payload) });
+    return res.json();
+  }
 
-  let autosaveTimer = null;
-  function scheduleAutosave(summary){
-    clearTimeout(autosaveTimer);
-    const statusEl = document.getElementById("save-status");
-    if (statusEl) statusEl.textContent = "⏳ 打緊字…";
-    autosaveTimer = setTimeout(async () => {
-      try {
-        await saveVersion(state.snapshot, "manual", summary || "手動編輯更新");
-        if (statusEl) { statusEl.textContent = "✅ 已自動儲存"; setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 2000); }
-      } catch (e) {
-        if (statusEl) statusEl.textContent = "⚠️ 儲存失敗，請撳「儲存」";
-      }
-    }, 900);
+  let saveTimer = null;
+  function flash(msg, keep){
+    const el = $("#savestate");
+    el.textContent = msg;
+    el.classList.add("on");
+    if (!keep) setTimeout(() => el.classList.remove("on"), 1900);
+  }
+  async function saveNow(summary){
+    clearTimeout(saveTimer);
+    flash("儲存緊…", true);
+    try { await saveVersion(state.snapshot, "manual", summary); flash("已儲存"); }
+    catch (e) { flash("儲存唔到，改動只留喺呢部機"); }
+  }
+  function saveSoon(summary){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveNow(summary), 900);
   }
 
   // ==================================================================
-  // RENDER: HERO
+  // MODEL HELPERS
   // ==================================================================
-  function renderHero(meta){
-    if (!meta) return;
-    document.getElementById("hero-title").textContent = meta.title || "首爾秋楓銀杏行";
-    document.getElementById("hero-sub").textContent = meta.dateRangeSub || "";
-    document.getElementById("hero-tags").innerHTML = (meta.hotelTags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
-  }
+  function dayById(id){ return state.snapshot.days.find(d => d.id === id); }
 
-  // ==================================================================
-  // RENDER: OVERVIEW
-  // ==================================================================
-  function renderOverview(d){
-    const acc = d.accommodation || {};
-    const foodCardsHtml = (d.foodCards || []).map(f => `
-      <div class="food-card">
-        <div class="food-card-top">
-          <span class="food-tags">${(f.niecepicks||[]).map(np=>`<span class="niecepick">${esc(np)}</span>`).join("")}</span>
-          <span class="badge note">${esc(f.day)}</span>
-        </div>
-        <div class="food-name">${f.name}</div>
-        ${f.must ? `<div class="food-must">${esc(f.must)}</div>` : ""}
-        <div class="eat-meta">${(f.chips||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>
-      </div>
-    `).join("");
-
-    document.getElementById("overview-body").innerHTML = `
-      <div class="info-card" style="margin-bottom:14px;">
-        <div class="k">Accommodation</div>
-        <div class="v" style="font-size:16px;">${esc(acc.name)}</div>
-        <div class="d">${esc(acc.desc)}</div>
-        <div class="eat-meta"><span class="meta-chip hours">${esc(acc.hoursChip)}</span></div>
-        ${acc.warning ? `<div class="d" style="margin-top:6px;">${esc(acc.warning)}</div>` : ""}
-        ${acc.mapUrl ? `<a class="maplink" style="margin-top:10px;" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 在 Naver Map 開啟酒店</a>` : ""}
-      </div>
-
-      <h3 style="font-size:15px;margin:20px 0 2px;color:var(--text);">🌤 10月下旬首爾天氣參考</h3>
-      <p class="section-sub" style="margin-bottom:6px;">以下為歷年同期平均值，僅供準備衣物參考；出發前一週請務必查看即時預報（可用上面AI助手嘅「check最新天氣」）。</p>
-      <table class="weather-table">
-        <tr><th>日期</th><th>日間高溫</th><th>清晨低溫</th><th>概況</th></tr>
-        ${(d.weatherRows||[]).map(r=>`<tr><td>${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
-      </table>
-
-      <h3 style="font-size:15px;margin:22px 0 2px;color:var(--text);">🧥 穿搭建議</h3>
-      <ul class="clothing-list">
-        ${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}
-      </ul>
-
-      <h3 style="font-size:15px;margin:22px 0 2px;color:var(--text);">🚫🪜 無障礙圖例（姨姨專用）</h3>
-      <p class="section-sub" style="margin-bottom:6px;">姨姨不能行樓梯，以下標記會出現在每個地點旁，方便快速判斷路線是否合適。</p>
-      <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:var(--moss)"></span> ${esc((d.accessLegend||[])[0]||"")}</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span> ${esc((d.accessLegend||[])[1]||"")}</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--maple)"></span> ${esc((d.accessLegend||[])[2]||"")}</div>
-      </div>
-      <p class="section-sub" style="margin-top:12px;">${d.elevatorTip||""}</p>
-
-      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🍁 銀杏／楓葉時機提醒</h3>
-      <p class="section-sub" style="margin-bottom:6px;">${d.foliageNote||""}</p>
-
-      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🗓 日程調動重要提醒</h3>
-      <p class="section-sub" style="margin-bottom:6px;">${d.scheduleSwapNote||""}</p>
-
-      <h3 style="font-size:15px;margin:24px 0 2px;color:var(--text);">🍽 表妹美食清單 × 全程對照</h3>
-      <p class="section-sub" style="margin-bottom:6px;">下面用 <span class="niecepick" style="vertical-align:middle;">💌 表妹清單</span> 標記逐一對應，並附上參考評分、營業時間同訂位提示。評分為整合Naver／大眾食評的參考值，出發前建議再核實一次。</p>
-      <div class="food-list">${foodCardsHtml}</div>
-    `;
-  }
-
-  // ==================================================================
-  // RENDER: STOP PHOTO
-  // ==================================================================
-  function photoBlockHtml(item, dayId, idx){
-    if (item.photoUrl) {
-      return `<div class="stop-photo">
-        <img src="${esc(item.photoUrl)}" alt="${esc(item.title)}" loading="lazy">
-        <button class="photo-refresh-btn" data-action="find-photo" data-day="${dayId}" data-idx="${idx}">🔄 換相</button>
-      </div>`;
-    }
-    return `<div class="stop-photo-empty">
-      <button class="btn-sm" data-action="find-photo" data-day="${dayId}" data-idx="${idx}">📷 幫我搵呢度嘅相</button>
-    </div>`;
-  }
-
-  // ==================================================================
-  // RENDER: STOP / CONNECTOR / DAY
-  // ==================================================================
-  function stopMarkup(item, dayId, idx){
-    const niecepickHtml = (item.niecepick && item.niecepick.length)
-      ? `<div>${item.niecepick.map(np=>`<span class="niecepick">${esc(np)}</span>`).join("")}</div>` : "";
-    const eatMetaHtml = (item.eatMeta && item.eatMeta.length)
-      ? `<div class="eat-meta">${item.eatMeta.map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>` : "";
-    let bodyExtra = "";
-    if (item.eatboxHtml) {
-      bodyExtra += `<div class="eatbox">${item.eatboxHtml}${eatMetaHtml}</div>`;
-    } else {
-      bodyExtra += eatMetaHtml;
-    }
-    const mapHtml = item.mapUrl ? `<a class="maplink" href="${esc(item.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 導航</a>` : "";
-    const accessHtml = (item.accessBadges && item.accessBadges.length)
-      ? `<div class="access-row">${item.accessBadges.map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>` : "";
-    const tipHtml = item.tip ? `<div class="tip-box">${esc(item.tip)}</div>` : "";
-
-    return `
-      <div class="stop-card">
-        ${photoBlockHtml(item, dayId, idx)}
-        <div class="stop-time">${esc(item.time)}</div>
-        <div class="stop-title">${esc(item.title)} ${item.kr ? `<span class="kr">${esc(item.kr)}</span>` : ""}</div>
-        ${niecepickHtml}
-        ${item.desc ? `<div class="stop-desc">${esc(item.desc)}</div>` : ""}
-        ${bodyExtra}
-        ${mapHtml}
-        ${accessHtml}
-        ${tipHtml}
-      </div>
-    `;
-  }
-
-  function stopEditMarkup(dayId, idx, item){
-    const key = dayId + ":" + idx;
-    const isExpanded = state.expanded.has(key);
-    const typeLabel = item.type === "eat" ? "🍽 餐飲" : item.type === "rest" ? "🛌 休息" : "📍 一般";
-    return `
-      <div class="stop-card">
-        <div class="stop-view-row ${isExpanded ? "expanded" : ""}" data-action="toggle-expand" data-key="${key}">
-          <div class="info">
-            <div class="stop-time">${esc(item.time) || "（未設時間）"}</div>
-            <div class="stop-title">${esc(item.title) || "（未命名）"} <span class="kr">${typeLabel}</span></div>
-          </div>
-          <div class="chev">⌄</div>
-        </div>
-        ${isExpanded ? `
-        <div class="stop-edit-body">
-          <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
-          <div class="field-row"><label>類型</label>
-            <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type">
-              <option value="normal" ${item.type==="normal"?"selected":""}>一般</option>
-              <option value="eat" ${item.type==="eat"?"selected":""}>餐飲</option>
-              <option value="rest" ${item.type==="rest"?"selected":""}>休息</option>
-            </select>
-          </div>
-          <div class="field-row">
-            <label>名稱（打字會自動搜尋Google地圖真實地點，揀一個就自動填地址同攞相）</label>
-            <input class="field-input place-search-input" data-day="${dayId}" data-idx="${idx}" data-field="title" value="${esc(item.title)}" autocomplete="off">
-            <div class="place-search-results" data-day="${dayId}" data-idx="${idx}"></div>
-          </div>
-          <div class="field-row"><label>韓文</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="kr" value="${esc(item.kr)}"></div>
-          <div class="field-row"><label>描述</label><textarea class="field-textarea" data-day="${dayId}" data-idx="${idx}" data-field="desc">${esc(item.desc)}</textarea></div>
-          <div class="stop-edit-tools">
-            <button class="btn-sm" data-action="move-stop" data-day="${dayId}" data-idx="${idx}" data-dir="-1">⬆️ 上移</button>
-            <button class="btn-sm" data-action="move-stop" data-day="${dayId}" data-idx="${idx}" data-dir="1">⬇️ 下移</button>
-            <button class="btn-sm danger" data-action="remove-stop" data-day="${dayId}" data-idx="${idx}">🗑 移除呢個景點</button>
-          </div>
-        </div>` : ""}
-      </div>
-    `;
-  }
-
-  function connectorMarkup(item){
-    return `<div class="connector">${item.html}</div>`;
-  }
-
-  function newBlankStop(){
-    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"", photoUrl:"", placeId:"" };
-  }
-
-  function renderDaySection(day){
-    const itemsHtml = day.items.map((item, idx) => {
-      if (item.kind === "connector") return connectorMarkup(item);
-      return state.editMode ? stopEditMarkup(day.id, idx, item) : stopMarkup(item, day.id, idx);
-    }).join("");
-    const mapBlock = day.mapPoints ? `
-      <div class="daymap-wrap">
-        <div class="daymap" id="map-${day.id}" data-points='${JSON.stringify(day.mapPoints)}'></div>
-        <p class="daymap-cap">${esc(day.mapCap||"")}</p>
-      </div>` : "";
-    const addBtn = state.editMode ? `<button class="add-stop-btn" data-action="add-stop" data-day="${day.id}">+ 新增景點到呢一日</button>` : "";
-
-    return `
-      <div class="day" id="${day.id}">
-        <div class="day-head">
-          <span class="day-num">${esc(day.num)}</span>
-          <span class="day-date mono">${esc(day.date)}</span>
-        </div>
-        <h2>${esc(day.title)}</h2>
-        <p class="day-desc">${esc(day.desc)}</p>
-        <div class="day-badges">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
-        ${mapBlock}
-        <div class="timeline">${itemsHtml}</div>
-        ${addBtn}
-      </div>
-    `;
-  }
-
-  function renderDays(){
-    const root = document.getElementById("days-root");
-    const days = state.snapshot.days;
-    root.innerHTML = days.map((day, i) => renderDaySection(day) + (i < days.length - 1 ? '<hr class="div">' : "")).join("");
-    if (!state.editMode) initDayMaps();
-    bindStopHandlers();
-  }
-
-  function renderAll(){
-    renderHero(state.snapshot.meta);
-    renderOverview(state.snapshot);
-    renderDays();
-    if (!state.editMode) initOverviewMap();
-  }
-
-  // ==================================================================
-  // EDIT MODE + PHOTO PICKER (shared handlers, bound after every render)
-  // ==================================================================
-  // group a day's flat items array into movable units: a connector immediately
-  // followed by a stop travels together as one unit (so "move" keeps the
-  // transit note attached to the stop it describes).
-  function groupIntoUnits(items){
+  // A connector describes the trip INTO the stop that follows it, so the two
+  // travel together as one unit whenever a stop is moved.
+  function toUnits(items){
     const units = [];
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].kind === "connector" && items[i+1] && items[i+1].kind === "stop") {
-        units.push([items[i], items[i+1]]);
+    for (let i = 0; i < items.length; i++){
+      if (items[i].kind === "connector" && items[i+1] && items[i+1].kind === "stop"){
+        units.push({ seg: items[i], stop: items[i+1] });
         i++;
+      } else if (items[i].kind === "stop"){
+        units.push({ seg: null, stop: items[i] });
       } else {
-        units.push([items[i]]);
+        units.push({ seg: items[i], stop: null });
       }
     }
     return units;
   }
-  function moveStopUnit(day, stopIdx, direction){
-    const oldItems = day.items;
-    const units = groupIntoUnits(oldItems);
-    let flatPos = 0, unitIdx = -1;
-    for (let u = 0; u < units.length; u++) {
-      if (stopIdx >= flatPos && stopIdx < flatPos + units[u].length) { unitIdx = u; break; }
-      flatPos += units[u].length;
-    }
-    const targetIdx = unitIdx + direction;
-    if (unitIdx === -1 || targetIdx < 0 || targetIdx >= units.length) return false;
-    const tmp = units[unitIdx];
-    units[unitIdx] = units[targetIdx];
-    units[targetIdx] = tmp;
-    const newItems = units.flat();
-    // keep the same stop card expanded/collapsed after its position changes
-    const remapped = new Set();
-    state.expanded.forEach(key => {
-      const sep = key.indexOf(":");
-      const kDay = key.slice(0, sep), kIdx = +key.slice(sep + 1);
-      if (kDay !== day.id) { remapped.add(key); return; }
-      const newIdx = newItems.indexOf(oldItems[kIdx]);
-      remapped.add(newIdx === -1 ? key : (day.id + ":" + newIdx));
-    });
-    state.expanded = remapped;
-    day.items = newItems;
-    return true;
+  function fromUnits(units){
+    const out = [];
+    units.forEach(u => { if (u.seg) out.push(u.seg); if (u.stop) out.push(u.stop); });
+    return out;
+  }
+  function blankStop(){
+    return { kind:"stop", type:"normal", marker:"", time:"", title:"", kr:"",
+             niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"",
+             accessBadges:[], tip:"", photoUrl:"", placeId:"" };
+  }
+  const MODES = [
+    { key:"walk",  icon:"🚶", label:"步行" },
+    { key:"metro", icon:"🚇", label:"地鐵" },
+    { key:"bus",   icon:"🚌", label:"巴士" },
+    { key:"taxi",  icon:"🚕", label:"的士" },
+    { key:"air",   icon:"✈",  label:"航班" }
+  ];
+  function segMode(html){
+    const s = String(html || "");
+    if (s.includes("🚶")) return "walk";
+    if (s.includes("🚇") || s.includes("🚉") || s.includes("🚊") || s.includes("🚆")) return "metro";
+    if (s.includes("🚌")) return "bus";
+    if (s.includes("🚕") || s.includes("🚗")) return "taxi";
+    if (s.includes("✈")) return "air";
+    return "other";
+  }
+  function segPlain(html){
+    const tmp = document.createElement("div");
+    tmp.innerHTML = String(html || "");
+    return tmp.textContent.replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}️]+/u, "").trim();
+  }
+  function buildSeg(mode, text){
+    const m = MODES.find(x => x.key === mode) || MODES[0];
+    return { kind:"connector", html:`<span class="icon">${m.icon}</span>${esc(text)}` };
   }
 
-  function bindStopHandlers(){
-    document.querySelectorAll("#days-root [data-field]").forEach(el => {
-      el.addEventListener("input", () => {
-        const dayId = el.dataset.day, idx = +el.dataset.idx, field = el.dataset.field;
-        const day = state.snapshot.days.find(d => d.id === dayId);
-        if (day) {
-          day.items[idx][field] = el.value;
-          scheduleAutosave("編輯咗「" + (day.items[idx].title || "景點") + "」");
+  // ==================================================================
+  // RENDER — shell
+  // ==================================================================
+  function renderLines(){
+    const el = $("#lines");
+    const days = state.snapshot ? state.snapshot.days : [];
+    el.innerHTML = `
+      <button class="linebtn" role="tab" data-go="overview" aria-selected="${state.view==='overview'}" style="--lc:var(--ink-faint)">
+        <span class="bullet"></span><span class="lbl">全程</span>
+      </button>
+      ${days.map(d => `
+        <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+          <span class="bullet"></span>
+          <span class="lbl">D${d.id.replace('day','')}</span>
+          <span>${esc(DAY_SHORT[d.id]||'')}</span>
+        </button>`).join("")}
+    `;
+    el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
+      state.view = b.dataset.go;
+      state.open.clear();
+      window.scrollTo({ top: 0, behavior: "auto" });
+      render();
+      const active = $("#lines [aria-selected='true']");
+      if (active) active.scrollIntoView({ block:"nearest", inline:"center" });
+    }));
+  }
+
+  function render(){
+    renderLines();
+    const app = $("#app");
+    if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
+    app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
+    if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
+  }
+
+  // ==================================================================
+  // RENDER — overview
+  // ==================================================================
+  function overviewHtml(){
+    const d = state.snapshot;
+    const m = d.meta || {};
+    const acc = d.accommodation || {};
+
+    const board = d.days.map(day => {
+      const stops = day.items.filter(i => i.kind === "stop").length;
+      return `
+        <button class="board-row" data-go="${day.id}" style="--lc:${DAY_COLORS[day.id]||'var(--d1)'}">
+          <span class="dcode">Day ${day.id.replace('day','')}</span>
+          <span class="track"></span>
+          <span class="stack">
+            <span class="name">${esc(day.title)}</span>
+            <span class="sub">${esc(day.date)}</span>
+          </span>
+          <span class="count">${stops} 站</span>
+        </button>`;
+    }).join("");
+
+    const food = (d.foodCards || []).map(f => `
+      <div class="foodcard">
+        <div class="foodcard-top">
+          <span style="display:flex;gap:6px;flex-wrap:wrap;">${(f.niecepicks||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("")}</span>
+          <span class="badge note">${esc(f.day)}</span>
+        </div>
+        <div class="fname">${f.name}</div>
+        ${f.must ? `<div class="fmust">${esc(f.must)}</div>` : ""}
+        <div class="chiprow">${(f.chips||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>
+      </div>`).join("");
+
+    return `
+      <section class="hero">
+        <div class="eyebrow">10.23 — 10.28 · 2026</div>
+        <h1>${esc(m.title || "首爾秋楓銀杏行")}</h1>
+        <div class="hero-meta">
+          <span>7 位家庭成員</span><span>·</span>
+          <span>6 日 5 夜</span><span>·</span>
+          <span>賞楓銀杏</span>
+        </div>
+        <div class="chiprow">${(m.hotelTags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}</div>
+      </section>
+
+      <div class="board">
+        <div class="board-head"><span class="t">Route Board</span><span class="t">${d.days.length} lines</span></div>
+        ${board}
+      </div>
+
+      <section class="sec">
+        <h2 class="sec-title">全程地圖</h2>
+        <p class="sec-sub">6 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
+        <div class="mapbox tall" id="map-all"></div>
+        <div class="chiprow" id="map-legend"></div>
+        <p class="mapcap">示意路線，非精確導航。南怡島（Day 3）離市中心較遠，比例上會壓縮顯示。</p>
+      </section>
+
+      <hr class="rule">
+
+      <section class="sec">
+        <h2 class="sec-title">出發前必讀</h2>
+        <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。</p>
+
+        <div class="panel">
+          <div class="k">住宿</div>
+          <div class="v">${esc(acc.name)}</div>
+          <div class="d">${esc(acc.desc)}</div>
+          <div class="chiprow"><span class="meta-chip hours">${esc(acc.hoursChip)}</span></div>
+          ${acc.warning ? `<div class="d">${esc(acc.warning)}</div>` : ""}
+          ${acc.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
+        </div>
+
+        <h3>10 月下旬天氣</h3>
+        <p class="sec-sub">歷年同期平均，出發前一週用 AI 助手 check 返實時預報。</p>
+        <table class="wtable">
+          <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
+          ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
+        </table>
+
+        <h3>點著衫</h3>
+        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>
+
+        <h3>無障礙標記</h3>
+        <p class="sec-sub">姨姨唔行得樓梯，每個地點都會標返路況。</p>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
+          <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>${esc((d.accessLegend||[])[1]||"")}</div>
+          <div class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>${esc((d.accessLegend||[])[2]||"")}</div>
+        </div>
+        <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>
+
+        <h3>銀杏同紅葉時機</h3>
+        <p class="sec-sub">${d.foliageNote||""}</p>
+
+        <h3>日程調動</h3>
+        <p class="sec-sub">${d.scheduleSwapNote||""}</p>
+      </section>
+
+      <hr class="rule">
+
+      <section class="sec">
+        <h2 class="sec-title">表妹美食清單</h2>
+        <p class="sec-sub">標住 <span class="niecepick">💌 表妹清單</span> 嘅係表妹指定，附參考評分同訂位提示。</p>
+        <div class="foodgrid">${food}</div>
+      </section>
+
+      <footer>
+        <div class="fbrand">首爾秋楓銀杏行</div>
+        營業時間、評分同 Naver Map 連結僅供參考，出發前請再確認一次。<br>
+        地圖為示意路線，實際導航請以各站 Naver Map 為準。<br>
+        地點相片由 Google Places 提供。行程由家人共同編輯，每次改動都會自動存低版本。<br>
+        祝 7 位旅途愉快 🍁
+      </footer>
+    `;
+  }
+
+  function wireOverview(){
+    document.querySelectorAll(".board-row[data-go]").forEach(b => b.addEventListener("click", () => {
+      state.view = b.dataset.go;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      render();
+    }));
+    initOverviewMap();
+  }
+
+  // ==================================================================
+  // RENDER — one day
+  // ==================================================================
+  function dayHtml(day){
+    if (!day) return `<p class="loading">搵唔到呢一日。</p>`;
+    const lc = DAY_COLORS[day.id] || "var(--d1)";
+    const units = toUnits(day.items);
+    const mapOpen = state.mapsOpen.has(day.id);
+
+    return `
+      <section class="dayhead" style="--lc:${lc}">
+        <div class="kicker">
+          <span class="dno">Day ${day.id.replace('day','')}</span>
+          <span class="kline"></span>
+          <span class="date">${esc(day.date)}</span>
+        </div>
+        <h2>${esc(day.title)}</h2>
+        <p class="intro">${esc(day.desc)}</p>
+        <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
+        ${day.mapPoints ? `
+          <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
+            <span>🗺</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">▾</span>
+          </button>
+          ${mapOpen ? `<div class="mapbox" id="map-${day.id}" data-points='${esc(JSON.stringify(day.mapPoints))}'></div>
+                       <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
+        ` : ""}
+      </section>
+
+      <div class="line" id="line" style="--lc:${lc}">
+        ${units.map((u,i) => unitHtml(day, u, i, units.length)).join("")}
+      </div>
+
+      <button class="addstop" id="addstop">＋ 加一個地點落 ${esc(day.title)}</button>
+
+      <footer>
+        <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
+        撳一下卡片就可以改；改完會自動儲存，唔使撳掣。<br>
+        想搬位就用卡片右上角嘅 ⠿ 拉上拉落，或者用「搬去第幾日」。
+      </footer>
+    `;
+  }
+
+  function unitHtml(day, u, i, total){
+    const key = day.id + ":" + i;
+    const open = state.open.has(key);
+    const s = u.stop;
+    const segHtml = u.seg ? `
+      <div class="seg" data-mode="${segMode(u.seg.html)}">
+        <div class="seg-rail"></div>
+        <div class="seg-text">${u.seg.html}</div>
+      </div>` : "";
+
+    if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
+
+    const named = (s.title || "").trim();
+    const thumb = s.photoUrl
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
+      : "";
+
+    const chips = []
+      .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
+      .concat((s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
+      .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
+      .join("");
+
+    return `
+      <div class="unit" data-i="${i}">
+        ${segHtml}
+        <div class="stop">
+          <div class="stop-rail"><span class="node" data-type="${esc(s.type||'normal')}"></span></div>
+          <div class="stopcard${open ? " open" : ""}">
+            <button class="stopmain" data-open="${key}">
+              ${thumb}
+              <div class="stopbody">
+                <div class="stoptime">${esc(s.time) || "未定時間"}</div>
+                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(s.title) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(s.kr)}</span>` : ""}</div>
+                ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
+                ${chips ? `<div class="chiprow">${chips}</div>` : ""}
+              </div>
+            </button>
+            <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+            ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
+            ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
+            ${s.mapUrl ? `<div class="stopfoot"><a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a></div>` : ""}
+            ${open ? editorHtml(day, u, i, total) : ""}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function editorHtml(day, u, i, total){
+    const s = u.stop;
+    const mode = u.seg ? segMode(u.seg.html) : "walk";
+    const segText = u.seg ? segPlain(u.seg.html) : "";
+    return `
+      <div class="editor" data-editor="${i}">
+        <div class="field">
+          <label>名 — 打字會搵返 Google 地圖真實地點</label>
+          <input class="input" data-f="title" value="${esc(s.title)}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+          <div class="suggest" data-suggest></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>時間</label><input class="input" data-f="time" value="${esc(s.time)}" placeholder="約 14:00"></div>
+          <div class="field"><label>類型</label>
+            <select class="select" data-f="type">
+              <option value="normal" ${s.type==="normal"?"selected":""}>景點</option>
+              <option value="eat" ${s.type==="eat"?"selected":""}>餐飲</option>
+              <option value="rest" ${s.type==="rest"?"selected":""}>休息</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>韓文名</label><input class="input" data-f="kr" value="${esc(s.kr)}" placeholder="남산골한옥마을"></div>
+        <div class="field"><label>描述</label><textarea class="textarea" data-f="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
+
+        ${i > 0 ? `
+        <div class="row2">
+          <div class="field"><label>點樣去</label>
+            <select class="select" data-seg="mode">
+              ${MODES.map(m=>`<option value="${m.key}" ${mode===m.key?"selected":""}>${m.icon} ${m.label}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field"><label>要幾耐</label><input class="input" data-seg="text" value="${esc(segText)}" placeholder="約 10 分鐘"></div>
+        </div>` : ""}
+
+        <div class="field">
+          <label>相片</label>
+          <div data-photos>
+            <button class="btn wide" data-act="findphoto">${s.photoUrl ? "換張相" : "搵返呢度嘅相"}</button>
+          </div>
+        </div>
+
+        <div class="editor-tools">
+          <button class="btn" data-act="moveday">搬去第幾日</button>
+          <button class="btn" data-act="up" ${i===0?"disabled":""}>⬆ 上</button>
+          <button class="btn" data-act="down" ${i===total-1?"disabled":""}>⬇ 落</button>
+          <button class="btn danger" data-act="remove">刪走</button>
+          <button class="btn primary" data-act="close">完成</button>
+        </div>
+      </div>`;
+  }
+
+  // ==================================================================
+  // WIRING — one day
+  // ==================================================================
+  function wireDay(day){
+    const line = $("#line");
+
+    const toggle = $("#maptoggle");
+    if (toggle) toggle.addEventListener("click", () => {
+      if (state.mapsOpen.has(day.id)) state.mapsOpen.delete(day.id); else state.mapsOpen.add(day.id);
+      render();
+    });
+    if (state.mapsOpen.has(day.id)) initDayMap(day);
+
+    document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => {
+      const key = btn.dataset.open;
+      if (state.open.has(key)) state.open.delete(key); else { state.open.clear(); state.open.add(key); }
+      render();
+      if (state.open.has(key)){
+        const el = document.querySelector(`[data-editor]`);
+        if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" });
+      }
+    }));
+
+    $("#addstop").addEventListener("click", async () => {
+      const units = toUnits(day.items);
+      units.push({ seg: buildSeg("walk", ""), stop: blankStop() });
+      day.items = fromUnits(units);
+      state.open.clear();
+      state.open.add(day.id + ":" + (units.length - 1));
+      render();
+      const inp = document.querySelector('[data-editor] [data-f="title"]');
+      if (inp){ inp.focus(); inp.scrollIntoView({ block:"center", behavior:"smooth" }); }
+      saveNow("加咗一個新地點");
+    });
+
+    wireEditor(day);
+    wireDrag(day, line);
+  }
+
+  function wireEditor(day){
+    const box = document.querySelector("[data-editor]");
+    if (!box) return;
+    const i = +box.dataset.editor;
+    const units = toUnits(day.items);
+    const u = units[i];
+    const s = u.stop;
+
+    // plain field edits
+    box.querySelectorAll("[data-f]").forEach(el => {
+      const evt = el.tagName === "SELECT" ? "change" : "input";
+      el.addEventListener(evt, () => {
+        s[el.dataset.f] = el.value;
+        if (el.dataset.f === "type" || el.dataset.f === "time" || el.dataset.f === "title"){
+          const nameEl = box.closest(".stopcard").querySelector(".stopname");
+          const timeEl = box.closest(".stopcard").querySelector(".stoptime");
+          if (el.dataset.f === "title" && nameEl){
+            nameEl.textContent = el.value.trim() || "未改名嘅地點";
+            nameEl.classList.toggle("unnamed", !el.value.trim());
+          }
+          if (el.dataset.f === "time" && timeEl) timeEl.textContent = el.value || "未定時間";
+          if (el.dataset.f === "type"){
+            const node = box.closest(".stop").querySelector(".node");
+            if (node) node.dataset.type = el.value;
+          }
         }
+        saveSoon("改咗「" + (s.title || "一個地點") + "」");
       });
     });
-    document.querySelectorAll('[data-action="toggle-expand"]').forEach(row => {
-      row.addEventListener("click", () => {
-        const key = row.dataset.key;
-        if (state.expanded.has(key)) state.expanded.delete(key); else state.expanded.add(key);
-        renderDays();
-      });
-    });
-    document.querySelectorAll('[data-action="remove-stop"]').forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const dayId = btn.dataset.day, idx = +btn.dataset.idx;
-        const day = state.snapshot.days.find(d => d.id === dayId);
-        if (day && confirm("確定要移除呢個景點？")) {
-          const removedTitle = day.items[idx].title || "景點";
-          day.items.splice(idx, 1);
-          try { await saveVersion(state.snapshot, "manual", "移除咗「" + removedTitle + "」"); } catch (err) { /* still show locally even if save fails */ }
-          renderDays();
-        }
-      });
-    });
-    document.querySelectorAll('[data-action="move-stop"]').forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const dayId = btn.dataset.day, idx = +btn.dataset.idx, dir = +btn.dataset.dir;
-        const day = state.snapshot.days.find(d => d.id === dayId);
-        if (day && moveStopUnit(day, idx, dir)) {
-          try { await saveVersion(state.snapshot, "manual", "調整景點次序"); } catch (err) { /* still show locally even if save fails */ }
-          renderDays();
-        }
-      });
-    });
-    document.querySelectorAll('[data-action="add-stop"]').forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const day = state.snapshot.days.find(d => d.id === btn.dataset.day);
-        if (day) {
-          day.items.push(newBlankStop());
-          state.expanded.add(day.id + ":" + (day.items.length - 1));
-          try { await saveVersion(state.snapshot, "manual", "新增咗一個新景點"); } catch (err) { /* still show locally even if save fails */ }
-          renderDays();
-        }
-      });
-    });
-    document.querySelectorAll('[data-action="find-photo"]').forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const dayId = btn.dataset.day, idx = +btn.dataset.idx;
-        const day = state.snapshot.days.find(d => d.id === dayId);
-        const item = day.items[idx];
-        // if a photo is already showing, this is the "換相" button -> let user pick from alternatives.
-        // if there's no photo yet, auto-pick the first result so the user doesn't need to choose.
-        const showPicker = !!item.photoUrl;
-        const container = btn.parentElement;
-        btn.textContent = "搵緊…";
-        btn.disabled = true;
+
+    // transit segment
+    const segMode_ = box.querySelector('[data-seg="mode"]');
+    const segText_ = box.querySelector('[data-seg="text"]');
+    function writeSeg(){
+      if (!segMode_ || !segText_) return;
+      u.seg = buildSeg(segMode_.value, segText_.value);
+      day.items = fromUnits(units);
+      const segEl = box.closest(".unit").querySelector(".seg");
+      if (segEl){ segEl.dataset.mode = segMode_.value; segEl.querySelector(".seg-text").innerHTML = u.seg.html; }
+      saveSoon("改咗去「" + (s.title || "一個地點") + "」嘅交通");
+    }
+    if (segMode_) segMode_.addEventListener("change", writeSeg);
+    if (segText_) segText_.addEventListener("input", writeSeg);
+
+    // google place autocomplete on the name field
+    const titleInput = box.querySelector('[data-f="title"]');
+    const sugBox = box.querySelector("[data-suggest]");
+    let sugTimer = null;
+    titleInput.addEventListener("input", () => {
+      clearTimeout(sugTimer);
+      const q = titleInput.value.trim();
+      if (q.length < 2){ sugBox.innerHTML = ""; return; }
+      sugTimer = setTimeout(async () => {
+        sugBox.innerHTML = `<p class="hint">搵緊…</p>`;
         try {
-          const payload = item.placeId
-            ? { action: "place-photo", placeId: item.placeId }
-            : { action: "place-photo", query: item.kr || item.title };
+          const r = await callAi({ action:"place-search", query:q });
+          if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
+          if (!r.places || !r.places.length){ sugBox.innerHTML = `<p class="hint">搵唔到，照用你打嘅名就得。</p>`; return; }
+          sugBox.innerHTML = r.places.map((p,ix)=>`
+            <button class="suggest-item" data-p="${ix}">
+              <div class="n">${esc(p.name)}</div><div class="a">${esc(p.address)}</div>
+            </button>`).join("");
+          sugBox.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", async () => {
+            const p = r.places[+b.dataset.p];
+            s.title = p.name; s.placeId = p.placeId;
+            s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+            titleInput.value = p.name;
+            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊張相…</p>`;
+            try {
+              const pr = await callAi({ action:"place-photo", placeId:p.placeId });
+              if (pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
+            } catch(_){}
+            await saveNow("加咗「" + s.title + "」");
+            render();
+          }));
+        } catch (e){ sugBox.innerHTML = `<p class="hint">搵唔到：${esc(e.message)}</p>`; }
+      }, 420);
+    });
+
+    // actions
+    box.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", async () => {
+      const act = btn.dataset.act;
+
+      if (act === "close"){ state.open.clear(); render(); return; }
+
+      if (act === "remove"){
+        if (!confirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
+        units.splice(i,1);
+        day.items = fromUnits(units);
+        state.open.clear();
+        render();
+        saveNow("刪走咗「" + (s.title || "一個地點") + "」");
+        return;
+      }
+
+      if (act === "up" || act === "down"){
+        const j = act === "up" ? i-1 : i+1;
+        if (j < 0 || j >= units.length) return;
+        const tmp = units[i]; units[i] = units[j]; units[j] = tmp;
+        day.items = fromUnits(units);
+        state.open.clear(); state.open.add(day.id + ":" + j);
+        render();
+        saveNow("調整咗次序");
+        return;
+      }
+
+      if (act === "moveday"){ openDayPicker(day, i); return; }
+
+      if (act === "findphoto"){
+        const holder = box.querySelector("[data-photos]");
+        holder.innerHTML = `<p class="hint">搵緊相…</p>`;
+        try {
+          const payload = s.placeId ? { action:"place-photo", placeId:s.placeId }
+                                    : { action:"place-photo", query:(s.kr || s.title) };
           const r = await callAi(payload);
-          if (r.ok === false) {
-            container.innerHTML = `<p class="section-sub">${esc(r.message)}</p>`;
-            return;
-          }
-          if (!r.photos || !r.photos.length) {
-            container.innerHTML = `<p class="section-sub">📷 搵唔到「${esc(item.title)}」相關相片，可以人手上網搵幾張相自己貼link。</p>`;
-            return;
-          }
-          if (!showPicker) {
-            item.photoUrl = r.photos[0];
-            try { await saveVersion(state.snapshot, "manual", "更新相片：" + item.title); } catch (err) { /* still show locally even if save fails */ }
-            renderDays();
-            return;
-          }
-          container.innerHTML = `<div class="photo-picker">${r.photos.map(url=>`<img src="${esc(url)}" data-url="${esc(url)}" class="${url===item.photoUrl?'selected':''}">`).join("")}</div><p class="section-sub" style="margin-top:6px;">撳一張相就會揀返嗰張，自動儲存。</p>`;
-          container.querySelectorAll("img").forEach(img => {
-            img.addEventListener("click", async () => {
-              item.photoUrl = img.dataset.url;
-              clearTimeout(autosaveTimer);
-              try { await saveVersion(state.snapshot, "manual", "更新相片：" + item.title); } catch (err) { /* still show locally even if save fails */ }
-              renderDays();
-            });
+          if (r.ok === false){ holder.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
+          if (!r.photos || !r.photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
+          holder.innerHTML = `<div class="photogrid">${r.photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
+          holder.querySelectorAll("img").forEach(img => img.addEventListener("click", async () => {
+            s.photoUrl = img.dataset.u;
+            await saveNow("換咗「" + (s.title||"一個地點") + "」嘅相");
+            render();
+          }));
+        } catch (e){ holder.innerHTML = `<p class="hint">搵唔到：${esc(e.message)}</p>`; }
+      }
+    }));
+  }
+
+  // ---------- move to another day ----------
+  function openDayPicker(fromDay, unitIndex){
+    const units = toUnits(fromDay.items);
+    const moving = units[unitIndex];
+    openSheet(`
+      <h3>搬去邊一日？</h3>
+      <p class="sec-sub">「${esc(moving.stop.title || "呢個地點")}」會搬到嗰日最後，之後可以再拉上去啱嘅位。</p>
+      <div class="daypick">
+        ${state.snapshot.days.map(d => `
+          <button data-to="${d.id}" ${d.id===fromDay.id?"disabled":""} style="--lc:${DAY_COLORS[d.id]}">
+            <span class="bullet"></span>
+            <span class="dcode">Day ${d.id.replace('day','')}</span>
+            <span>${esc(d.title)}${d.id===fromDay.id?"（而家喺度）":""}</span>
+          </button>`).join("")}
+      </div>
+    `, sheet => {
+      sheet.querySelectorAll("[data-to]").forEach(b => b.addEventListener("click", async () => {
+        const target = dayById(b.dataset.to);
+        units.splice(unitIndex, 1);
+        fromDay.items = fromUnits(units);
+        const tUnits = toUnits(target.items);
+        tUnits.push(moving);
+        target.items = fromUnits(tUnits);
+        closeLayer();
+        state.open.clear();
+        state.view = target.id;
+        render();
+        saveNow(`「${moving.stop.title || "一個地點"}」由 ${fromDay.title} 搬咗去 ${target.title}`);
+      }));
+    });
+  }
+
+  // ---------- drag to reorder ----------
+  function wireDrag(day, line){
+    if (!line) return;
+    let drag = null;
+
+    line.querySelectorAll("[data-drag]").forEach(handle => {
+      handle.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        const unitEl = handle.closest(".unit");
+        const units = Array.from(line.querySelectorAll(".unit"));
+        const rects = units.map(u => u.getBoundingClientRect());
+        drag = {
+          el: unitEl,
+          from: units.indexOf(unitEl),
+          to: units.indexOf(unitEl),
+          startY: e.clientY,
+          units, rects,
+          pointerId: e.pointerId,
+          active: false,
+          timer: setTimeout(() => {
+            drag.active = true;
+            unitEl.classList.add("lifted");
+            if (navigator.vibrate) navigator.vibrate(12);
+          }, 260)
+        };
+        handle.setPointerCapture(e.pointerId);
+      });
+
+      handle.addEventListener("pointermove", e => {
+        if (!drag) return;
+        const dy = e.clientY - drag.startY;
+        if (!drag.active){
+          if (Math.abs(dy) > 9){ clearTimeout(drag.timer); drag = null; }
+          return;
+        }
+        e.preventDefault();
+        drag.el.style.transform = `translateY(${dy}px)`;
+
+        // find the slot whose midpoint the pointer has crossed
+        let to = drag.from;
+        for (let k = 0; k < drag.rects.length; k++){
+          if (k === drag.from) continue;
+          const r = drag.rects[k];
+          const mid = r.top + r.height/2;
+          if (k < drag.from && e.clientY < mid){ to = Math.min(to, k); }
+          if (k > drag.from && e.clientY > mid){ to = Math.max(to, k); }
+        }
+        if (to !== drag.to){
+          drag.to = to;
+          const h = drag.rects[drag.from].height;
+          drag.units.forEach((u,k) => {
+            if (k === drag.from) return;
+            u.classList.add("shifting");
+            let shift = 0;
+            if (drag.to < drag.from && k >= drag.to && k < drag.from) shift = h;
+            if (drag.to > drag.from && k > drag.from && k <= drag.to) shift = -h;
+            u.style.transform = shift ? `translateY(${shift}px)` : "";
           });
-        } catch (err) {
-          container.innerHTML = `<p class="section-sub">搵相失敗：${esc(err.message)}</p>`;
         }
       });
+
+      const finish = () => {
+        if (!drag) return;
+        clearTimeout(drag.timer);
+        const d = drag; drag = null;
+        d.units.forEach(u => { u.style.transform = ""; u.classList.remove("shifting","lifted"); });
+        if (!d.active || d.to === d.from) return;
+        const units = toUnits(day.items);
+        const [moved] = units.splice(d.from, 1);
+        units.splice(d.to, 0, moved);
+        day.items = fromUnits(units);
+        state.open.clear();
+        render();
+        saveNow("調整咗次序");
+      };
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
     });
-    document.querySelectorAll(".place-search-input").forEach(input => {
-      let timer = null;
-      input.addEventListener("input", () => {
-        clearTimeout(timer);
-        const dayId = input.dataset.day, idx = +input.dataset.idx;
-        const resultsEl = document.querySelector(`.place-search-results[data-day="${dayId}"][data-idx="${idx}"]`);
-        const q = input.value.trim();
-        if (!q) { resultsEl.innerHTML = ""; return; }
-        timer = setTimeout(async () => {
-          resultsEl.innerHTML = `<p class="section-sub">搜尋緊…</p>`;
-          try {
-            const r = await callAi({ action: "place-search", query: q });
-            if (r.ok === false) { resultsEl.innerHTML = `<p class="section-sub">${esc(r.message)}</p>`; return; }
-            if (!r.places || !r.places.length) { resultsEl.innerHTML = `<p class="section-sub">搵唔到相關地點，可以直接落面手動填名。</p>`; return; }
-            resultsEl.innerHTML = r.places.map((p, i) => `
-              <div class="place-search-item" data-i="${i}">
-                <div class="name">${esc(p.name)}</div>
-                <div class="addr">${esc(p.address)}</div>
-              </div>`).join("");
-            resultsEl.querySelectorAll(".place-search-item").forEach(elItem => {
-              elItem.addEventListener("click", async () => {
-                const chosen = r.places[+elItem.dataset.i];
-                const day = state.snapshot.days.find(d => d.id === dayId);
-                const item = day.items[idx];
-                item.title = chosen.name;
-                item.placeId = chosen.placeId;
-                item.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(chosen.name)}`;
-                resultsEl.innerHTML = `<p class="section-sub">已選擇「${esc(chosen.name)}」，幫緊你搵相片…</p>`;
-                clearTimeout(autosaveTimer);
-                try {
-                  const pr = await callAi({ action: "place-photo", placeId: chosen.placeId });
-                  if (pr.ok !== false && pr.photos && pr.photos.length) item.photoUrl = pr.photos[0];
-                } catch (err) { /* photo fetch is best-effort */ }
-                try { await saveVersion(state.snapshot, "manual", "新增地點：" + item.title); } catch (err) { /* still show locally even if save fails */ }
-                renderDays();
-              });
-            });
-          } catch (err) {
-            resultsEl.innerHTML = `<p class="section-sub">搜尋失敗：${esc(err.message)}</p>`;
+  }
+
+  // ==================================================================
+  // MAPS
+  // ==================================================================
+  function mapIcon(color, label){
+    return L.divIcon({
+      className:"", iconSize:[22,22], iconAnchor:[11,11],
+      html:`<div class="mapnode" style="background:${color}">${label}</div>`
+    });
+  }
+  function initDayMap(day){
+    const el = document.getElementById("map-" + day.id);
+    if (!el || typeof L === "undefined"){
+      if (el) el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`;
+      return;
+    }
+    let pts;
+    try { pts = JSON.parse(el.dataset.points); } catch(_){ return; }
+    if (!pts || !pts.length) return;
+    const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
+    const color = DAY_HEX[day.id] || "#8A94A6";
+    const latlngs = pts.map(p => [p.lat, p.lng]);
+    L.polyline(latlngs, { color, weight:4, opacity:.85 }).addTo(map);
+    pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, i+1) }).addTo(map).bindPopup(p.name || ""));
+    map.fitBounds(L.latLngBounds(latlngs).pad(0.22));
+    el.addEventListener("click", () => { map.dragging.enable(); map.scrollWheelZoom.enable(); }, { once:true });
+  }
+  function initOverviewMap(){
+    const el = document.getElementById("map-all");
+    const legend = document.getElementById("map-legend");
+    if (!el) return;
+    if (typeof L === "undefined"){ el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`; return; }
+    const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
+    const all = [];
+    const layers = {};
+    state.snapshot.days.forEach(day => {
+      if (!day.mapPoints || !day.mapPoints.length) return;
+      const color = DAY_HEX[day.id] || "#8A94A6";
+      const latlngs = day.mapPoints.map(p => [p.lat,p.lng]);
+      const g = L.layerGroup();
+      L.polyline(latlngs, { color, weight:4, opacity:.8 }).addTo(g);
+      day.mapPoints.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, i+1) }).bindPopup(p.name||"").addTo(g));
+      g.addTo(map);
+      layers[day.id] = g;
+      all.push(...latlngs);
+    });
+    if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.14));
+    el.addEventListener("click", () => { map.dragging.enable(); map.scrollWheelZoom.enable(); }, { once:true });
+
+    if (legend){
+      legend.innerHTML = state.snapshot.days.filter(d => layers[d.id]).map(d =>
+        `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${DAY_HEX[d.id]};color:${DAY_HEX[d.id]}">● D${d.id.replace('day','')} ${esc(DAY_SHORT[d.id]||"")}</button>`
+      ).join("");
+      legend.querySelectorAll("[data-layer]").forEach(b => b.addEventListener("click", () => {
+        const g = layers[b.dataset.layer];
+        if (map.hasLayer(g)){ map.removeLayer(g); b.style.opacity = ".35"; }
+        else { g.addTo(map); b.style.opacity = "1"; }
+      }));
+    }
+  }
+
+  // ==================================================================
+  // LAYERS (sheet / modal)
+  // ==================================================================
+  function closeLayer(){
+    $("#layer").innerHTML = "";
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onLayerKey);
+  }
+  function onLayerKey(e){ if (e.key === "Escape") closeLayer(); }
+  function openSheet(inner, after){
+    const layer = $("#layer");
+    layer.innerHTML = `<div class="scrim" data-close></div>
+      <div class="sheet" role="dialog" aria-modal="true"><div class="sheet-wide">
+        <div class="grabber"></div>
+        <button class="iconbtn sheet-close" data-close aria-label="收埋">✕</button>
+        ${inner}
+      </div></div>`;
+    layer.querySelectorAll("[data-close]").forEach(el => el.addEventListener("click", closeLayer));
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onLayerKey);
+    if (after) after(layer);
+  }
+
+  // ---------- AI ----------
+  $("#btn-ai").addEventListener("click", () => {
+    openSheet(`
+      <h3>AI 助手</h3>
+      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。撳「套用」會直接改咗個行程同存低版本。</p>
+      <div class="aibtns">
+        <button class="btn" data-ai="weather">☁️ 實時天氣</button>
+        <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
+        <button class="btn" data-ai="suggest">💡 執一執行程</button>
+      </div>
+      <div class="askrow">
+        <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
+        <button class="btn primary" data-ai="ask">問</button>
+      </div>
+      <div class="ai-out" id="ai-out"></div>
+    `, layer => {
+      const out = layer.querySelector("#ai-out");
+      const q = layer.querySelector("#ai-q");
+      const busy = () => { out.innerHTML = `<div class="ai-msg">諗緊…</div>`; };
+
+      layer.querySelectorAll("[data-ai]").forEach(b => b.addEventListener("click", async () => {
+        const act = b.dataset.ai;
+        busy();
+        try {
+          if (act === "weather"){
+            const r = await callAi({ action:"weather" });
+            out.innerHTML = `<div class="ai-msg">${esc(r.summary||"")}</div>` +
+                            (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
+                            (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
+          } else if (act === "foliage"){
+            const r = await callAi({ action:"foliage" });
+            out.innerHTML = `<div class="ai-msg">${esc(r.aiSummary || r.message || "冇回覆")}</div>`;
+          } else if (act === "ask"){
+            const question = q.value.trim();
+            if (!question){ out.innerHTML = ""; q.focus(); return; }
+            const r = await callAi({ action:"ask", question, itinerary: state.snapshot });
+            out.innerHTML = `<div class="ai-msg">${esc(r.aiSummary || r.message || "冇回覆")}</div>`;
+          } else if (act === "suggest"){
+            const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
+            if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
+            const changes = r.changes || [];
+            if (!changes.length){ out.innerHTML = `<div class="ai-msg">${esc(r.notes || r.aiSummary || "冇特別建議。")}</div>`; return; }
+            out.innerHTML = (r.notes ? `<div class="ai-msg">${esc(r.notes)}</div>` : "") +
+              changes.map((c,i) => {
+                const label = c.op === "add" ? "加" : c.op === "remove" ? "刪" : "改";
+                const name = c.stop?.title || c.matchTitle || "";
+                return `<div class="ai-change" style="--lc:${DAY_COLORS[c.dayId]||'var(--d3)'}">
+                  <div class="op">Day ${String(c.dayId||"").replace("day","")} · ${label}</div>
+                  <div class="ttl">${esc(name)}</div>
+                  ${c.stop?.transitBefore ? `<div class="why">${esc(c.stop.transitBefore)}</div>` : ""}
+                  <div class="why">${esc(c.reason||"")}</div>
+                  <div class="editor-tools"><button class="btn primary" data-apply="${i}">套用</button></div>
+                </div>`;
+              }).join("");
+            out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", async () => {
+              const c = changes[+ab.dataset.apply];
+              applyAiChange(c);
+              ab.textContent = "已套用"; ab.disabled = true;
+              await saveNow(c.reason || `AI 建議：${c.op} ${c.dayId}`);
+            }));
           }
-        }, 400);
-      });
+        } catch (e){ out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`; }
+      }));
     });
-  }
-
-  document.getElementById("btn-edit-toggle").addEventListener("click", () => {
-    state.editMode = !state.editMode;
-    document.getElementById("btn-edit-toggle").textContent = state.editMode ? "👁 睇返正常版" : "✏️ 編輯模式";
-    document.getElementById("btn-save").style.display = state.editMode ? "inline-block" : "none";
-    renderDays();
   });
-
-  document.getElementById("btn-save").addEventListener("click", async () => {
-    const statusEl = document.getElementById("save-status");
-    statusEl.textContent = "儲存緊…";
-    try {
-      await saveVersion(state.snapshot, "manual", "手動編輯更新");
-      statusEl.textContent = "✅ 已儲存 " + new Date().toLocaleTimeString("zh-HK");
-    } catch (e) {
-      statusEl.textContent = "❌ 儲存失敗：" + e.message;
-    }
-  });
-
-  // ==================================================================
-  // VERSION HISTORY + DIFF + RESTORE
-  // ==================================================================
-  function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
-
-  async function openHistoryModal(){
-    const root = document.getElementById("modal-root");
-    root.innerHTML = `<div class="modal-backdrop" id="modal-bg"><div class="modal-sheet">
-      <div class="modal-title">🕓 歷史紀錄 <button class="modal-close" id="modal-close">✕</button></div>
-      <p class="section-sub">揀兩個版本可以比較內容差異；還原會建立一個新版本，唔會刪走中間嘅紀錄。</p>
-      <div id="version-list"><p class="ai-loading">載入緊…</p></div>
-    </div></div>`;
-    document.getElementById("modal-close").addEventListener("click", closeModal);
-    document.getElementById("modal-bg").addEventListener("click", (e) => { if (e.target.id === "modal-bg") closeModal(); });
-
-    try {
-      const versions = await fetchAllVersions();
-      const listEl = document.getElementById("version-list");
-      listEl.innerHTML = versions.map(v => `
-        <div class="version-item">
-          <div class="vtop">
-            <span>${new Date(v.created_at).toLocaleString("zh-HK")} · ${esc(v.edited_by)}</span>
-            <span class="src-chip ${esc(v.source)}">${esc(v.source)}</span>
-          </div>
-          <div class="vsummary">${esc(v.summary || "（無摘要）")}</div>
-          <div class="vactions">
-            <label class="btn-sm"><input type="checkbox" class="v-compare-check" value="${v.id}" style="margin-right:4px;">比較</label>
-            <button class="btn-sm" data-action="view-version" data-id="${v.id}">睇呢個版本</button>
-            <button class="btn-sm primary" data-action="restore-version" data-id="${v.id}">還原到呢個版本</button>
-          </div>
-        </div>
-      `).join("") + `<button class="btn-sm" id="btn-do-compare" style="width:100%;margin-top:6px;">比較已選嘅兩個版本</button><div id="diff-area"></div>`;
-
-      listEl.querySelectorAll('[data-action="view-version"]').forEach(btn => {
-        btn.addEventListener("click", async () => {
-          try {
-            const snap = await fetchVersionSnapshot(btn.dataset.id);
-            alert("「" + (snap?.meta?.title||"") + "」呢個版本共有 " + (snap?.days?.length||0) + " 日行程。撳「還原到呢個版本」可以將佢變返做目前版本。");
-          } catch (e) { alert("讀取失敗：" + e.message); }
-        });
-      });
-      listEl.querySelectorAll('[data-action="restore-version"]').forEach(btn => {
-        btn.addEventListener("click", async () => {
-          if (!confirm("確定要還原到呢個版本？（會建立一個新嘅『還原』版本，原本嘅歷史都會keep低）")) return;
-          try {
-            const snap = await fetchVersionSnapshot(btn.dataset.id);
-            if (!snap) return alert("讀取唔到呢個版本");
-            await saveVersion(snap, "restore", "還原到較早版本（#" + btn.dataset.id + "）");
-            state.snapshot = snap;
-            closeModal();
-            renderAll();
-          } catch (e) { alert("還原失敗：" + e.message); }
-        });
-      });
-      document.getElementById("btn-do-compare").addEventListener("click", async () => {
-        const ids = [...listEl.querySelectorAll(".v-compare-check:checked")].map(c => c.value);
-        const diffArea = document.getElementById("diff-area");
-        if (ids.length !== 2) { diffArea.innerHTML = '<p class="section-sub">請剛好揀兩個版本。</p>'; return; }
-        diffArea.innerHTML = '<p class="ai-loading">比較緊…</p>';
-        try {
-          const [snapA, snapB] = await Promise.all([fetchVersionSnapshot(ids[0]), fetchVersionSnapshot(ids[1])]);
-          const daysA = (snapA?.days || []).map(d => ({ id: d.id, title: d.title, items: d.items }));
-          const daysB = (snapB?.days || []).map(d => ({ id: d.id, title: d.title, items: d.items }));
-          if (typeof Diff === "undefined") throw new Error("比較工具未能載入（需要網絡連線）");
-          const parts = Diff.diffJson(daysA, daysB);
-          diffArea.innerHTML = '<div class="diff-block">' + parts.map(p => {
-            const cls = p.added ? "diff-add" : p.removed ? "diff-del" : "";
-            return `<span class="${cls}">${esc(p.value)}</span>`;
-          }).join("") + "</div>";
-        } catch (e) {
-          diffArea.innerHTML = `<p class="section-sub">比較失敗：${esc(e.message)}</p>`;
-        }
-      });
-    } catch (e) {
-      document.getElementById("version-list").innerHTML = `<p class="section-sub">載入失敗：${esc(e.message)}</p>`;
-    }
-  }
-  document.getElementById("btn-history").addEventListener("click", openHistoryModal);
-
-  // ==================================================================
-  // AI ASSISTANT
-  // ==================================================================
-  async function callAi(payload){
-    const res = await fetch(FUNCTIONS_URL, {
-      method: "POST",
-      headers: sbHeaders(),
-      body: JSON.stringify(payload)
-    });
-    return res.json();
-  }
-
-  function renderAiNotice(msg){
-    document.getElementById("ai-output").innerHTML = `<div class="ai-result">${esc(msg)}</div>`;
-  }
-  function renderAiText(text){
-    document.getElementById("ai-output").innerHTML = `<div class="ai-result">${esc(text)}</div>`;
-  }
-  function setAiLoading(){
-    document.getElementById("ai-output").innerHTML = `<p class="ai-loading">AI 諗緊…</p>`;
-  }
-
-  document.getElementById("btn-ai-weather").addEventListener("click", async () => {
-    setAiLoading();
-    try {
-      const r = await callAi({ action: "weather" });
-      let html = `<div class="ai-result">${esc(r.summary || "")}</div>`;
-      if (r.aiSummary) html += `<div class="ai-result">${esc(r.aiSummary)}</div>`;
-      else if (r.aiNotice) html += `<div class="ai-result">${esc(r.aiNotice)}</div>`;
-      document.getElementById("ai-output").innerHTML = html;
-    } catch (e) { renderAiNotice("讀取天氣失敗：" + e.message); }
-  });
-
-  document.getElementById("btn-ai-foliage").addEventListener("click", async () => {
-    setAiLoading();
-    try {
-      const r = await callAi({ action: "foliage" });
-      renderAiText(r.aiSummary || r.message || "冇回覆");
-    } catch (e) { renderAiNotice("讀取紅葉情報失敗：" + e.message); }
-  });
-
-  function renderSuggestChanges(notes, changes){
-    let html = notes ? `<div class="ai-result">${esc(notes)}</div>` : "";
-    if (!changes.length) {
-      html += `<div class="ai-result">AI 暫時冇提出具體建議。</div>`;
-    } else {
-      html += changes.map((c, i) => `
-        <div class="ai-change-card">
-          <div class="ai-change-top">
-            <span class="badge note">${esc(c.dayId)} · ${esc(c.op)}</span>
-            <button class="btn-sm primary" data-action="apply-change" data-idx="${i}">✅ 套用</button>
-          </div>
-          ${c.stop?.transitBefore ? `<div class="food-must">🧭 ${esc(c.stop.transitBefore)}</div>` : ""}
-          <div class="food-must">${esc(c.reason || "")}</div>
-        </div>
-      `).join("");
-    }
-    document.getElementById("ai-output").innerHTML = html;
-
-    document.querySelectorAll('[data-action="apply-change"]').forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const c = changes[+btn.dataset.idx];
-        applyAiChange(c);
-        btn.textContent = "✅ 已套用同儲存";
-        btn.disabled = true;
-        try {
-          await saveVersion(state.snapshot, "ai-suggestion", c.reason || ("AI建議：" + c.op + " " + c.dayId));
-        } catch (e) {
-          alert("已套用落畫面，但儲存去DB失敗：" + e.message);
-        }
-      });
-    });
-  }
 
   function applyAiChange(c){
-    const day = state.snapshot.days.find(d => d.id === c.dayId);
+    const day = dayById(c.dayId);
     if (!day) return;
-    if (c.op === "add" && c.stop) {
-      if (c.stop.transitBefore) {
-        day.items.push({ kind: "connector", html: `<span class="icon">🧭</span>${esc(c.stop.transitBefore)}` });
-      }
-      day.items.push(Object.assign(newBlankStop(), c.stop, { kind: "stop" }));
-    } else if (c.op === "remove" && c.matchTitle) {
-      day.items = day.items.filter(it => !(it.kind === "stop" && it.title === c.matchTitle));
-    } else if (c.op === "edit" && c.matchTitle && c.stop) {
-      day.items = day.items.map(it => (it.kind === "stop" && it.title === c.matchTitle) ? Object.assign({}, it, c.stop, { kind: "stop" }) : it);
+    const units = toUnits(day.items);
+    if (c.op === "add" && c.stop){
+      const seg = c.stop.transitBefore ? buildSeg(segMode(c.stop.transitBefore) === "other" ? "walk" : segMode(c.stop.transitBefore), c.stop.transitBefore) : null;
+      units.push({ seg, stop: Object.assign(blankStop(), c.stop, { kind:"stop" }) });
+    } else if (c.op === "remove" && c.matchTitle){
+      const ix = units.findIndex(u => u.stop && u.stop.title === c.matchTitle);
+      if (ix >= 0) units.splice(ix,1);
+    } else if (c.op === "edit" && c.matchTitle && c.stop){
+      const u = units.find(u => u.stop && u.stop.title === c.matchTitle);
+      if (u) Object.assign(u.stop, c.stop, { kind:"stop" });
     }
-    renderDays();
+    day.items = fromUnits(units);
+    render();
   }
 
-  document.getElementById("btn-ai-suggest").addEventListener("click", async () => {
-    setAiLoading();
-    try {
-      const question = document.getElementById("ai-question").value;
-      const r = await callAi({ action: "suggest", question, itinerary: state.snapshot });
-      if (r.ok === false) return renderAiNotice(r.message);
-      renderSuggestChanges(r.notes, r.changes || []);
-    } catch (e) { renderAiNotice("建議行程調整失敗：" + e.message); }
-  });
-
-  document.getElementById("btn-ai-ask").addEventListener("click", async () => {
-    const question = document.getElementById("ai-question").value.trim();
-    if (!question) return;
-    setAiLoading();
-    try {
-      const r = await callAi({ action: "ask", question, itinerary: state.snapshot });
-      if (r.ok === false) return renderAiNotice(r.message);
-      renderAiText(r.aiSummary || "冇回覆");
-    } catch (e) { renderAiNotice("問AI失敗：" + e.message); }
-  });
-
-  // ==================================================================
-  // MAPS (Leaflet + OpenStreetMap)
-  // ==================================================================
-  function leafDivIcon(label, color){
-    return L.divIcon({
-      className: "",
-      html: `<div class="leafnum sm" style="background:${color || 'var(--gold)'};">${esc(label)}</div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10]
-    });
-  }
-
-  function mountFallback(el, msg){
-    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:var(--text-soft);padding:12px;text-align:center;">${esc(msg)}</div>`;
-  }
-
-  function initDayMaps(){
-    document.querySelectorAll(".daymap").forEach(el => {
-      let points;
-      try { points = JSON.parse(el.dataset.points); } catch { return; }
-      if (!points || !points.length) return;
-      if (typeof L === "undefined") return mountFallback(el, "地圖暫時無法載入（需要網絡連線），請直接使用下方各站 Naver Map 連結導航。");
+  // ---------- history ----------
+  $("#btn-history").addEventListener("click", async () => {
+    openSheet(`<h3>改動紀錄</h3><p class="sec-sub">每次改動都會存低一個版本，可以睇返、比較同還原。</p><div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
+      const list = layer.querySelector("#vlist");
       try {
-        const map = L.map(el, { dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
-        const latlngs = points.map(p => [p[0], p[1]]);
-        L.polyline(latlngs, { color:"#E0B563", weight:3, dashArray:"2 7", opacity:.9 }).addTo(map);
-        points.forEach(p => {
-          const isHotel = /^酒店$/.test(p[2]);
-          const numMatch = p[2].match(/^\d+/);
-          const label = isHotel ? "🏨" : (numMatch ? numMatch[0] : "·");
-          L.marker([p[0], p[1]], { icon: leafDivIcon(label) }).addTo(map).bindPopup(p[2]);
+        const rows = await fetchAllVersions();
+        if (!rows.length){ list.innerHTML = `<p class="hint">仲未有任何紀錄。</p>`; return; }
+        list.innerHTML = `
+          <div class="editor-tools" style="margin:0 0 4px;">
+            <button class="btn" id="cmp">比較揀咗嘅兩個</button>
+          </div>
+          ${rows.map(r => `
+            <label class="vrow">
+              <input type="checkbox" value="${r.id}">
+              <span style="flex:1 1 auto;min-width:0;">
+                <span class="who">${esc(r.edited_by||"匿名")}</span>
+                <span class="when"> · ${esc(new Date(r.created_at).toLocaleString("zh-HK",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}))}</span>
+                <span class="sum">${esc(r.summary||"")}</span>
+                <span class="acts">
+                  <button class="btn" data-view="${r.id}">睇呢版</button>
+                  <button class="btn" data-restore="${r.id}">還原</button>
+                </span>
+              </span>
+            </label>`).join("")}`;
+
+        list.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", async e => {
+          e.preventDefault();
+          try {
+            const snap = await fetchVersionSnapshot(b.dataset.view);
+            if (!snap) return;
+            state.snapshot = snap; state.open.clear();
+            closeLayer(); render();
+            flash("而家睇緊舊版本（未還原）");
+          } catch (err){ alert("睇唔到呢版：" + err.message); }
+        }));
+
+        list.querySelectorAll("[data-restore]").forEach(b => b.addEventListener("click", async e => {
+          e.preventDefault();
+          if (!confirm("還原到呢個版本？（唔會刪走中間嘅紀錄）")) return;
+          try {
+            const snap = await fetchVersionSnapshot(b.dataset.restore);
+            if (!snap) return;
+            state.snapshot = snap;
+            await saveVersion(snap, "restore", "還原到版本 #" + b.dataset.restore);
+            closeLayer(); render(); flash("已還原");
+          } catch (err){ alert("還原唔到：" + err.message); }
+        }));
+
+        list.querySelector("#cmp").addEventListener("click", async e => {
+          e.preventDefault();
+          const picked = Array.from(list.querySelectorAll("input:checked")).map(i => i.value);
+          if (picked.length !== 2){ alert("揀啱兩個版本先可以比較。"); return; }
+          const holder = document.createElement("div");
+          holder.className = "diff";
+          holder.textContent = "比較緊…";
+          list.prepend(holder);
+          try {
+            if (typeof Diff === "undefined") throw new Error("比較工具載入唔到，可能係網絡問題。");
+            const [a,b2] = await Promise.all([fetchVersionSnapshot(picked[1]), fetchVersionSnapshot(picked[0])]);
+            const parts = Diff.diffJson(a, b2);
+            holder.innerHTML = parts.map(p => {
+              const t = esc(p.value);
+              return p.added ? `<ins>${t}</ins>` : p.removed ? `<del>${t}</del>` : t;
+            }).join("");
+          } catch (err){ holder.textContent = "比較唔到：" + err.message; }
         });
-        map.fitBounds(latlngs, { padding:[24,24] });
-        const tap = document.createElement("div");
-        tap.className = "daymap-tap";
-        tap.innerHTML = "👆 點擊以自由查看地圖（可拖曳／縮放）";
-        el.style.position = "relative";
-        el.appendChild(tap);
-        tap.addEventListener("click", () => {
-          map.dragging.enable(); map.touchZoom.enable(); map.scrollWheelZoom.enable();
-          map.doubleClickZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
-          tap.remove();
-        }, { once:true });
-      } catch (e) { mountFallback(el, "地圖暫時無法載入，請直接使用下方各站 Naver Map 連結導航。"); }
+      } catch (e){ list.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`; }
     });
-  }
-
-  function initOverviewMap(){
-    const el = document.getElementById("overview-map");
-    const legendEl = document.getElementById("overview-legend");
-    const days = state.snapshot.days.filter(d => d.mapPoints && d.mapPoints.length);
-    if (typeof L === "undefined") return mountFallback(el, "總覽地圖暫時無法載入（需要網絡連線）。");
-    try {
-      const map = L.map(el, { dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
-
-      const allLatLngs = [];
-      const layers = {};
-      days.forEach(day => {
-        const color = DAY_COLORS[day.id] || "#888";
-        const latlngs = day.mapPoints.map(p => [p[0], p[1]]);
-        const group = L.layerGroup();
-        L.polyline(latlngs, { color, weight:3, dashArray:"2 6", opacity:.9 }).addTo(group);
-        day.mapPoints.forEach(p => {
-          const isHotel = /^酒店$/.test(p[2]);
-          const numMatch = p[2].match(/^\d+/);
-          const label = isHotel ? "🏨" : (numMatch ? numMatch[0] : "·");
-          L.marker([p[0], p[1]], { icon: leafDivIcon(label, color) }).addTo(group).bindPopup(`${DAY_LABELS[day.id]||day.id}：${p[2]}`);
-        });
-        group.addTo(map);
-        layers[day.id] = group;
-        allLatLngs.push(...latlngs);
-      });
-      if (allLatLngs.length) map.fitBounds(allLatLngs, { padding:[20,20] });
-
-      legendEl.innerHTML = days.map(day => `
-        <span class="legend-chip" data-day="${day.id}">
-          <span class="dot" style="background:${DAY_COLORS[day.id]||'#888'};"></span>${esc(day.num)} ${esc(DAY_LABELS[day.id]||"")}
-        </span>
-      `).join("");
-      legendEl.querySelectorAll(".legend-chip").forEach(chip => {
-        chip.addEventListener("click", () => {
-          const g = layers[chip.dataset.day];
-          if (map.hasLayer(g)) { map.removeLayer(g); chip.classList.add("off"); }
-          else { map.addLayer(g); chip.classList.remove("off"); }
-        });
-      });
-
-      const tap = document.createElement("div");
-      tap.className = "daymap-tap";
-      tap.innerHTML = "👆 點擊以自由查看地圖（可拖曳／縮放）";
-      el.style.position = "relative";
-      el.appendChild(tap);
-      tap.addEventListener("click", () => {
-        map.dragging.enable(); map.touchZoom.enable(); map.scrollWheelZoom.enable();
-        map.doubleClickZoom.enable(); map.boxZoom.enable(); map.keyboard.enable();
-        tap.remove();
-      }, { once:true });
-    } catch (e) { mountFallback(el, "總覽地圖暫時無法載入。"); }
-  }
-
-  // ---------- ACTIVE NAV PILL ON SCROLL ----------
-  function setupNavHighlight(){
-    const sections = [...document.querySelectorAll("section, .day")].filter(s => s.id);
-    const pills = [...document.querySelectorAll(".daypill")];
-    function setActive(){
-      let current = sections[0]?.id;
-      const offset = 80;
-      for (const sec of sections) {
-        const rect = sec.getBoundingClientRect();
-        if (rect.top - offset <= 0) current = sec.id;
-      }
-      pills.forEach(p => {
-        const match = p.getAttribute("href") === "#" + current;
-        p.classList.toggle("active", match);
-        if (match) p.scrollIntoView({ behavior:"smooth", inline:"center", block:"nearest" });
-      });
-    }
-    document.addEventListener("scroll", () => window.requestAnimationFrame(setActive), { passive:true });
-    setActive();
-  }
+  });
 
   // ==================================================================
   // BOOT
@@ -1305,29 +1605,15 @@
   async function boot(){
     try {
       const row = await fetchLatestVersion();
-      if (!row) throw new Error("資料庫入面未有任何行程版本");
+      if (!row) throw new Error("資料庫入面仲未有行程版本。");
       state.snapshot = row.snapshot;
-      renderAll();
-      setupNavHighlight();
-      checkGeminiConfigured();
-    } catch (e) {
-      document.getElementById("overview-body").innerHTML = `<div class="info-card"><div class="d">❌ 載入行程失敗：${esc(e.message)}<br>請檢查網絡連線，或重新整理頁面。</div></div>`;
-      document.getElementById("days-root").innerHTML = "";
+      render();
+    } catch (e){
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理。</div></div>`;
     }
   }
-
-  async function checkGeminiConfigured(){
-    try {
-      const r = await callAi({ action: "status" });
-      if (r.geminiConfigured === false) {
-        document.getElementById("ai-key-notice").innerHTML = `<div class="ai-result">${esc(r.geminiNotice || "AI功能未啟用")}</div>`;
-      }
-    } catch (e) { /* silent - button clicks will surface errors */ }
-  }
-
   boot();
 })();
 </script>
-
 </body>
 </html>
