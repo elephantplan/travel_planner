@@ -114,7 +114,7 @@ async function searchPlacePhotos(query: string, apiKey: string): Promise<string[
   return fetchPhotosForPlaceId(placeId, apiKey);
 }
 
-async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: string; name: string; address: string }[]> {
+async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: string; name: string; address: string; lat?: number; lng?: number }[]> {
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + " 서울")}&key=${apiKey}`;
   const res = await fetch(url);
   const data = await res.json();
@@ -122,7 +122,40 @@ async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: s
     placeId: r.place_id,
     name: r.name,
     address: r.formatted_address || r.vicinity || "",
+    lat: r.geometry?.location?.lat,
+    lng: r.geometry?.location?.lng,
   }));
+}
+
+// One endpoint of a journey: a Google place id when we have one, otherwise
+// coordinates, otherwise the place's name as free text.
+function dmRef(p: any): string | null {
+  if (!p) return null;
+  if (p.placeId) return `place_id:${p.placeId}`;
+  if (Number.isFinite(p.lat) && Number.isFinite(p.lng)) return `${p.lat},${p.lng}`;
+  if (p.text) return p.text + " 서울";
+  return null;
+}
+
+async function transitBetween(from: any, to: any, apiKey: string) {
+  const o = dmRef(from), d = dmRef(to);
+  if (!o || !d) return null;
+  const out: Record<string, { text: string; value: number }> = {};
+  for (const mode of ["walking", "transit"]) {
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json` +
+      `?origins=${encodeURIComponent(o)}&destinations=${encodeURIComponent(d)}` +
+      `&mode=${mode}&language=zh-TW&region=kr&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const el = data?.rows?.[0]?.elements?.[0];
+    if (el?.status === "OK" && el.duration) out[mode] = { text: el.duration.text, value: el.duration.value };
+  }
+  const walk = out.walking, tr = out.transit;
+  // under ~15 minutes on foot, walking is simply the better answer
+  if (walk && walk.value <= 900) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
+  if (tr) return { mode: "metro", text: `地鐵／巴士約 ${Math.max(1, Math.round(tr.value / 60))} 分鐘` };
+  if (walk) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -241,6 +274,18 @@ Deno.serve(async (req) => {
         return json({ ok: true, photos, cached: false });
       } catch (e) {
         return json({ ok: false, message: "搵相片失敗：" + String(e) });
+      }
+    }
+
+    if (action === "transit") {
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+      try {
+        const r = await transitBetween(body?.from, body?.to, placesKey);
+        if (!r) return json({ ok: false, message: "計唔到呢兩點之間嘅交通。" });
+        return json({ ok: true, mode: r.mode, text: r.text });
+      } catch (e) {
+        return json({ ok: false, message: "計交通失敗：" + String(e) });
       }
     }
 

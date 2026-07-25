@@ -361,6 +361,11 @@ img{max-width:100%;}
 }
 .seg-text b{color:var(--ink);font-weight:700;font-family:'JetBrains Mono',monospace;}
 .seg-text .icon{font-size:14px;}
+.seg-note{font-size:12.5px;color:var(--ink-faint);}
+.seg-note.warn{color:var(--warn);font-weight:600;}
+.seg.stale .seg-rail::before{
+  background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);
+}
 
 /* a station */
 .stop{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:start;}
@@ -651,13 +656,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     readOnlyLabel: null            // set when previewing an old version
   };
 
-  function getEditedBy(){
-    if (state.editedBy) return state.editedBy;
-    const name = prompt("你叫咩名？（等大家喺歷史紀錄度知道邊個改過）") || "匿名";
-    state.editedBy = name;
-    localStorage.setItem("seoul_trip_name", name);
-    return name;
-  }
+  // never interrupt an edit to ask who is typing; a name can be set in 歷史 if wanted
+  function getEditedBy(){ return state.editedBy || "家人"; }
 
   // ---------- theme ----------
   function applyTheme(t){
@@ -751,7 +751,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function blankStop(){
     return { kind:"stop", type:"normal", marker:"", time:"", title:"", kr:"",
              niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"",
-             accessBadges:[], tip:"", photoUrl:"", placeId:"" };
+             accessBadges:[], tip:"", photoUrl:"", placeId:"", lat:null, lng:null };
   }
   const MODES = [
     { key:"walk",  icon:"🚶", label:"步行" },
@@ -777,6 +777,48 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function buildSeg(mode, text){
     const m = MODES.find(x => x.key === mode) || MODES[0];
     return { kind:"connector", html:`<span class="icon">${m.icon}</span>${esc(text)}` };
+  }
+
+  // how to name a stop to Google: its place id if we have one, else coordinates,
+  // else just its name
+  function stopRef(s){
+    if (!s) return null;
+    if (s.placeId) return { placeId: s.placeId };
+    if (Number.isFinite(s.lat) && Number.isFinite(s.lng)) return { lat: s.lat, lng: s.lng };
+    if ((s.title || "").trim()) return { text: s.title.trim() };
+    return null;
+  }
+
+  // After the order changes, the transit note before a stop describes a journey
+  // that no longer happens. Flag those, then ask Google for the real numbers.
+  async function refreshTransit(day, indices){
+    let units = toUnits(day.items);
+    // nothing comes before the first stop of a day, so it carries no transit note
+    if (units[0] && units[0].seg && units[0].stop){ units[0].seg = null; day.items = fromUnits(units); }
+    const todo = [...new Set(indices)]
+      .filter(i => i > 0 && i < units.length && units[i] && units[i].stop);
+    if (!todo.length){ render(); return; }
+
+    todo.forEach(i => {
+      units[i].seg = Object.assign({ kind:"connector", html:"" }, units[i].seg, { stale:true, checking:true });
+    });
+    day.items = fromUnits(units);
+    render();
+
+    for (const i of todo){
+      const from = stopRef(units[i-1].stop), to = stopRef(units[i].stop);
+      let done = false;
+      if (from && to){
+        try {
+          const r = await callAi({ action:"transit", from, to });
+          if (r && r.ok !== false && r.text){ units[i].seg = buildSeg(r.mode || "walk", r.text); done = true; }
+        } catch (_){ /* leave it flagged rather than showing a wrong number */ }
+      }
+      if (!done) units[i].seg.checking = false;
+      day.items = fromUnits(units);
+      render();
+    }
+    await saveNow("更新咗交通時間");
   }
 
   // ==================================================================
@@ -986,10 +1028,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const key = day.id + ":" + i;
     const open = state.open.has(key);
     const s = u.stop;
-    const segHtml = u.seg ? `
-      <div class="seg" data-mode="${segMode(u.seg.html)}">
+    const showSeg = u.seg && !(i === 0 && u.stop);
+    const segBody = !showSeg ? "" :
+      u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
+      u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認</span>` :
+      u.seg.html;
+    const segHtml = showSeg ? `
+      <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg.html)}">
         <div class="seg-rail"></div>
-        <div class="seg-text">${u.seg.html}</div>
+        <div class="seg-text">${segBody}</div>
       </div>` : "";
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
@@ -1185,6 +1232,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           sugBox.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", async () => {
             const p = r.places[+b.dataset.p];
             s.title = p.name; s.placeId = p.placeId;
+            if (Number.isFinite(p.lat)) s.lat = p.lat;
+            if (Number.isFinite(p.lng)) s.lng = p.lng;
             s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
             sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊張相…</p>`;
@@ -1211,7 +1260,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         day.items = fromUnits(units);
         state.open.clear();
         render();
-        saveNow("刪走咗「" + (s.title || "一個地點") + "」");
+        await saveNow("刪走咗「" + (s.title || "一個地點") + "」");
+        refreshTransit(day, [i]);          // the stop that closed the gap
         return;
       }
 
@@ -1222,13 +1272,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         day.items = fromUnits(units);
         state.open.clear(); state.open.add(day.id + ":" + j);
         render();
-        saveNow("調整咗次序");
+        await saveNow("調整咗次序");
+        refreshTransit(day, [i, j, Math.max(i,j)+1]);
         return;
       }
 
       if (act === "moveday"){ openDayPicker(day, i); return; }
 
       if (act === "findphoto"){
+        // first time: just take the top photo. only offer a choice when replacing one.
+        const replacing = !!s.photoUrl;
         const holder = box.querySelector("[data-photos]");
         holder.innerHTML = `<p class="hint">搵緊相…</p>`;
         try {
@@ -1237,6 +1290,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           const r = await callAi(payload);
           if (r.ok === false){ holder.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
           if (!r.photos || !r.photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
+          if (!replacing){
+            s.photoUrl = r.photos[0];
+            await saveNow("加咗「" + (s.title||"一個地點") + "」嘅相");
+            render();
+            return;
+          }
           holder.innerHTML = `<div class="photogrid">${r.photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
           holder.querySelectorAll("img").forEach(img => img.addEventListener("click", async () => {
             s.photoUrl = img.dataset.u;
@@ -1271,11 +1330,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         const tUnits = toUnits(target.items);
         tUnits.push(moving);
         target.items = fromUnits(tUnits);
+        const landedAt = tUnits.length - 1;
         closeLayer();
         state.open.clear();
         state.view = target.id;
         render();
-        saveNow(`「${moving.stop.title || "一個地點"}」由 ${fromDay.title} 搬咗去 ${target.title}`);
+        await saveNow(`「${moving.stop.title || "一個地點"}」由 ${fromDay.title} 搬咗去 ${target.title}`);
+        // both days changed shape: the gap left behind and the new arrival
+        await refreshTransit(target, [landedAt]);
+        refreshTransit(fromDay, [unitIndex]);
       }));
     });
   }
@@ -1353,7 +1416,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         day.items = fromUnits(units);
         state.open.clear();
         render();
-        saveNow("調整咗次序");
+        saveNow("調整咗次序").then(() =>
+          refreshTransit(day, [d.to, d.to + 1, d.from, d.from + 1]));
       };
       handle.addEventListener("pointerup", finish);
       handle.addEventListener("pointercancel", finish);
