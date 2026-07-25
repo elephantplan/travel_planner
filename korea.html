@@ -231,7 +231,14 @@
   .stop-photo-empty{margin-bottom:10px;}
   .photo-picker{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
   .photo-picker img{width:100%;height:76px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;}
-  .photo-picker img:hover{border-color:var(--gold);}
+  .photo-picker img:hover, .photo-picker img.selected{border-color:var(--gold);}
+
+  /* ---------- PLACE SEARCH (autocomplete) ---------- */
+  .place-search-results{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
+  .place-search-item{background:#FFFCF3;border:1px solid var(--line);border-radius:10px;padding:9px 11px;cursor:pointer;}
+  .place-search-item:active{background:var(--gold-soft);}
+  .place-search-item .name{font-size:13px;font-weight:700;color:var(--ink);}
+  .place-search-item .addr{font-size:11px;color:#6b6252;margin-top:1px;}
 
   /* timeline */
   .timeline{position:relative;padding-left:0;}
@@ -682,6 +689,11 @@
         </div>
         ${isExpanded ? `
         <div class="stop-edit-body">
+          <div class="field-row">
+            <label>🔍 搜尋Google地圖真實地點（打字揀一個，會自動填名同攞相）</label>
+            <input class="field-input place-search-input" data-day="${dayId}" data-idx="${idx}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+            <div class="place-search-results" data-day="${dayId}" data-idx="${idx}"></div>
+          </div>
           <div class="field-row"><label>時間</label><input class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="time" value="${esc(item.time)}"></div>
           <div class="field-row"><label>類型</label>
             <select class="field-input" data-day="${dayId}" data-idx="${idx}" data-field="type">
@@ -706,7 +718,7 @@
   }
 
   function newBlankStop(){
-    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"", photoUrl:"" };
+    return { kind:"stop", type:"normal", marker:"", time:"", title:"新景點", kr:"", niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"", accessBadges:[], tip:"", photoUrl:"", placeId:"" };
   }
 
   function renderDaySection(day){
@@ -797,11 +809,17 @@
         const dayId = btn.dataset.day, idx = +btn.dataset.idx;
         const day = state.snapshot.days.find(d => d.id === dayId);
         const item = day.items[idx];
+        // if a photo is already showing, this is the "換相" button -> let user pick from alternatives.
+        // if there's no photo yet, auto-pick the first result so the user doesn't need to choose.
+        const showPicker = !!item.photoUrl;
         const container = btn.parentElement;
         btn.textContent = "搵緊…";
         btn.disabled = true;
         try {
-          const r = await callAi({ action: "place-photo", query: item.kr || item.title });
+          const payload = item.placeId
+            ? { action: "place-photo", placeId: item.placeId }
+            : { action: "place-photo", query: item.kr || item.title };
+          const r = await callAi(payload);
           if (r.ok === false) {
             container.innerHTML = `<p class="section-sub">${esc(r.message)}</p>`;
             return;
@@ -810,7 +828,13 @@
             container.innerHTML = `<p class="section-sub">📷 搵唔到「${esc(item.title)}」相關相片，可以人手上網搵幾張相自己貼link。</p>`;
             return;
           }
-          container.innerHTML = `<div class="photo-picker">${r.photos.map(url=>`<img src="${esc(url)}" data-url="${esc(url)}">`).join("")}</div><p class="section-sub" style="margin-top:6px;">撳一張相就會揀返嗰張，自動儲存。</p>`;
+          if (!showPicker) {
+            item.photoUrl = r.photos[0];
+            try { await saveVersion(state.snapshot, "manual", "更新相片：" + item.title); } catch (err) { /* still show locally even if save fails */ }
+            renderDays();
+            return;
+          }
+          container.innerHTML = `<div class="photo-picker">${r.photos.map(url=>`<img src="${esc(url)}" data-url="${esc(url)}" class="${url===item.photoUrl?'selected':''}">`).join("")}</div><p class="section-sub" style="margin-top:6px;">撳一張相就會揀返嗰張，自動儲存。</p>`;
           container.querySelectorAll("img").forEach(img => {
             img.addEventListener("click", async () => {
               item.photoUrl = img.dataset.url;
@@ -821,6 +845,48 @@
         } catch (err) {
           container.innerHTML = `<p class="section-sub">搵相失敗：${esc(err.message)}</p>`;
         }
+      });
+    });
+    document.querySelectorAll(".place-search-input").forEach(input => {
+      let timer = null;
+      input.addEventListener("input", () => {
+        clearTimeout(timer);
+        const dayId = input.dataset.day, idx = +input.dataset.idx;
+        const resultsEl = document.querySelector(`.place-search-results[data-day="${dayId}"][data-idx="${idx}"]`);
+        const q = input.value.trim();
+        if (!q) { resultsEl.innerHTML = ""; return; }
+        timer = setTimeout(async () => {
+          resultsEl.innerHTML = `<p class="section-sub">搜尋緊…</p>`;
+          try {
+            const r = await callAi({ action: "place-search", query: q });
+            if (r.ok === false) { resultsEl.innerHTML = `<p class="section-sub">${esc(r.message)}</p>`; return; }
+            if (!r.places || !r.places.length) { resultsEl.innerHTML = `<p class="section-sub">搵唔到相關地點，可以直接落面手動填名。</p>`; return; }
+            resultsEl.innerHTML = r.places.map((p, i) => `
+              <div class="place-search-item" data-i="${i}">
+                <div class="name">${esc(p.name)}</div>
+                <div class="addr">${esc(p.address)}</div>
+              </div>`).join("");
+            resultsEl.querySelectorAll(".place-search-item").forEach(elItem => {
+              elItem.addEventListener("click", async () => {
+                const chosen = r.places[+elItem.dataset.i];
+                const day = state.snapshot.days.find(d => d.id === dayId);
+                const item = day.items[idx];
+                item.title = chosen.name;
+                item.placeId = chosen.placeId;
+                item.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(chosen.name)}`;
+                resultsEl.innerHTML = `<p class="section-sub">已選擇「${esc(chosen.name)}」，幫緊你搵相片…</p>`;
+                try {
+                  const pr = await callAi({ action: "place-photo", placeId: chosen.placeId });
+                  if (pr.ok !== false && pr.photos && pr.photos.length) item.photoUrl = pr.photos[0];
+                } catch (err) { /* photo fetch is best-effort */ }
+                try { await saveVersion(state.snapshot, "manual", "新增地點：" + item.title); } catch (err) { /* still show locally even if save fails */ }
+                renderDays();
+              });
+            });
+          } catch (err) {
+            resultsEl.innerHTML = `<p class="section-sub">搜尋失敗：${esc(err.message)}</p>`;
+          }
+        }, 400);
       });
     });
   }

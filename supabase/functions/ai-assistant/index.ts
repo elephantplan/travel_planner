@@ -89,13 +89,7 @@ async function saveCachedPhotos(query: string, photos: string[]) {
   });
 }
 
-async function searchPlacePhotos(query: string, apiKey: string): Promise<string[]> {
-  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query + " 서울")}&inputtype=textquery&fields=place_id&key=${apiKey}`;
-  const findRes = await fetch(findUrl);
-  const findData = await findRes.json();
-  const placeId = findData?.candidates?.[0]?.place_id;
-  if (!placeId) return [];
-
+async function fetchPhotosForPlaceId(placeId: string, apiKey: string): Promise<string[]> {
   const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=photos&key=${apiKey}`;
   const detailsRes = await fetch(detailsUrl);
   const detailsData = await detailsRes.json();
@@ -109,6 +103,26 @@ async function searchPlacePhotos(query: string, apiKey: string): Promise<string[
     await photoRes.body?.cancel();
   }
   return resolvedUrls;
+}
+
+async function searchPlacePhotos(query: string, apiKey: string): Promise<string[]> {
+  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query + " 서울")}&inputtype=textquery&fields=place_id&key=${apiKey}`;
+  const findRes = await fetch(findUrl);
+  const findData = await findRes.json();
+  const placeId = findData?.candidates?.[0]?.place_id;
+  if (!placeId) return [];
+  return fetchPhotosForPlaceId(placeId, apiKey);
+}
+
+async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: string; name: string; address: string }[]> {
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + " 서울")}&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return (data?.results ?? []).slice(0, 5).map((r: any) => ({
+    placeId: r.place_id,
+    name: r.name,
+    address: r.formatted_address || r.vicinity || "",
+  }));
 }
 
 Deno.serve(async (req) => {
@@ -208,21 +222,40 @@ Deno.serve(async (req) => {
     }
 
     if (action === "place-photo") {
+      const placeId = (body?.placeId ?? "").toString().trim();
       const query = (body?.query ?? "").toString().trim();
-      if (!query) return json({ error: "Missing query" }, 400);
+      const cacheKey = placeId || query;
+      if (!cacheKey) return json({ error: "Missing query or placeId" }, 400);
 
-      const cached = await getCachedPhotos(query);
+      const cached = await getCachedPhotos(cacheKey);
       if (cached) return json({ ok: true, photos: cached, cached: true });
 
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
 
       try {
-        const photos = await searchPlacePhotos(query, placesKey);
-        if (photos.length) await saveCachedPhotos(query, photos);
+        const photos = placeId
+          ? await fetchPhotosForPlaceId(placeId, placesKey)
+          : await searchPlacePhotos(query, placesKey);
+        if (photos.length) await saveCachedPhotos(cacheKey, photos);
         return json({ ok: true, photos, cached: false });
       } catch (e) {
         return json({ ok: false, message: "搵相片失敗：" + String(e) });
+      }
+    }
+
+    if (action === "place-search") {
+      const query = (body?.query ?? "").toString().trim();
+      if (!query) return json({ ok: true, places: [] });
+
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+
+      try {
+        const places = await searchPlaces(query, placesKey);
+        return json({ ok: true, places });
+      } catch (e) {
+        return json({ ok: false, message: "搜尋地點失敗：" + String(e) });
       }
     }
 
