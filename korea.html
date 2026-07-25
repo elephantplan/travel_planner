@@ -1363,6 +1363,22 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // MAPS
   // ==================================================================
+  // stored points are [lat, lng, name] tuples; the name often carries the
+  // stop's own number ("1 Artist Bakery"), so use that rather than inventing one
+  function normPoints(raw){
+    if (!Array.isArray(raw)) return [];
+    return raw.map(p => {
+      const lat = Array.isArray(p) ? p[0] : p?.lat;
+      const lng = Array.isArray(p) ? p[1] : p?.lng;
+      const name = String((Array.isArray(p) ? p[2] : p?.name) || "");
+      const m = name.match(/^\s*(\d+)\s+(.*)$/);
+      return {
+        lat: Number(lat), lng: Number(lng),
+        label: m ? m[1] : "",
+        name: m ? m[2] : name
+      };
+    }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  }
   function mapIcon(color, label){
     return L.divIcon({
       className:"", iconSize:[22,22], iconAnchor:[11,11],
@@ -1371,43 +1387,52 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   }
   function initDayMap(day){
     const el = document.getElementById("map-" + day.id);
-    if (!el || typeof L === "undefined"){
-      if (el) el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`;
-      return;
+    if (!el) return;
+    try {
+      if (typeof L === "undefined"){ el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`; return; }
+      const pts = normPoints(day.mapPoints);
+      if (!pts.length){ el.innerHTML = `<div class="mapfallback">呢日仲未有地圖座標。</div>`; return; }
+      const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
+      const color = DAY_HEX[day.id] || "#8A94A6";
+      const latlngs = pts.map(p => [p.lat, p.lng]);
+      L.polyline(latlngs, { color, weight:4, opacity:.85 }).addTo(map);
+      pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label || (i+1)) }).addTo(map).bindPopup(p.name || ""));
+      const fit = () => { map.invalidateSize(); map.fitBounds(L.latLngBounds(latlngs).pad(0.22)); };
+      fit();
+      requestAnimationFrame(fit);   // the box was just inserted; re-fit once it has its real size
+      el.addEventListener("click", () => { map.dragging.enable(); map.scrollWheelZoom.enable(); }, { once:true });
+    } catch (e){
+      el.innerHTML = `<div class="mapfallback">地圖載入唔到：${esc(e.message)}</div>`;
     }
-    let pts;
-    try { pts = JSON.parse(el.dataset.points); } catch(_){ return; }
-    if (!pts || !pts.length) return;
-    const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
-    const color = DAY_HEX[day.id] || "#8A94A6";
-    const latlngs = pts.map(p => [p.lat, p.lng]);
-    L.polyline(latlngs, { color, weight:4, opacity:.85 }).addTo(map);
-    pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, i+1) }).addTo(map).bindPopup(p.name || ""));
-    map.fitBounds(L.latLngBounds(latlngs).pad(0.22));
-    el.addEventListener("click", () => { map.dragging.enable(); map.scrollWheelZoom.enable(); }, { once:true });
   }
   function initOverviewMap(){
     const el = document.getElementById("map-all");
     const legend = document.getElementById("map-legend");
     if (!el) return;
+    try {
     if (typeof L === "undefined"){ el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`; return; }
     const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
     const all = [];
     const layers = {};
     state.snapshot.days.forEach(day => {
-      if (!day.mapPoints || !day.mapPoints.length) return;
+      const pts = normPoints(day.mapPoints);
+      if (!pts.length) return;
       const color = DAY_HEX[day.id] || "#8A94A6";
-      const latlngs = day.mapPoints.map(p => [p.lat,p.lng]);
+      const latlngs = pts.map(p => [p.lat,p.lng]);
       const g = L.layerGroup();
       L.polyline(latlngs, { color, weight:4, opacity:.8 }).addTo(g);
-      day.mapPoints.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, i+1) }).bindPopup(p.name||"").addTo(g));
+      pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label || (i+1)) }).bindPopup(p.name||"").addTo(g));
       g.addTo(map);
       layers[day.id] = g;
       all.push(...latlngs);
     });
-    if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.14));
+    if (all.length){
+      const fit = () => { map.invalidateSize(); map.fitBounds(L.latLngBounds(all).pad(0.14)); };
+      fit();
+      requestAnimationFrame(fit);   // the box was just inserted; re-fit once it has its real size
+    }
     el.addEventListener("click", () => { map.dragging.enable(); map.scrollWheelZoom.enable(); }, { once:true });
 
     if (legend){
@@ -1419,6 +1444,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         if (map.hasLayer(g)){ map.removeLayer(g); b.style.opacity = ".35"; }
         else { g.addTo(map); b.style.opacity = "1"; }
       }));
+    }
+    } catch (e){
+      el.innerHTML = `<div class="mapfallback">地圖載入唔到：${esc(e.message)}</div>`;
     }
   }
 
@@ -1603,13 +1631,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // BOOT
   // ==================================================================
   async function boot(){
+    let row;
     try {
-      const row = await fetchLatestVersion();
+      row = await fetchLatestVersion();
       if (!row) throw new Error("資料庫入面仲未有行程版本。");
-      state.snapshot = row.snapshot;
-      render();
     } catch (e){
       $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理。</div></div>`;
+      return;
+    }
+    state.snapshot = row.snapshot;
+    try {
+      render();
+    } catch (e){
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">行程讀到咗，但畫唔出嚟：${esc(e.message)}<br>可以撳上面日子掣試下第二日。</div></div>`;
     }
   }
   boot();
