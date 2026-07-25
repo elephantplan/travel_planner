@@ -438,10 +438,13 @@ img{max-width:100%;}
   text-decoration:none;
 }
 .draghandle{
-  position:absolute;top:0;right:0;width:46px;height:46px;display:grid;place-items:center;
-  color:var(--ink-faint);font-size:15px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+  position:absolute;top:6px;right:6px;width:38px;height:38px;display:grid;place-items:center;
+  border-radius:11px;background:var(--surface-2);border:1px solid var(--rule);
+  color:var(--ink-soft);font-size:15px;line-height:1;cursor:grab;
+  touch-action:none;user-select:none;-webkit-user-select:none;
 }
-.draghandle:active{cursor:grabbing;}
+.draghandle:active{cursor:grabbing;background:var(--lc);color:#fff;border-color:transparent;}
+.unit.lifted .draghandle{background:var(--lc);color:#fff;border-color:transparent;}
 .stopcard{position:relative;}
 
 /* expanded editor */
@@ -1356,25 +1359,72 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function wireDrag(day, line){
     if (!line) return;
     let drag = null;
+    let raf = null;
+
+    // Everything is measured in page coordinates, not viewport ones, so the
+    // drag keeps working while the page scrolls underneath it.
+    function paint(){
+      if (!drag || !drag.active) return;
+      const pageY = drag.clientY + window.scrollY;
+      drag.el.style.transform = `translateY(${pageY - drag.startPageY}px)`;
+
+      let to = drag.from;
+      for (let k = 0; k < drag.rects.length; k++){
+        if (k === drag.from) continue;
+        const mid = drag.rects[k].top + drag.rects[k].height / 2;
+        if (k < drag.from && pageY < mid) to = Math.min(to, k);
+        if (k > drag.from && pageY > mid) to = Math.max(to, k);
+      }
+      if (to !== drag.to){
+        drag.to = to;
+        const h = drag.rects[drag.from].height;
+        drag.units.forEach((u,k) => {
+          if (k === drag.from) return;
+          u.classList.add("shifting");
+          let shift = 0;
+          if (drag.to < drag.from && k >= drag.to && k < drag.from) shift = h;
+          if (drag.to > drag.from && k > drag.from && k <= drag.to) shift = -h;
+          u.style.transform = shift ? `translateY(${shift}px)` : "";
+        });
+      }
+    }
+
+    // hold the card near the top or bottom edge and the page follows
+    function tick(){
+      if (!drag || !drag.active){ raf = null; return; }
+      const edge = 110, vh = window.innerHeight, y = drag.clientY;
+      let step = 0;
+      if (y < edge) step = -Math.ceil((edge - y) / 5);
+      else if (y > vh - edge) step = Math.ceil((y - (vh - edge)) / 5);
+      if (step){
+        const before = window.scrollY;
+        window.scrollBy(0, Math.max(-28, Math.min(28, step)));
+        if (window.scrollY !== before) paint();
+      }
+      raf = requestAnimationFrame(tick);
+    }
 
     line.querySelectorAll("[data-drag]").forEach(handle => {
       handle.addEventListener("pointerdown", e => {
         e.preventDefault();
         const unitEl = handle.closest(".unit");
         const units = Array.from(line.querySelectorAll(".unit"));
-        const rects = units.map(u => u.getBoundingClientRect());
+        const sy = window.scrollY;
         drag = {
           el: unitEl,
           from: units.indexOf(unitEl),
           to: units.indexOf(unitEl),
-          startY: e.clientY,
-          units, rects,
-          pointerId: e.pointerId,
+          startPageY: e.clientY + sy,
+          clientY: e.clientY,
+          units,
+          rects: units.map(u => { const r = u.getBoundingClientRect(); return { top: r.top + sy, height: r.height }; }),
           active: false,
           timer: setTimeout(() => {
+            if (!drag) return;
             drag.active = true;
             unitEl.classList.add("lifted");
             if (navigator.vibrate) navigator.vibrate(12);
+            if (!raf) raf = requestAnimationFrame(tick);
           }, 260)
         };
         handle.setPointerCapture(e.pointerId);
@@ -1382,40 +1432,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
       handle.addEventListener("pointermove", e => {
         if (!drag) return;
-        const dy = e.clientY - drag.startY;
         if (!drag.active){
-          if (Math.abs(dy) > 9){ clearTimeout(drag.timer); drag = null; }
+          // still deciding: a clear vertical move means the user meant to scroll
+          if (Math.abs((e.clientY + window.scrollY) - drag.startPageY) > 9){
+            clearTimeout(drag.timer);
+            drag = null;
+          }
           return;
         }
         e.preventDefault();
-        drag.el.style.transform = `translateY(${dy}px)`;
-
-        // find the slot whose midpoint the pointer has crossed
-        let to = drag.from;
-        for (let k = 0; k < drag.rects.length; k++){
-          if (k === drag.from) continue;
-          const r = drag.rects[k];
-          const mid = r.top + r.height/2;
-          if (k < drag.from && e.clientY < mid){ to = Math.min(to, k); }
-          if (k > drag.from && e.clientY > mid){ to = Math.max(to, k); }
-        }
-        if (to !== drag.to){
-          drag.to = to;
-          const h = drag.rects[drag.from].height;
-          drag.units.forEach((u,k) => {
-            if (k === drag.from) return;
-            u.classList.add("shifting");
-            let shift = 0;
-            if (drag.to < drag.from && k >= drag.to && k < drag.from) shift = h;
-            if (drag.to > drag.from && k > drag.from && k <= drag.to) shift = -h;
-            u.style.transform = shift ? `translateY(${shift}px)` : "";
-          });
-        }
+        drag.clientY = e.clientY;
+        paint();
       });
 
       const finish = () => {
         if (!drag) return;
         clearTimeout(drag.timer);
+        if (raf){ cancelAnimationFrame(raf); raf = null; }
         const d = drag; drag = null;
         d.units.forEach(u => { u.style.transform = ""; u.classList.remove("shifting","lifted"); });
         if (!d.active || d.to === d.from) return;
@@ -1425,6 +1458,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         day.items = fromUnits(units);
         state.open.clear();
         render();
+        // follow the card to where it landed, so the drop is never off-screen
+        const landed = line.querySelector(`.unit[data-i="${d.to}"]`);
+        if (landed) landed.scrollIntoView({ block:"center", behavior:"smooth" });
         saveNow("調整咗次序").then(() =>
           refreshTransit(day, [d.to, d.to + 1, d.from, d.from + 1]));
       };
