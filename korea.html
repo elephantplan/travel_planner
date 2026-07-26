@@ -336,6 +336,9 @@ img{max-width:100%;}
 .mapbox{
   height:230px;margin-top:11px;border-radius:var(--r-lg);overflow:hidden;
   border:1px solid var(--rule);background:var(--surface-2);
+  /* Leaflet gives its panes z-index up to 1000. Without a stacking context of
+     its own the map floats over the sticky nav and the AI sheet. */
+  position:relative;z-index:0;isolation:isolate;
 }
 .mapbox.tall{height:300px;}
 .mapcap{font-size:11.5px;color:var(--ink-faint);margin:7px 2px 0;line-height:1.55;}

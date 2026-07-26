@@ -221,6 +221,27 @@ async function transitBetween(from: any, to: any, apiKey: string) {
   return { error: (tr as any).problem || (walk as any).problem || "Google 冇俾到路線資料" };
 }
 
+// A snapshot is ~29 KB, most of it photo URLs, HTML blobs and map coordinates
+// the planner has no use for. Slicing that to fit the prompt cut the trip off
+// after Day 2 — which is why suggestions only ever touched the first day or two.
+// Keep the planning facts, drop the rest, and the whole 6 days fits easily.
+function compactItinerary(it: any) {
+  const days = (it?.days ?? []).map((d: any) => ({
+    dayId: d.id,
+    date: d.date,
+    title: d.title,
+    stops: (d.items ?? []).filter((i: any) => i.kind === "stop").map((s: any) => {
+      const o: any = { time: s.time, title: s.title, type: s.type };
+      if (s.desc) o.desc = String(s.desc).slice(0, 140);
+      const access = (s.accessBadges ?? []).map((b: any) => b?.text).filter(Boolean);
+      if (access.length) o.已核實無障礙安排 = access;
+      if ((s.niecepick ?? []).length) o.表妹指定要去 = true;
+      return o;
+    }),
+  }));
+  return { 酒店: it?.accommodation?.name ?? "", days };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -283,7 +304,7 @@ Deno.serve(async (req) => {
       if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）睇緊佢哋10月23-28日嘅首爾行程JSON。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n行程JSON（節錄，只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(itinerary)?.slice(0, 6000)}\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）睇緊佢哋10月23-28日嘅首爾行程JSON。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成6日行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
       try {
         const aiText = await callGemini(apiKey, prompt);
         return json({ ok: true, aiSummary: aiText });
@@ -297,7 +318,7 @@ Deno.serve(async (req) => {
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
       const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n用戶要求：${question || "檢視成個行程，建議1-3個增加或移除景點的調整"}\n\n現有行程JSON（dayId對應每一日）：\n${JSON.stringify(itinerary)?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個6日行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過6日，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如南山塔已經寫明「循環巴士無台階＋塔內電梯直達展望台」）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「表妹指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級景點（例如南山塔、景福宮、南怡島）唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成6日行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
       let aiText: string;
       try {
         aiText = await callGemini(apiKey, prompt);
