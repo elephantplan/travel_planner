@@ -583,6 +583,28 @@ img{max-width:100%;}
 .ai-change .ttl{font-size:14.5px;font-weight:700;margin:3px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
 
+/* ---------- asked / answered log ---------- */
+.tabs{display:flex;gap:6px;margin:0 0 12px;}
+.tab{
+  flex:1 1 auto;padding:9px 12px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--rule);background:var(--surface);
+  font-size:13px;font-weight:600;color:var(--ink-soft);
+}
+.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:7px;overflow:hidden;}
+.qa-head{
+  display:block;width:100%;text-align:left;cursor:pointer;
+  border:0;background:transparent;padding:11px 12px;
+}
+.qa-meta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.qa-meta .when{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);}
+.qa-q{display:block;font-size:13.5px;font-weight:700;margin-top:5px;line-height:1.45;}
+.qa-head.open .qa-q{color:var(--info);}
+.qa-a{
+  padding:0 12px 12px;font-size:13px;line-height:1.75;white-space:pre-wrap;
+  color:var(--ink-soft);border-top:1px dashed var(--rule);padding-top:10px;
+}
+
 .vlist{display:flex;flex-direction:column;gap:7px;}
 .vrow{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:11px 12px;}
 .vrow .who{font-size:13.5px;font-weight:700;}
@@ -737,6 +759,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   }
   async function callAi(payload){
     const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(payload) });
+    return res.json();
+  }
+
+  // Every AI answer is kept, so the family can read back what was asked.
+  async function saveAiNote(kind, question, answer){
+    if (!answer) return;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/ai_notes`, {
+        method: "POST",
+        headers: sbHeaders(),
+        body: JSON.stringify({ asked_by: getEditedBy(), kind, question: question || null, answer })
+      });
+    } catch (e) { /* an unsaved note must never block the answer on screen */ }
+  }
+  async function fetchAiNotes(){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
+    if (!res.ok) throw new Error("讀取紀錄失敗 " + res.status);
     return res.json();
   }
 
@@ -1672,21 +1711,34 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   $("#btn-ai").addEventListener("click", () => {
     openSheet(`
       <h3>AI 助手</h3>
-      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。撳「套用」會直接改咗個行程同存低版本。</p>
-      <div class="aibtns">
-        <button class="btn" data-ai="weather">☁️ 實時天氣</button>
-        <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
-        <button class="btn" data-ai="suggest">💡 執一執行程</button>
+      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。問過嘅嘢會自動存底，全家人喺「問過啲咩」度睇返。</p>
+      <div class="tabs">
+        <button class="tab on" data-tab="ask">問嘢</button>
+        <button class="tab" data-tab="log">問過啲咩</button>
       </div>
-      <div class="askrow">
-        <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
-        <button class="btn primary" data-ai="ask">問</button>
+      <div data-pane="ask">
+        <div class="aibtns">
+          <button class="btn" data-ai="weather">☁️ 實時天氣</button>
+          <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
+          <button class="btn" data-ai="suggest">💡 執一執行程</button>
+        </div>
+        <div class="askrow">
+          <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
+          <button class="btn primary" data-ai="ask">問</button>
+        </div>
+        <div class="ai-out" id="ai-out"></div>
       </div>
-      <div class="ai-out" id="ai-out"></div>
+      <div data-pane="log" hidden><div id="ai-log"><p class="hint">載入緊…</p></div></div>
     `, layer => {
       const out = layer.querySelector("#ai-out");
       const q = layer.querySelector("#ai-q");
       const busy = () => { out.innerHTML = `<div class="ai-msg">諗緊…</div>`; };
+
+      layer.querySelectorAll("[data-tab]").forEach(t => t.addEventListener("click", async () => {
+        layer.querySelectorAll("[data-tab]").forEach(x => x.classList.toggle("on", x === t));
+        layer.querySelectorAll("[data-pane]").forEach(p => { p.hidden = p.dataset.pane !== t.dataset.tab; });
+        if (t.dataset.tab === "log") renderAiLog(layer.querySelector("#ai-log"));
+      }));
 
       layer.querySelectorAll("[data-ai]").forEach(b => b.addEventListener("click", async () => {
         const act = b.dataset.ai;
@@ -1697,19 +1749,34 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             out.innerHTML = `<div class="ai-msg">${esc(r.summary||"")}</div>` +
                             (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
                             (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
+            saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
           } else if (act === "foliage"){
             const r = await callAi({ action:"foliage" });
-            out.innerHTML = `<div class="ai-msg">${esc(r.aiSummary || r.message || "冇回覆")}</div>`;
+            const a = r.aiSummary || r.message || "冇回覆";
+            out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+            if (r.aiSummary) saveAiNote("foliage", "紅葉情況", a);
           } else if (act === "ask"){
             const question = q.value.trim();
             if (!question){ out.innerHTML = ""; q.focus(); return; }
             const r = await callAi({ action:"ask", question, itinerary: state.snapshot });
-            out.innerHTML = `<div class="ai-msg">${esc(r.aiSummary || r.message || "冇回覆")}</div>`;
+            const a = r.aiSummary || r.message || "冇回覆";
+            out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+            if (r.aiSummary) saveAiNote("ask", question, a);
           } else if (act === "suggest"){
             const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
             if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
             const changes = r.changes || [];
-            if (!changes.length){ out.innerHTML = `<div class="ai-msg">${esc(r.notes || r.aiSummary || "冇特別建議。")}</div>`; return; }
+            if (!changes.length){
+              const a = r.notes || r.aiSummary || "冇特別建議。";
+              out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+              saveAiNote("suggest", q.value.trim() || "執一執行程", a);
+              return;
+            }
+            saveAiNote("suggest", q.value.trim() || "執一執行程",
+              [r.notes, ...changes.map(c => {
+                const label = c.op === "add" ? "加" : c.op === "remove" ? "刪" : "改";
+                return `【Day ${String(c.dayId||"").replace("day","")}・${label}】${c.stop?.title || c.matchTitle || ""}\n${c.reason || ""}`;
+              })].filter(Boolean).join("\n\n"));
             out.innerHTML = (r.notes ? `<div class="ai-msg">${esc(r.notes)}</div>` : "") +
               changes.map((c,i) => {
                 const label = c.op === "add" ? "加" : c.op === "remove" ? "刪" : "改";
@@ -1733,6 +1800,37 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       }));
     });
   });
+
+  const AI_KIND = { weather:"☁️ 天氣", foliage:"🍁 紅葉", ask:"💬 問嘢", suggest:"💡 執行程" };
+  async function renderAiLog(box){
+    box.innerHTML = `<p class="hint">載入緊…</p>`;
+    try {
+      const rows = await fetchAiNotes();
+      if (!rows.length){
+        box.innerHTML = `<p class="hint">仲未問過嘢。喺「問嘢」度問一次，之後就會喺呢度見到。</p>`;
+        return;
+      }
+      box.innerHTML = rows.map((r,i) => `
+        <div class="qa">
+          <button class="qa-head" data-note="${i}">
+            <span class="qa-meta">
+              <span class="badge note">${esc(AI_KIND[r.kind] || r.kind)}</span>
+              <span class="when">${esc(new Date(r.created_at).toLocaleString("zh-HK",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}))}</span>
+              <span class="when">· ${esc(r.asked_by || "家人")}</span>
+            </span>
+            <span class="qa-q">${esc(r.question || "")}</span>
+          </button>
+          <div class="qa-a" hidden>${esc(r.answer)}</div>
+        </div>`).join("");
+      box.querySelectorAll("[data-note]").forEach(btn => btn.addEventListener("click", () => {
+        const a = btn.nextElementSibling;
+        a.hidden = !a.hidden;
+        btn.classList.toggle("open", !a.hidden);
+      }));
+    } catch (e){
+      box.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`;
+    }
+  }
 
   function applyAiChange(c){
     const day = dayById(c.dayId);
