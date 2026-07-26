@@ -176,7 +176,6 @@ img{max-width:100%;}
   background:color-mix(in srgb, var(--lc,var(--ink)) 11%, var(--surface));
 }
 .linebtn[aria-selected="true"] .bullet{box-shadow:0 0 0 3px color-mix(in srgb, var(--lc) 26%, transparent);}
-.linebtn.addbtn{border-style:dashed;color:var(--bookmark);}
 
 /* ---------- hero / route board ---------- */
 .hero{padding:26px 0 6px;}
@@ -728,6 +727,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 </main>
 
 <div class="dock">
+  <button class="dockbtn" id="btn-boards">📌 清單</button>
   <button class="dockbtn" id="btn-history">🕓 歷史</button>
   <button class="dockbtn accent" id="btn-ai">✨ AI 助手</button>
 </div>
@@ -1005,10 +1005,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // RENDER — shell
   // ==================================================================
+  // Bookmark boards used to live at the tail end of this strip, past all 6
+  // day tabs — invisible unless you scrolled all the way right, and easy to
+  // not know existed at all. They now have their own always-visible entry
+  // point (the 📌 button in the bottom dock) instead of competing for space
+  // here; this strip stays just overview + days + notes, however many boards
+  // you make.
   function renderLines(){
     const el = $("#lines");
     const days = state.snapshot ? state.snapshot.days : [];
-    const boards = state.snapshot ? (state.snapshot.boards || []) : [];
     el.innerHTML = `
       <button class="linebtn" role="tab" data-go="overview" aria-selected="${state.view==='overview'}" style="--lc:var(--ink-faint)">
         <span class="bullet"></span><span class="lbl">全程</span>
@@ -1019,11 +1024,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="lbl">D${d.id.replace('day','')}</span>
           <span>${esc(DAY_SHORT[d.id]||'')}</span>
         </button>`).join("")}
-      ${boards.map(b => `
-        <button class="linebtn" role="tab" data-go="${b.id}" aria-selected="${state.view===b.id}" style="--lc:var(--bookmark)">
-          <span class="bullet"></span><span class="lbl">📌 ${esc(b.name||'清單')}</span>
-        </button>`).join("")}
-      <button class="linebtn addbtn" id="addboard" type="button" title="加一個新嘅心水清單">＋ 清單</button>
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
       </button>
@@ -1037,18 +1037,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const active = $("#lines [aria-selected='true']");
       if (active) active.scrollIntoView({ block:"nearest", inline:"center" });
     }));
-    const addBoardBtn = $("#addboard");
-    if (addBoardBtn) addBoardBtn.addEventListener("click", async () => {
-      state.snapshot.boards = state.snapshot.boards || [];
-      const b = newBoard(`清單 ${state.snapshot.boards.length + 1}`);
-      state.snapshot.boards.push(b);
-      state.view = b.id;
-      state.open.clear();
-      state.renamingBoard = b.id;   // straight into renaming — the default name is just a placeholder
-      window.scrollTo({ top: 0, behavior: "auto" });
-      render();
-      await saveNow(`加咗個新清單「${b.name}」`);
-    });
   }
 
   function render(){
@@ -2609,6 +2597,51 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div class="diffday-title">${esc(sec.label)}</div>
         ${sec.lines.map(l => `<div class="diffline diffline-${l.type}">${esc(l.text)}</div>`).join("")}
       </div>`).join("");
+  }
+
+  // ---------- 📌 bookmark boards: one always-visible entry point ----------
+  // Living as tabs after all 6 days meant they were invisible off the right
+  // edge of a horizontally-scrolling strip unless you already knew to look.
+  // A dock button — same tier as 歷史/AI助手 — is reachable from any page.
+  $("#btn-boards").addEventListener("click", () => openBoardsSheet());
+  function openBoardsSheet(){
+    const boards = state.snapshot.boards || [];
+    openSheet(`
+      <h3>📌 心水清單</h3>
+      <p class="sec-sub">未定實邊日去嘅地點放呢度。撳一個入去，或者開個新嘅。</p>
+      <div class="daypick">
+        ${boards.map(b => `
+          <button data-gotoboard="${b.id}" style="--lc:var(--bookmark)">
+            <span class="bullet"></span><span class="dcode">📌</span>
+            <span>${esc(b.name)}（${b.items.length} 個地點）</span>
+          </button>`).join("")}
+        <button data-newboard-sheet style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="dcode">＋</span><span>開個新清單</span>
+        </button>
+      </div>
+      ${!boards.length ? `<p class="hint">仲未有清單，撳「開個新清單」整第一個。</p>` : ""}
+    `, sheet => {
+      sheet.querySelectorAll("[data-gotoboard]").forEach(b => b.addEventListener("click", () => {
+        state.view = b.dataset.gotoboard;
+        state.open.clear();
+        closeLayer();
+        window.scrollTo({ top: 0, behavior: "auto" });
+        render();
+      }));
+      const nb = sheet.querySelector("[data-newboard-sheet]");
+      if (nb) nb.addEventListener("click", async () => {
+        state.snapshot.boards = state.snapshot.boards || [];
+        const b = newBoard(`清單 ${state.snapshot.boards.length + 1}`);
+        state.snapshot.boards.push(b);
+        state.view = b.id;
+        state.open.clear();
+        state.renamingBoard = b.id;
+        closeLayer();
+        window.scrollTo({ top: 0, behavior: "auto" });
+        render();
+        await saveNow(`加咗個新清單「${b.name}」`);
+      });
+    });
   }
 
   // ---------- history ----------
