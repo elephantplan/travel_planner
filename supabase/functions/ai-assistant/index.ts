@@ -149,10 +149,14 @@ function problemHint(status: string, msg?: string): string {
   return full;
 }
 
+// Station and bus-stop names come back in Korean on purpose. Asking Google for
+// zh-TW gave Simplified Chinese for Korean stops ("龙岩小学入口"), which is both
+// wrong for the page and useless on the ground — the signs, the announcements
+// and Kakao/Naver are all in Korean.
 async function directions(o: string, d: string, mode: string, apiKey: string) {
   const url = `https://maps.googleapis.com/maps/api/directions/json` +
     `?origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}` +
-    `&mode=${mode}&language=zh-TW&region=kr&key=${apiKey}`;
+    `&mode=${mode}&language=ko&region=kr&key=${apiKey}`;
   const res = await fetch(url);
   const data = await res.json();
   // Google reports failures in the body, not the HTTP status
@@ -162,12 +166,32 @@ async function directions(o: string, d: string, mode: string, apiKey: string) {
   return { seconds: leg.duration?.value ?? 0, steps: leg.steps ?? [] };
 }
 
+// Named lines Google returns in Korean, spelled the way a Cantonese reader
+// expects. Numbered lines are handled by the pattern below instead.
+const KO_LINES: Record<string, string> = {
+  "경의중앙선": "京義中央線",
+  "수인분당선": "水仁盆唐線",
+  "분당선": "盆唐線",
+  "신분당선": "新盆唐線",
+  "경춘선": "京春線",
+  "공항철도": "機場鐵路",
+  "우이신설선": "牛耳新設線",
+  "서해선": "西海線",
+  "신림선": "新林線",
+  "김포골드라인": "金浦金線",
+};
 function lineLabel(line: any): string {
   const t = line?.vehicle?.type;
   const short = (line?.short_name || "").trim();
   const name = (line?.name || "").trim();
   if (t === "SUBWAY" || t === "HEAVY_RAIL" || t === "COMMUTER_TRAIN"){
-    if (/^\d+$/.test(short)) return `${short}號線`;
+    for (const pick of [short, name]){
+      if (!pick) continue;
+      const num = pick.match(/^(\d+)\s*(호선|號線)?$/);   // "3" or "3호선"
+      if (num) return `${num[1]}號線`;
+      const known = KO_LINES[pick.replace(/\s/g, "")];
+      if (known) return known;
+    }
     return short || name || "地鐵";
   }
   if (t === "BUS") return short ? `${short}號巴士` : "巴士";
@@ -318,7 +342,7 @@ Deno.serve(async (req) => {
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
       const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個6日行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過6日，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如南山塔已經寫明「循環巴士無台階＋塔內電梯直達展望台」）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「表妹指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級景點（例如南山塔、景福宮、南怡島）唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成6日行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個6日行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過6日，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶小食，唔算一餐。每一日嘅午餐同晚餐都要係正餐（韓式或其他熟食），唔可以用麵包、吐司、蛋糕頂數。如果某一日由早到晚都冇一餐正餐，嗰日就係有問題，要提議加一餐。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如南山塔已經寫明「循環巴士無台階＋塔內電梯直達展望台」）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「表妹指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級景點（例如南山塔、景福宮、南怡島）唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成6日行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
       let aiText: string;
       try {
         aiText = await callGemini(apiKey, prompt);
