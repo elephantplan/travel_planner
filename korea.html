@@ -656,9 +656,25 @@ img{max-width:100%;}
 .vrow .sum{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:3px;}
 .vrow .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;}
 .vrow input[type=checkbox]{width:19px;height:19px;flex:0 0 auto;margin-top:3px;accent-color:var(--d3);}
-.diff{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px;max-height:52vh;overflow:auto;margin-top:11px;}
-.diff ins{background:var(--ok-bg);color:var(--ok);text-decoration:none;}
-.diff del{background:var(--danger-bg);color:var(--danger);}
+.badge.now{background:var(--ok-bg);color:var(--ok);border-color:transparent;font-weight:800;}
+
+/* human-readable version comparison — one section per day/board, plain lines
+   instead of a raw JSON diff */
+.diffwrap{
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:12px;max-height:56vh;overflow:auto;margin-bottom:11px;
+}
+.diffwrap-title{font-size:13px;font-weight:800;margin:0 0 9px;}
+.diffday+.diffday{margin-top:14px;}
+.diffday-title{
+  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:12px;
+  letter-spacing:.04em;color:var(--ink);margin-bottom:5px;
+}
+.diffline{font-size:12.5px;line-height:1.7;padding-left:2px;}
+.diffline-add{color:var(--ok);}
+.diffline-remove{color:var(--danger);}
+.diffline-edit{color:var(--info);}
+.diffline-reorder{color:var(--warn);}
 
 .daypick{display:flex;flex-direction:column;gap:6px;}
 .daypick button{
@@ -719,7 +735,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 <div id="layer"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/diff@5.2.0/dist/diff.js"></script>
 <script>
 (function(){
   "use strict";
@@ -2510,9 +2525,95 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return "呢個建議睇唔明，冇改到行程";
   }
 
+  // ---------- human-readable version comparison ----------
+  // A raw JSON diff is unreadable (photo URLs, HTML blobs, coordinates all
+  // shift line numbers around). Compare what a reader actually cares about:
+  // which stop was added/removed/changed, day by day.
+  function stopKey(s){ return plain(s && s.title) || ""; }
+
+  function summarizeItemsDiff(oldItems, newItems){
+    const oldStops = (oldItems||[]).filter(i => i.kind === "stop");
+    const newStops = (newItems||[]).filter(i => i.kind === "stop");
+    const oldByKey = new Map();
+    oldStops.forEach(s => { const k = stopKey(s); if (k && !oldByKey.has(k)) oldByKey.set(k, s); });
+    const newByKey = new Map();
+    newStops.forEach(s => { const k = stopKey(s); if (k && !newByKey.has(k)) newByKey.set(k, s); });
+
+    const lines = [];
+    newStops.forEach(s => {
+      const k = stopKey(s);
+      if (k && !oldByKey.has(k)) lines.push({ type:"add", text:`＋ 加咗「${k}」${plain(s.time) ? `（${plain(s.time)}）` : ""}` });
+    });
+    oldStops.forEach(s => {
+      const k = stopKey(s);
+      if (k && !newByKey.has(k)) lines.push({ type:"remove", text:`－ 刪咗「${k}」` });
+    });
+    newByKey.forEach((s, k) => {
+      const o = oldByKey.get(k);
+      if (!o) return;
+      const changes = [];
+      if (plain(o.time) !== plain(s.time)) changes.push(`時間 ${plain(o.time) || "未定"} → ${plain(s.time) || "未定"}`);
+      if (plain(o.desc) !== plain(s.desc)) changes.push("改咗描述");
+      if ((o.photoUrl||"") !== (s.photoUrl||"")) changes.push(o.photoUrl ? "換咗相" : "加咗相");
+      if ((o.mapUrl||"") !== (s.mapUrl||"") && o.mapUrl && s.mapUrl) changes.push("地圖連結有更新");
+      if (changes.length) lines.push({ type:"edit", text:`✎ 「${k}」：${changes.join("、")}` });
+    });
+    // did the common stops change relative order?
+    const commonOld = oldStops.map(stopKey).filter(k => k && newByKey.has(k));
+    const commonNew = newStops.map(stopKey).filter(k => k && oldByKey.has(k));
+    if (commonOld.length > 1 && commonOld.join("|") !== commonNew.join("|")){
+      lines.push({ type:"reorder", text:"⇅ 次序調整咗" });
+    }
+    return lines;
+  }
+
+  function summarizeSnapshotDiff(oldSnap, newSnap){
+    const sections = [];
+    const oldDaysById = new Map((oldSnap.days||[]).map(d => [d.id, d]));
+    (newSnap.days||[]).forEach(nd => {
+      const od = oldDaysById.get(nd.id);
+      const lines = summarizeItemsDiff(od ? od.items : [], nd.items);
+      if (lines.length) sections.push({ label: `Day ${nd.id.replace('day','')} · ${nd.title}`, lines });
+    });
+    (oldSnap.days||[]).forEach(od => {
+      if (!(newSnap.days||[]).some(nd => nd.id === od.id)){
+        sections.push({ label: `Day ${od.id.replace('day','')} · ${od.title}`, lines:[{ type:"remove", text:"－ 成日行程被刪走咗" }] });
+      }
+    });
+
+    const oldBoards = oldSnap.boards || [], newBoards = newSnap.boards || [];
+    const oldBoardsById = new Map(oldBoards.map(b => [b.id, b]));
+    newBoards.forEach(nb => {
+      const ob = oldBoardsById.get(nb.id);
+      const asStops = items => items.map(i => ({ ...i, kind:"stop" }));
+      if (!ob){
+        sections.push({ label:`📌 ${nb.name}`, lines:[{ type:"add", text:`＋ 開咗個新清單，入面 ${nb.items.length} 個地點` }] });
+        return;
+      }
+      const lines = [];
+      if (ob.name !== nb.name) lines.push({ type:"edit", text:`改咗名：「${ob.name}」→「${nb.name}」` });
+      lines.push(...summarizeItemsDiff(asStops(ob.items), asStops(nb.items)));
+      if (lines.length) sections.push({ label:`📌 ${nb.name}`, lines });
+    });
+    oldBoards.forEach(ob => {
+      if (!newBoards.some(nb => nb.id === ob.id)) sections.push({ label:`📌 ${ob.name}`, lines:[{ type:"remove", text:"－ 成個清單被刪走咗" }] });
+    });
+
+    return sections;
+  }
+
+  function diffSummaryHtml(sections){
+    if (!sections.length) return `<p class="hint">呢兩個版本冇分別。</p>`;
+    return sections.map(sec => `
+      <div class="diffday">
+        <div class="diffday-title">${esc(sec.label)}</div>
+        ${sec.lines.map(l => `<div class="diffline diffline-${l.type}">${esc(l.text)}</div>`).join("")}
+      </div>`).join("");
+  }
+
   // ---------- history ----------
   $("#btn-history").addEventListener("click", async () => {
-    openSheet(`<h3>改動紀錄</h3><p class="sec-sub">每次改動都會存低一個版本，可以睇返、比較同還原。</p><div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
+    openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p><div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
       const list = layer.querySelector("#vlist");
       try {
         const rows = await fetchAllVersions();
@@ -2521,15 +2622,17 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <div class="editor-tools" style="margin:0 0 4px;">
             <button class="btn" id="cmp">比較揀咗嘅兩個</button>
           </div>
-          ${rows.map(r => `
+          ${rows.map((r,idx) => `
             <label class="vrow">
               <input type="checkbox" value="${r.id}">
               <span style="flex:1 1 auto;min-width:0;">
                 <span class="who">${esc(r.edited_by||"匿名")}</span>
                 <span class="when"> · ${esc(new Date(r.created_at).toLocaleString("zh-HK",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}))}</span>
+                ${idx===0 ? `<span class="badge now">而家</span>` : ""}
                 <span class="sum">${esc(r.summary||"")}</span>
                 <span class="acts">
                   <button class="btn" data-view="${r.id}">睇呢版</button>
+                  ${idx!==0 ? `<button class="btn" data-cmpnow="${r.id}">同而家比較</button>` : ""}
                   <button class="btn" data-restore="${r.id}">還原</button>
                 </span>
               </span>
@@ -2558,23 +2661,35 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           } catch (err){ alert("還原唔到：" + err.message); }
         }));
 
+        list.querySelectorAll("[data-cmpnow]").forEach(b => b.addEventListener("click", async e => {
+          e.preventDefault();
+          const holder = document.createElement("div");
+          holder.className = "diffwrap";
+          holder.innerHTML = `<p class="hint">比較緊…</p>`;
+          list.prepend(holder);
+          try {
+            const old = await fetchVersionSnapshot(b.dataset.cmpnow);
+            if (!old) return;
+            const sections = summarizeSnapshotDiff(old, state.snapshot);
+            holder.innerHTML = `<div class="diffwrap-title">呢個版本 → 而家嘅分別</div>${diffSummaryHtml(sections)}`;
+          } catch (err){ holder.innerHTML = `<p class="hint">比較唔到：${esc(err.message)}</p>`; }
+        }));
+
         list.querySelector("#cmp").addEventListener("click", async e => {
           e.preventDefault();
+          // checkboxes appear in the same order as rows (newest first), so the
+          // one checked first in document order is whichever pick is newer
           const picked = Array.from(list.querySelectorAll("input:checked")).map(i => i.value);
           if (picked.length !== 2){ alert("揀啱兩個版本先可以比較。"); return; }
           const holder = document.createElement("div");
-          holder.className = "diff";
-          holder.textContent = "比較緊…";
+          holder.className = "diffwrap";
+          holder.innerHTML = `<p class="hint">比較緊…</p>`;
           list.prepend(holder);
           try {
-            if (typeof Diff === "undefined") throw new Error("比較工具載入唔到，可能係網絡問題。");
-            const [a,b2] = await Promise.all([fetchVersionSnapshot(picked[1]), fetchVersionSnapshot(picked[0])]);
-            const parts = Diff.diffJson(a, b2);
-            holder.innerHTML = parts.map(p => {
-              const t = esc(p.value);
-              return p.added ? `<ins>${t}</ins>` : p.removed ? `<del>${t}</del>` : t;
-            }).join("");
-          } catch (err){ holder.textContent = "比較唔到：" + err.message; }
+            const [older, newer] = await Promise.all([fetchVersionSnapshot(picked[1]), fetchVersionSnapshot(picked[0])]);
+            const sections = summarizeSnapshotDiff(older, newer);
+            holder.innerHTML = `<div class="diffwrap-title">兩個版本嘅分別</div>${diffSummaryHtml(sections)}`;
+          } catch (err){ holder.innerHTML = `<p class="hint">比較唔到：${esc(err.message)}</p>`; }
         });
       } catch (e){ list.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`; }
     });
