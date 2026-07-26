@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'transit'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -137,43 +137,88 @@ function dmRef(p: any): string | null {
   return null;
 }
 
+function problemHint(status: string, msg?: string): string {
+  const full = `${status}${msg ? ": " + msg : ""}`;
+  if (status === "REQUEST_DENIED") {
+    return `Google 拒絕咗呢個請求（${full}）。通常係個 API key 冇批准用 Directions API：` +
+           `去 Google Cloud Console → APIs & Services → Credentials → 揀返條 key → API restrictions，加埋「Directions API」，` +
+           `同埋喺 Enabled APIs 度確認 Directions API 已經開咗。`;
+  }
+  if (status === "OVER_QUERY_LIMIT") return "Directions API 用量超咗限額，或者未開啟計費。";
+  if (status === "ZERO_RESULTS") return "Google 搵唔到呢兩點之間嘅路線（可能太遠或者跨海）。";
+  return full;
+}
+
+async function directions(o: string, d: string, mode: string, apiKey: string) {
+  const url = `https://maps.googleapis.com/maps/api/directions/json` +
+    `?origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}` +
+    `&mode=${mode}&language=zh-TW&region=kr&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  // Google reports failures in the body, not the HTTP status
+  if (data?.status !== "OK") return { problem: problemHint(data?.status || "UNKNOWN", data?.error_message) };
+  const leg = data?.routes?.[0]?.legs?.[0];
+  if (!leg) return { problem: problemHint("ZERO_RESULTS") };
+  return { seconds: leg.duration?.value ?? 0, steps: leg.steps ?? [] };
+}
+
+function lineLabel(line: any): string {
+  const t = line?.vehicle?.type;
+  const short = (line?.short_name || "").trim();
+  const name = (line?.name || "").trim();
+  if (t === "SUBWAY" || t === "HEAVY_RAIL" || t === "COMMUTER_TRAIN"){
+    if (/^\d+$/.test(short)) return `${short}號線`;
+    return short || name || "地鐵";
+  }
+  if (t === "BUS") return short ? `${short}號巴士` : "巴士";
+  return short || name || "";
+}
+
+// Turn Google's steps into "安國 ─3號線─ 忠武路 ─4號線─ 明洞"
+function describeRide(steps: any[]) {
+  const rides = steps.filter(s => s.travel_mode === "TRANSIT" && s.transit_details);
+  if (!rides.length) return null;
+  let chain = "";
+  let sawSubway = false;
+  rides.forEach((s, i) => {
+    const td = s.transit_details;
+    if (s.transit_details?.line?.vehicle?.type === "SUBWAY") sawSubway = true;
+    const from = td.departure_stop?.name || "";
+    const to = td.arrival_stop?.name || "";
+    const label = lineLabel(td.line);
+    const stops = td.num_stops ? `・${td.num_stops}站` : "";
+    if (i === 0) chain += from;
+    chain += ` ─${label}${stops}─ ${to}`;
+  });
+  return { chain, transfers: rides.length - 1, sawSubway };
+}
+
 async function transitBetween(from: any, to: any, apiKey: string) {
   const o = dmRef(from), d = dmRef(to);
   if (!o || !d) return { error: "呢兩個地點冇足夠資料（冇 Google 地點或座標）去計交通。" };
-  const out: Record<string, { text: string; value: number }> = {};
-  let lastProblem = "";
-  for (const mode of ["walking", "transit"]) {
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json` +
-      `?origins=${encodeURIComponent(o)}&destinations=${encodeURIComponent(d)}` +
-      `&mode=${mode}&language=zh-TW&region=kr&key=${apiKey}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    // Google reports failures in the body, not the HTTP status
-    if (data?.status && data.status !== "OK") {
-      lastProblem = `${data.status}${data.error_message ? ": " + data.error_message : ""}`;
-      continue;
-    }
-    const el = data?.rows?.[0]?.elements?.[0];
-    if (el?.status === "OK" && el.duration) out[mode] = { text: el.duration.text, value: el.duration.value };
-    else if (el?.status && el.status !== "OK") lastProblem = `element ${el.status}`;
-  }
-  const walk = out.walking, tr = out.transit;
-  // under ~15 minutes on foot, walking is simply the better answer
-  if (walk && walk.value <= 900) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
-  if (tr) return { mode: "metro", text: `地鐵／巴士約 ${Math.max(1, Math.round(tr.value / 60))} 分鐘` };
-  if (walk) return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.value / 60))} 分鐘` };
 
-  let hint = lastProblem || "Google 冇俾到路線資料";
-  if (lastProblem.startsWith("REQUEST_DENIED")) {
-    hint = `Google 拒絕咗呢個請求（${lastProblem}）。通常係個 API key 冇批准用 Distance Matrix API：` +
-           `去 Google Cloud Console → APIs & Services → Credentials → 揀返條 key → API restrictions，加埋「Distance Matrix API」，` +
-           `同埋確認 Distance Matrix API 已經 Enable 咗。`;
-  } else if (lastProblem.startsWith("OVER_QUERY_LIMIT")) {
-    hint = "Distance Matrix 用量超咗限額或者未開啟計費。";
-  } else if (lastProblem.startsWith("ZERO_RESULTS") || lastProblem.startsWith("element ZERO_RESULTS")) {
-    hint = "Google 搵唔到呢兩點之間嘅路線（可能太遠或者跨海）。";
+  const walk = await directions(o, d, "walking", apiKey);
+  // under ~15 minutes on foot, walking is simply the better answer
+  if (!("problem" in walk) && walk.seconds && walk.seconds <= 900) {
+    return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.seconds / 60))} 分鐘` };
   }
-  return { error: hint };
+
+  const tr = await directions(o, d, "transit", apiKey);
+  if (!("problem" in tr) && tr.seconds) {
+    const mins = Math.max(1, Math.round(tr.seconds / 60));
+    const ride = describeRide(tr.steps);
+    if (ride) {
+      const kind = ride.sawSubway ? "地鐵" : "巴士";
+      const xfer = ride.transfers > 0 ? `・轉${ride.transfers}次` : "";
+      return { mode: ride.sawSubway ? "metro" : "bus", text: `${kind}約 ${mins} 分鐘${xfer}`, route: ride.chain };
+    }
+    return { mode: "metro", text: `大眾運輸約 ${mins} 分鐘` };
+  }
+
+  if (!("problem" in walk) && walk.seconds) {
+    return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.seconds / 60))} 分鐘` };
+  }
+  return { error: (tr as any).problem || (walk as any).problem || "Google 冇俾到路線資料" };
 }
 
 Deno.serve(async (req) => {
@@ -301,7 +346,7 @@ Deno.serve(async (req) => {
       try {
         const r = await transitBetween(body?.from, body?.to, placesKey);
         if (!r || (r as any).error) return json({ ok: false, message: (r as any)?.error || "計唔到呢兩點之間嘅交通。" });
-        return json({ ok: true, mode: (r as any).mode, text: (r as any).text });
+        return json({ ok: true, mode: (r as any).mode, text: (r as any).text, route: (r as any).route || "" });
       } catch (e) {
         return json({ ok: false, message: "計交通失敗：" + String(e) });
       }

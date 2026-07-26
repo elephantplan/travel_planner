@@ -364,6 +364,12 @@ img{max-width:100%;}
 .seg-note{font-size:12.5px;color:var(--ink-faint);}
 .seg-note.warn{color:var(--warn);font-weight:600;}
 .seg-why{display:block;margin-top:3px;font-weight:400;font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
+/* which station to which station, on its own line under the duration */
+.seg-route{
+  display:block;width:100%;margin-top:4px;padding-left:1px;
+  font-size:11.5px;line-height:1.6;color:var(--ink-faint);
+  font-family:'JetBrains Mono',monospace;letter-spacing:-.01em;
+}
 .seg.stale .seg-rail::before{
   background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);
 }
@@ -782,9 +788,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     tmp.innerHTML = String(html || "");
     return tmp.textContent.replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}️]+/u, "").trim();
   }
-  function buildSeg(mode, text){
+  function buildSeg(mode, text, route){
     const m = MODES.find(x => x.key === mode) || MODES[0];
-    return { kind:"connector", html:`<span class="icon">${m.icon}</span>${esc(text)}` };
+    const seg = { kind:"connector", html:`<span class="icon">${m.icon}</span>${esc(text)}` };
+    if (route) seg.route = route;   // e.g. 安國 ─3號線・4站─ 忠武路 ─4號線・2站─ 明洞
+    return seg;
   }
 
   // how to name a stop to Google: its place id if we have one, else coordinates,
@@ -820,7 +828,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (from && to){
         try {
           const r = await callAi({ action:"transit", from, to });
-          if (r && r.ok !== false && r.text){ units[i].seg = buildSeg(r.mode || "walk", r.text); done = true; }
+          if (r && r.ok !== false && r.text){ units[i].seg = buildSeg(r.mode || "walk", r.text, r.route); done = true; }
           else if (r && r.message) why = r.message;
         } catch (e){ why = e.message; }   // leave it flagged rather than show a wrong number
       }
@@ -1044,7 +1052,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
       u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
-      u.seg.html;
+      u.seg.html + (u.seg.route ? `<span class="seg-route">${esc(u.seg.route)}</span>` : "");
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg.html)}">
         <div class="seg-rail"></div>
@@ -1214,7 +1222,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const segText_ = box.querySelector('[data-seg="text"]');
     function writeSeg(){
       if (!segMode_ || !segText_) return;
-      u.seg = buildSeg(segMode_.value, segText_.value);
+      // the station list still applies if it is still a train or bus ride
+      const keepRoute = (segMode_.value === "metro" || segMode_.value === "bus") ? (u.seg && u.seg.route) : "";
+      u.seg = buildSeg(segMode_.value, segText_.value, keepRoute);
       day.items = fromUnits(units);
       const segEl = box.closest(".unit").querySelector(".seg");
       if (segEl){ segEl.dataset.mode = segMode_.value; segEl.querySelector(".seg-text").innerHTML = u.seg.html; }
