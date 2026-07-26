@@ -2251,13 +2251,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       }
       if (places.length){
         parts.push(`<div class="ideasec-title">📍 地點推介</div>`);
-        parts.push(places.map((pl,i) => `
+        parts.push(places.map((pl,i) => {
+          const targetDay = pl.dayId ? dayById(pl.dayId) : null;
+          return `
           <div class="ai-change" style="--lc:var(--bookmark)">
             <div class="ttl">${esc(pl.title||"")}${pl.kr ? ` <span class="kr">${esc(pl.kr)}</span>` : ""}</div>
             ${pl.desc ? `<div class="why">${esc(pl.desc)}</div>` : ""}
             ${pl.dayHint ? `<div class="idea-dayhint">🧭 ${esc(pl.dayHint)}</div>` : ""}
-            <div class="editor-tools"><button class="btn primary" data-addidea="${i}">＋ 加落呢個清單</button></div>
-          </div>`).join(""));
+            <div class="editor-tools">
+              <button class="btn" data-addidea="${i}">＋ 加落呢個清單</button>
+              ${targetDay ? `<button class="btn primary" data-adddayidea="${i}">＋ 加落 Day ${targetDay.id.replace('day','')} 行程</button>` : ""}
+            </div>
+          </div>`;
+        }).join(""));
       }
       if (!parts.length) parts.push(`<div class="ai-msg">冇特別建議。</div>`);
       out.innerHTML = parts.join("");
@@ -2269,6 +2275,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ].filter(Boolean).join("\n\n");
       if (savedAnswer) saveAiNote("board", `${board.name} 主題資訊`, savedAnswer);
 
+      // park the suggestion in this bookmark board, untouched by the itinerary
       out.querySelectorAll("[data-addidea]").forEach(btn => btn.addEventListener("click", async () => {
         const pl = places[+btn.dataset.addidea];
         btn.textContent = "加緊…"; btn.disabled = true;
@@ -2280,6 +2287,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         render();
         await saveNow(`AI 建議加咗「${plain(item.title) || "一個地點"}」落「${board.name}」`);
         btn.textContent = "已加";
+      }));
+
+      // follow the AI's own day suggestion: drop it straight into that day's
+      // itinerary instead of the bookmark board (appended to the end, same as
+      // any other cross-day move — drag it into the right slot afterward)
+      out.querySelectorAll("[data-adddayidea]").forEach(btn => btn.addEventListener("click", async () => {
+        const pl = places[+btn.dataset.adddayidea];
+        const day = dayById(pl.dayId);
+        if (!day) return;
+        btn.textContent = "加緊…"; btn.disabled = true;
+        const stop = Object.assign(blankStop(), {
+          title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
+        });
+        const units = toUnits(day.items);
+        units.push({ seg: null, stop });
+        day.items = fromUnits(units);
+        const landedAt = units.length - 1;
+        await enrichStop(stop);
+        day.items = fromUnits(units);
+        render();
+        await saveNow(`AI 建議加咗「${plain(stop.title) || "一個地點"}」落 ${day.title}`);
+        if (landedAt > 0) refreshTransit(day, [landedAt]);
+        btn.textContent = "已加落 " + day.title;
       }));
     });
   }
