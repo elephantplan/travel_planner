@@ -422,7 +422,9 @@ img{max-width:100%;}
   margin:0 0 4px 4px;overflow:hidden;box-shadow:var(--shadow-1);
   transition:border-color .15s, box-shadow .15s;
 }
-.stopmain{display:flex;gap:12px;padding:12px;cursor:pointer;align-items:flex-start;text-align:left;width:100%;border:0;background:transparent;}
+/* not a button — the name/desc text needs to stay long-press-selectable so it
+   can be copied; editing now happens through the explicit ✏️ button instead */
+.stopmain{display:flex;gap:12px;padding:12px 96px 12px 12px;align-items:flex-start;text-align:left;width:100%;-webkit-user-select:text;user-select:text;}
 .thumb{
   flex:0 0 auto;width:76px;height:76px;border-radius:var(--r-md);overflow:hidden;
   background:var(--surface-2);position:relative;
@@ -476,12 +478,16 @@ img{max-width:100%;}
   color:var(--info);background:var(--info-bg);padding:6px 11px;border-radius:999px;
   text-decoration:none;
 }
-.draghandle{
-  position:absolute;top:6px;right:6px;width:38px;height:38px;display:grid;place-items:center;
+.cardtools{position:absolute;top:6px;right:6px;display:flex;gap:6px;}
+.editbtn,.draghandle{
+  width:38px;height:38px;display:grid;place-items:center;
   border-radius:11px;background:var(--surface-2);border:1px solid var(--rule);
-  color:var(--ink-soft);font-size:15px;line-height:1;cursor:grab;
-  touch-action:none;user-select:none;-webkit-user-select:none;
+  color:var(--ink-soft);font-size:15px;line-height:1;
 }
+.editbtn{cursor:pointer;}
+.editbtn:active{background:var(--lc);color:#fff;border-color:transparent;}
+.stopcard.open .editbtn{background:var(--lc);color:#fff;border-color:transparent;}
+.draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
 .draghandle:active{cursor:grabbing;background:var(--lc);color:#fff;border-color:transparent;}
 .unit.lifted .draghandle{background:var(--lc);color:#fff;border-color:transparent;}
 .stopcard{position:relative;}
@@ -869,6 +875,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return seg;
   }
 
+  // Quick outbound links for a stop. Korean name searches better than the
+  // Cantonese title, so prefer it; " 서울" narrows a bare name like "황생가칼국수".
+  function searchTerm(s){
+    const kr = plain(s.kr), title = plain(s.title);
+    return kr || title;
+  }
+  function googleSearchUrl(s){
+    const q = searchTerm(s);
+    return q ? `https://www.google.com/search?q=${encodeURIComponent(q + " 서울")}` : null;
+  }
+  // The Maps "search action" URL (Google's documented format) lands on the
+  // place card with its star rating and review count visible immediately.
+  function googleReviewsUrl(s){
+    const q = searchTerm(s);
+    if (!q) return null;
+    const base = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + " 서울")}`;
+    return s.placeId ? `${base}&query_place_id=${encodeURIComponent(s.placeId)}` : base;
+  }
+
   // how to name a stop to Google: its place id if we have one, else coordinates,
   // else just its name
   function stopRef(s){
@@ -1210,13 +1235,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
       .join("");
 
+    // quick outbound links — only for stops that are a real, named place
+    // (logistics rows like "酒店出發" have no mapUrl and get none of this)
+    const links = [];
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
+    if (s.mapUrl){
+      const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
+      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">🔍 Google 搜尋</a>`);
+    }
+
     return `
       <div class="unit" data-i="${i}">
         ${segHtml}
         <div class="stop">
           <div class="stop-rail"><span class="node" data-type="${esc(s.type||'normal')}"></span></div>
           <div class="stopcard${open ? " open" : ""}">
-            <button class="stopmain" data-open="${key}">
+            <div class="stopmain">
               ${thumb}
               <div class="stopbody">
                 <div class="stoptime">${esc(s.time) || "未定時間"}</div>
@@ -1224,11 +1259,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                 ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
-            </button>
-            <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+            </div>
+            <div class="cardtools">
+              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
+              <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+            </div>
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
-            ${s.mapUrl ? `<div class="stopfoot"><a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a></div>` : ""}
+            ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
             ${open ? editorHtml(day, u, i, total) : ""}
           </div>
         </div>
