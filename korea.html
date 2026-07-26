@@ -270,7 +270,7 @@ img{max-width:100%;}
   text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);
 }
 .wtable td{padding:8px 9px;border-bottom:1px solid var(--rule-soft);}
-.wtable td.hi{color:var(--warn);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.wtable td.hi{color:var(--warn);font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
 .wtable td.lo{color:var(--info);font-weight:700;font-family:'JetBrains Mono',monospace;}
 
 .clist{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:9px;}
@@ -281,6 +281,26 @@ img{max-width:100%;}
 .legend{display:flex;flex-direction:column;gap:7px;margin-top:8px;}
 .legend-item{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);}
 .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+
+/* ---------- paying for transport ---------- */
+.panel.verdict{border-left:4px solid var(--ok);margin-bottom:12px;}
+.panel.verdict .k{color:var(--ok);}
+.panel.callout{border-left:4px solid var(--warn);margin-top:14px;}
+.panel.callout .k{color:var(--warn);}
+.fare-grid{display:flex;flex-direction:column;gap:9px;}
+.fare-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 14px;}
+.fare-card.pick{border-color:var(--ok);background:color-mix(in srgb, var(--ok) 6%, var(--surface));}
+.fare-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+.fare-name{font-size:14.5px;font-weight:700;}
+.fare-name .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
+.fare-price{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
+.fare-line{font-size:12.5px;line-height:1.55;margin-top:5px;}
+.fare-line.good{color:var(--ok);}
+.fare-line.bad{color:var(--danger);}
+.opt{margin-top:10px;padding-top:10px;border-top:1px dashed var(--rule);}
+.opt-name{font-size:13.5px;font-weight:700;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.opt-cost{font-weight:500;color:var(--warn);font-size:12.5px;}
+.opt-note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:2px;}
 
 .foodgrid{display:flex;flex-direction:column;gap:9px;margin-top:12px;}
 .foodcard{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 14px;}
@@ -979,6 +999,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
       <hr class="rule">
 
+      ${transitInfoHtml(d.transitInfo)}
+
       <section class="sec">
         <h2 class="sec-title">表妹美食清單</h2>
         <p class="sec-sub">標住 <span class="niecepick">💌 表妹清單</span> 嘅係表妹指定，附參考評分同訂位提示。</p>
@@ -993,6 +1015,49 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         祝 7 位旅途愉快 🍁
       </footer>
     `;
+  }
+
+  // ---------- how to pay for transport ----------
+  function transitInfoHtml(t){
+    if (!t) return "";
+    const cards = (t.cards || []).map(c => `
+      <div class="fare-card${c.pick ? " pick" : ""}">
+        <div class="fare-top">
+          <span class="fare-name">${esc(c.name)}${c.kr ? `<span class="kr">${esc(c.kr)}</span>` : ""}</span>
+          ${c.pick ? `<span class="badge note">建議</span>` : ""}
+        </div>
+        <div class="fare-price mono">${esc(c.price)}</div>
+        ${c.good ? `<div class="fare-line good">✓ ${esc(c.good)}</div>` : ""}
+        ${c.bad ? `<div class="fare-line bad">✕ ${esc(c.bad)}</div>` : ""}
+      </div>`).join("");
+
+    const fares = (t.fares || []).map(f =>
+      `<tr><td>${esc(f.what)}</td><td class="hi mono">${esc(f.cost)}</td><td>${esc(f.note || "")}</td></tr>`).join("");
+
+    const arrival = t.arrival ? `
+      <div class="panel callout">
+        <div class="k">⚠️ ${esc(t.arrival.title)}</div>
+        <div class="d">${esc(t.arrival.body)}</div>
+        ${(t.arrival.options || []).map(o => `
+          <div class="opt">
+            <div class="opt-name">${esc(o.name)} <span class="mono opt-cost">${esc(o.cost)}</span></div>
+            <div class="opt-note">${esc(o.note)}</div>
+          </div>`).join("")}
+      </div>` : "";
+
+    return `
+      <section class="sec">
+        <h2 class="sec-title">交通點畀錢</h2>
+        <p class="sec-sub">${esc(t.intro || "")}</p>
+        ${t.verdict ? `<div class="panel verdict"><div class="k">結論</div><div class="d">${esc(t.verdict)}</div></div>` : ""}
+        ${cards ? `<div class="fare-grid">${cards}</div>` : ""}
+        ${fares ? `<h3>大約幾多錢</h3>
+          <table class="wtable"><tr><th>項目</th><th>車費</th><th>備註</th></tr>${fares}</table>` : ""}
+        ${arrival}
+        ${(t.tips || []).length ? `<h3>實用貼士</h3><ul class="clist">${
+          t.tips.map(x => `<li><span class="ico">·</span><div>${esc(x)}</div></li>`).join("")}</ul>` : ""}
+        ${t.asOf ? `<p class="mapcap">${esc(t.asOf)}</p>` : ""}
+      </section>`;
   }
 
   function wireOverview(){
