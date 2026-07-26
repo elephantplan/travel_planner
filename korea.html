@@ -1848,8 +1848,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", async () => {
               const c = changes[+ab.dataset.apply];
               ab.textContent = "套用緊…"; ab.disabled = true;
-              await applyAiChange(c);      // inserts by time, then fills in photo and transit
-              ab.textContent = "已套用";
+              // inserts by time, then fills in photo and transit; "" means it worked
+              const why = await applyAiChange(c);
+              if (why){ ab.textContent = "⚠️ " + why; ab.disabled = false; }
+              else ab.textContent = "已套用";
             }));
           }
         } catch (e){ out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`; }
@@ -1964,9 +1966,36 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     } catch (_){}
   }
 
+  // The AI names a stop in its own words — "北村韓屋村" for a card actually
+  // titled "北村韓屋村（平緩觀景點）". Exact matching silently dropped those,
+  // so fall back to a looser comparison before giving up.
+  function loose(s){
+    return plain(s)
+      .replace(/[（(][^）)]*[）)]/g, "")   // drop parentheticals
+      .replace(/[\s・·、，,.。~〜\-–—]/g, "")
+      .toLowerCase();
+  }
+  function findStopIndex(units, title){
+    const want = plain(title), wantLoose = loose(title);
+    if (!want) return -1;
+    let ix = units.findIndex(u => u.stop && plain(u.stop.title) === want);
+    if (ix >= 0) return ix;
+    if (!wantLoose) return -1;
+    ix = units.findIndex(u => u.stop && loose(u.stop.title) === wantLoose);
+    if (ix >= 0) return ix;
+    // one name contains the other, e.g. "Mil Toast House" vs "Mil Toast House 益善洞"
+    const hits = units.map((u,i) => [u,i]).filter(([u]) => {
+      if (!u.stop) return false;
+      const got = loose(u.stop.title);
+      return got && (got.includes(wantLoose) || wantLoose.includes(got));
+    });
+    return hits.length === 1 ? hits[0][1] : -1;   // ambiguous is as bad as missing
+  }
+
+  // returns "" when applied, otherwise a reason to show on the button
   async function applyAiChange(c){
     const day = dayById(c.dayId);
-    if (!day) return;
+    if (!day) return `搵唔到 ${c.dayId || "嗰一日"}`;
     const units = toUnits(day.items);
 
     if (c.op === "add" && c.stop){
@@ -1983,24 +2012,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       await saveNow(c.reason || `加咗「${plain(stop.title) || "一個地點"}」`);
       // the AI's own travel note assumed a different neighbour; ask Google instead
       await refreshTransit(day, [at, at + 1]);
-      return;
+      return "";
     }
 
     if (c.op === "remove" && c.matchTitle){
-      const ix = units.findIndex(u => u.stop && plain(u.stop.title) === plain(c.matchTitle));
-      if (ix < 0) return;
+      const ix = findStopIndex(units, c.matchTitle);
+      if (ix < 0) return `搵唔到「${plain(c.matchTitle)}」`;
       units.splice(ix,1);
       day.items = fromUnits(units);
       render();
       await saveNow(c.reason || `刪走咗「${plain(c.matchTitle)}」`);
       await refreshTransit(day, [ix]);
-      return;
+      return "";
     }
 
     if (c.op === "edit" && c.matchTitle && c.stop){
-      const ix = units.findIndex(u => u.stop && plain(u.stop.title) === plain(c.matchTitle));
-      if (ix < 0) return;
+      const ix = findStopIndex(units, c.matchTitle);
+      if (ix < 0) return `搵唔到「${plain(c.matchTitle)}」`;
       const before = units[ix].stop.time;
+      const wasNamed = plain(units[ix].stop.title);
       Object.assign(units[ix].stop, c.stop, { kind:"stop" });
       delete units[ix].stop.transitBefore;
       let at = ix;
@@ -2011,13 +2041,22 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       }
       day.items = fromUnits(units);
       render();
+      // renamed to a different place, so its photo and coordinates are stale too
+      if (plain(units[at].stop.title) !== wasNamed){
+        units[at].stop.photoUrl = ""; units[at].stop.placeId = "";
+        await enrichStop(units[at].stop);
+        day.items = fromUnits(units);
+        render();
+      }
       await saveNow(c.reason || `改咗「${plain(c.matchTitle)}」`);
-      if (at !== ix) await refreshTransit(day, [ix, at, at + 1]);
-      return;
+      // a moved stop leaves two broken legs behind it and one in front
+      if (at !== ix) await refreshTransit(day, [Math.min(ix, at), Math.max(ix, at), Math.max(ix, at) + 1]);
+      return "";
     }
 
     day.items = fromUnits(units);
     render();
+    return "呢個建議睇唔明，冇改到行程";
   }
 
   // ---------- history ----------
