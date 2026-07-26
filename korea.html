@@ -584,13 +584,6 @@ img{max-width:100%;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
 
 /* ---------- asked / answered log ---------- */
-.tabs{display:flex;gap:6px;margin:0 0 12px;}
-.tab{
-  flex:1 1 auto;padding:9px 12px;border-radius:999px;cursor:pointer;
-  border:1px solid var(--rule);background:var(--surface);
-  font-size:13px;font-weight:600;color:var(--ink-soft);
-}
-.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
 .qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:7px;overflow:hidden;}
 .qa-head{
   display:block;width:100%;text-align:left;cursor:pointer;
@@ -918,6 +911,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="lbl">D${d.id.replace('day','')}</span>
           <span>${esc(DAY_SHORT[d.id]||'')}</span>
         </button>`).join("")}
+      <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
+        <span class="bullet"></span><span>問過啲咩</span>
+      </button>
     `;
     el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
@@ -933,6 +929,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     renderLines();
     const app = $("#app");
     if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
+    if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
   }
@@ -1711,34 +1708,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   $("#btn-ai").addEventListener("click", () => {
     openSheet(`
       <h3>AI 助手</h3>
-      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。問過嘅嘢會自動存底，全家人喺「問過啲咩」度睇返。</p>
-      <div class="tabs">
-        <button class="tab on" data-tab="ask">問嘢</button>
-        <button class="tab" data-tab="log">問過啲咩</button>
+      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。問過嘅嘢會自動存底，去頂部「問過啲咩」睇返。</p>
+      <div class="aibtns">
+        <button class="btn" data-ai="weather">☁️ 實時天氣</button>
+        <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
+        <button class="btn" data-ai="suggest">💡 執一執行程</button>
       </div>
-      <div data-pane="ask">
-        <div class="aibtns">
-          <button class="btn" data-ai="weather">☁️ 實時天氣</button>
-          <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
-          <button class="btn" data-ai="suggest">💡 執一執行程</button>
-        </div>
-        <div class="askrow">
-          <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
-          <button class="btn primary" data-ai="ask">問</button>
-        </div>
-        <div class="ai-out" id="ai-out"></div>
+      <div class="askrow">
+        <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
+        <button class="btn primary" data-ai="ask">問</button>
       </div>
-      <div data-pane="log" hidden><div id="ai-log"><p class="hint">載入緊…</p></div></div>
+      <div class="ai-out" id="ai-out"></div>
+      <button class="btn wide" id="go-notes" style="margin-top:12px;">🗒 睇返問過啲咩</button>
     `, layer => {
       const out = layer.querySelector("#ai-out");
       const q = layer.querySelector("#ai-q");
       const busy = () => { out.innerHTML = `<div class="ai-msg">諗緊…</div>`; };
 
-      layer.querySelectorAll("[data-tab]").forEach(t => t.addEventListener("click", async () => {
-        layer.querySelectorAll("[data-tab]").forEach(x => x.classList.toggle("on", x === t));
-        layer.querySelectorAll("[data-pane]").forEach(p => { p.hidden = p.dataset.pane !== t.dataset.tab; });
-        if (t.dataset.tab === "log") renderAiLog(layer.querySelector("#ai-log"));
-      }));
+      layer.querySelector("#go-notes").addEventListener("click", () => {
+        closeLayer();
+        state.view = "notes";
+        window.scrollTo({ top: 0, behavior: "auto" });
+        render();
+      });
 
       layer.querySelectorAll("[data-ai]").forEach(b => b.addEventListener("click", async () => {
         const act = b.dataset.ai;
@@ -1801,16 +1793,52 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
   });
 
+  // ==================================================================
+  // ASKED / ANSWERED — its own page, so a long history stays readable
+  // ==================================================================
   const AI_KIND = { weather:"☁️ 天氣", foliage:"🍁 紅葉", ask:"💬 問嘢", suggest:"💡 執行程" };
-  async function renderAiLog(box){
-    box.innerHTML = `<p class="hint">載入緊…</p>`;
+
+  function notesPageHtml(){
+    return `
+      <section class="sec" style="padding-top:24px;">
+        <h2 class="sec-title">問過啲咩</h2>
+        <p class="sec-sub">全家人問過 AI 嘅嘢都喺呢度，最新喺上面。撳一下睇返完整答案。</p>
+        <div class="chiprow" id="note-filter"></div>
+        <div id="note-list"><p class="hint">載入緊…</p></div>
+      </section>`;
+  }
+
+  async function wireNotes(){
+    const list = document.getElementById("note-list");
+    const filter = document.getElementById("note-filter");
+    let rows = [];
     try {
-      const rows = await fetchAiNotes();
-      if (!rows.length){
-        box.innerHTML = `<p class="hint">仲未問過嘢。喺「問嘢」度問一次，之後就會喺呢度見到。</p>`;
-        return;
-      }
-      box.innerHTML = rows.map((r,i) => `
+      rows = await fetchAiNotes();
+    } catch (e){
+      list.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`;
+      return;
+    }
+    if (!rows.length){
+      filter.innerHTML = "";
+      list.innerHTML = `<p class="hint">仲未問過嘢。撳右下角「✨ AI 助手」問一次，之後就會喺呢度見到。</p>`;
+      return;
+    }
+
+    const kinds = ["all", ...Object.keys(AI_KIND).filter(k => rows.some(r => r.kind === k))];
+    let active = "all";
+
+    function paint(){
+      filter.innerHTML = kinds.map(k => {
+        const n = k === "all" ? rows.length : rows.filter(r => r.kind === k).length;
+        return `<button class="badge${k === active ? " note" : ""}" data-kind="${k}" style="cursor:pointer">${
+          k === "all" ? "全部" : esc(AI_KIND[k])} ${n}</button>`;
+      }).join("");
+      filter.querySelectorAll("[data-kind]").forEach(b => b.addEventListener("click", () => {
+        active = b.dataset.kind; paint();
+      }));
+
+      const shown = active === "all" ? rows : rows.filter(r => r.kind === active);
+      list.innerHTML = shown.map((r,i) => `
         <div class="qa">
           <button class="qa-head" data-note="${i}">
             <span class="qa-meta">
@@ -1822,14 +1850,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           </button>
           <div class="qa-a" hidden>${esc(r.answer)}</div>
         </div>`).join("");
-      box.querySelectorAll("[data-note]").forEach(btn => btn.addEventListener("click", () => {
+      list.querySelectorAll("[data-note]").forEach(btn => btn.addEventListener("click", () => {
         const a = btn.nextElementSibling;
         a.hidden = !a.hidden;
         btn.classList.toggle("open", !a.hidden);
       }));
-    } catch (e){
-      box.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`;
     }
+    paint();
   }
 
   function applyAiChange(c){
