@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'transit'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'transit' | 'board-ideas'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -360,6 +360,39 @@ Deno.serve(async (req) => {
         return json({ ok: true, notes: parsed.notes ?? "", changes: parsed.changes });
       }
       return json({ ok: true, aiSummary: aiText, changes: [] });
+    }
+
+    if (action === "board-ideas") {
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const itinerary = body?.itinerary;
+      const theme = (body?.theme ?? "").toString().trim().slice(0, 60);
+      if (!theme) return json({ ok: false, message: "清單未改名，唔知幫你搵咩題材嘅資訊。" });
+      const existing: string[] = Array.isArray(body?.existingTitles) ? body.existingTitles.slice(0, 30) : [];
+
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶開咗一個叫「${theme}」嘅心水清單，想你根據呢個題材提供資訊。\n\n**先判斷呢個題材屬於邊一種：**\n\nA) **需要實時／官方資料先準嘅題材**（例如天氣、紅葉/銀杏情況、滙率、開放時間、車票預約）—— 你冇即時上網能力，唔好扮到自己知道最新情況。喺 resources 度俾2-4個「已知穩定」嘅官方或者常用網站，下面已經幫你列咗啲例子，揀啱題材嘅就用，唔啱就唔好亂作第啲URL：\n- 天氣：기상청 https://www.weather.go.kr 、Naver 날씨 https://weather.naver.com\n- 紅葉/銀杏：산림청（林務廳）https://www.forest.go.kr 、南怡島官網 https://namisum.com\n- 滙率：Naver 환율 https://finance.naver.com/marketindex/\n- 火車車票（南怡島/ITX）：Korail https://www.letskorail.com\n- 韓國旅遊官方：Visit Korea https://korean.visitkorea.or.kr 、Visit Seoul https://korean.visitseoul.net\n- 地圖／路線：Naver Map https://map.naver.com 、Kakao Map https://map.kakao.com\n只揀同「${theme}」相關嘅幾個，唔使全部列晒，唔啱題材就唔好列。\n\nB) **地點／推介類題材**（例如零食、手信、必去景點、咖啡店、美食）—— 喺 places 度俾3-6個具體建議（唔好同下面「已有」重複：${existing.length ? existing.join("、") : "（未有）"}）。每個建議都要對照返成個行程（見下面JSON），講低邊一日順路（例如靠近嗰日某個景點、唔使特登兜路），或者話明「冇特別順路日子，要特登去一次」。唔好作實體幾多蚊、幾多克呢啲你唔肯定嘅具體數字。\n\n兩種都可以同時出現（例如「必去景點」都可能想要多啲官方連結）。如果題材完全睇唔明係關於乜，intro 講返你嘅理解就得，resources／places 可以係空陣列。\n\n現有6日行程（參考用，唔使覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 16000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式：\n{"intro":"一句廣東話簡介你點理解呢個題材","resources":[{"name":"網站名","url":"https://...","note":"呢個網站可以查到咩"}],"places":[{"title":"地點名","kr":"韓文名或留空","desc":"簡短描述","dayHint":"例如 Day 3 南怡島程尾順路，或者留空即係冇特別邊日順路"}]}`;
+
+      let aiText: string;
+      try {
+        aiText = await callGemini(apiKey, prompt);
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
+      let parsed: any = null;
+      try {
+        const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch {
+        parsed = null;
+      }
+      if (parsed) {
+        return json({
+          ok: true,
+          intro: parsed.intro ?? "",
+          resources: Array.isArray(parsed.resources) ? parsed.resources.slice(0, 6) : [],
+          places: Array.isArray(parsed.places) ? parsed.places.slice(0, 8) : [],
+        });
+      }
+      return json({ ok: true, intro: aiText, resources: [], places: [] });
     }
 
     if (action === "place-photo") {

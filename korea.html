@@ -632,6 +632,20 @@ img{max-width:100%;}
 }
 .ai-change .ttl{font-size:14.5px;font-weight:700;margin:3px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
+.idea-dayhint{font-size:12px;color:var(--bookmark);margin-top:6px;font-weight:600;}
+
+.ideasec-title{
+  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+  margin:16px 2px 8px;
+}
+.ideasec-title:first-child{margin-top:0;}
+.reslink{
+  display:block;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:11px 13px;margin-bottom:7px;text-decoration:none;color:inherit;
+}
+.reslink .resname{font-size:13.5px;font-weight:700;color:var(--info);}
+.reslink .resnote{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
 
 /* ---------- asked / answered log ---------- */
 .qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:7px;overflow:hidden;}
@@ -1942,12 +1956,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ? `<input class="input boardname-input" id="boardname-input" value="${esc(board.name)}" placeholder="幫個清單改名…" maxlength="40">`
           : `<h2 class="boardname" id="boardname-display" title="撳一下改名">📌 ${esc(board.name || "未命名清單")}<span class="editpencil">✏️</span></h2>`}
         <p class="intro">呢度淨係放心水地點，未定實邊日去、邊個先去都得。撳景點卡入面嘅「搬去…」就可以擺入某一日，或者搬去另一個清單。</p>
+        <button class="btn wide" id="boardideas" style="margin-top:11px;">✨ 問 AI「${esc(board.name)}」有咩資訊</button>
       </section>
 
       <div class="line" id="boardline" style="--lc:var(--bookmark)">
         ${board.items.map((s,i) => boardItemHtml(board, s, i)).join("")}
       </div>
-      ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟。</p>` : ""}
+      ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟，或者問AI攞主意。</p>` : ""}
 
       <button class="addstop" id="addboarditem">＋ 加一個地點落「${esc(board.name)}」</button>
       <button class="btn danger wide" id="delboard" style="margin-top:8px;">🗑 刪除呢個清單</button>
@@ -2076,6 +2091,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       await saveNow(`刪除咗清單「${board.name}」`);
     });
 
+    const ideasBtn = $("#boardideas");
+    if (ideasBtn) ideasBtn.addEventListener("click", () => openBoardIdeasSheet(board));
+
     // 📷 placeholder on a photo-less item: fetch one picture, no picker
     document.querySelectorAll("[data-getboardphoto]").forEach(el => el.addEventListener("click", async ev => {
       ev.preventDefault();
@@ -2199,6 +2217,73 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
   }
 
+  // Ask the AI what's useful for whatever theme this board is named after.
+  // Live-data topics (weather, foliage) get pointers to real sites instead of
+  // a guess; place-type topics (snacks, souvenirs) get concrete suggestions
+  // tagged with which day of the actual route they're convenient near.
+  function openBoardIdeasSheet(board){
+    openSheet(`
+      <h3>✨ ${esc(board.name)}</h3>
+      <p class="sec-sub">問 AI 呢個主題有咩實用資訊或者地點推介。</p>
+      <div id="ideas-out"><div class="ai-msg">諗緊…</div></div>
+    `, async layer => {
+      const out = layer.querySelector("#ideas-out");
+      let r;
+      try {
+        const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
+        r = await callAi({ action:"board-ideas", theme: board.name, itinerary: state.snapshot, existingTitles });
+      } catch (e){
+        out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+        return;
+      }
+      if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
+
+      const resources = r.resources || [], places = r.places || [];
+      const parts = [];
+      if (r.intro) parts.push(`<div class="ai-msg">${esc(r.intro)}</div>`);
+      if (resources.length){
+        parts.push(`<div class="ideasec-title">🔗 官方／實用網站</div>`);
+        parts.push(resources.map(res => `
+          <a class="reslink" href="${esc(res.url)}" target="_blank" rel="noopener">
+            <div class="resname">${esc(res.name)}</div>
+            ${res.note ? `<div class="resnote">${esc(res.note)}</div>` : ""}
+          </a>`).join(""));
+      }
+      if (places.length){
+        parts.push(`<div class="ideasec-title">📍 地點推介</div>`);
+        parts.push(places.map((pl,i) => `
+          <div class="ai-change" style="--lc:var(--bookmark)">
+            <div class="ttl">${esc(pl.title||"")}${pl.kr ? ` <span class="kr">${esc(pl.kr)}</span>` : ""}</div>
+            ${pl.desc ? `<div class="why">${esc(pl.desc)}</div>` : ""}
+            ${pl.dayHint ? `<div class="idea-dayhint">🧭 ${esc(pl.dayHint)}</div>` : ""}
+            <div class="editor-tools"><button class="btn primary" data-addidea="${i}">＋ 加落呢個清單</button></div>
+          </div>`).join(""));
+      }
+      if (!parts.length) parts.push(`<div class="ai-msg">冇特別建議。</div>`);
+      out.innerHTML = parts.join("");
+
+      const savedAnswer = [
+        r.intro,
+        resources.length ? resources.map(x => `${x.name}：${x.url}`).join("\n") : "",
+        places.length ? places.map(x => `${x.title}${x.dayHint ? `（${x.dayHint}）` : ""}：${x.desc||""}`).join("\n") : "",
+      ].filter(Boolean).join("\n\n");
+      if (savedAnswer) saveAiNote("board", `${board.name} 主題資訊`, savedAnswer);
+
+      out.querySelectorAll("[data-addidea]").forEach(btn => btn.addEventListener("click", async () => {
+        const pl = places[+btn.dataset.addidea];
+        btn.textContent = "加緊…"; btn.disabled = true;
+        const item = Object.assign(blankBoardItem(), {
+          title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
+        });
+        board.items.push(item);
+        await enrichStop(item);
+        render();
+        await saveNow(`AI 建議加咗「${plain(item.title) || "一個地點"}」落「${board.name}」`);
+        btn.textContent = "已加";
+      }));
+    });
+  }
+
   // ==================================================================
   // LAYERS (sheet / modal)
   // ==================================================================
@@ -2316,7 +2401,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // ASKED / ANSWERED — its own page, so a long history stays readable
   // ==================================================================
-  const AI_KIND = { weather:"☁️ 天氣", foliage:"🍁 紅葉", ask:"💬 問嘢", suggest:"💡 執行程" };
+  const AI_KIND = { weather:"☁️ 天氣", foliage:"🍁 紅葉", ask:"💬 問嘢", suggest:"💡 執行程", board:"📌 清單主題" };
 
   function notesPageHtml(){
     return `
