@@ -326,6 +326,8 @@ img{max-width:100%;}
   color:#fff;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
   border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);
 }
+/* an anchor such as the hotel: a plain dot, never a stop number */
+.mapnode.plain{width:13px;height:13px;border-width:2px;}
 
 /* ---------- the line: stops + segments ---------- */
 .line{margin-top:18px;}
@@ -665,7 +667,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     snapshot: null,
     view: "overview",              // "overview" | dayId
     open: new Set(),               // "dayId:unitIndex" currently expanded
-    mapsOpen: new Set(),           // dayIds whose map is expanded
+    mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
     editedBy: localStorage.getItem("seoul_trip_name") || "",
     readOnlyLabel: null            // set when previewing an old version
   };
@@ -1009,7 +1011,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (!day) return `<p class="loading">搵唔到呢一日。</p>`;
     const lc = DAY_COLORS[day.id] || "var(--d1)";
     const units = toUnits(day.items);
-    const mapOpen = state.mapsOpen.has(day.id);
+    const mapOpen = !state.mapsShut.has(day.id);
 
     return `
       <section class="dayhead" style="--lc:${lc}">
@@ -1156,10 +1158,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const toggle = $("#maptoggle");
     if (toggle) toggle.addEventListener("click", () => {
-      if (state.mapsOpen.has(day.id)) state.mapsOpen.delete(day.id); else state.mapsOpen.add(day.id);
+      if (state.mapsShut.has(day.id)) state.mapsShut.delete(day.id); else state.mapsShut.add(day.id);
       render();
     });
-    if (state.mapsOpen.has(day.id)) initDayMap(day);
+    if (!state.mapsShut.has(day.id)) initDayMap(day);
 
     document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => {
       const key = btn.dataset.open;
@@ -1486,7 +1488,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // stop's own number ("1 Artist Bakery"), so use that rather than inventing one
   function normPoints(raw){
     if (!Array.isArray(raw)) return [];
-    return raw.map(p => {
+    const pts = raw.map(p => {
       const lat = Array.isArray(p) ? p[0] : p?.lat;
       const lng = Array.isArray(p) ? p[1] : p?.lng;
       const name = String((Array.isArray(p) ? p[2] : p?.name) || "");
@@ -1497,11 +1499,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         name: m ? m[2] : name
       };
     }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    // The data numbers its own stops ("1 Artist Bakery"); anything without a
+    // number is an anchor like the hotel and gets a plain dot, not a number,
+    // so it can't collide with a real stop. If nothing is numbered, number them all.
+    if (!pts.some(p => p.label)) pts.forEach((p,i) => { p.label = String(i+1); });
+    return pts;
   }
   function mapIcon(color, label){
+    if (!label) return L.divIcon({
+      className:"", iconSize:[13,13], iconAnchor:[6.5,6.5],
+      html:`<div class="mapnode plain" style="background:${color}"></div>`
+    });
     return L.divIcon({
       className:"", iconSize:[22,22], iconAnchor:[11,11],
-      html:`<div class="mapnode" style="background:${color}">${label}</div>`
+      html:`<div class="mapnode" style="background:${color}">${esc(label)}</div>`
     });
   }
   function initDayMap(day){
@@ -1516,7 +1527,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const color = DAY_HEX[day.id] || "#8A94A6";
       const latlngs = pts.map(p => [p.lat, p.lng]);
       L.polyline(latlngs, { color, weight:4, opacity:.85 }).addTo(map);
-      pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label || (i+1)) }).addTo(map).bindPopup(p.name || ""));
+      pts.forEach(p => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label) }).addTo(map).bindPopup(p.name || ""));
       const fit = () => { map.invalidateSize(); map.fitBounds(L.latLngBounds(latlngs).pad(0.22)); };
       fit();
       requestAnimationFrame(fit);   // the box was just inserted; re-fit once it has its real size
@@ -1542,7 +1553,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const latlngs = pts.map(p => [p.lat,p.lng]);
       const g = L.layerGroup();
       L.polyline(latlngs, { color, weight:4, opacity:.8 }).addTo(g);
-      pts.forEach((p,i) => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label || (i+1)) }).bindPopup(p.name||"").addTo(g));
+      pts.forEach(p => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label) }).bindPopup(p.name||"").addTo(g));
       g.addTo(map);
       layers[day.id] = g;
       all.push(...latlngs);
