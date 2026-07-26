@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'transit' | 'board-ideas'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'transit' | 'board-ideas'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -114,7 +114,7 @@ async function searchPlacePhotos(query: string, apiKey: string): Promise<string[
   return fetchPhotosForPlaceId(placeId, apiKey);
 }
 
-async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: string; name: string; address: string; lat?: number; lng?: number }[]> {
+async function searchPlaces(query: string, apiKey: string) {
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + " 서울")}&key=${apiKey}`;
   const res = await fetch(url);
   const data = await res.json();
@@ -124,7 +124,36 @@ async function searchPlaces(query: string, apiKey: string): Promise<{ placeId: s
     address: r.formatted_address || r.vicinity || "",
     lat: r.geometry?.location?.lat,
     lng: r.geometry?.location?.lng,
+    // text search already carries these, so a rating costs no extra request
+    rating: typeof r.rating === "number" ? r.rating : null,
+    ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
   }));
+}
+
+// Rating for a place we already identified. Place Details is the accurate
+// source once a place_id is known; fall back to a text search by name.
+async function fetchRating(placeId: string, query: string, apiKey: string) {
+  if (placeId) {
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
+      `&fields=rating,user_ratings_total,name&language=zh-TW&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data?.status === "OK") {
+      return {
+        rating: typeof data.result?.rating === "number" ? data.result.rating : null,
+        ratingCount: typeof data.result?.user_ratings_total === "number" ? data.result.user_ratings_total : null,
+        placeId,
+      };
+    }
+    if (data?.status !== "NOT_FOUND" && data?.status !== "ZERO_RESULTS") {
+      return { problem: problemHint(data?.status || "UNKNOWN", data?.error_message) };
+    }
+  }
+  if (!query) return { rating: null, ratingCount: null, placeId: "" };
+  const hits = await searchPlaces(query, apiKey);
+  const top = hits[0];
+  if (!top) return { rating: null, ratingCount: null, placeId: "" };
+  return { rating: top.rating, ratingCount: top.ratingCount, placeId: top.placeId };
 }
 
 // One endpoint of a journey: a Google place id when we have one, otherwise
@@ -435,6 +464,21 @@ Deno.serve(async (req) => {
         return json({ ok: true, mode: (r as any).mode, text: (r as any).text, route: (r as any).route || "" });
       } catch (e) {
         return json({ ok: false, message: "計交通失敗：" + String(e) });
+      }
+    }
+
+    if (action === "place-rating") {
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+      const placeId = (body?.placeId ?? "").toString().trim();
+      const query = (body?.query ?? "").toString().trim();
+      if (!placeId && !query) return json({ ok: false, message: "冇地點資料，攞唔到評分。" });
+      try {
+        const r = await fetchRating(placeId, query, placesKey);
+        if ((r as any).problem) return json({ ok: false, message: (r as any).problem });
+        return json({ ok: true, ...r });
+      } catch (e) {
+        return json({ ok: false, message: "攞評分失敗：" + String(e) });
       }
     }
 

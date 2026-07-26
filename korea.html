@@ -785,7 +785,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
     editedBy: localStorage.getItem("seoul_trip_name") || "",
     readOnlyLabel: null,           // set when previewing an old version
-    renamingBoard: null            // boardId currently showing its rename input
+    renamingBoard: null,           // boardId currently showing its rename input
+    boardIdeas: null               // last AI answer shown inline on a board page
   };
 
   // never interrupt an edit to ask who is typing; a name can be set in 歷史 if wanted
@@ -1273,6 +1274,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ? `↻ 重算全日交通（有 ${staleCount(units)} 段待確認）`
           : `↻ 重算全日交通`
       }</button>` : ""}
+      ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
 
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
@@ -1285,6 +1287,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // how many legs are flagged as needing a fresh answer from Google
   function staleCount(units){
     return units.filter((u,i) => i > 0 && u.stop && u.seg && u.seg.stale).length;
+  }
+  // real places still missing a Google rating (logistics rows never count)
+  function ratableCount(stops){
+    return stops.filter(s => !Number.isFinite(s.rating) && !s.noRating && (s.placeId || s.mapUrl) && plain(s.title)).length;
   }
 
   function unitHtml(day, u, i, total){
@@ -1316,7 +1322,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const chips = []
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
-      .concat((s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
+      .concat(ratingChip(s) ? [ratingChip(s)] : [])
+      // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
+      // Google's own number is on the card so the two can't contradict
+      .concat((s.eatMeta||[]).filter(c => !(Number.isFinite(s.rating) && /^⭐/.test(c.text||""))).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
       .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
       .join("");
 
@@ -1480,6 +1489,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const todo = stale.length ? stale : units.map((u,i) => i).filter(i => i > 0 && units[i].stop);
       state.transitProblem = "";
       await refreshTransit(day, todo);
+    });
+
+    const getratings = $("#getratings");
+    if (getratings) getratings.addEventListener("click", async () => {
+      getratings.disabled = true;
+      getratings.textContent = "問緊 Google…";
+      const stops = toUnits(day.items).map(u => u.stop).filter(Boolean);
+      const { done, why } = await fetchRatings(stops, day.title);
+      const btn = $("#getratings");
+      if (btn && !done) btn.textContent = why ? "攞唔到：" + why : "呢一日冇再攞到新評分";
     });
 
     wireEditor(day);
@@ -1806,12 +1825,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       handle.addEventListener("pointermove", e => {
         if (!drag) return;
         if (!drag.active){
-          // still deciding: a clear vertical move means the user meant to scroll
-          if (Math.abs((e.clientY + window.scrollY) - drag.startPageY) > 9){
+          // Moving before the hold timer fires used to CANCEL the drag, on the
+          // theory the user meant to scroll. But the handle has
+          // touch-action:none and captures the pointer, so it can never scroll
+          // the page — pressing and moving straight away (the natural drag
+          // gesture) just silently did nothing. Treat that move as the drag
+          // starting instead; the timer stays for press-and-hold-still.
+          if (Math.abs((e.clientY + window.scrollY) - drag.startPageY) > 6){
             clearTimeout(drag.timer);
-            drag = null;
+            drag.active = true;
+            drag.el.classList.add("lifted");
+            if (!raf) raf = requestAnimationFrame(tick);
+          } else {
+            return;
           }
-          return;
         }
         e.preventDefault();
         drag.clientY = e.clientY;
@@ -1957,6 +1984,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           : `<h2 class="boardname" id="boardname-display" title="撳一下改名">📌 ${esc(board.name || "未命名清單")}<span class="editpencil">✏️</span></h2>`}
         <p class="intro">呢度淨係放心水地點，未定實邊日去、邊個先去都得。撳景點卡入面嘅「搬去…」就可以擺入某一日，或者搬去另一個清單。</p>
         <button class="btn wide" id="boardideas" style="margin-top:11px;">✨ 問 AI「${esc(board.name)}」有咩資訊</button>
+        <div id="boardideas-out"></div>
       </section>
 
       <div class="line" id="boardline" style="--lc:var(--bookmark)">
@@ -1965,6 +1993,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟，或者問AI攞主意。</p>` : ""}
 
       <button class="addstop" id="addboarditem">＋ 加一個地點落「${esc(board.name)}」</button>
+      ${ratableCount(board.items) ? `<button class="recalc" id="getboardratings" style="margin-top:8px;">★ 攞 Google 評分（${ratableCount(board.items)} 個地點未有）</button>` : ""}
       <button class="btn danger wide" id="delboard" style="margin-top:8px;">🗑 刪除呢個清單</button>
 
       <footer>
@@ -1984,7 +2013,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : fetchable
         ? `<div class="thumb ghost" data-getboardphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
         : "";
-    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("");
+    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s);
     const links = [];
     if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
     if (s.mapUrl){
@@ -2092,7 +2121,41 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
 
     const ideasBtn = $("#boardideas");
-    if (ideasBtn) ideasBtn.addEventListener("click", () => openBoardIdeasSheet(board));
+    if (ideasBtn) ideasBtn.addEventListener("click", () => runBoardIdeas(board));
+
+    // re-show the last answer for THIS board after any re-render
+    const ideasOut = $("#boardideas-out");
+    if (ideasOut && state.boardIdeas && state.boardIdeas.boardId === board.id){
+      ideasOut.innerHTML = state.boardIdeas.html +
+        (state.boardIdeas.status ? `<div class="ai-msg">${esc(state.boardIdeas.status)}</div>` : "");
+      ideasOut.querySelectorAll("[data-quickmove]").forEach(btn => btn.addEventListener("click", async () => {
+        const idx = +btn.dataset.quickmove;
+        const day = dayById(btn.dataset.quickmoveday);
+        const item = board.items[idx];
+        if (!day || !item) return;
+        btn.textContent = "搬緊…"; btn.disabled = true;
+        board.items.splice(idx, 1);
+        item.kind = "stop";
+        const units = toUnits(day.items);
+        units.push({ seg: null, stop: item });
+        day.items = fromUnits(units);
+        const landedAt = units.length - 1;
+        state.boardIdeas = null;                 // indices shifted; the panel is stale now
+        state.view = day.id;
+        render();
+        await saveNow(`「${plain(item.title) || "一個地點"}」搬咗去 ${day.title}`);
+        if (landedAt > 0) refreshTransit(day, [landedAt]);
+      }));
+    }
+
+    const rateBtn = $("#getboardratings");
+    if (rateBtn) rateBtn.addEventListener("click", async () => {
+      rateBtn.disabled = true;
+      rateBtn.textContent = "問緊 Google…";
+      const { done, why } = await fetchRatings(board.items, board.name);
+      const b2 = $("#getboardratings");
+      if (b2 && !done) b2.textContent = why ? "攞唔到：" + why : "呢個清單冇再攞到新評分";
+    });
 
     // 📷 placeholder on a photo-less item: fetch one picture, no picker
     document.querySelectorAll("[data-getboardphoto]").forEach(el => el.addEventListener("click", async ev => {
@@ -2221,99 +2284,79 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // Live-data topics (weather, foliage) get pointers to real sites instead of
   // a guess; place-type topics (snacks, souvenirs) get concrete suggestions
   // tagged with which day of the actual route they're convenient near.
-  // Asked from inside a board, so the answer belongs on that board: any place
-  // suggestions are saved straight into it (no per-item "add" tap needed —
-  // that extra step was exactly what left the list looking empty last time).
-  // Anything not a place (official websites for a live-data theme like
-  // weather) can't be "added", so those stay as plain links to open.
-  function openBoardIdeasSheet(board){
-    openSheet(`
-      <h3>✨ ${esc(board.name)}</h3>
-      <p class="sec-sub">問 AI 呢個主題有咩實用資訊或者地點推介。搵到嘅地點會自動加落呢個清單，唔啱心水可以之後喺度刪走或者改。</p>
-      <div id="ideas-out"><div class="ai-msg">諗緊…</div></div>
-    `, async layer => {
-      const out = layer.querySelector("#ideas-out");
-      let r;
-      try {
-        const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
-        r = await callAi({ action:"board-ideas", theme: board.name, itinerary: state.snapshot, existingTitles });
-      } catch (e){
-        out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
-        return;
-      }
-      if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
+  // Asked from inside a board, so it answers inside that board — no overlay.
+  // An overlay for this was pure ceremony: the results belong to the page you
+  // are already looking at, and covering that page hid the very list the
+  // suggestions were being added to. Progress and results render in place,
+  // and place suggestions save themselves into the board as they resolve.
+  // Non-places (official sites for a live-data theme) stay as plain links.
+  async function runBoardIdeas(board){
+    const out = $("#boardideas-out");
+    const btn = $("#boardideas");
+    if (!out) return;
+    if (btn){ btn.disabled = true; btn.textContent = "✨ 問緊 AI…"; }
+    out.innerHTML = `<div class="ai-msg">諗緊「${esc(board.name)}」有咩資訊…</div>`;
 
-      const resources = r.resources || [], places = r.places || [];
-      const introHtml = r.intro ? `<div class="ai-msg">${esc(r.intro)}</div>` : "";
-      const resourcesHtml = resources.length ? `<div class="ideasec-title">🔗 官方／實用網站</div>` +
-        resources.map(res => `
-          <a class="reslink" href="${esc(res.url)}" target="_blank" rel="noopener">
-            <div class="resname">${esc(res.name)}</div>
-            ${res.note ? `<div class="resnote">${esc(res.note)}</div>` : ""}
-          </a>`).join("") : "";
+    let r;
+    try {
+      const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
+      r = await callAi({ action:"board-ideas", theme: board.name, itinerary: state.snapshot, existingTitles });
+    } catch (e){
+      out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+      if (btn){ btn.disabled = false; btn.textContent = `✨ 問 AI「${board.name}」有咩資訊`; }
+      return;
+    }
+    if (r.ok === false){
+      out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`;
+      if (btn){ btn.disabled = false; btn.textContent = `✨ 問 AI「${board.name}」有咩資訊`; }
+      return;
+    }
 
-      out.innerHTML = introHtml + resourcesHtml +
-        (places.length ? `<div class="ai-msg">搵緊相、加緊落「${esc(board.name)}」…</div>` : "");
+    const resources = r.resources || [], places = r.places || [];
+    const introHtml = r.intro ? `<div class="ai-msg">${esc(r.intro)}</div>` : "";
+    const resourcesHtml = resources.length ? `<div class="ideasec-title">🔗 官方／實用網站</div>` +
+      resources.map(res => `
+        <a class="reslink" href="${esc(res.url)}" target="_blank" rel="noopener">
+          <div class="resname">${esc(res.name)}</div>
+          ${res.note ? `<div class="resnote">${esc(res.note)}</div>` : ""}
+        </a>`).join("") : "";
 
-      // auto-add every place suggestion — enrichStop resolves a real photo
-      // and map link for each, same as any manually-typed board item
-      const added = [];
-      for (const pl of places){
-        const item = Object.assign(blankBoardItem(), {
-          title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
-        });
-        board.items.push(item);
-        await enrichStop(item);
-        added.push({ item, dayId: pl.dayId });
-      }
-      if (added.length){
-        render();                                                   // the board page underneath already shows the new cards
-        await saveNow(`AI 建議加咗 ${added.length} 個地點落「${board.name}」`);
-      }
+    // render() below rebuilds the page, so remember what to re-show afterwards
+    state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml, status: places.length ? `搵緊相、加緊落「${board.name}」…` : "" };
+    out.innerHTML = state.boardIdeas.html + (state.boardIdeas.status ? `<div class="ai-msg">${esc(state.boardIdeas.status)}</div>` : "");
 
-      const addedHtml = added.length ? `<div class="ideasec-title">📍 已經加落「${esc(board.name)}」（${added.length}）</div>` +
-        added.map(({item, dayId}, i) => {
-          const targetDay = dayId ? dayById(dayId) : null;
-          return `
-          <div class="ai-change" style="--lc:var(--bookmark)">
-            <div class="ttl">${esc(plain(item.title))}${item.kr ? ` <span class="kr">${esc(item.kr)}</span>` : ""}</div>
-            ${item.desc ? `<div class="why">${esc(item.desc)}</div>` : ""}
-            ${item.tip ? `<div class="idea-dayhint">🧭 ${esc(item.tip)}</div>` : ""}
-            ${targetDay ? `<div class="editor-tools"><button class="btn" data-quickmove="${i}">→ 搬去 ${targetDay.title}</button></div>` : ""}
-          </div>`;
-        }).join("") : "";
+    // add each suggestion as it resolves, so the list visibly fills up
+    const added = [];
+    for (const pl of places){
+      const item = Object.assign(blankBoardItem(), {
+        title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
+      });
+      board.items.push(item);
+      await enrichStop(item);
+      added.push({ item, dayId: pl.dayId });
+      state.boardIdeas.status = `已經加咗 ${added.length}／${places.length} 個…`;
+      render();
+    }
+    if (added.length) await saveNow(`AI 建議加咗 ${added.length} 個地點落「${board.name}」`);
 
-      const finalHtml = introHtml + resourcesHtml + addedHtml;
-      out.innerHTML = finalHtml || `<div class="ai-msg">冇特別建議。</div>`;
+    const addedHtml = added.length
+      ? `<div class="ideasec-title">📍 已經加落「${esc(board.name)}」（${added.length}）—— 見下面</div>` +
+        added.filter(({dayId}) => dayId && dayById(dayId)).map(({item, dayId}) => {
+          const targetDay = dayById(dayId);
+          const idx = board.items.indexOf(item);
+          return `<button class="btn" data-quickmove="${idx}" data-quickmoveday="${dayId}" style="margin:0 6px 6px 0;">→ 「${esc(plain(item.title))}」搬去 ${esc(targetDay.title)}</button>`;
+        }).join("")
+      : "";
 
-      const savedAnswer = [
-        r.intro,
-        resources.length ? resources.map(x => `${x.name}：${x.url}`).join("\n") : "",
-        added.length ? added.map(({item}) => `${plain(item.title)}${item.tip ? `（${item.tip}）` : ""}：${item.desc||""}`).join("\n") : "",
-      ].filter(Boolean).join("\n\n");
-      if (savedAnswer) saveAiNote("board", `${board.name} 主題資訊`, savedAnswer);
+    state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml + addedHtml, status: "" };
+    render();
 
-      // one-tap follow-through on the AI's own day suggestion: move the item
-      // (already sitting in the board) straight into that day's itinerary
-      out.querySelectorAll("[data-quickmove]").forEach(btn => btn.addEventListener("click", async () => {
-        const { item, dayId } = added[+btn.dataset.quickmove];
-        const day = dayById(dayId);
-        if (!day) return;
-        const idx = board.items.indexOf(item);
-        if (idx === -1) return;
-        btn.textContent = "搬緊…"; btn.disabled = true;
-        board.items.splice(idx, 1);
-        item.kind = "stop";
-        const units = toUnits(day.items);
-        units.push({ seg: null, stop: item });
-        day.items = fromUnits(units);
-        const landedAt = units.length - 1;
-        render();
-        await saveNow(`「${plain(item.title) || "一個地點"}」搬咗去 ${day.title}`);
-        if (landedAt > 0) refreshTransit(day, [landedAt]);
-        btn.textContent = "已搬去 " + day.title;
-      }));
-    });
+    const savedAnswer = [
+      r.intro,
+      resources.length ? resources.map(x => `${x.name}：${x.url}`).join("\n") : "",
+      added.length ? added.map(({item}) => `${plain(item.title)}${item.tip ? `（${item.tip}）` : ""}：${item.desc||""}`).join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+    if (savedAnswer) saveAiNote("board", `${board.name} 主題資訊`, savedAnswer);
   }
 
   // ==================================================================
@@ -2527,6 +2570,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         if (Number.isFinite(p.lat)) s.lat = p.lat;
         if (Number.isFinite(p.lng)) s.lng = p.lng;
         if (!s.mapUrl) s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+        // text search carries the rating already — no extra request for it
+        if (Number.isFinite(p.rating)) s.rating = p.rating;
+        if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
       }
     } catch (_){}
     if (s.photoUrl) return;
@@ -2535,6 +2581,37 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                                         : { action:"place-photo", query:name });
       if (pr && pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
     } catch (_){}
+  }
+
+  // "⭐ 4.3・1,234 則評價" — Google's own numbers, not something we wrote
+  function ratingChip(s){
+    if (!Number.isFinite(s.rating)) return "";
+    const count = Number.isFinite(s.ratingCount) ? `・${s.ratingCount.toLocaleString("en-US")} 則評價` : "";
+    return `<span class="meta-chip rating">⭐ ${s.rating.toFixed(1)}${count}</span>`;
+  }
+  // fills in ratings for everything on screen that Google can identify
+  async function fetchRatings(items, label){
+    const todo = items.filter(s => !Number.isFinite(s.rating) && !s.noRating && (s.placeId || s.mapUrl) && plain(s.title));
+    if (!todo.length) return { done:0, why:"" };
+    let done = 0, why = "";
+    for (const s of todo){
+      try {
+        const r = await callAi(s.placeId ? { action:"place-rating", placeId:s.placeId }
+                                         : { action:"place-rating", query:(plain(s.kr) || plain(s.title)) });
+        if (r && r.ok !== false && Number.isFinite(r.rating)){
+          s.rating = r.rating;
+          if (Number.isFinite(r.ratingCount)) s.ratingCount = r.ratingCount;
+          if (!s.placeId && r.placeId) s.placeId = r.placeId;
+          done++;
+        } else {
+          s.noRating = true;                       // Google has no rating for it; stop asking
+          if (r && r.message) why = r.message;
+        }
+      } catch (e){ why = e.message; }
+      render();
+    }
+    if (done) await saveNow(`攞咗 ${done} 個地點嘅 Google 評分（${label}）`);
+    return { done, why };
   }
 
   // The AI names a stop in its own words — "北村韓屋村" for a card actually
