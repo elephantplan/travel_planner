@@ -48,6 +48,8 @@
   --niece-bg:#FCEBF5;
   --info:#1D7FC4;
   --info-bg:#E7F2FB;
+  --bookmark:#6B6FD1;
+  --bookmark-bg:#EDECFB;
 
   --r-sm:8px;
   --r-md:12px;
@@ -81,6 +83,7 @@
     --danger:#E8695C; --danger-bg:#2E1917;
     --niece:#EC81C0; --niece-bg:#2C1727;
     --info:#54AEEA; --info-bg:#122534;
+    --bookmark:#9B9EFA; --bookmark-bg:#211F3C;
   }
 }
 :root[data-theme="dark"]{
@@ -105,6 +108,7 @@
   --danger:#E8695C; --danger-bg:#2E1917;
   --niece:#EC81C0; --niece-bg:#2C1727;
   --info:#54AEEA; --info-bg:#122534;
+  --bookmark:#9B9EFA; --bookmark-bg:#211F3C;
 }
 
 *{box-sizing:border-box;}
@@ -172,6 +176,7 @@ img{max-width:100%;}
   background:color-mix(in srgb, var(--lc,var(--ink)) 11%, var(--surface));
 }
 .linebtn[aria-selected="true"] .bullet{box-shadow:0 0 0 3px color-mix(in srgb, var(--lc) 26%, transparent);}
+.linebtn.addbtn{border-style:dashed;color:var(--bookmark);}
 
 /* ---------- hero / route board ---------- */
 .hero{padding:26px 0 6px;}
@@ -324,6 +329,26 @@ img{max-width:100%;}
 }
 .dayhead .intro{font-size:13.5px;color:var(--ink-soft);line-height:1.65;margin:0;}
 .dayhead .chiprow{margin-top:11px;}
+
+/* bookmark board title — tap to rename, no separate "mode" */
+.boardname{
+  font-family:'Noto Sans TC',sans-serif;font-weight:900;
+  font-size:clamp(24px,6.6vw,32px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
+  cursor:pointer;display:inline-flex;align-items:baseline;gap:8px;
+}
+.boardname .editpencil{font-size:14px;opacity:.45;}
+.boardname-input{
+  display:block;width:100%;font-family:'Noto Sans TC',sans-serif;font-weight:900;
+  font-size:clamp(22px,6vw,30px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
+  padding:4px 2px 6px;border:0;border-bottom:2px solid var(--lc,var(--bookmark));
+  background:transparent;color:var(--ink);
+}
+.boardname-input:focus{outline:none;}
+.picker-label{
+  font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-faint);margin:16px 2px 7px;
+}
+.picker-label:first-child{margin-top:0;}
 
 .maptoggle{
   display:flex;align-items:center;gap:7px;margin-top:14px;
@@ -730,7 +755,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     open: new Set(),               // "dayId:unitIndex" currently expanded
     mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
     editedBy: localStorage.getItem("seoul_trip_name") || "",
-    readOnlyLabel: null            // set when previewing an old version
+    readOnlyLabel: null,           // set when previewing an old version
+    renamingBoard: null            // boardId currently showing its rename input
   };
 
   // never interrupt an edit to ask who is typing; a name can be set in 歷史 if wanted
@@ -847,6 +873,27 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
              niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"",
              accessBadges:[], tip:"", photoUrl:"", placeId:"", lat:null, lng:null };
   }
+
+  // ==================================================================
+  // BOOKMARK BOARDS — a place to park "maybe" spots that aren't slotted
+  // into a day yet. Same stop shape as an itinerary stop (so nothing is
+  // lost moving a place either direction), just no time/connectors.
+  // ==================================================================
+  function blankBoardItem(){
+    return { title:"", kr:"", desc:"", mapUrl:"", photoUrl:"", placeId:"", lat:null, lng:null, tip:"", niecepick:[] };
+  }
+  function newBoard(name){
+    const id = "board_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    return { id, name: name || "新清單", items: [] };
+  }
+  function boardById(id){
+    return (state.snapshot.boards || []).find(b => b.id === id);
+  }
+  // older snapshots (saved before this feature existed) simply have no boards array
+  function normalizeSnapshot(snap){
+    if (snap && !Array.isArray(snap.boards)) snap.boards = [];
+    return snap;
+  }
   const MODES = [
     { key:"walk",  icon:"🚶", label:"步行" },
     { key:"metro", icon:"🚇", label:"地鐵" },
@@ -946,6 +993,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function renderLines(){
     const el = $("#lines");
     const days = state.snapshot ? state.snapshot.days : [];
+    const boards = state.snapshot ? (state.snapshot.boards || []) : [];
     el.innerHTML = `
       <button class="linebtn" role="tab" data-go="overview" aria-selected="${state.view==='overview'}" style="--lc:var(--ink-faint)">
         <span class="bullet"></span><span class="lbl">全程</span>
@@ -956,6 +1004,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="lbl">D${d.id.replace('day','')}</span>
           <span>${esc(DAY_SHORT[d.id]||'')}</span>
         </button>`).join("")}
+      ${boards.map(b => `
+        <button class="linebtn" role="tab" data-go="${b.id}" aria-selected="${state.view===b.id}" style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="lbl">📌 ${esc(b.name||'清單')}</span>
+        </button>`).join("")}
+      <button class="linebtn addbtn" id="addboard" type="button" title="加一個新嘅心水清單">＋ 清單</button>
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
       </button>
@@ -963,11 +1016,24 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
       state.open.clear();
+      state.renamingBoard = null;
       window.scrollTo({ top: 0, behavior: "auto" });
       render();
       const active = $("#lines [aria-selected='true']");
       if (active) active.scrollIntoView({ block:"nearest", inline:"center" });
     }));
+    const addBoardBtn = $("#addboard");
+    if (addBoardBtn) addBoardBtn.addEventListener("click", async () => {
+      state.snapshot.boards = state.snapshot.boards || [];
+      const b = newBoard(`清單 ${state.snapshot.boards.length + 1}`);
+      state.snapshot.boards.push(b);
+      state.view = b.id;
+      state.open.clear();
+      state.renamingBoard = b.id;   // straight into renaming — the default name is just a placeholder
+      window.scrollTo({ top: 0, behavior: "auto" });
+      render();
+      await saveNow(`加咗個新清單「${b.name}」`);
+    });
   }
 
   function render(){
@@ -975,6 +1041,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const app = $("#app");
     if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
+    const board = boardById(state.view);
+    if (board){ app.innerHTML = boardHtml(board); wireBoard(board); return; }
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
   }
@@ -1315,13 +1383,27 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
 
         <div class="editor-tools">
-          <button class="btn" data-act="moveday">搬去第幾日</button>
+          <button class="btn" data-act="move">搬去邊度</button>
           <button class="btn" data-act="up" ${i===0?"disabled":""}>⬆ 上</button>
           <button class="btn" data-act="down" ${i===total-1?"disabled":""}>⬇ 落</button>
           <button class="btn danger" data-act="remove">刪走</button>
           <button class="btn primary" data-act="close">完成</button>
         </div>
       </div>`;
+  }
+
+  // toggling which card is expanded — shared by the day view and every
+  // bookmark board, so opening one always closes whatever else was open
+  function wireOpenToggles(){
+    document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => {
+      const key = btn.dataset.open;
+      if (state.open.has(key)) state.open.delete(key); else { state.open.clear(); state.open.add(key); }
+      render();
+      if (state.open.has(key)){
+        const el = document.querySelector(`[data-editor], [data-boardeditor]`);
+        if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" });
+      }
+    }));
   }
 
   // ==================================================================
@@ -1337,15 +1419,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
     if (!state.mapsShut.has(day.id)) initDayMap(day);
 
-    document.querySelectorAll("[data-open]").forEach(btn => btn.addEventListener("click", () => {
-      const key = btn.dataset.open;
-      if (state.open.has(key)) state.open.delete(key); else { state.open.clear(); state.open.add(key); }
-      render();
-      if (state.open.has(key)){
-        const el = document.querySelector(`[data-editor]`);
-        if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" });
-      }
-    }));
+    wireOpenToggles();
 
     $("#addstop").addEventListener("click", async () => {
       const units = toUnits(day.items);
@@ -1507,7 +1581,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         return;
       }
 
-      if (act === "moveday"){ openDayPicker(day, i); return; }
+      if (act === "move"){ openMovePicker({ kind:"day", day, index:i }); return; }
 
       if (act === "findphoto"){
         // first time: just take the top photo. only offer a choice when replacing one.
@@ -1537,39 +1611,103 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
   }
 
-  // ---------- move to another day ----------
-  function openDayPicker(fromDay, unitIndex){
-    const units = toUnits(fromDay.items);
-    const moving = units[unitIndex];
+  // ---------- move a stop to another day, or to/from a bookmark board ----------
+  // source: { kind:"day", day, index } | { kind:"board", board, index }
+  function openMovePicker(source){
+    const days = state.snapshot.days || [];
+    const boards = state.snapshot.boards || [];
+    const stop = source.kind === "day" ? toUnits(source.day.items)[source.index].stop : source.board.items[source.index];
+    const name = plain(stop.title) || "呢個地點";
+
+    // takes the stop out of wherever it currently lives, fixing up what's left behind
+    function detach(){
+      if (source.kind === "day"){
+        const units = toUnits(source.day.items);
+        const moving = units[source.index];
+        units.splice(source.index, 1);
+        source.day.items = fromUnits(units);
+        return moving.stop;
+      }
+      const [moving] = source.board.items.splice(source.index, 1);
+      return moving;
+    }
+    function afterDetach(){
+      if (source.kind === "day") refreshTransit(source.day, [source.index]);
+    }
+
     openSheet(`
-      <h3>搬去邊一日？</h3>
-      <p class="sec-sub">「${esc(moving.stop.title || "呢個地點")}」會搬到嗰日最後，之後可以再拉上去啱嘅位。</p>
+      <h3>搬去邊度？</h3>
+      <p class="sec-sub">「${esc(name)}」揀個新位置，之後隨時都可以再搬。</p>
+      ${days.length ? `
+        <p class="picker-label">行程日子</p>
+        <div class="daypick">
+          ${days.map(d => {
+            const here = source.kind === "day" && source.day.id === d.id;
+            return `<button data-today="${d.id}" ${here?"disabled":""} style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+              <span class="bullet"></span>
+              <span class="dcode">Day ${d.id.replace('day','')}</span>
+              <span>${esc(d.title)}${here?"（而家喺度）":""}</span>
+            </button>`;
+          }).join("")}
+        </div>` : ""}
+      <p class="picker-label">心水清單</p>
       <div class="daypick">
-        ${state.snapshot.days.map(d => `
-          <button data-to="${d.id}" ${d.id===fromDay.id?"disabled":""} style="--lc:${DAY_COLORS[d.id]}">
-            <span class="bullet"></span>
-            <span class="dcode">Day ${d.id.replace('day','')}</span>
-            <span>${esc(d.title)}${d.id===fromDay.id?"（而家喺度）":""}</span>
-          </button>`).join("")}
+        ${boards.map(b => {
+          const here = source.kind === "board" && source.board.id === b.id;
+          return `<button data-toboard="${b.id}" ${here?"disabled":""} style="--lc:var(--bookmark)">
+            <span class="bullet"></span><span class="dcode">📌</span>
+            <span>${esc(b.name)}${here?"（而家喺度）":""}</span>
+          </button>`;
+        }).join("")}
+        <button data-newboard style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="dcode">＋</span><span>開個新清單</span>
+        </button>
       </div>
     `, sheet => {
-      sheet.querySelectorAll("[data-to]").forEach(b => b.addEventListener("click", async () => {
-        const target = dayById(b.dataset.to);
-        units.splice(unitIndex, 1);
-        fromDay.items = fromUnits(units);
+      sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", async () => {
+        const target = dayById(b.dataset.today);
+        const movingStop = detach();
+        movingStop.kind = "stop";
         const tUnits = toUnits(target.items);
-        tUnits.push(moving);
+        tUnits.push({ seg: null, stop: movingStop });
         target.items = fromUnits(tUnits);
         const landedAt = tUnits.length - 1;
         closeLayer();
         state.open.clear();
         state.view = target.id;
         render();
-        await saveNow(`「${moving.stop.title || "一個地點"}」由 ${fromDay.title} 搬咗去 ${target.title}`);
-        // both days changed shape: the gap left behind and the new arrival
-        await refreshTransit(target, [landedAt]);
-        refreshTransit(fromDay, [unitIndex]);
+        await saveNow(`「${name}」搬咗去 ${target.title}`);
+        afterDetach();
+        refreshTransit(target, [landedAt]);
       }));
+
+      sheet.querySelectorAll("[data-toboard]").forEach(b => b.addEventListener("click", async () => {
+        const target = boardById(b.dataset.toboard);
+        const movingStop = detach();
+        target.items.push(movingStop);
+        closeLayer();
+        state.open.clear();
+        state.view = target.id;
+        render();
+        await saveNow(`「${name}」搬咗去清單「${target.name}」`);
+        afterDetach();
+      }));
+
+      const newBoardBtn = sheet.querySelector("[data-newboard]");
+      if (newBoardBtn) newBoardBtn.addEventListener("click", async () => {
+        state.snapshot.boards = state.snapshot.boards || [];
+        const b = newBoard(`清單 ${state.snapshot.boards.length + 1}`);
+        state.snapshot.boards.push(b);
+        const movingStop = detach();
+        b.items.push(movingStop);
+        closeLayer();
+        state.open.clear();
+        state.view = b.id;
+        state.renamingBoard = b.id;
+        render();
+        await saveNow(`開咗個新清單「${b.name}」，「${name}」搬咗入去`);
+        afterDetach();
+      });
     });
   }
 
@@ -1784,6 +1922,278 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     } catch (e){
       el.innerHTML = `<div class="mapfallback">地圖載入唔到：${esc(e.message)}</div>`;
     }
+  }
+
+  // ==================================================================
+  // RENDER + WIRING — bookmark boards
+  // ==================================================================
+  function boardHtml(board){
+    const renaming = state.renamingBoard === board.id;
+    return `
+      <section class="dayhead" style="--lc:var(--bookmark)">
+        <div class="kicker">
+          <span class="dno">心水清單</span>
+          <span class="kline"></span>
+        </div>
+        ${renaming
+          ? `<input class="input boardname-input" id="boardname-input" value="${esc(board.name)}" placeholder="幫個清單改名…" maxlength="40">`
+          : `<h2 class="boardname" id="boardname-display" title="撳一下改名">📌 ${esc(board.name || "未命名清單")}<span class="editpencil">✏️</span></h2>`}
+        <p class="intro">呢度淨係放心水地點，未定實邊日去、邊個先去都得。撳景點卡入面嘅「搬去…」就可以擺入某一日，或者搬去另一個清單。</p>
+      </section>
+
+      <div class="line" id="boardline" style="--lc:var(--bookmark)">
+        ${board.items.map((s,i) => boardItemHtml(board, s, i)).join("")}
+      </div>
+      ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟。</p>` : ""}
+
+      <button class="addstop" id="addboarditem">＋ 加一個地點落「${esc(board.name)}」</button>
+      <button class="btn danger wide" id="delboard" style="margin-top:8px;">🗑 刪除呢個清單</button>
+
+      <footer>
+        <div class="fbrand">📌 ${esc(board.name)}</div>
+        撳一下標題可以改名；撳景點卡右上角 ✏️ 就可以改內容或者搬去第度。
+      </footer>
+    `;
+  }
+
+  function boardItemHtml(board, s, i){
+    const key = board.id + ":" + i;
+    const open = state.open.has(key);
+    const named = plain(s.title);
+    const fetchable = !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl);
+    const thumb = s.photoUrl
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
+      : fetchable
+        ? `<div class="thumb ghost" data-getboardphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
+        : "";
+    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("");
+    const links = [];
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
+    if (s.mapUrl){
+      const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
+      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">🔍 Google 搜尋</a>`);
+    }
+
+    return `
+      <div class="unit" data-i="${i}">
+        <div class="stop">
+          <div class="stop-rail"><span class="node"></span></div>
+          <div class="stopcard${open ? " open" : ""}">
+            <div class="stopmain">
+              ${thumb}
+              <div class="stopbody">
+                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
+                ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
+                ${chips ? `<div class="chiprow">${chips}</div>` : ""}
+              </div>
+            </div>
+            <div class="cardtools">
+              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
+            </div>
+            ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
+            ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
+            ${open ? boardItemEditorHtml(board, s, i) : ""}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function boardItemEditorHtml(board, s, i){
+    return `
+      <div class="editor" data-boardeditor="${i}">
+        <div class="field">
+          <label>名 — 打字會搵返 Google 地圖真實地點</label>
+          <input class="input" data-bf="title" value="${esc(plain(s.title))}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+          <div class="suggest" data-bsuggest></div>
+        </div>
+        <div class="field"><label>韓文名</label><input class="input" data-bf="kr" value="${esc(s.kr)}" placeholder="남산골한옥마을"></div>
+        <div class="field"><label>記低啲乜</label><textarea class="textarea" data-bf="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
+
+        <div class="field">
+          <label>相片</label>
+          <div data-bphotos>
+            <button class="btn wide" data-bact="findphoto">${s.photoUrl ? "換張相" : "搵返呢度嘅相"}</button>
+          </div>
+        </div>
+
+        <div class="editor-tools">
+          <button class="btn" data-bact="move">搬去…</button>
+          <button class="btn danger" data-bact="remove">刪走</button>
+          <button class="btn primary" data-bact="close">完成</button>
+        </div>
+      </div>`;
+  }
+
+  function wireBoard(board){
+    wireOpenToggles();
+
+    const nameEl = $("#boardname-display");
+    if (nameEl) nameEl.addEventListener("click", () => {
+      state.renamingBoard = board.id;
+      render();
+      const inp = $("#boardname-input");
+      if (inp){ inp.focus(); inp.select(); }
+    });
+    const nameInput = $("#boardname-input");
+    if (nameInput){
+      nameInput.focus(); nameInput.select();
+      let committed = false;
+      const commit = async () => {
+        if (committed) return;
+        committed = true;
+        const v = nameInput.value.trim();
+        board.name = v || "未命名清單";
+        state.renamingBoard = null;
+        render();
+        await saveNow(`將清單改名做「${board.name}」`);
+      };
+      nameInput.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); nameInput.blur(); } });
+      nameInput.addEventListener("blur", commit);
+    }
+
+    const addBtn = $("#addboarditem");
+    if (addBtn) addBtn.addEventListener("click", async () => {
+      board.items.push(blankBoardItem());
+      const idx = board.items.length - 1;
+      state.open.clear();
+      state.open.add(board.id + ":" + idx);
+      render();
+      const titleInp = document.querySelector('[data-boardeditor] [data-bf="title"]');
+      if (titleInp){ titleInp.focus(); titleInp.scrollIntoView({ block:"center", behavior:"smooth" }); }
+      await saveNow(`加咗一個新地點落「${board.name}」`);
+    });
+
+    const delBtn = $("#delboard");
+    if (delBtn) delBtn.addEventListener("click", async () => {
+      if (!confirm(`刪除成個「${board.name}」清單？入面 ${board.items.length} 個地點都會一齊冇。`)) return;
+      state.snapshot.boards = (state.snapshot.boards || []).filter(b => b.id !== board.id);
+      state.view = "overview";
+      render();
+      await saveNow(`刪除咗清單「${board.name}」`);
+    });
+
+    // 📷 placeholder on a photo-less item: fetch one picture, no picker
+    document.querySelectorAll("[data-getboardphoto]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (el.dataset.busy) return;
+      el.dataset.busy = "1";
+      el.innerHTML = "⏳";
+      const s = board.items[+el.dataset.getboardphoto];
+      const name = plain(s.kr) || plain(s.title);
+      let got = false;
+      try {
+        const r = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
+                                         : { action:"place-photo", query:name });
+        if (r && r.ok !== false && r.photos && r.photos.length){ s.photoUrl = r.photos[0]; got = true; }
+      } catch (_){}
+      if (!got) s.noPhoto = true;
+      render();
+      if (got) saveNow(`搵咗張相俾「${name}」`);
+    }));
+
+    wireBoardItemEditor(board);
+  }
+
+  function wireBoardItemEditor(board){
+    const box = document.querySelector("[data-boardeditor]");
+    if (!box) return;
+    const i = +box.dataset.boardeditor;
+    const s = board.items[i];
+
+    box.querySelectorAll("[data-bf]").forEach(el => {
+      el.addEventListener("input", () => {
+        s[el.dataset.bf] = el.value;
+        if (el.dataset.bf === "title"){
+          const nameEl = box.closest(".stopcard").querySelector(".stopname");
+          if (nameEl){
+            nameEl.textContent = el.value.trim() || "未改名嘅地點";
+            nameEl.classList.toggle("unnamed", !el.value.trim());
+          }
+        }
+        saveSoon("改咗「" + (plain(s.title) || "一個地點") + "」");
+      });
+    });
+
+    // google place autocomplete on the name field
+    const titleInput = box.querySelector('[data-bf="title"]');
+    const sugBox = box.querySelector("[data-bsuggest]");
+    let sugTimer = null;
+    titleInput.addEventListener("input", () => {
+      clearTimeout(sugTimer);
+      const q = titleInput.value.trim();
+      if (q.length < 2){ sugBox.innerHTML = ""; return; }
+      sugTimer = setTimeout(async () => {
+        sugBox.innerHTML = `<p class="hint">搵緊…</p>`;
+        try {
+          const r = await callAi({ action:"place-search", query:q });
+          if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
+          if (!r.places || !r.places.length){ sugBox.innerHTML = `<p class="hint">搵唔到，照用你打嘅名就得。</p>`; return; }
+          sugBox.innerHTML = r.places.map((p,ix)=>`
+            <button class="suggest-item" data-p="${ix}">
+              <div class="n">${esc(p.name)}</div><div class="a">${esc(p.address)}</div>
+            </button>`).join("");
+          sugBox.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", async () => {
+            const p = r.places[+b.dataset.p];
+            s.title = p.name; s.placeId = p.placeId;
+            if (Number.isFinite(p.lat)) s.lat = p.lat;
+            if (Number.isFinite(p.lng)) s.lng = p.lng;
+            s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+            titleInput.value = p.name;
+            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊張相…</p>`;
+            try {
+              const pr = await callAi({ action:"place-photo", placeId:p.placeId });
+              if (pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
+            } catch(_){}
+            await saveNow("加咗「" + s.title + "」落「" + board.name + "」");
+            render();
+          }));
+        } catch (e){ sugBox.innerHTML = `<p class="hint">搵唔到：${esc(e.message)}</p>`; }
+      }, 420);
+    });
+
+    box.querySelectorAll("[data-bact]").forEach(btn => btn.addEventListener("click", async () => {
+      const act = btn.dataset.bact;
+
+      if (act === "close"){ state.open.clear(); render(); return; }
+
+      if (act === "remove"){
+        if (!confirm("刪走「" + (plain(s.title) || "呢個地點") + "」？")) return;
+        board.items.splice(i,1);
+        state.open.clear();
+        render();
+        await saveNow("刪走咗「" + (plain(s.title) || "一個地點") + "」");
+        return;
+      }
+
+      if (act === "move"){ openMovePicker({ kind:"board", board, index:i }); return; }
+
+      if (act === "findphoto"){
+        const replacing = !!s.photoUrl;
+        const holder = box.querySelector("[data-bphotos]");
+        holder.innerHTML = `<p class="hint">搵緊相…</p>`;
+        try {
+          const payload = s.placeId ? { action:"place-photo", placeId:s.placeId }
+                                    : { action:"place-photo", query:(s.kr || s.title) };
+          const r = await callAi(payload);
+          if (r.ok === false){ holder.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
+          if (!r.photos || !r.photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
+          if (!replacing){
+            s.photoUrl = r.photos[0];
+            await saveNow("加咗「" + (plain(s.title)||"一個地點") + "」嘅相");
+            render();
+            return;
+          }
+          holder.innerHTML = `<div class="photogrid">${r.photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
+          holder.querySelectorAll("img").forEach(img => img.addEventListener("click", async () => {
+            s.photoUrl = img.dataset.u;
+            await saveNow("換咗「" + (plain(s.title)||"一個地點") + "」嘅相");
+            render();
+          }));
+        } catch (e){ holder.innerHTML = `<p class="hint">搵唔到：${esc(e.message)}</p>`; }
+      }
+    }));
   }
 
   // ==================================================================
@@ -2130,7 +2540,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           try {
             const snap = await fetchVersionSnapshot(b.dataset.view);
             if (!snap) return;
-            state.snapshot = snap; state.open.clear();
+            state.snapshot = normalizeSnapshot(snap); state.open.clear();
             closeLayer(); render();
             flash("而家睇緊舊版本（未還原）");
           } catch (err){ alert("睇唔到呢版：" + err.message); }
@@ -2142,7 +2552,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           try {
             const snap = await fetchVersionSnapshot(b.dataset.restore);
             if (!snap) return;
-            state.snapshot = snap;
+            state.snapshot = normalizeSnapshot(snap);
             await saveVersion(snap, "restore", "還原到版本 #" + b.dataset.restore);
             closeLayer(); render(); flash("已還原");
           } catch (err){ alert("還原唔到：" + err.message); }
@@ -2182,7 +2592,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理。</div></div>`;
       return;
     }
-    state.snapshot = row.snapshot;
+    state.snapshot = normalizeSnapshot(row.snapshot);
     try {
       render();
     } catch (e){
