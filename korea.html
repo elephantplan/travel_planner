@@ -872,6 +872,32 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return res.json();
   }
 
+  // The board-ideas/board-picks panel lives in memory only, so a page reload
+  // used to make a just-computed recommendation vanish even though the actual
+  // places it added were saved fine. Caching the finished panel per device
+  // means "why did my Google 高分 list disappear" doesn't happen on refresh —
+  // it's just a convenience cache, not trip data, so localStorage is enough.
+  function boardIdeasCacheKey(boardId){ return "boardideas:" + boardId; }
+  function cacheBoardIdeas(idea){
+    if (!idea || idea.status) return;   // only cache the finished panel, not a mid-progress one
+    try { localStorage.setItem(boardIdeasCacheKey(idea.boardId), JSON.stringify(idea)); } catch (_){}
+  }
+  function loadCachedBoardIdeas(boardId){
+    try {
+      const raw = localStorage.getItem(boardIdeasCacheKey(boardId));
+      return raw ? JSON.parse(raw) : null;
+    } catch (_){ return null; }
+  }
+  // "already copied to Day X" buttons on a restored panel would otherwise all
+  // read as un-copied again after a reload, inviting an accidental double-copy
+  function loadCopiedPicks(){
+    try { return new Set(JSON.parse(localStorage.getItem("boardideas:copied") || "[]")); }
+    catch (_){ return new Set(); }
+  }
+  function saveCopiedPicks(set){
+    try { localStorage.setItem("boardideas:copied", JSON.stringify([...set])); } catch (_){}
+  }
+
   // Every AI answer is kept, so the family can read back what was asked.
   async function saveAiNote(kind, question, answer){
     if (!answer) return;
@@ -2240,6 +2266,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const picksBtn = $("#boardpicks");
     if (picksBtn) picksBtn.addEventListener("click", () => runBoardPicks(board));
 
+    // a page reload clears state.boardIdeas (in-memory only) — fall back to
+    // the cached copy of the last finished panel so it doesn't just vanish
+    if (!state.boardIdeas || state.boardIdeas.boardId !== board.id){
+      const cached = loadCachedBoardIdeas(board.id);
+      if (cached) state.boardIdeas = cached;
+    }
+
     // re-show the last answer for THIS board after any re-render
     const ideasOut = $("#boardideas-out");
     if (ideasOut && state.boardIdeas && state.boardIdeas.boardId === board.id){
@@ -2251,7 +2284,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       // refreshTransit() re-renders the page several times while it works, which
       // would wipe a plain DOM-text confirmation — so "already copied" lives in
       // state and gets re-applied every time this wiring runs, not just once.
-      if (!state.copiedPicks) state.copiedPicks = new Set();
+      if (!state.copiedPicks) state.copiedPicks = loadCopiedPicks();
       ideasOut.querySelectorAll("[data-quickcopy]").forEach(btn => {
         const idx = +btn.dataset.quickcopy;
         const dayId = btn.dataset.quickcopyday;
@@ -2273,6 +2306,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           day.items = fromUnits(units);
           const landedAt = units.length - 1;
           state.copiedPicks.add(copyKey);
+          saveCopiedPicks(state.copiedPicks);
           btn.textContent = `✓ 已複製去 ${day.title}`;
           await saveNow(`「${plain(copy.title) || "一個地點"}」複製咗去 ${day.title}（清單度都仲留低）`);
           refreshTransit(day, [landedAt]);
@@ -2481,6 +2515,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml + addedHtml, status: "" };
+    cacheBoardIdeas(state.boardIdeas);
     render();
 
     const savedAnswer = [
@@ -2593,6 +2628,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>`).join("")}` : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml + topHtml + buzzHtml, status: "" };
+    cacheBoardIdeas(state.boardIdeas);
     render();
 
     const saved = [
