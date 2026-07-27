@@ -31,13 +31,17 @@ async function fetchWeather() {
   return { inForecastRange, daily: data?.daily ?? null };
 }
 
-async function callGemini(apiKey: string, prompt: string): Promise<string> {
+async function callGemini(apiKey: string, prompt: string, opts?: { json?: boolean; maxOutputTokens?: number }): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  const generationConfig: Record<string, unknown> = {};
+  if (opts?.json) generationConfig.responseMimeType = "application/json";
+  if (opts?.maxOutputTokens) generationConfig.maxOutputTokens = opts.maxOutputTokens;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
+      ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
     }),
   });
   if (!res.ok) {
@@ -45,6 +49,13 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
     throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
+  // A long structured ask (e.g. 16+8 detailed candidates) can hit the output
+  // token cap mid-JSON — the response is then guaranteed to fail JSON.parse.
+  // Flagging this here lets callers give "the answer was too long, try again"
+  // instead of silently showing a JSON.parse failure to the user.
+  if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+    throw new Error("TRUNCATED: Gemini 回覆俾輸出上限截斷咗");
+  }
   const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
   return text || "（AI冇回覆內容）";
 }
@@ -54,7 +65,29 @@ function friendlyGeminiError(e: unknown): string {
   if (msg.includes("429")) {
     return "⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。";
   }
+  if (msg.includes("TRUNCATED")) {
+    return "✂️ AI 今次答案太長俾截斷咗，未夠格式完整。請再撳一次試多次（通常第二次就得）。";
+  }
   return "🔧 AI暫時無法回覆：" + msg.slice(0, 200);
+}
+
+// Strip markdown fences, then also try the substring between the first "{"
+// and the last "}" — Gemini occasionally wraps valid JSON in a stray leading
+// or trailing sentence even when told not to. Returns null (never throws) so
+// callers can fall back to a clean error instead of showing broken JSON.
+function parseAiJson(aiText: string): any {
+  const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch { /* fall through to the braces-substring attempt below */ }
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch { /* genuinely malformed/truncated — give up */ }
+  }
+  return null;
 }
 
 const NOT_CONFIGURED_MSG =
@@ -464,21 +497,17 @@ Deno.serve(async (req) => {
       const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）調整佢哋10月23-28日嘅首爾行程。姨姨唔可以行樓梯，主題係賞紅葉銀杏。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個6日行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過6日，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶小食，唔算一餐。每一日嘅午餐同晚餐都要係正餐（韓式或其他熟食），唔可以用麵包、吐司、蛋糕頂數。如果某一日由早到晚都冇一餐正餐，嗰日就係有問題，要提議加一餐。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如南山塔已經寫明「循環巴士無台階＋塔內電梯直達展望台」）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「表妹指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級景點（例如南山塔、景福宮、南怡島）唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成6日行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
       let aiText: string;
       try {
-        aiText = await callGemini(apiKey, prompt);
+        aiText = await callGemini(apiKey, prompt, { json: true, maxOutputTokens: 8192 });
       } catch (e) {
         return json({ ok: false, message: friendlyGeminiError(e) });
       }
-      let parsed: any = null;
-      try {
-        const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-        parsed = JSON.parse(cleaned);
-      } catch {
-        parsed = null;
-      }
+      const parsed = parseAiJson(aiText);
       if (parsed && Array.isArray(parsed.changes)) {
         return json({ ok: true, notes: parsed.notes ?? "", changes: parsed.changes });
       }
-      return json({ ok: true, aiSummary: aiText, changes: [] });
+      // Never surface the raw (possibly truncated/malformed) JSON text as if
+      // it were a normal AI reply — that reads as garbage to the user.
+      return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅建議格式，麻煩再試一次（通常第二次就得）。" });
     }
 
     if (action === "board-ideas") {
@@ -495,17 +524,11 @@ Deno.serve(async (req) => {
 
       let aiText: string;
       try {
-        aiText = await callGemini(apiKey, prompt);
+        aiText = await callGemini(apiKey, prompt, { json: true, maxOutputTokens: 8192 });
       } catch (e) {
         return json({ ok: false, message: friendlyGeminiError(e) });
       }
-      let parsed: any = null;
-      try {
-        const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-        parsed = JSON.parse(cleaned);
-      } catch {
-        parsed = null;
-      }
+      const parsed = parseAiJson(aiText);
       if (parsed) {
         const places = (Array.isArray(parsed.places) ? parsed.places.slice(0, 12) : []).map((p: any) => ({
           ...p,
@@ -519,7 +542,9 @@ Deno.serve(async (req) => {
           places,
         });
       }
-      return json({ ok: true, intro: aiText, resources: [], places: [] });
+      // Never surface the raw (possibly truncated/malformed) JSON text as if
+      // it were a normal AI reply — that reads as garbage to the user.
+      return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅資訊格式，麻煩再試一次（通常第二次就得）。" });
     }
 
     if (action === "board-picks") {
@@ -541,16 +566,14 @@ Deno.serve(async (req) => {
 
       let aiText: string;
       try {
-        aiText = await callGemini(apiKey, prompt);
+        aiText = await callGemini(apiKey, prompt, { json: true, maxOutputTokens: 8192 });
       } catch (e) {
         return json({ ok: false, message: friendlyGeminiError(e) });
       }
-      let parsed: any = null;
-      try {
-        const cleaned = aiText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-        parsed = JSON.parse(cleaned);
-      } catch { parsed = null; }
-      if (!parsed) return json({ ok: true, intro: aiText, topRated: [], trending: [], checked: 0 });
+      const parsed = parseAiJson(aiText);
+      // Never surface the raw (possibly truncated/malformed) JSON text as if
+      // it were a normal AI reply — that reads as garbage to the user.
+      if (!parsed) return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅推介格式，麻煩再試一次（通常第二次就得，呢個清單本身要求好長嘅回覆，偶爾會俾截斷）。" });
 
       const clampDay = (p: any) => ({ ...p, dayId: validDayIds.has(p?.dayId) ? p.dayId : null });
       const notDup = (p: any) => !isAlreadyOnList(p?.title, p?.kr, existingNorm);
