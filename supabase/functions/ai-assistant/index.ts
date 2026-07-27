@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -656,6 +656,97 @@ Deno.serve(async (req) => {
       } catch (e) {
         return json({ ok: false, message: "攞營業時間失敗：" + String(e) });
       }
+    }
+
+    // One day at a time. `suggest` deliberately sweeps all six days, which is
+    // the wrong shape when you are standing on Day 4 with an empty page and
+    // want THAT day filled — and it kept proposing places already booked on
+    // another day, because nothing told it to look sideways.
+    if (action === "day-plan") {
+      const brief = briefOf(body);
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const itinerary = body?.itinerary;
+      const dayId = (body?.dayId ?? "").toString().trim();
+      const want = (body?.question ?? "").toString().slice(0, 1000);
+      const day = (itinerary?.days ?? []).find((d: any) => d.id === dayId);
+      if (!day) return json({ ok: false, message: "搵唔到呢一日。" });
+
+      const stops = (day.items ?? []).filter((i: any) => i.kind === "stop");
+      const isEmpty = stops.length === 0;
+      // every place already spoken for on ANOTHER day — the single most useful
+      // thing to hand the model, since repeats are the usual failure
+      const elsewhere: string[] = [];
+      (itinerary?.days ?? []).forEach((d: any) => {
+        if (d.id === dayId) return;
+        (d.items ?? []).forEach((i: any) => {
+          if (i.kind === "stop" && i.title) elsewhere.push(`${d.id}:${i.title}`);
+        });
+      });
+      // which hotel they sleep at that night, so "順路" means something
+      const dayIdx = (itinerary?.days ?? []).findIndex((d: any) => d.id === dayId);
+      const idxOf = (id: string) => (itinerary?.days ?? []).findIndex((d: any) => d.id === id);
+      const stay = (Array.isArray(itinerary?.stays) ? itinerary.stays : []).find((s: any) => {
+        const a = idxOf(s?.from), b = idxOf(s?.to);
+        return a >= 0 && b >= 0 && dayIdx >= Math.min(a, b) && dayIdx <= Math.max(a, b);
+      });
+
+      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘","eatboxHtml":"","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
+      const prompt = `${brief}\n\n你而家淨係負責 **${day.title}（${day.date}，${dayId}）** 呢一日，唔好去改其他日。\n\n${
+        isEmpty
+          ? "呢一日而家係完全空白嘅，請由零幫佢哋砌一日出嚟：早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排。"
+          : `呢一日已經有 ${stops.length} 個站，請睇清楚先，補返唔夠嘅嘢（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。`
+      }\n\n${stay?.name ? `佢哋嗰晚住「${stay.name}」，所以最後一個站唔好離酒店太遠。\n\n` : ""}**唔可以推介以下地方**——呢啲喺其他日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n呢一日而家嘅內容：\n${JSON.stringify({ dayId, date: day.date, title: day.title, desc: day.desc, stops: stops.map((s: any) => ({ time: s.time, title: s.title, type: s.type })) }).slice(0, 6000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 10000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"1-2句廣東話講你點砌呢一日","changes":[{"dayId":"${dayId}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。dayId 一律填 "${dayId}"。`;
+
+      let aiText: string;
+      try {
+        aiText = await callGemini(apiKey, prompt, { json: true });
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
+      const parsed = parseAiJson(aiText);
+      if (!parsed || !Array.isArray(parsed.changes)) {
+        return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅建議格式，麻煩再試一次（通常第二次就得）。" });
+      }
+      // the model was told to stay on this day; enforce it rather than trust it
+      const changes = parsed.changes
+        .filter((c: any) => c?.op === "add" || c?.op === "edit")
+        .map((c: any) => ({ ...c, dayId }));
+      return json({ ok: true, notes: parsed.notes ?? "", changes });
+    }
+
+    // Free-form sections for the home page ("手信買咩好", "換錢攻略"…). The page
+    // used to have a fixed set of panels baked into the markup, so anything the
+    // family wanted to keep together that wasn't 天氣/穿搭 had nowhere to live.
+    if (action === "make-section") {
+      const brief = briefOf(body);
+      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const topic = (body?.topic ?? "").toString().trim().slice(0, 200);
+      if (!topic) return json({ ok: false, message: "未講低想開咩題目。" });
+      const itinerary = body?.itinerary;
+      const prompt = `${brief}\n\n幫佢哋喺行程主頁開一個新 section，題目係「${topic}」。\n\n寫成一份佢哋出發前／喺當地真係用得着嘅筆記：\n- 6 至 10 條重點，每條一行，唔好過 40 字，可以喺開頭用一個 emoji\n- 講得實在啲（買咩、去邊度買、幾錢上落、幾時做、要注意乜），唔好講廢話同客套說話\n- **唔好作數字或者價錢**如果你唔肯定；唔肯定就寫「出發前 check 返」\n- 如果呢個題目要實時／官方資料先準（天氣、紅葉情況、滙率、車票），喺 links 度俾 1-3 個官方網站，唔好亂作 URL\n- 全部用廣東話（香港口語）\n\n佢哋個行程概況（參考，唔使覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"title":"section 標題（短，最多 10 字）","icon":"一個 emoji","sub":"一句副標題","lines":["重點一","重點二"],"links":[{"name":"網站名","url":"https://..."}]}`;
+      let aiText: string;
+      try {
+        aiText = await callGemini(apiKey, prompt, { json: true });
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
+      const parsed = parseAiJson(aiText);
+      if (!parsed || !Array.isArray(parsed.lines)) {
+        return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅格式，麻煩再試一次（通常第二次就得）。" });
+      }
+      return json({
+        ok: true,
+        section: {
+          title: (parsed.title ?? topic).toString().slice(0, 40),
+          icon: (parsed.icon ?? "📌").toString().slice(0, 4),
+          sub: (parsed.sub ?? "").toString().slice(0, 120),
+          lines: parsed.lines.map((l: any) => String(l).slice(0, 200)).slice(0, 12),
+          links: (Array.isArray(parsed.links) ? parsed.links : [])
+            .filter((l: any) => /^https?:\/\//.test(l?.url ?? ""))
+            .map((l: any) => ({ name: String(l.name ?? l.url).slice(0, 60), url: String(l.url).slice(0, 300) }))
+            .slice(0, 3),
+        },
+      });
     }
 
     if (action === "place-search") {
