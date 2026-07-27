@@ -375,6 +375,13 @@ img{max-width:100%;}
 }
 .mapbox.tall{height:300px;}
 .mapcap{font-size:11.5px;color:var(--ink-faint);margin:7px 2px 0;line-height:1.55;}
+.mapnote{font-size:12px;margin:8px 2px 0;line-height:1.6;color:var(--ink-soft);}
+.mapnote.warn{color:var(--warn);}
+.mapnote .linkbtn{
+  background:none;border:0;padding:0 0 0 6px;font:inherit;color:var(--info);
+  text-decoration:underline;cursor:pointer;
+}
+.mapnote .geowhy{color:var(--ink-faint);font-size:11px;}
 .mapfallback{display:grid;place-items:center;height:100%;padding:20px;text-align:center;font-size:12.5px;color:var(--ink-faint);}
 .leaflet-container{background:var(--surface-2);font:inherit;}
 .mapnode{
@@ -1363,11 +1370,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <h2>${esc(day.title)}</h2>
         <p class="intro">${esc(day.desc)}</p>
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
-        ${day.mapPoints ? `
+        ${hasMappableDay(day) ? `
           <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
             <span>🗺</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">▾</span>
           </button>
           ${mapOpen ? `<div class="mapbox" id="map-${day.id}" data-points='${esc(JSON.stringify(buildDayMapPoints(day)))}'></div>
+                       ${mapNoteHtml(day)}
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
       </section>
@@ -1383,7 +1391,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           : `↻ 重算全日交通`
       }</button>` : ""}
       ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
-      ${unmappedStops(day).length ? `<button class="recalc" id="getmappoints">🗺 幫呢日搵返地圖座標（${unmappedStops(day).length} 個地點未有）</button>` : ""}
 
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
@@ -1553,6 +1560,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       render();
     });
     if (!state.mapsShut.has(day.id)) initDayMap(day);
+    autoGeocodeDay(day);          // fire-and-forget; it re-renders as it fills in
 
     wireOpenToggles();
 
@@ -1610,27 +1618,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (btn && !done) btn.textContent = why ? "攞唔到：" + why : "呢一日冇再攞到新評分";
     });
 
+    // manual retry — clears the "已試過" marks so a transient failure (quota,
+    // network) can be attempted again rather than being remembered as "Google
+    // doesn't know this place"
     const getmappoints = $("#getmappoints");
-    if (getmappoints) getmappoints.addEventListener("click", async () => {
-      getmappoints.disabled = true;
-      getmappoints.textContent = "問緊 Google…";
-      const missing = unmappedStops(day);
-      let done = 0, why = "";
-      for (const s of missing){
-        try {
-          const r = await callAi({ action:"place-search", query: plain(s.kr) || plain(s.title) });
-          const p = r && r.places && r.places[0];
-          if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)){
-            s.lat = p.lat; s.lng = p.lng;
-            if (!s.placeId) s.placeId = p.placeId;
-            done++;
-          } else if (r && r.message) why = r.message;
-        } catch (e){ why = e.message; }
-        render();
-      }
-      if (done) await saveNow(`搵返 ${done} 個地點嘅地圖座標（${day.title}）`);
-      const btn = $("#getmappoints");
-      if (btn && !done) btn.textContent = why ? "攞唔到：" + why : "呢一日冇再搵到新座標";
+    if (getmappoints) getmappoints.addEventListener("click", () => {
+      unmappedStops(day).forEach(s => { delete s.noGeo; });
+      toUnits(day.items).map(u => u.stop).filter(Boolean).forEach(s => { delete s.noGeo; });
+      state.geoProblem = "";
+      if (state.geocodedDays) state.geocodedDays.delete(day.id);
+      autoGeocodeDay(day);
     });
 
     wireEditor(day);
@@ -2054,6 +2051,31 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // This derives fresh from the CURRENT stops every render: prefer a stop's
   // own coordinate, fall back to a fuzzy name-match against the legacy list,
   // and report what still has neither so the UI can offer to look it up.
+  // Every name this stop is known by. The Chinese title alone is often not
+  // what the legacy point or Google calls it — "搭乘 ITX-青春 列車" is the point
+  // "清涼里站" and the Naver link's search term 청량리역; "北村韓屋村（平緩觀景點）"
+  // is 북촌한옥마을. Matching and geocoding both need all of them.
+  function stopSearchTerms(s){
+    const out = [plain(s.title), plain(s.kr)];
+    const m = String(s.mapUrl || "").match(/\/search\/([^/?#]+)/);
+    if (m){ try { out.push(decodeURIComponent(m[1]).replace(/\+/g, " ")); } catch (_){} }
+    return out.map(t => String(t || "").trim()).filter(Boolean);
+  }
+  // Rows like 「酒店出發」「自由漫遊／拍照時光」「飛返香港 ✈」 are schedule notes,
+  // not places — sending them to Google would pin some unrelated hotel on the
+  // map. A row is a real place only if it carries a Korean name or a map link,
+  // the same signal the rating and link features already use.
+  function isRealPlace(s){
+    return !!(s.placeId || plain(s.kr) || String(s.mapUrl || "").trim());
+  }
+  // what to actually search Google with — Korean first, it matches far better
+  function geocodeQuery(s){
+    const m = String(s.mapUrl || "").match(/\/search\/([^/?#]+)/);
+    let naver = "";
+    if (m){ try { naver = decodeURIComponent(m[1]).replace(/\+/g, " ").trim(); } catch (_){} }
+    return plain(s.kr) || naver || plain(s.title);
+  }
+
   function resolveDayMapPoints(day){
     const raw = Array.isArray(day.mapPoints) ? day.mapPoints : [];
     const parsed = raw.map(p => {
@@ -2063,14 +2085,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const m = name.match(/^\s*(\d+)\s+(.*)$/);
       return { lat: Number(lat), lng: Number(lng), label: m ? m[1] : "", text: m ? m[2] : name };
     }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-    const anchors = parsed.filter(p => !p.label);
-    const legacy = parsed.filter(p => p.label);
+    const anchors = parsed.filter(p => !p.label);       // e.g. "酒店" — never a stop
+    const legacy  = parsed.filter(p => p.label);
 
-    const findLegacy = title => {
-      const l = loose(title);
-      if (!l) return null;
-      let hit = legacy.find(p => loose(p.text) === l);
-      if (!hit) hit = legacy.find(p => { const t = loose(p.text); return t && (t.includes(l) || l.includes(t)); });
+    const used = new Set();
+    const claimLegacy = s => {
+      const terms = stopSearchTerms(s).map(loose).filter(Boolean);
+      if (!terms.length) return null;
+      let hit = legacy.find(p => !used.has(p) && terms.includes(loose(p.text)));
+      if (!hit) hit = legacy.find(p => {
+        if (used.has(p)) return false;
+        const t = loose(p.text);
+        return t && terms.some(l => t.includes(l) || l.includes(t));
+      });
+      if (hit) used.add(hit);
       return hit || null;
     };
 
@@ -2082,21 +2110,100 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (!title) return;
       let lat = s.lat, lng = s.lng;
       if (!(Number.isFinite(lat) && Number.isFinite(lng))){
-        const hit = findLegacy(title);
+        const hit = claimLegacy(s);
         if (hit){ lat = hit.lat; lng = hit.lng; }
       }
       if (Number.isFinite(lat) && Number.isFinite(lng)){
         n++;
         points.push([lat, lng, `${n} ${title}`]);
-      } else {
-        unresolved.push(s);
+      } else if (isRealPlace(s) && !s.noGeo){
+        unresolved.push(s);          // a real place Google can probably find
       }
     });
 
-    return { tuples: [...anchors.map(p => [p.lat, p.lng, p.text]), ...points], unresolved };
+    // A curated point no stop claimed still belongs on the map — dropping it
+    // would make the map show LESS than it did before this resolver existed.
+    // It rides along as an unnumbered dot, same as the hotel anchor.
+    // Exception: 「清涼里站」 and the stop 「搭乘 ITX-青春 列車」 are the same
+    // platform written in two scripts, so no name match is possible — but once
+    // the stop has been geocoded they land on the same spot. Anything within
+    // ~90 m of a numbered pin is already represented; a second dot on top of
+    // it is just clutter.
+    const near = (a, b) => Math.abs(a[0] - b[0]) < 0.0008 && Math.abs(a[1] - b[1]) < 0.0008;
+    const orphans = legacy.filter(p => !used.has(p) && !points.some(q => near(q, [p.lat, p.lng])));
+
+    return {
+      tuples: [...anchors.map(p => [p.lat, p.lng, p.text]),
+               ...orphans.map(p => [p.lat, p.lng, p.text]),
+               ...points],
+      unresolved,
+    };
   }
   function buildDayMapPoints(day){ return resolveDayMapPoints(day).tuples; }
   function unmappedStops(day){ return resolveDayMapPoints(day).unresolved; }
+  // Day 1 has no legacy mapPoints at all, so the map section used to be hidden
+  // outright — but its stops are real places that can be looked up, so it
+  // should get a map too once they are.
+  function hasMappableDay(day){
+    const r = resolveDayMapPoints(day);
+    return r.tuples.length > 0 || r.unresolved.length > 0;
+  }
+  // Status sits directly under the map, where the missing pins are visible —
+  // not at the bottom of the page past every stop card, where it went unseen.
+  function mapNoteHtml(day){
+    const busy = state.geoBusy && state.geoBusy.dayId === day.id ? state.geoBusy : null;
+    if (busy) return `<p class="mapnote">🗺 搵緊未有座標嘅地點…（${busy.done}／${busy.total}）</p>`;
+    const missing = unmappedStops(day);
+    if (!missing.length) return "";
+    return `<p class="mapnote warn">仲有 ${missing.length} 個地點未有座標，未顯示到喺地圖度。` +
+           `<button class="linkbtn" id="getmappoints">再試搵一次</button>` +
+           `${state.geoProblem ? `<br><span class="geowhy">${esc(state.geoProblem)}</span>` : ""}</p>`;
+  }
+
+  // Almost every stop in this trip predates coordinates being stored at all —
+  // they only ever had a Naver link. Rather than making someone hunt for a
+  // button on all six days, look the missing ones up the first time a day is
+  // opened. One Google text search each, saved permanently, so it never runs
+  // for the same stop twice.
+  async function autoGeocodeDay(day){
+    if (!state.geocodedDays) state.geocodedDays = new Set();
+    if (state.geocodedDays.has(day.id)) return;
+    state.geocodedDays.add(day.id);
+
+    const missing = unmappedStops(day);
+    if (!missing.length) return;
+
+    state.geoBusy = { dayId: day.id, done: 0, total: missing.length, why: "" };
+    render();
+
+    let done = 0, why = "";
+    for (const s of missing){
+      const query = geocodeQuery(s);
+      try {
+        const r = await callAi({ action:"place-search", query });
+        const p = r && r.places && r.places[0];
+        if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)){
+          s.lat = p.lat; s.lng = p.lng;
+          if (!s.placeId) s.placeId = p.placeId;
+          done++;
+        } else if (r && r.ok === false){
+          // the whole lookup is unavailable (no API key, quota, outage) — that
+          // says nothing about this place, so don't mark it as unfindable and
+          // don't burn the remaining calls; surface it and let them retry
+          why = r.message || "";
+          break;
+        } else {
+          s.noGeo = true;                  // Google really has no such place
+        }
+      } catch (e){ why = e.message; break; }
+      if (state.geoBusy) state.geoBusy.done = done;
+      render();
+    }
+    state.geoBusy = null;
+    state.geoProblem = why;
+    if (done) await saveNow(`搵返 ${done} 個地點嘅地圖座標（${day.title}）`);
+    else render();
+  }
 
   function normPoints(raw){
     if (!Array.isArray(raw)) return [];
