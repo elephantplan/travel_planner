@@ -484,7 +484,7 @@ Deno.serve(async (req) => {
     if (action === "board-ideas") {
       if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
-      const theme = (body?.theme ?? "").toString().trim().slice(0, 60);
+      const theme = (body?.theme ?? "").toString().trim().slice(0, 120);
       if (!theme) return json({ ok: false, message: "清單未改名，唔知幫你搵咩題材嘅資訊。" });
       const existing: string[] = Array.isArray(body?.existingTitles) ? body.existingTitles.slice(0, 30) : [];
 
@@ -527,7 +527,7 @@ Deno.serve(async (req) => {
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
-      const theme = (body?.theme ?? "").toString().trim().slice(0, 60);
+      const theme = (body?.theme ?? "").toString().trim().slice(0, 120);
       if (!theme) return json({ ok: false, message: "清單未改名，唔知幫你搵咩題材。" });
       // most-recent-first: if the list has grown past the cap, a repeat of
       // something just added is far more likely than a repeat of the oldest

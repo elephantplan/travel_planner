@@ -2340,7 +2340,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="kline"></span>
         </div>
         ${renaming
-          ? `<input class="input boardname-input" id="boardname-input" value="${esc(board.name)}" placeholder="幫個清單改名…" maxlength="40">`
+          ? `<input class="input boardname-input" id="boardname-input" value="${esc(board.name)}" placeholder="幫個清單改名…" maxlength="120">`
           : `<h2 class="boardname" id="boardname-display" title="撳一下改名">📌 ${esc(board.name || "未命名清單")}<span class="editpencil">✏️</span></h2>`}
         <p class="intro">呢度淨係放心水地點，未定實邊日去、邊個先去都得。撳景點卡入面嘅「搬去…」就可以擺入某一日，或者搬去另一個清單。</p>
         <p class="picker-label">呢個清單喺全程地圖上嘅顏色</p>
