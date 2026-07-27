@@ -513,6 +513,19 @@ img{max-width:100%;}
   font-size:10px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--ok);margin-bottom:2px;
 }
+/* booking/queue info on an AI-recommended restaurant — Google has no API for
+   this, so it's always the model's impression, never verified like the
+   rating chip is; the warning line makes that impossible to miss */
+.bookbox{
+  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
+  background:var(--warn-bg);font-size:12.5px;line-height:1.6;color:var(--ink);
+}
+.bookbox b{
+  display:block;font-family:'Bricolage Grotesque',sans-serif;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--warn);margin-bottom:2px;
+}
+.bookbox .warnline{display:block;color:var(--warn);font-size:11px;margin-top:4px;}
 .stopfoot{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px 12px;}
 .maplink{
   display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
@@ -1456,6 +1469,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             </div>
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
+            ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
             ${open ? editorHtml(day, u, i, total) : ""}
           </div>
@@ -2208,6 +2222,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
               <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
             </div>
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
+            ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
             ${open ? boardItemEditorHtml(board, s, i) : ""}
           </div>
@@ -2546,6 +2561,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const item = Object.assign(blankBoardItem(), {
         title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
       });
+      if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
       board.items.push(item);
       await enrichStop(item);
       added.push({ item, dayId: pl.dayId });
@@ -2625,6 +2641,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (Number.isFinite(pl.lat)) item.lat = pl.lat;
       if (Number.isFinite(pl.lng)) item.lng = pl.lng;
       if (!item.mapUrl && (pl.kr || pl.title)) item.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(pl.kr || pl.title)}`;
+      if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
       board.items.push(item);
       await enrichStop(item);                    // photo (rating already known)
       added.push({ item, dayId: pl.dayId, kind:"top" });
@@ -2636,6 +2653,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "",
         tip: `🔥 社交平台熱門（AI 印象・未經核實）${pl.dayHint ? "・" + pl.dayHint : ""}`,
       });
+      if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
       board.items.push(item);
       await enrichStop(item);                    // resolves photo + real rating
       added.push({ item, dayId: pl.dayId, kind:"buzz", buzz: pl.buzz || "" });
@@ -2657,6 +2675,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
           <div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>
           ${a.item.desc ? `<div class="why">${esc(a.item.desc)}</div>` : ""}
+          ${bookingBoxHtml(a.item)}
           ${copyBtn(a)}
         </div>`).join("")}` : "";
 
@@ -2671,6 +2690,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ${a.buzz ? `<div class="buzz">🔥 ${esc(a.buzz)}</div>` : ""}
           <div class="checklinks">${buzzLinks(plain(a.item.kr) || plain(a.item.title)).map(l =>
             `<a href="${esc(l.url)}" target="_blank" rel="noopener">喺 ${esc(l.label)} 睇下</a>`).join("")}</div>
+          ${bookingBoxHtml(a.item)}
           ${copyBtn(a)}
         </div>`).join("")}` : "";
 
@@ -2922,6 +2942,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                                         : { action:"place-photo", query:name });
       if (pr && pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
     } catch (_){}
+  }
+
+  // Google has no API for reservation/queue info, so this is always the
+  // model's own impression — never treat it with the same confidence as the
+  // Google-verified rating chip.
+  const BOOKING_LABEL = { online:"🌐 可網上／App預約", phone:"📞 只可電話訂位", walkin:"🚶 冇預約，現場排隊" };
+  function bookingBoxHtml(s){
+    if (!s.isFood) return "";
+    const parts = [];
+    if (BOOKING_LABEL[s.booking]) parts.push(BOOKING_LABEL[s.booking]);
+    if (plain(s.bookingHow)) parts.push(esc(plain(s.bookingHow)));
+    if (plain(s.queueNote)) parts.push(`⏱ ${esc(plain(s.queueNote))}`);
+    if (!parts.length) return "";
+    return `<div class="bookbox"><b>訂位／排隊</b>${parts.join("<br>")}<span class="warnline">⚠️ AI 印象・未經核實，出發前建議自己再確認</span></div>`;
   }
 
   // "⭐ 4.3・1,234 則評價" — Google's own numbers, not something we wrote
