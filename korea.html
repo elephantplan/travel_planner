@@ -489,7 +489,6 @@ img{max-width:100%;}
 .stopcard.open{border-color:var(--lc);}
 .unit{scroll-margin-top:112px;}
 .stopbody{flex:1 1 auto;min-width:0;}
-.stoptime{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);letter-spacing:.02em;}
 .stopname{font-size:15.5px;font-weight:700;line-height:1.35;margin:1px 0 0;}
 .stopname .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
 .stopname.unnamed{color:var(--ink-faint);font-weight:500;font-style:italic;}
@@ -1368,7 +1367,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
             <span>🗺</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">▾</span>
           </button>
-          ${mapOpen ? `<div class="mapbox" id="map-${day.id}" data-points='${esc(JSON.stringify(day.mapPoints))}'></div>
+          ${mapOpen ? `<div class="mapbox" id="map-${day.id}" data-points='${esc(JSON.stringify(buildDayMapPoints(day)))}'></div>
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
       </section>
@@ -1384,6 +1383,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           : `↻ 重算全日交通`
       }</button>` : ""}
       ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+      ${unmappedStops(day).length ? `<button class="recalc" id="getmappoints">🗺 幫呢日搵返地圖座標（${unmappedStops(day).length} 個地點未有）</button>` : ""}
 
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
@@ -1457,7 +1457,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             <div class="stopmain">
               ${thumb}
               <div class="stopbody">
-                <div class="stoptime">${esc(s.time) || "未定時間"}</div>
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
@@ -1611,6 +1610,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (btn && !done) btn.textContent = why ? "攞唔到：" + why : "呢一日冇再攞到新評分";
     });
 
+    const getmappoints = $("#getmappoints");
+    if (getmappoints) getmappoints.addEventListener("click", async () => {
+      getmappoints.disabled = true;
+      getmappoints.textContent = "問緊 Google…";
+      const missing = unmappedStops(day);
+      let done = 0, why = "";
+      for (const s of missing){
+        try {
+          const r = await callAi({ action:"place-search", query: plain(s.kr) || plain(s.title) });
+          const p = r && r.places && r.places[0];
+          if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)){
+            s.lat = p.lat; s.lng = p.lng;
+            if (!s.placeId) s.placeId = p.placeId;
+            done++;
+          } else if (r && r.message) why = r.message;
+        } catch (e){ why = e.message; }
+        render();
+      }
+      if (done) await saveNow(`搵返 ${done} 個地點嘅地圖座標（${day.title}）`);
+      const btn = $("#getmappoints");
+      if (btn && !done) btn.textContent = why ? "攞唔到：" + why : "呢一日冇再搵到新座標";
+    });
+
     wireEditor(day);
     wireDrag(day, line);
   }
@@ -1628,14 +1650,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const evt = el.tagName === "SELECT" ? "change" : "input";
       el.addEventListener(evt, () => {
         s[el.dataset.f] = el.value;
-        if (el.dataset.f === "type" || el.dataset.f === "time" || el.dataset.f === "title"){
+        if (el.dataset.f === "type" || el.dataset.f === "title"){
           const nameEl = box.closest(".stopcard").querySelector(".stopname");
-          const timeEl = box.closest(".stopcard").querySelector(".stoptime");
           if (el.dataset.f === "title" && nameEl){
             nameEl.textContent = el.value.trim() || "未改名嘅地點";
             nameEl.classList.toggle("unnamed", !el.value.trim());
           }
-          if (el.dataset.f === "time" && timeEl) timeEl.textContent = el.value || "未定時間";
           if (el.dataset.f === "type"){
             const node = box.closest(".stop").querySelector(".node");
             if (node) node.dataset.type = el.value;
@@ -2023,6 +2043,61 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     day.mapPoints = [...anchors, ...matched].map(p => [p.lat, p.lng, `${p.label} ${p.text}`.trim()]);
   }
+
+  // The single source of truth for what actually shows on a day's map. Older
+  // content only ever has coordinates in the hand-authored day.mapPoints list
+  // (curated once, a handful of points), while day.items keeps growing —
+  // stops added since (via AI suggest, a board copy, or the autocomplete
+  // search box) carry their OWN real lat/lng from enrichStop, but nothing
+  // ever added them to that old list. Rendering straight from day.mapPoints
+  // is why a day with many stops could show only the 3 it originally had.
+  // This derives fresh from the CURRENT stops every render: prefer a stop's
+  // own coordinate, fall back to a fuzzy name-match against the legacy list,
+  // and report what still has neither so the UI can offer to look it up.
+  function resolveDayMapPoints(day){
+    const raw = Array.isArray(day.mapPoints) ? day.mapPoints : [];
+    const parsed = raw.map(p => {
+      const lat = Array.isArray(p) ? p[0] : p?.lat;
+      const lng = Array.isArray(p) ? p[1] : p?.lng;
+      const name = String((Array.isArray(p) ? p[2] : p?.name) || "");
+      const m = name.match(/^\s*(\d+)\s+(.*)$/);
+      return { lat: Number(lat), lng: Number(lng), label: m ? m[1] : "", text: m ? m[2] : name };
+    }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const anchors = parsed.filter(p => !p.label);
+    const legacy = parsed.filter(p => p.label);
+
+    const findLegacy = title => {
+      const l = loose(title);
+      if (!l) return null;
+      let hit = legacy.find(p => loose(p.text) === l);
+      if (!hit) hit = legacy.find(p => { const t = loose(p.text); return t && (t.includes(l) || l.includes(t)); });
+      return hit || null;
+    };
+
+    const points = [];
+    const unresolved = [];
+    let n = 0;
+    toUnits(day.items).map(u => u.stop).filter(Boolean).forEach(s => {
+      const title = plain(s.title);
+      if (!title) return;
+      let lat = s.lat, lng = s.lng;
+      if (!(Number.isFinite(lat) && Number.isFinite(lng))){
+        const hit = findLegacy(title);
+        if (hit){ lat = hit.lat; lng = hit.lng; }
+      }
+      if (Number.isFinite(lat) && Number.isFinite(lng)){
+        n++;
+        points.push([lat, lng, `${n} ${title}`]);
+      } else {
+        unresolved.push(s);
+      }
+    });
+
+    return { tuples: [...anchors.map(p => [p.lat, p.lng, p.text]), ...points], unresolved };
+  }
+  function buildDayMapPoints(day){ return resolveDayMapPoints(day).tuples; }
+  function unmappedStops(day){ return resolveDayMapPoints(day).unresolved; }
+
   function normPoints(raw){
     if (!Array.isArray(raw)) return [];
     const pts = raw.map(p => {
@@ -2065,7 +2140,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (!el) return;
     try {
       if (typeof L === "undefined"){ el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`; return; }
-      const pts = normPoints(day.mapPoints);
+      const pts = normPoints(buildDayMapPoints(day));
       if (!pts.length){ el.innerHTML = `<div class="mapfallback">呢日仲未有地圖座標。</div>`; return; }
       const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
@@ -2092,7 +2167,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const all = [];
     const layers = {};
     state.snapshot.days.forEach(day => {
-      const pts = normPoints(day.mapPoints);
+      const pts = normPoints(buildDayMapPoints(day));
       if (!pts.length) return;
       const color = DAY_HEX[day.id] || "#8A94A6";
       const latlngs = pts.map(p => [p.lat,p.lng]);
