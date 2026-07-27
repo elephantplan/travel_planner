@@ -2378,7 +2378,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : fetchable
         ? `<div class="thumb ghost" data-getboardphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
         : "";
-    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s);
+    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
+      + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
     const links = [];
     if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
     if (s.mapUrl){
@@ -3100,7 +3101,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // this pick by its Korean name) — searching again by the Chinese title can
     // land on a different place and overwrite good coordinates and a real
     // rating with another shop's. Keep what we have; just get the photo.
-    if (s.placeId) return enrichPhoto(s, name);
+    if (s.placeId){ await enrichHours(s); return enrichPhoto(s, name); }
     try {
       const r = await callAi({ action:"place-search", query:name });
       const p = r && r.places && r.places[0];
@@ -3114,7 +3115,24 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
       }
     } catch (_){}
+    await enrichHours(s);
     return enrichPhoto(s, name);
+  }
+
+  // Opening hours for a newly-found place — unlike the booking/queue
+  // impression on a picks card, Google Places actually has this as real
+  // structured data, so it's fetched the same way the rating is: once per
+  // place, and it's Google's own answer, not a guess.
+  async function enrichHours(s){
+    if (!s.placeId || s.hoursDone) return;
+    s.hoursDone = true;   // never ask twice, even if Google has nothing for it
+    try {
+      const r = await callAi({ action:"place-hours", placeId:s.placeId });
+      if (r && r.ok !== false && r.summary){
+        s.eatMeta = (s.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
+        s.eatMeta.push({ text:`🕒 ${r.summary}`, cls:"meta-chip hours" });
+      }
+    } catch (_){}
   }
 
   async function enrichPhoto(s, name){

@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'transit' | 'board-ideas' | 'board-picks'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ideas' | 'board-picks'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -208,6 +208,42 @@ async function fetchRating(placeId: string, query: string, apiKey: string) {
   const top = hits[0];
   if (!top) return { rating: null, ratingCount: null, placeId: "" };
   return { rating: top.rating, ratingCount: top.ratingCount, placeId: top.placeId };
+}
+
+// Opening hours for a place we already have a place_id for. Unlike the
+// booking/queue impression the model gives, Google Places actually carries
+// this as real structured data — so it rides along with the rating chip as
+// something Google-verified, not a guess.
+async function fetchOpeningHours(placeId: string, apiKey: string): Promise<string[] | null> {
+  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
+    `&fields=opening_hours&language=zh-TW&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data?.status !== "OK") return null;
+  const wd = data?.result?.opening_hours?.weekday_text;
+  return Array.isArray(wd) && wd.length === 7 ? wd : null;
+}
+
+// Google returns one line per day ("星期一: 上午9:00 – 下午6:00"); most places
+// repeat the same hours most days with one or two exceptions, so group
+// identical lines together rather than showing all 7 — a stop card has no
+// room for a 7-line schedule. If the week is too irregular to summarize
+// cleanly, say so plainly rather than guessing at something shorter.
+function summarizeHours(weekdayText: string[]): string {
+  const parts = weekdayText.map(line => {
+    const idx = line.indexOf(":");
+    return idx < 0 ? { day: line.trim(), hours: "" } : { day: line.slice(0, idx).trim(), hours: line.slice(idx + 1).trim() };
+  });
+  const groups = new Map<string, string[]>();
+  for (const p of parts) {
+    const key = p.hours || "休息";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p.day);
+  }
+  if (groups.size === 1) return `${[...groups.keys()][0]}（每日）`;
+  if (groups.size > 3) return "每日時間唔同，詳情請睇 Google 地圖";
+  return [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+    .map(([hours, days]) => `${days.join("、")}：${hours}`).join("；");
 }
 
 // One endpoint of a journey: a Google place id when we have one, otherwise
@@ -585,6 +621,20 @@ Deno.serve(async (req) => {
         return json({ ok: true, ...r });
       } catch (e) {
         return json({ ok: false, message: "攞評分失敗：" + String(e) });
+      }
+    }
+
+    if (action === "place-hours") {
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+      const placeId = (body?.placeId ?? "").toString().trim();
+      if (!placeId) return json({ ok: false, message: "冇地點資料，攞唔到營業時間。" });
+      try {
+        const weekdayText = await fetchOpeningHours(placeId, placesKey);
+        if (!weekdayText) return json({ ok: true, weekdayText: null, summary: "" });
+        return json({ ok: true, weekdayText, summary: summarizeHours(weekdayText) });
+      } catch (e) {
+        return json({ ok: false, message: "攞營業時間失敗：" + String(e) });
       }
     }
 
