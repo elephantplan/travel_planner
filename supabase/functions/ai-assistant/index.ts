@@ -435,7 +435,13 @@ function compactItinerary(it: any) {
       return o;
     }),
   }));
-  return { 酒店: it?.accommodation?.name ?? "", days };
+  // A trip can change hotels partway through, and "which day is this on the way
+  // for" only makes sense against the hotel you're at THAT night — passing just
+  // the first one would quietly misjudge the back half of the trip.
+  const stays = (Array.isArray(it?.stays) ? it.stays : [])
+    .filter((s: any) => s?.name)
+    .map((s: any) => ({ 住邊度: s.name, 由邊日: s.from ?? "", 住到邊日: s.to ?? "" }));
+  return { 酒店: stays.length ? stays : (it?.accommodation?.name ?? ""), days };
 }
 
 Deno.serve(async (req) => {

@@ -685,6 +685,22 @@ img{max-width:100%;}
 .reslink .resname{font-size:13.5px;font-weight:700;color:var(--info);}
 .reslink .resnote{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
 
+.stayrow{border-top:1px solid var(--rule);padding-top:10px;margin-top:10px;}
+.stayrow:first-of-type{border-top:0;padding-top:0;margin-top:0;}
+.staywhen{
+  font-family:var(--mono);font-size:11px;color:var(--ink-soft);
+  letter-spacing:.02em;margin-bottom:3px;
+}
+.stayblock{border:1px solid var(--rule);border-radius:var(--r-md);padding:11px 12px;margin-bottom:10px;}
+.stayblock-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.stayrange{display:flex;align-items:center;gap:8px;}
+.stayrange select{flex:1 1 auto;min-width:0;}
+.daystay{
+  font-size:12.5px;color:var(--ink-soft);margin-top:9px;
+  background:var(--surface-2);border-radius:var(--r-sm);padding:7px 10px;
+}
+.daystay b{color:var(--ink);font-weight:700;}
+
 /* ---------- home page section editing ---------- */
 .secedit{
   border:0;background:transparent;cursor:pointer;
@@ -1028,6 +1044,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // the overview map has something consistent to draw with
   function normalizeSnapshot(snap){
     if (snap && !Array.isArray(snap.boards)) snap.boards = [];
+    migrateStays(snap);
     if (snap) snap.boards.forEach(b => { if (!b.color) b.color = pickBoardColor(snap.boards); });
     return snap;
   }
@@ -1183,7 +1200,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function overviewHtml(){
     const d = state.snapshot;
     const m = d.meta || {};
-    const acc = d.accommodation || {};
 
     const board = d.days.map(day => {
       const stops = day.items.filter(i => i.kind === "stop").length;
@@ -1242,11 +1258,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
         <div class="panel">
           <div class="k">住宿${secEditBtn("acc")}</div>
-          <div class="v">${esc(acc.name)}</div>
-          <div class="d">${esc(acc.desc)}</div>
-          <div class="chiprow"><span class="meta-chip hours">${esc(acc.hoursChip)}</span></div>
-          ${acc.warning ? `<div class="d">${esc(acc.warning)}</div>` : ""}
-          ${acc.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
+          ${(d.stays || []).length ? (d.stays || []).map(st => `
+            <div class="stayrow">
+              <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
+              <div class="v">${esc(st.name || "未填")}</div>
+              ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
+              ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
+              ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
+              ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
+            </div>`).join("")
+            : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
         </div>
 
         <h3>10 月下旬天氣${secEditBtn("weather")}</h3>
@@ -1408,6 +1429,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <h2>${esc(day.title)}</h2>
         <p class="intro">${esc(day.desc)}</p>
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
+        ${(() => {
+          // which hotel this day belongs to, so a multi-hotel trip is obvious
+          // on the day you actually need it rather than only on the home page
+          const st = stayForDay(state.snapshot, day);
+          return st && st.name ? `<div class="daystay">🏨 呢晚住：<b>${esc(st.name)}</b></div>` : "";
+        })()}
         ${hasMappableDay(day) ? `
           <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
             <span>🗺</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">▾</span>
@@ -2061,21 +2088,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       });
     },
 
-    acc: () => {
-      const d = state.snapshot;
-      const a = d.accommodation = d.accommodation || {};
-      openEditSheet("住宿", "", [
-        { key:"name", type:"text", label:"住邊度", value: a.name || "" },
-        { key:"desc", type:"textarea", rows:3, label:"描述", value: a.desc || "" },
-        { key:"hoursChip", type:"text", label:"入住／退房", value: a.hoursChip || "" },
-        { key:"warning", type:"textarea", rows:2, label:"要注意", value: a.warning || "" },
-        { key:"mapUrl", type:"text", label:"地圖連結", value: a.mapUrl || "", placeholder:"https://map.naver.com/..." },
-      ], async out => {
-        Object.assign(a, out);
-        render();
-        await saveNow("改咗住宿資料");
-      });
-    },
+    acc: () => openStaysSheet(),
 
     weather: () => {
       const d = state.snapshot;
@@ -2136,6 +2149,180 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       });
     },
   };
+
+  // ---------- 住宿：可以唔止一間 ----------
+  // A trip can change hotels partway through, so accommodation is a LIST of
+  // stays, each covering a range of days. The old single-object shape is
+  // migrated on load, and stays[0] is mirrored back onto `accommodation` so the
+  // Edge Function (which reads accommodation.name) keeps working unchanged.
+  function migrateStays(snap){
+    if (!snap) return snap;
+    if (!Array.isArray(snap.stays)){
+      const a = snap.accommodation;
+      const days = snap.days || [];
+      snap.stays = (a && (a.name || a.desc))
+        ? [Object.assign({}, a, {
+            from: days[0] ? days[0].id : "",
+            to:   days.length ? days[days.length-1].id : "",
+          })]
+        : [];
+    }
+    return snap;
+  }
+  function syncAccommodation(snap){
+    // keep the legacy field pointing at the first stay: the AI prompt and any
+    // older saved snapshot still read it
+    const s = (snap.stays || [])[0];
+    snap.accommodation = s
+      ? { name:s.name||"", desc:s.desc||"", hoursChip:s.hoursChip||"", warning:s.warning||"", mapUrl:s.mapUrl||"" }
+      : { name:"", desc:"", hoursChip:"", warning:"", mapUrl:"" };
+  }
+  function dayIndexById(snap, id){
+    return (snap.days || []).findIndex(d => d.id === id);
+  }
+  // which stay covers this day (first match wins if ranges overlap)
+  function stayForDay(snap, day){
+    const di = dayIndexById(snap, day.id);
+    if (di < 0) return null;
+    return (snap.stays || []).find(s => {
+      const a = dayIndexById(snap, s.from), b = dayIndexById(snap, s.to);
+      if (a < 0 || b < 0) return false;
+      return di >= Math.min(a,b) && di <= Math.max(a,b);
+    }) || null;
+  }
+  function stayRangeLabel(snap, s){
+    const days = snap.days || [];
+    const a = days[dayIndexById(snap, s.from)], b = days[dayIndexById(snap, s.to)];
+    if (!a && !b) return "未定日子";
+    if (a && b && a.id === b.id) return `${a.date}（一晚）`;
+    return `${a ? a.date : "?"} → ${b ? b.date : "?"}`;
+  }
+
+  // Renaming the hotel on the home page has to reach the itinerary too — Day 1
+  // literally says 「抵達 <酒店名>」, so leaving the stops alone is what made an
+  // updated 住宿 look like it did nothing. Only whole-name occurrences are
+  // swapped, and only for names long enough to be unambiguous.
+  function renameStayInItinerary(snap, oldName, newName){
+    const from = String(oldName || "").trim(), to = String(newName || "").trim();
+    if (!from || !to || from === to || from.length < 3) return 0;
+    let hits = 0;
+    const swap = t => {
+      const s = String(t == null ? "" : t);
+      if (!s.includes(from)) return t;
+      hits++;
+      return s.split(from).join(to);
+    };
+    (snap.days || []).forEach(d => (d.items || []).forEach(it => {
+      if (it.kind !== "stop") return;
+      it.title = swap(it.title);
+      it.desc  = swap(it.desc);
+    }));
+    // the hero badge names the hotel too — leaving it behind looks just as
+    // stale as the Day 1 stop did
+    const m = snap.meta;
+    if (m && Array.isArray(m.hotelTags)) m.hotelTags = m.hotelTags.map(swap);
+    return hits;
+  }
+
+  // A dedicated sheet rather than the generic field editor: each stay has its
+  // own block with a from/to day picker, and you can add or remove stays.
+  function openStaysSheet(){
+    const snap = state.snapshot;
+    const days = snap.days || [];
+    // work on a copy so 取消 really cancels
+    let draft = JSON.parse(JSON.stringify(snap.stays || []));
+    if (!draft.length) draft = [{ name:"", desc:"", hoursChip:"", warning:"", mapUrl:"",
+                                 from: days[0] ? days[0].id : "", to: days.length ? days[days.length-1].id : "" }];
+
+    const dayOptions = (sel) => days.map(d =>
+      `<option value="${esc(d.id)}"${d.id === sel ? " selected" : ""}>Day ${d.id.replace('day','')} · ${esc(d.date)}</option>`).join("");
+
+    const blockHtml = (s, i) => `
+      <div class="stayblock" data-stay="${i}">
+        <div class="stayblock-head">
+          <b>住宿 ${i+1}</b>
+          ${draft.length > 1 ? `<button class="btn danger" data-staydel="${i}">刪走</button>` : ""}
+        </div>
+        <div class="field"><label>住邊度</label>
+          <input class="input" data-sf="name" value="${esc(s.name||"")}" placeholder="酒店／Airbnb 名或地址"></div>
+        <div class="field"><label>由邊日住到邊日</label>
+          <div class="stayrange">
+            <select class="input" data-sf="from">${dayOptions(s.from)}</select>
+            <span>→</span>
+            <select class="input" data-sf="to">${dayOptions(s.to)}</select>
+          </div>
+        </div>
+        <div class="field"><label>描述</label>
+          <textarea class="textarea" data-sf="desc" rows="3">${esc(s.desc||"")}</textarea></div>
+        <div class="field"><label>入住／退房</label>
+          <input class="input" data-sf="hoursChip" value="${esc(s.hoursChip||"")}"></div>
+        <div class="field"><label>要注意</label>
+          <textarea class="textarea" data-sf="warning" rows="2">${esc(s.warning||"")}</textarea></div>
+        <div class="field"><label>地圖連結</label>
+          <input class="input" data-sf="mapUrl" value="${esc(s.mapUrl||"")}" placeholder="https://map.naver.com/..."></div>
+      </div>`;
+
+    const paint = () => {
+      const box = document.querySelector("#staysbox");
+      if (box) box.innerHTML = draft.map(blockHtml).join("");
+      wireBlocks();
+    };
+    // read every field back out of the DOM before re-rendering or saving,
+    // otherwise switching blocks would throw away what was just typed
+    const readBack = () => {
+      document.querySelectorAll("#staysbox [data-stay]").forEach(el => {
+        const i = +el.dataset.stay;
+        el.querySelectorAll("[data-sf]").forEach(f => { draft[i][f.dataset.sf] = f.value.trim(); });
+      });
+    };
+    function wireBlocks(){
+      document.querySelectorAll("#staysbox [data-staydel]").forEach(b =>
+        b.addEventListener("click", () => { readBack(); draft.splice(+b.dataset.staydel, 1); paint(); }));
+    }
+
+    openSheet(`
+      <h3>住宿</h3>
+      <p class="sec-sub">可以加多過一間 —— 例如頭兩晚住 A，之後轉去 B。改咗酒店名之後，行程入面提到舊名嗰啲景點都會一齊改返。</p>
+      <div id="staysbox">${draft.map(blockHtml).join("")}</div>
+      <button class="btn wide" id="stayadd" style="margin-top:8px;">＋ 加多一間住宿</button>
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>儲存</button>
+      </div>
+    `, sheet => {
+      wireBlocks();
+      sheet.querySelector("#stayadd").addEventListener("click", () => {
+        readBack();
+        const last = draft[draft.length - 1];
+        const nextFrom = last && dayIndexById(snap, last.to) >= 0 && days[dayIndexById(snap, last.to) + 1]
+          ? days[dayIndexById(snap, last.to) + 1].id
+          : (days[0] ? days[0].id : "");
+        draft.push({ name:"", desc:"", hoursChip:"", warning:"", mapUrl:"",
+                     from: nextFrom, to: days.length ? days[days.length-1].id : "" });
+        paint();
+      });
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        readBack();
+        const before = (snap.stays || []).map(s => s.name || "");
+        const kept = draft.filter(s => (s.name || s.desc || "").trim());
+
+        // rename propagation, matched up by position
+        let renamed = 0;
+        kept.forEach((s, i) => {
+          if (before[i] && before[i] !== s.name) renamed += renameStayInItinerary(snap, before[i], s.name);
+        });
+
+        snap.stays = kept;
+        syncAccommodation(snap);
+        closeLayer();
+        render();
+        await saveNow(renamed
+          ? `改咗住宿（${kept.length} 間），順手更新咗行程入面 ${renamed} 個提到舊名嘅地方`
+          : `改咗住宿（${kept.length} 間）`);
+      });
+    });
+  }
 
   // ---------- drag to reorder ----------
   function wireDrag(day, line){
@@ -3496,7 +3683,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     changed("標題", (oldSnap.meta||{}).title, (newSnap.meta||{}).title);
     changed("標題下面嘅資料", [(oldSnap.meta||{}).eyebrow, (oldSnap.meta||{}).facts, (oldSnap.meta||{}).hotelTags],
                               [(newSnap.meta||{}).eyebrow, (newSnap.meta||{}).facts, (newSnap.meta||{}).hotelTags]);
-    changed("住宿", oldSnap.accommodation, newSnap.accommodation);
+    changed("住宿", oldSnap.stays || oldSnap.accommodation, newSnap.stays || newSnap.accommodation);
     changed("天氣", oldSnap.weatherRows, newSnap.weatherRows);
     changed("穿搭建議", oldSnap.clothing, newSnap.clothing);
     changed("無障礙標記", [oldSnap.accessLegend, oldSnap.elevatorTip], [newSnap.accessLegend, newSnap.elevatorTip]);
