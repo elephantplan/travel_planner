@@ -2164,10 +2164,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         ? [Object.assign({}, a, {
             from: days[0] ? days[0].id : "",
             to:   days.length ? days[days.length-1].id : "",
+            // the old 「酒店」 map pin IS this hotel, just written down as a bare
+            // coordinate — take it over so the pin now belongs to the stay and
+            // moves (or disappears) when the stay changes
+            lat: legacyHotelPoint(snap)[0],
+            lng: legacyHotelPoint(snap)[1],
           })]
         : [];
     }
     return snap;
+  }
+  // matches the hand-authored unnumbered pin 「酒店」 that every day used to carry
+  function isHotelAnchorName(t){ return /^(酒店|住宿|hotel)/i.test(String(t || "").trim()); }
+  function legacyHotelPoint(snap){
+    for (const d of (snap.days || [])){
+      for (const p of (Array.isArray(d.mapPoints) ? d.mapPoints : [])){
+        const name = String((Array.isArray(p) ? p[2] : p?.name) || "");
+        if (/^\s*\d+\s/.test(name) || !isHotelAnchorName(name)) continue;
+        const lat = Number(Array.isArray(p) ? p[0] : p?.lat);
+        const lng = Number(Array.isArray(p) ? p[1] : p?.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) return [lat, lng];
+      }
+    }
+    return [undefined, undefined];
   }
   function syncAccommodation(snap){
     // keep the legacy field pointing at the first stay: the AI prompt and any
@@ -2180,8 +2199,35 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function dayIndexById(snap, id){
     return (snap.days || []).findIndex(d => d.id === id);
   }
+  // A stay needs its own coordinate, otherwise the 🏨 pin can't move when the
+  // hotel changes. Looked up the same way stops are (Google via place-search).
+  // A failure leaves the stay with no coordinate — no pin at all beats a pin
+  // on the previous hotel.
+  async function geocodeStays(snap){
+    const todo = (snap.stays || []).filter(s =>
+      (s.name || "").trim() && !s.noGeo &&
+      !(Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))));
+    if (!todo.length) return;
+    let found = 0;
+    for (const s of todo){
+      try {
+        const r = await callAi({ action:"place-search", query: plain(s.name) });
+        const p = r && r.places && r.places[0];
+        if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)){
+          s.lat = p.lat; s.lng = p.lng; found++;
+        } else if (r && r.ok === false){
+          break;                 // lookup unavailable — says nothing about this hotel
+        } else {
+          s.noGeo = true;        // Google has no such place; don't ask again
+        }
+      } catch (_){ break; }
+    }
+    if (found){ render(); await saveNow(`搵返住宿喺地圖上面嘅位置`); }
+    else render();
+  }
   // which stay covers this day (first match wins if ranges overlap)
   function stayForDay(snap, day){
+    if (!snap || !day) return null;
     const di = dayIndexById(snap, day.id);
     if (di < 0) return null;
     return (snap.stays || []).find(s => {
@@ -2312,6 +2358,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         kept.forEach((s, i) => {
           if (before[i] && before[i] !== s.name) renamed += renameStayInItinerary(snap, before[i], s.name);
         });
+        // a renamed hotel is a DIFFERENT building — its old coordinate would
+        // leave the map pin sitting at the previous hotel under the new name
+        kept.forEach((s, i) => {
+          if (before[i] !== s.name){ delete s.lat; delete s.lng; delete s.noGeo; }
+        });
 
         snap.stays = kept;
         syncAccommodation(snap);
@@ -2320,6 +2371,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         await saveNow(renamed
           ? `改咗住宿（${kept.length} 間），順手更新咗行程入面 ${renamed} 個提到舊名嘅地方`
           : `改咗住宿（${kept.length} 間）`);
+        await geocodeStays(snap);
       });
     });
   }
@@ -2533,8 +2585,17 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const m = name.match(/^\s*(\d+)\s+(.*)$/);
       return { lat: Number(lat), lng: Number(lng), label: m ? m[1] : "", text: m ? m[2] : name };
     }).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
-    const anchors = parsed.filter(p => !p.label);       // e.g. "酒店" — never a stop
+    // The hand-authored 「酒店」 pin is a frozen coordinate: it kept pointing at
+    // the first hotel even after 住宿 was changed, which is exactly the "地圖到
+    //仲未update" complaint. Drop it and draw the pin from the stay covering
+    // THIS day instead — right name, right place, and it follows a hotel swap
+    // partway through the trip.
+    const anchors = parsed.filter(p => !p.label && !isHotelAnchorName(p.text));
     const legacy  = parsed.filter(p => p.label);
+    const stay = stayForDay(state.snapshot, day);
+    if (stay && Number.isFinite(Number(stay.lat)) && Number.isFinite(Number(stay.lng)))
+      anchors.unshift({ lat:Number(stay.lat), lng:Number(stay.lng),
+                        label:"", text:`🏨 ${plain(stay.name) || "住宿"}` });
 
     const used = new Set();
     const claimLegacy = s => {
@@ -3848,6 +3909,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     state.snapshot = normalizeSnapshot(row.snapshot);
     try {
       render();
+      // snapshots saved before stays carried their own coordinate still have
+      // no 🏨 pin; fill it in once, in the background
+      geocodeStays(state.snapshot);
     } catch (e){
       $("#app").innerHTML = `<div class="sec"><div class="errbox">行程讀到咗，但畫唔出嚟：${esc(e.message)}<br>可以撳上面日子掣試下第二日。</div></div>`;
     }
