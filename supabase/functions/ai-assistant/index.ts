@@ -130,6 +130,24 @@ async function searchPlaces(query: string, apiKey: string) {
   }));
 }
 
+// A "give me 5 more, different from before" request can't just rely on the
+// prompt asking nicely — a narrow theme naturally has a small set of famous
+// spots, so Gemini tends to reconverge on the same names even when told not
+// to. This is the hard guarantee: normalize away spacing/punctuation/case and
+// drop anything that matches (or is a substring of) something already saved.
+function normPlaceName(s: string): string {
+  return String(s || "").toLowerCase().replace(/[\s·・()（）\-–—,.，。]/g, "");
+}
+function isAlreadyOnList(title: string, kr: string, existingNorm: string[]): boolean {
+  const a = normPlaceName(title), b = normPlaceName(kr);
+  return existingNorm.some(e => {
+    if (!e) return false;
+    if (a && (e === a || (e.length >= 3 && a.length >= 3 && (e.includes(a) || a.includes(e))))) return true;
+    if (b && (e === b || (e.length >= 3 && b.length >= 3 && (e.includes(b) || b.includes(e))))) return true;
+    return false;
+  });
+}
+
 // Look each AI-proposed name up on Google and keep only what actually exists
 // with a real rating attached. This is what separates "high-rated" from
 // "the model asserted it is high-rated" — the numbers come from Google, and
@@ -469,11 +487,15 @@ Deno.serve(async (req) => {
       const itinerary = body?.itinerary;
       const theme = (body?.theme ?? "").toString().trim().slice(0, 60);
       if (!theme) return json({ ok: false, message: "清單未改名，唔知幫你搵咩題材。" });
-      const existing: string[] = Array.isArray(body?.existingTitles) ? body.existingTitles.slice(0, 30) : [];
+      // most-recent-first: if the list has grown past the cap, a repeat of
+      // something just added is far more likely than a repeat of the oldest
+      // entry, so keep the tail (most recently added) when trimming
+      const existing: string[] = Array.isArray(body?.existingTitles) ? body.existingTitles.slice(-60) : [];
+      const existingNorm = existing.map(normPlaceName).filter(Boolean);
       const validDayIds = new Set((itinerary?.days ?? []).map((d: any) => d.id));
       const dayIdList = [...validDayIds].join(", ");
 
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅清單，想要兩組唔同嘅推介。\n\n**第一組 candidates（Google 高分兼多人評）**：俾 12 個你認為評分高、評價人數多嘅候選。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同評價人數，查唔到、或者分數／人數唔夠嘅會自動篩走**，最後只會留低 5 個。所以\n- 唔好自己作評分或者評價人數（你寫幾多我哋都唔會用，一律以 Google 為準）\n- 寧願俾多幾個穩陣嘅、真係存在而且街知巷聞嘅老字號／人氣店，唔好俾啲查唔到嘅冷門名\n- 「kr」欄一定要填返準確嘅韓文店名，因為我哋係用韓文名去 Google 度搜\n\n**第二組 trending（社交平台近排紅）**：俾 5 個你印象中近排喺 Instagram／小紅書／Naver blog 紅嘅。\n重要：**你冇即時上網能力，呢一組我哋會明確標示做「AI 印象・未經核實」俾用戶睇**，所以\n- 唔好扮到自己知道呢一刻嘅熱度，唔好作「最近爆紅」「上個月開幕」呢啲你查唔到嘅講法\n- 淨係揀你訓練資料入面真係有印象嘅，如果諗唔到5個，寧願俾少啲\n- 「buzz」欄用一句講返點解你有印象佢紅（例如打卡位、某劇取景、排隊名物）\n\n兩組都唔好同下面「已有」重複：${existing.length ? existing.join("、") : "（未有）"}\n\n兩組每個都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日順路就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"intro":"一句廣東話簡介","candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null"}],"trending":[{"title":"地點名","kr":"韓文名","desc":"簡短描述","buzz":"點解你有印象佢紅","dayHint":"...","dayId":"dayX或null"}]}`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅清單，想要兩組唔同嘅推介。\n\n**第一組 candidates（Google 高分兼多人評）**：俾 16 個你認為評分高、評價人數多嘅候選。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同埋人數，查唔到、或者分數／人數唔夠嘅會自動篩走，同「已有」重複嘅都會自動剔除**，最後只會留低 5 個。所以\n- 唔好自己作評分或者評價人數（你寫幾多我哋都唔會用，一律以 Google 為準）\n- 寧願俾多幾個穩陣嘅、真係存在而且街知巷聞嘅老字號／人氣店，唔好俾啲查唔到嘅冷門名\n- 「kr」欄一定要填返準確嘅韓文店名，因為我哋係用韓文名去 Google 度搜\n- **如果下面「已有」個list好長，即係之前已經問過幾次，請特登諗第二層次、無咁出名但都真係高分嘅選擇，唔好淨係諗返嗰幾間最出晒名嘅**\n\n**第二組 trending（社交平台近排紅）**：俾 8 個你印象中近排喺 Instagram／小紅書／Naver blog 紅嘅。\n重要：**你冇即時上網能力，呢一組我哋會明確標示做「AI 印象・未經核實」俾用戶睇**，所以\n- 唔好扮到自己知道呢一刻嘅熱度，唔好作「最近爆紅」「上個月開幕」呢啲你查唔到嘅講法\n- 淨係揀你訓練資料入面真係有印象嘅，如果諗唔到8個，寧願俾少啲\n- 「buzz」欄用一句講返點解你有印象佢紅（例如打卡位、某劇取景、排隊名物）\n\n兩組都**一定唔可以**同下面「已有」重複（包括名稱好相似、明顯係同一間舖嘅都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n兩組每個都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日順路就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"intro":"一句廣東話簡介","candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null"}],"trending":[{"title":"地點名","kr":"韓文名","desc":"簡短描述","buzz":"點解你有印象佢紅","dayHint":"...","dayId":"dayX或null"}]}`;
 
       let aiText: string;
       try {
@@ -489,15 +511,16 @@ Deno.serve(async (req) => {
       if (!parsed) return json({ ok: true, intro: aiText, topRated: [], trending: [], checked: 0 });
 
       const clampDay = (p: any) => ({ ...p, dayId: validDayIds.has(p?.dayId) ? p.dayId : null });
-      const cands = (Array.isArray(parsed.candidates) ? parsed.candidates : []).map(clampDay);
+      const notDup = (p: any) => !isAlreadyOnList(p?.title, p?.kr, existingNorm);
+      const cands = (Array.isArray(parsed.candidates) ? parsed.candidates : []).map(clampDay).filter(notDup);
 
       // verified against Google, then ranked by how many people actually rated
-      const verified = await verifyPlaces(cands, placesKey, 12);
+      const verified = await verifyPlaces(cands, placesKey, 16);
       const strong = verified.filter(v => v.rating >= 4.0 && v.ratingCount >= 200);
       const pool = strong.length >= 5 ? strong : verified.filter(v => v.rating >= 3.8);
       const topRated = pool.sort((a, b) => b.ratingCount - a.ratingCount).slice(0, 5);
 
-      const trending = (Array.isArray(parsed.trending) ? parsed.trending : []).slice(0, 5).map(clampDay);
+      const trending = (Array.isArray(parsed.trending) ? parsed.trending : []).map(clampDay).filter(notDup).slice(0, 5);
 
       return json({
         ok: true,

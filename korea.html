@@ -643,6 +643,8 @@ img{max-width:100%;}
   padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
 }
 .ai-change{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--lc,var(--d3));border-radius:var(--r-md);padding:12px 13px;}
+.ai-change[data-jumpitem]{cursor:pointer;}
+.ai-change[data-jumpitem]:active{background:var(--surface-2);}
 .ai-change .op{
   font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;
   letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
@@ -872,21 +874,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return res.json();
   }
 
-  // The board-ideas/board-picks panel lives in memory only, so a page reload
-  // used to make a just-computed recommendation vanish even though the actual
-  // places it added were saved fine. Caching the finished panel per device
-  // means "why did my Google 高分 list disappear" doesn't happen on refresh —
-  // it's just a convenience cache, not trip data, so localStorage is enough.
-  function boardIdeasCacheKey(boardId){ return "boardideas:" + boardId; }
-  function cacheBoardIdeas(idea){
-    if (!idea || idea.status) return;   // only cache the finished panel, not a mid-progress one
-    try { localStorage.setItem(boardIdeasCacheKey(idea.boardId), JSON.stringify(idea)); } catch (_){}
-  }
-  function loadCachedBoardIdeas(boardId){
-    try {
-      const raw = localStorage.getItem(boardIdeasCacheKey(boardId));
-      return raw ? JSON.parse(raw) : null;
-    } catch (_){ return null; }
+  // The board-ideas/board-picks panel used to live in memory only, so a page
+  // reload made a just-computed recommendation vanish even though the actual
+  // places it added were saved fine. It's now saved onto the board itself
+  // (board.lastPanel) as part of the normal snapshot save — real DB
+  // persistence, not just this device — so it survives a reload AND shows up
+  // on another phone. summarizeSnapshotDiff() only ever inspects board.items
+  // and board.name, so this extra field never shows up as noise in the
+  // version-history diff.
+  function saveLastPanel(board, html){
+    board.lastPanel = { html, savedAt: Date.now() };
   }
   // "already copied to Day X" buttons on a restored panel would otherwise all
   // read as un-copied again after a reload, inviting an accidental double-copy
@@ -2306,10 +2303,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (picksBtn) picksBtn.addEventListener("click", () => runBoardPicks(board));
 
     // a page reload clears state.boardIdeas (in-memory only) — fall back to
-    // the cached copy of the last finished panel so it doesn't just vanish
-    if (!state.boardIdeas || state.boardIdeas.boardId !== board.id){
-      const cached = loadCachedBoardIdeas(board.id);
-      if (cached) state.boardIdeas = cached;
+    // the saved copy of the last finished panel so it doesn't just vanish
+    if ((!state.boardIdeas || state.boardIdeas.boardId !== board.id) && board.lastPanel){
+      state.boardIdeas = { boardId: board.id, html: board.lastPanel.html, status: "" };
     }
 
     // re-show the last answer for THIS board after any re-render
@@ -2352,6 +2348,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           refreshTransit(day, [landedAt]);
         });
       });
+
+      // tapping a recommendation card jumps down to the actual saved item in
+      // the list below — same fuzzy "look 落去" jump as the food-card feature
+      // on the overview page, so you can see the photo/rating that already
+      // landed instead of scrolling to hunt for it
+      ideasOut.querySelectorAll("[data-jumpitem]").forEach(card => card.addEventListener("click", e => {
+        if (e.target.closest("button, a")) return;   // let copy/check-links buttons behave normally
+        const el = document.querySelector(`#boardline .unit[data-i="${card.dataset.jumpitem}"]`);
+        if (!el) return;
+        el.scrollIntoView({ behavior:"smooth", block:"center" });
+        el.classList.add("flash");
+        setTimeout(() => el.classList.remove("flash"), 1600);
+      }));
     }
 
     const rateBtn = $("#getboardratings");
@@ -2543,8 +2552,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       state.boardIdeas.status = `已經加咗 ${added.length}／${places.length} 個…`;
       render();
     }
-    if (added.length) await saveNow(`AI 建議加咗 ${added.length} 個地點落「${board.name}」`);
-
     const addedHtml = added.length
       ? `<div class="ideasec-title">📍 已經加落「${esc(board.name)}」（${added.length}）—— 見下面</div>` +
         added.filter(({dayId}) => dayId && dayById(dayId)).map(({item, dayId}) => {
@@ -2555,8 +2562,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml + addedHtml, status: "" };
-    cacheBoardIdeas(state.boardIdeas);
+    saveLastPanel(board, state.boardIdeas.html);
     render();
+    await saveNow(added.length ? `AI 建議加咗 ${added.length} 個地點落「${board.name}」` : `問咗AI「${board.name}」有咩資訊`);
 
     const savedAnswer = [
       r.intro,
@@ -2634,7 +2642,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       state.boardIdeas.status = `加緊… ${added.length}／${topRated.length + trending.length}`;
       render();
     }
-    if (added.length) await saveNow(`AI 加咗 ${topRated.length} 個高分＋${trending.length} 個熱門地點落「${board.name}」`);
 
     const copyBtn = ({item, dayId}) => {
       const d = dayId ? dayById(dayId) : null;
@@ -2646,7 +2653,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="pickhead verified"><span class="pt">🏆 Google 高分・多人評價</span></div>
       <p class="picknote">下面每個都真係去咗 Google 查過（AI 提咗 ${r.checked || 0} 個，查到 ${r.verifiedCount || 0} 個有評分，揀返評價人數最多嘅 ${topRated.length} 個）。分數同人數係 Google 嘅數，唔係 AI 講嘅。</p>
       ${added.filter(a => a.kind === "top").map(a => `
-        <div class="ai-change" style="--lc:var(--ok)">
+        <div class="ai-change" style="--lc:var(--ok)" data-jumpitem="${board.items.indexOf(a.item)}" title="撳一下睇低面清單嗰個">
           <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
           <div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>
           ${a.item.desc ? `<div class="why">${esc(a.item.desc)}</div>` : ""}
@@ -2657,7 +2664,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="pickhead unverified"><span class="pt">🔥 社交平台熱門</span></div>
       <p class="picknote warn">⚠️ 呢一組 AI 冇即時上網能力，查唔到 Instagram／小紅書而家實際有幾紅，所以係佢訓練資料入面嘅印象，可能已經過時或者唔準。想確認就撳下面嘅連結自己睇下最近有冇人 post。</p>
       ${added.filter(a => a.kind === "buzz").map(a => `
-        <div class="ai-change" style="--lc:var(--warn)">
+        <div class="ai-change" style="--lc:var(--warn)" data-jumpitem="${board.items.indexOf(a.item)}" title="撳一下睇低面清單嗰個">
           <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
           ${ratingChip(a.item) ? `<div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>` : ""}
           ${a.item.desc ? `<div class="why">${esc(a.item.desc)}</div>` : ""}
@@ -2668,8 +2675,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>`).join("")}` : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml + topHtml + buzzHtml, status: "" };
-    cacheBoardIdeas(state.boardIdeas);
+    saveLastPanel(board, state.boardIdeas.html);
     render();
+    await saveNow(added.length
+      ? `AI 加咗 ${topRated.length} 個高分＋${trending.length} 個熱門地點落「${board.name}」`
+      : `問咗AI「${board.name}」嘅高分／熱門推介`);
 
     const saved = [
       r.intro,
