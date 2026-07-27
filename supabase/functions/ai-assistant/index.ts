@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ideas' | 'board-picks'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +33,7 @@ async function fetchWeather() {
 
 // NOTE: deliberately no maxOutputTokens. Setting one caps the model BELOW its
 // own default, and since this model's thinking tokens are billed against the
-// same budget, an explicit cap is what pushed the long board-picks answer into
+// same budget, an explicit cap is what pushed the long board-ai answer into
 // finishReason=MAX_TOKENS. Let the model use its full default budget; the
 // prompts are instead written to ask for less.
 async function callGemini(apiKey: string, prompt: string, opts?: { json?: boolean }): Promise<string> {
@@ -518,44 +518,12 @@ Deno.serve(async (req) => {
       return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅建議格式，麻煩再試一次（通常第二次就得）。" });
     }
 
-    if (action === "board-ideas") {
-      if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
-      const itinerary = body?.itinerary;
-      const theme = (body?.theme ?? "").toString().trim().slice(0, 120);
-      if (!theme) return json({ ok: false, message: "清單未改名，唔知幫你搵咩題材嘅資訊。" });
-      const existing: string[] = Array.isArray(body?.existingTitles) ? body.existingTitles.slice(0, 30) : [];
-
-      const validDayIds = new Set((itinerary?.days ?? []).map((d: any) => d.id));
-      const dayIdList = [...validDayIds].join(", ");
-
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶開咗一個叫「${theme}」嘅心水清單，想你根據呢個題材提供資訊。\n\n**先判斷呢個題材屬於邊一種：**\n\nA) **需要實時／官方資料先準嘅題材**（例如天氣、紅葉/銀杏情況、滙率、開放時間、車票預約）—— 你冇即時上網能力，唔好扮到自己知道最新情況。喺 resources 度俾2-4個「已知穩定」嘅官方或者常用網站，下面已經幫你列咗啲例子，揀啱題材嘅就用，唔啱就唔好亂作第啲URL：\n- 天氣：기상청 https://www.weather.go.kr 、Naver 날씨 https://weather.naver.com\n- 紅葉/銀杏：산림청（林務廳）https://www.forest.go.kr 、南怡島官網 https://namisum.com\n- 滙率：Naver 환율 https://finance.naver.com/marketindex/\n- 火車車票（南怡島/ITX）：Korail https://www.letskorail.com\n- 韓國旅遊官方：Visit Korea https://korean.visitkorea.or.kr 、Visit Seoul https://korean.visitseoul.net\n- 地圖／路線：Naver Map https://map.naver.com 、Kakao Map https://map.kakao.com\n只揀同「${theme}」相關嘅幾個，唔使全部列晒，唔啱題材就唔好列。\n\nB) **地點／推介類題材**（例如零食、手信、必去景點、咖啡店、美食）—— 喺 places 度俾8-10個具體建議（唔好同下面「已有」重複：${existing.length ? existing.join("、") : "（未有）"}）。每個建議都要對照返成個行程（見下面JSON），講低邊一日順路（例如靠近嗰日某個景點、唔使特登兜路），或者話明「冇特別順路日子，要特登去一次」。\n\n**dayId 好緊要**：如果嗰個建議真係啱擺入某一日（順路），dayId 要填返嗰日嘅真實 id，只可以用以下其中一個：${dayIdList || "（冇）"}。唔啱邊一日順路、或者要特登去一次嘅，dayId 填 null，唔好靠估亂填一個。dayHint 就係俾人睇嘅文字解釋（可以講埋dayId對應嗰日主題，例如「Day 3 南怡島程尾順路」），dayId 就係俾程式用嘅純ID。\n\n**如果 places 入面嘅建議係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"（有網上／App預約）、"phone"（只可以電話訂）、"walkin"（唔接受預約，要現場排隊）、"unknown"（你唔清楚）四選一\n- 「bookingHow」：一句講點樣訂位\n- 「queueNote」：大概要排幾耐嘅粗略推斷；**你冇即時資料，唔肯定就寫「唔清楚，建議去到先睇現場情況或者出發前打電話確認」，唔好作實體幾多分鐘**\n如果唔係食肆，呢4個欄位可以留空或者false。\n\n唔好作實體幾多蚊、幾多克呢啲你唔肯定嘅具體數字。\n\n兩種都可以同時出現（例如「必去景點」都可能想要多啲官方連結）。如果題材完全睇唔明係關於乜，intro 講返你嘅理解就得，resources／places 可以係空陣列。\n\n現有6日行程（參考用，唔使覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 16000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式：\n{"intro":"一句廣東話簡介你點理解呢個題材","resources":[{"name":"網站名","url":"https://...","note":"呢個網站可以查到咩"}],"places":[{"title":"地點名","kr":"韓文名或留空","desc":"簡短描述","dayHint":"俾人睇嘅文字，例如 Day 3 南怡島程尾順路，或者冇特別邊日順路就講明","dayId":"對應嘅day id或者null","isFood":false,"booking":"","bookingHow":"","queueNote":""}]}`;
-
-      let aiText: string;
-      try {
-        aiText = await callGemini(apiKey, prompt, { json: true });
-      } catch (e) {
-        return json({ ok: false, message: friendlyGeminiError(e) });
-      }
-      const parsed = parseAiJson(aiText);
-      if (parsed) {
-        const places = (Array.isArray(parsed.places) ? parsed.places.slice(0, 12) : []).map((p: any) => ({
-          ...p,
-          // never trust a hallucinated day id — drop anything that isn't a real day in this trip
-          dayId: validDayIds.has(p?.dayId) ? p.dayId : null,
-        }));
-        return json({
-          ok: true,
-          intro: parsed.intro ?? "",
-          resources: Array.isArray(parsed.resources) ? parsed.resources.slice(0, 6) : [],
-          places,
-        });
-      }
-      // Never surface the raw (possibly truncated/malformed) JSON text as if
-      // it were a normal AI reply — that reads as garbage to the user.
-      return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅資訊格式，麻煩再試一次（通常第二次就得）。" });
-    }
-
-    if (action === "board-picks") {
+    // One button on the board page does everything: understand the theme, hand
+    // back official links when the theme needs live/official data, and propose
+    // places that then get verified against Google. This used to be two separate
+    // actions behind two buttons, which meant two waits and two result panels
+    // that overwrote each other.
+    if (action === "board-ai") {
       if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
@@ -570,7 +538,7 @@ Deno.serve(async (req) => {
       const validDayIds = new Set((itinerary?.days ?? []).map((d: any) => d.id));
       const dayIdList = [...validDayIds].join(", ");
 
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅清單，想要一組 Google 高分推介。\n\n**candidates（Google 高分兼多人評）**：俾 12 個你認為評分高、評價人數多嘅候選。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同埋人數，查唔到、或者分數／人數唔夠嘅會自動篩走，同「已有」重複嘅都會自動剔除**，最後只會留低 5 個。所以\n- 唔好自己作評分或者評價人數（你寫幾多我哋都唔會用，一律以 Google 為準）\n- 寧願俾多幾個穩陣嘅、真係存在而且街知巷聞嘅老字號／人氣店，唔好俾啲查唔到嘅冷門名\n- 「kr」欄一定要填返準確嘅韓文店名，因為我哋係用韓文名去 Google 度搜\n- **如果下面「已有」個list好長，即係之前已經問過幾次，請特登諗第二層次、無咁出名但都真係高分嘅選擇，唔好淨係諗返嗰幾間最出晒名嘅**\n\n**如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"（有網上／App預約，例如 Naver Place、Catch Table）、"phone"（只可以電話訂）、"walkin"（唔接受預約，要現場排隊）、"unknown"（你唔清楚）呢四選一\n- 「bookingHow」：一句講點樣訂位（例如「Naver Place App 度預約」「淨係電話訂位，冇網上預約」「唔接受預約，現場攞籌」）\n- 「queueNote」：大概要排幾耐（例如「假日午晚市黃金時間可能要等30分鐘以上，avoid尖峰時段」「一般唔使等」）。**你冇即時資料，呢個係你憑印象嘅粗略推斷，唔肯定就寫「唔清楚，建議去到先睇現場情況或者出發前打電話確認」，唔好作實體幾多分鐘**\n如果唔係食肆（例如係景點、商場），呢4個欄位可以留空或者false。\n\n**一定唔可以**同下面「已有」重複（包括名稱好相似、明顯係同一間舖嘅都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n每個都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日順路就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：呢個回覆太長會俾系統截斷，然後乜都顯示唔到。所以 intro 一句起兩句止；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字。唔好寫長篇大論，夠簡潔就得。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"intro":"一句廣東話簡介","candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅心水清單。請做三樣嘢：\n\n**1) analysis（最重要）**：用2-4句廣東話講你點理解「${theme}」呢個題材，同埋針對佢哋呢個行程俾實際建議（例如擺喺邊一日最順路、有咩伏位、要唔要預約、姨姨行唔行到）。呢段會存低做紀錄一直留喺清單頂，所以要有實質內容，唔好求其。\n\n**2) resources**：如果呢個題材需要實時／官方資料先準（天氣、紅葉/銀杏情況、滙率、開放時間、車票預約），俾2-4個官方網站。你冇即時上網能力，唔好扮到自己知道最新情況，亦都唔好亂作URL，只可以喺下面呢堆揀：\n- 天氣：기상청 https://www.weather.go.kr 、Naver 날씨 https://weather.naver.com\n- 紅葉/銀杏：산림청 https://www.forest.go.kr 、南怡島官網 https://namisum.com\n- 滙率：Naver 환율 https://finance.naver.com/marketindex/\n- 火車車票：Korail https://www.letskorail.com\n- 旅遊官方：Visit Korea https://korean.visitkorea.or.kr 、Visit Seoul https://korean.visitseoul.net\n- 地圖：Naver Map https://map.naver.com 、Kakao Map https://map.kakao.com\n唔啱題材就俾空陣列，唔好夾硬列。\n\n**3) candidates**：俾 12 個同「${theme}」相關、你認為評分高兼多人評嘅地點。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同人數，查唔到或者分數唔夠嘅會自動篩走**，最後只留 5 個。所以：\n- 唔好自己作評分或者評價人數（一律以 Google 為準）\n- 「kr」欄一定要填準確韓文名，因為我哋用韓文名去搜\n- **如果下面「已有」個list好長，即係問過幾次，請特登諗第二層次、無咁出名但真係高分嘅選擇**\n- 如果呢個題材根本唔關地點事（例如只係問天氣），candidates 可以係空陣列\n\n**如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"、"phone"、"walkin"、"unknown" 四選一\n- 「bookingHow」：一句講點樣訂位\n- 「queueNote」：大概要排幾耐。**你冇即時資料，唔肯定就寫「唔清楚，建議出發前確認」，唔好作實體幾多分鐘**\n唔係食肆就留空或者false。\n\n**一定唔可以**同下面「已有」重複（名稱好相似、明顯同一間舖都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n每個地點都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：回覆太長會俾系統截斷，然後乜都顯示唔到。analysis 最多 4 句；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"analysis":"2-4句廣東話分析同建議","resources":[{"name":"網站名","url":"https://...","note":"可以查到咩"}],"candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
 
       let aiText: string;
       try {
@@ -581,7 +549,7 @@ Deno.serve(async (req) => {
       const parsed = parseAiJson(aiText);
       // Never surface the raw (possibly truncated/malformed) JSON text as if
       // it were a normal AI reply — that reads as garbage to the user.
-      if (!parsed) return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅推介格式，麻煩再試一次（通常第二次就得，呢個清單本身要求好長嘅回覆，偶爾會俾截斷）。" });
+      if (!parsed) return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅格式，麻煩再試一次（通常第二次就得）。" });
 
       const clampDay = (p: any) => ({ ...p, dayId: validDayIds.has(p?.dayId) ? p.dayId : null });
       const notDup = (p: any) => !isAlreadyOnList(p?.title, p?.kr, existingNorm);
@@ -595,7 +563,8 @@ Deno.serve(async (req) => {
 
       return json({
         ok: true,
-        intro: parsed.intro ?? "",
+        analysis: parsed.analysis ?? "",
+        resources: Array.isArray(parsed.resources) ? parsed.resources.slice(0, 4) : [],
         topRated,
         checked: cands.length,
         verifiedCount: verified.length,

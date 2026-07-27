@@ -685,23 +685,47 @@ img{max-width:100%;}
 .reslink .resname{font-size:13.5px;font-weight:700;color:var(--info);}
 .reslink .resnote{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
 
-/* one list is checked against Google, the other is the model's impression —
-   the page has to make that difference obvious, not bury it */
-.pickhead{
-  display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
-  margin:18px 2px 4px;
+/* ---------- AI analysis kept above the list ---------- */
+/* Deliberately a running log, not a panel: a new run appends, so nothing the
+   AI said last time disappears just because you asked again. */
+.ailog{
+  background:var(--surface);border:1px solid var(--rule);
+  border-radius:var(--r-md);padding:12px 13px;margin:0 0 14px;
 }
-.pickhead .pt{font-size:13.5px;font-weight:800;}
-.pickhead.verified .pt{color:var(--ok);}
-.pickhead.unverified .pt{color:var(--warn);}
-.picknote{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin:0 2px 9px;}
-.picknote.warn{color:var(--warn);}
-.buzz{font-size:12px;color:var(--warn);margin-top:5px;line-height:1.55;}
-.checklinks{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
-.checklinks a{
-  font-size:11.5px;font-weight:600;text-decoration:none;
-  color:var(--info);background:var(--info-bg);padding:5px 10px;border-radius:999px;
+.ailog-head{
+  font-size:13px;font-weight:800;color:var(--ink);
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin-bottom:9px;
 }
+.ailog-sub{font-size:11px;font-weight:500;color:var(--ink-soft);}
+.ailog-entry{border-top:1px solid var(--rule);padding-top:9px;margin-top:9px;}
+.ailog-entry:first-of-type{border-top:0;padding-top:0;margin-top:0;}
+.ailog-entry.latest{
+  border-left:3px solid var(--bookmark);padding-left:9px;margin-left:-2px;
+}
+.ailog-when{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;}
+.ailog-text{font-size:13px;line-height:1.72;color:var(--ink);white-space:pre-wrap;}
+.ailog-note{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin-top:6px;}
+.ailog-links{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.ailog-links a{
+  font-size:12px;font-weight:600;text-decoration:none;
+  color:var(--info);background:var(--info-bg);padding:7px 10px;border-radius:var(--r-sm);
+}
+.ailog-links a small{display:block;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+
+/* what THIS run just found, so it is obvious which entries are new */
+.ainew{
+  font-size:10.5px;font-weight:800;letter-spacing:.02em;
+  color:var(--bookmark);background:var(--bookmark-bg,rgba(124,140,161,.16));
+  border:1px solid var(--bookmark);border-radius:999px;padding:3px 8px;
+}
+.stopcard.freshai{box-shadow:0 0 0 1.5px var(--bookmark) inset;}
+
+.copyrow{
+  width:100%;margin-top:9px;display:flex;align-items:center;justify-content:center;
+  gap:7px;flex-wrap:wrap;
+}
+.copyrow small{font-weight:500;color:var(--ink-soft);font-size:11px;}
+.sugg{color:var(--bookmark);font-size:11px;font-weight:700;}
 
 /* ---------- asked / answered log ---------- */
 .qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:7px;overflow:hidden;}
@@ -891,37 +915,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   async function callAi(payload){
     const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(payload) });
     return res.json();
-  }
-
-  // The board-ideas/board-picks panel used to live in memory only, so a page
-  // reload made a just-computed recommendation vanish even though the actual
-  // places it added were saved fine. It's now saved onto the board itself
-  // as part of the normal snapshot save — real DB persistence, not just this
-  // device — so it survives a reload AND shows up on another phone.
-  // summarizeSnapshotDiff() only ever inspects board.items and board.name, so
-  // these extra fields never show up as noise in the version-history diff.
-  //
-  // Kept per kind: both buttons used to write the same single slot, so running
-  // "問 AI 有咩資訊" silently wiped the Google-高分 result you were still
-  // reading. Each kind now keeps its own, and both are shown.
-  function saveLastPanel(board, kind, html){
-    if (!board.lastPanels) board.lastPanels = {};
-    board.lastPanels[kind] = { html, savedAt: Date.now() };
-    delete board.lastPanel;          // superseded single-slot field
-  }
-  function restoredPanelHtml(board){
-    const slots = board.lastPanels ? Object.values(board.lastPanels).filter(s => s && s.html) : [];
-    if (!slots.length) return board.lastPanel ? board.lastPanel.html : "";   // pre-split boards
-    return slots.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).map(s => s.html).join("");
-  }
-  // "already copied to Day X" buttons on a restored panel would otherwise all
-  // read as un-copied again after a reload, inviting an accidental double-copy
-  function loadCopiedPicks(){
-    try { return new Set(JSON.parse(localStorage.getItem("boardideas:copied") || "[]")); }
-    catch (_){ return new Set(); }
-  }
-  function saveCopiedPicks(set){
-    try { localStorage.setItem("boardideas:copied", JSON.stringify([...set])); } catch (_){}
   }
 
   // Every AI answer is kept, so the family can read back what was asked.
@@ -1886,6 +1879,48 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
   }
 
+  // Copy (not move) a bookmarked place into a day: the list keeps its copy so
+  // the same place can go into several days, or stay parked for later. The
+  // AI's suggested day is flagged rather than pre-selected — it's a hint, and
+  // the list is still in trip order so nothing jumps around.
+  function openCopyPicker(board, index){
+    const item = board.items[index];
+    if (!item) return;
+    const name = plain(item.title) || "呢個地點";
+    const days = state.snapshot.days || [];
+    const suggested = item.suggestDayId && dayById(item.suggestDayId) ? item.suggestDayId : "";
+
+    openSheet(`
+      <h3>複製去邊一日？</h3>
+      <p class="sec-sub">「${esc(name)}」會複製一份入去嗰日，清單度呢個仍然留低，之後仲可以再複製去第二日。</p>
+      <div class="daypick">
+        ${days.map(d => `
+          <button data-copyday="${d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+            <span class="bullet"></span>
+            <span class="dcode">Day ${d.id.replace('day','')}</span>
+            <span>${esc(d.title)}${d.id === suggested ? ` <b class="sugg">⭐ AI 話呢日順路</b>` : ""}</span>
+          </button>`).join("")}
+      </div>
+    `, sheet => {
+      sheet.querySelectorAll("[data-copyday]").forEach(b => b.addEventListener("click", async () => {
+        const day = dayById(b.dataset.copyday);
+        if (!day) return;
+        const copy = Object.assign(blankStop(), JSON.parse(JSON.stringify(item)), { kind:"stop" });
+        delete copy.aiRun;            // the badge belongs to the bookmark list, not the itinerary
+        delete copy.suggestDayId;
+        const units = toUnits(day.items);
+        units.push({ seg: null, stop: copy });
+        day.items = fromUnits(units);
+        syncMapPoints(day);
+        const landedAt = units.length - 1;
+        closeLayer();
+        render();
+        await saveNow(`「${name}」複製咗去 ${day.title}（清單度都仲留低）`);
+        refreshTransit(day, [landedAt]);
+      }));
+    });
+  }
+
   // ---------- drag to reorder ----------
   function wireDrag(day, line){
     if (!line) return;
@@ -2357,10 +2392,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div class="colorpick" data-boardcolor>
           ${BOARD_PALETTE.map(c => `<button type="button" class="swatch${c === board.color ? " active" : ""}" data-setcolor="${c}" style="background:${c}" aria-label="改做${c}"></button>`).join("")}
         </div>
-        <button class="btn wide" id="boardideas" style="margin-top:11px;">✨ 問 AI「${esc(board.name)}」有咩資訊</button>
-        <button class="btn wide" id="boardpicks" style="margin-top:7px;">🏆 幫我搵 5 個 Google 高分地點</button>
-        <div id="boardideas-out"></div>
+        <button class="btn wide" id="boardai" style="margin-top:11px;">✨ 問 AI 幫我搵「${esc(board.name)}」</button>
+        <div id="boardai-out"></div>
       </section>
+
+      ${aiLogHtml(board)}
 
       <div class="line" id="boardline" style="--lc:var(--bookmark)">
         ${board.items.map((s,i) => boardItemHtml(board, s, i)).join("")}
@@ -2378,6 +2414,33 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     `;
   }
 
+  // AI's analysis lives above the list and ACCUMULATES:每次撳都係加多一段，
+  // 唔會蓋走之前嗰啲. Stored on the board (so it's real DB data, survives a
+  // reload and shows up on another phone) rather than as a throwaway panel.
+  function aiLogHtml(board){
+    const log = Array.isArray(board.aiLog) ? board.aiLog : [];
+    if (!log.length) return "";
+    return `
+      <section class="ailog">
+        <div class="ailog-head">🧠 AI 分析同建議<span class="ailog-sub">會一直記低，撳多次AI都唔會冇咗之前嘅</span></div>
+        ${log.map((e, i) => `
+          <div class="ailog-entry${i === 0 ? " latest" : ""}">
+            <div class="ailog-when">${esc(e.when || "")}${i === 0 ? " ・ 最新一次" : ""}</div>
+            ${e.analysis ? `<div class="ailog-text">${esc(e.analysis)}</div>` : ""}
+            ${(e.resources || []).length ? `<div class="ailog-links">${e.resources.map(r =>
+              `<a href="${esc(r.url)}" target="_blank" rel="noopener">🔗 ${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</a>`).join("")}</div>` : ""}
+            ${e.note ? `<div class="ailog-note">${esc(e.note)}</div>` : ""}
+          </div>`).join("")}
+      </section>`;
+  }
+
+  // the AI already worked out which day this place is on the way for, so the
+  // copy button says so up front instead of making you guess in the picker
+  function suggestLabel(s){
+    const d = s.suggestDayId ? dayById(s.suggestDayId) : null;
+    return d ? `<small>AI 建議：${esc(d.title)}</small>` : "";
+  }
+
   function boardItemHtml(board, s, i){
     const key = board.id + ":" + i;
     const open = state.open.has(key);
@@ -2388,7 +2451,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : fetchable
         ? `<div class="thumb ghost" data-getboardphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
         : "";
-    const chips = (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
+    // only the newest AI batch is badged — otherwise every place the AI ever
+    // found stays marked and the badge stops meaning "this is what just landed"
+    const isFresh = s.aiRun && s.aiRun === board.aiRunLatest;
+    const chips = (isFresh ? `<span class="ainew">✨ 今次 AI 搵</span>` : "")
+      + (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
       + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
     const links = [];
     if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
@@ -2402,7 +2469,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="unit" data-i="${i}">
         <div class="stop">
           <div class="stop-rail"><span class="node"></span></div>
-          <div class="stopcard${open ? " open" : ""}">
+          <div class="stopcard${open ? " open" : ""}${isFresh ? " freshai" : ""}">
             <div class="stopmain">
               ${thumb}
               <div class="stopbody">
@@ -2417,6 +2484,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
+            <button class="btn copyrow" data-copyitem="${i}">📋 複製去某一日…${suggestLabel(s)}</button>
             ${open ? boardItemEditorHtml(board, s, i) : ""}
           </div>
         </div>
@@ -2505,72 +2573,18 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       await saveNow(`「${board.name}」清單改咗地圖顏色`);
     }));
 
-    const ideasBtn = $("#boardideas");
-    if (ideasBtn) ideasBtn.addEventListener("click", () => runBoardIdeas(board));
-    const picksBtn = $("#boardpicks");
-    if (picksBtn) picksBtn.addEventListener("click", () => runBoardPicks(board));
+    const aiBtn = $("#boardai");
+    if (aiBtn) aiBtn.addEventListener("click", () => runBoardAi(board));
 
-    // a page reload clears state.boardIdeas (in-memory only) — fall back to
-    // the saved copy of the last finished panels so they don't just vanish
-    if (!state.boardIdeas || state.boardIdeas.boardId !== board.id){
-      const saved = restoredPanelHtml(board);
-      if (saved) state.boardIdeas = { boardId: board.id, html: saved, status: "" };
+    // live progress for a run in flight; the finished result lives in
+    // board.aiLog (rendered above the list) and in the list items themselves
+    const aiOut = $("#boardai-out");
+    if (aiOut && state.boardAi && state.boardAi.boardId === board.id && state.boardAi.status){
+      aiOut.innerHTML = `<div class="ai-msg">${esc(state.boardAi.status)}</div>`;
     }
 
-    // re-show the last answer for THIS board after any re-render
-    const ideasOut = $("#boardideas-out");
-    if (ideasOut && state.boardIdeas && state.boardIdeas.boardId === board.id){
-      ideasOut.innerHTML = state.boardIdeas.html +
-        (state.boardIdeas.status ? `<div class="ai-msg">${esc(state.boardIdeas.status)}</div>` : "");
-      // "copy", not "move": the place stays in the list (so it's still there for
-      // other days/trips to reuse) and a copy lands in the itinerary day.
-      // Indices don't shift, so the panel doesn't need to be torn down after.
-      // refreshTransit() re-renders the page several times while it works, which
-      // would wipe a plain DOM-text confirmation — so "already copied" lives in
-      // state and gets re-applied every time this wiring runs, not just once.
-      if (!state.copiedPicks) state.copiedPicks = loadCopiedPicks();
-      ideasOut.querySelectorAll("[data-quickcopy]").forEach(btn => {
-        const idx = +btn.dataset.quickcopy;
-        const dayId = btn.dataset.quickcopyday;
-        const day = dayById(dayId);
-        if (!day) return;
-        const copyKey = `${board.id}:${idx}:${dayId}`;
-        if (state.copiedPicks.has(copyKey)){
-          btn.disabled = true;
-          btn.textContent = `✓ 已複製去 ${day.title}`;
-          return;
-        }
-        btn.addEventListener("click", async () => {
-          const item = board.items[idx];
-          if (!item) return;
-          btn.textContent = "複製緊…"; btn.disabled = true;
-          const copy = Object.assign(blankStop(), JSON.parse(JSON.stringify(item)), { kind:"stop" });
-          const units = toUnits(day.items);
-          units.push({ seg: null, stop: copy });
-          day.items = fromUnits(units);
-          syncMapPoints(day);
-          const landedAt = units.length - 1;
-          state.copiedPicks.add(copyKey);
-          saveCopiedPicks(state.copiedPicks);
-          btn.textContent = `✓ 已複製去 ${day.title}`;
-          await saveNow(`「${plain(copy.title) || "一個地點"}」複製咗去 ${day.title}（清單度都仲留低）`);
-          refreshTransit(day, [landedAt]);
-        });
-      });
-
-      // tapping a recommendation card jumps down to the actual saved item in
-      // the list below — same fuzzy "look 落去" jump as the food-card feature
-      // on the overview page, so you can see the photo/rating that already
-      // landed instead of scrolling to hunt for it
-      ideasOut.querySelectorAll("[data-jumpitem]").forEach(card => card.addEventListener("click", e => {
-        if (e.target.closest("button, a")) return;   // let copy/check-links buttons behave normally
-        const el = document.querySelector(`#boardline .unit[data-i="${card.dataset.jumpitem}"]`);
-        if (!el) return;
-        el.scrollIntoView({ behavior:"smooth", block:"center" });
-        el.classList.add("flash");
-        setTimeout(() => el.classList.remove("flash"), 1600);
-      }));
-    }
+    document.querySelectorAll("#boardline [data-copyitem]").forEach(btn =>
+      btn.addEventListener("click", () => openCopyPicker(board, +btn.dataset.copyitem)));
 
     const rateBtn = $("#getboardratings");
     if (rateBtn) rateBtn.addEventListener("click", async () => {
@@ -2704,164 +2718,94 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
   }
 
-  // Ask the AI what's useful for whatever theme this board is named after.
-  // Live-data topics (weather, foliage) get pointers to real sites instead of
-  // a guess; place-type topics (snacks, souvenirs) get concrete suggestions
-  // tagged with which day of the actual route they're convenient near.
-  // Asked from inside a board, so it answers inside that board — no overlay.
-  // An overlay for this was pure ceremony: the results belong to the page you
-  // are already looking at, and covering that page hid the very list the
-  // suggestions were being added to. Progress and results render in place,
-  // and place suggestions save themselves into the board as they resolve.
-  // Non-places (official sites for a live-data theme) stay as plain links.
-  async function runBoardIdeas(board){
-    const out = $("#boardideas-out");
-    const btn = $("#boardideas");
+  // One button, one wait. Live-data topics (weather, foliage) come back as
+  // pointers to real official sites instead of a guess; place topics come back
+  // as names the server has already checked against Google Places, so every
+  // rating shown is Google's own.
+  //
+  // Where the results go:
+  //  · the analysis/advice is APPENDED to board.aiLog above the list, so asking
+  //    again never wipes what the AI said last time;
+  //  · the places themselves go to the TOP of the list, badged as this run's,
+  //    because the list is where you actually work with them (the old duplicate
+  //    "recommendation card" panel just repeated the same rating/booking box
+  //    and its copy button did nothing the list couldn't already do).
+  async function runBoardAi(board){
+    const out = $("#boardai-out");
+    const btn = $("#boardai");
     if (!out) return;
-    if (btn){ btn.disabled = true; btn.textContent = "✨ 問緊 AI…"; }
-    out.innerHTML = `<div class="ai-msg">諗緊「${esc(board.name)}」有咩資訊…</div>`;
-
-    let r;
-    try {
-      const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
-      r = await callAi({ action:"board-ideas", theme: board.name, itinerary: state.snapshot, existingTitles });
-    } catch (e){
-      out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
-      if (btn){ btn.disabled = false; btn.textContent = `✨ 問 AI「${board.name}」有咩資訊`; }
-      return;
-    }
-    if (r.ok === false){
-      out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`;
-      if (btn){ btn.disabled = false; btn.textContent = `✨ 問 AI「${board.name}」有咩資訊`; }
-      return;
-    }
-
-    const resources = r.resources || [], places = r.places || [];
-    const introHtml = r.intro ? `<div class="ai-msg">${esc(r.intro)}</div>` : "";
-    const resourcesHtml = resources.length ? `<div class="ideasec-title">🔗 官方／實用網站</div>` +
-      resources.map(res => `
-        <a class="reslink" href="${esc(res.url)}" target="_blank" rel="noopener">
-          <div class="resname">${esc(res.name)}</div>
-          ${res.note ? `<div class="resnote">${esc(res.note)}</div>` : ""}
-        </a>`).join("") : "";
-
-    // render() below rebuilds the page, so remember what to re-show afterwards
-    state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml, status: places.length ? `搵緊相、加緊落「${board.name}」…` : "" };
-    out.innerHTML = state.boardIdeas.html + (state.boardIdeas.status ? `<div class="ai-msg">${esc(state.boardIdeas.status)}</div>` : "");
-
-    // add each suggestion as it resolves, so the list visibly fills up
-    const added = [];
-    for (const pl of places){
-      const item = Object.assign(blankBoardItem(), {
-        title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
-      });
-      if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
-      board.items.push(item);
-      await enrichStop(item);
-      added.push({ item, dayId: pl.dayId });
-      state.boardIdeas.status = `已經加咗 ${added.length}／${places.length} 個…`;
-      render();
-    }
-    const addedHtml = added.length
-      ? `<div class="ideasec-title">📍 已經加落「${esc(board.name)}」（${added.length}）—— 見下面</div>` +
-        added.filter(({dayId}) => dayId && dayById(dayId)).map(({item, dayId}) => {
-          const targetDay = dayById(dayId);
-          const idx = board.items.indexOf(item);
-          return `<button class="btn" data-quickcopy="${idx}" data-quickcopyday="${dayId}" style="margin:0 6px 6px 0;">📋 「${esc(plain(item.title))}」複製去 ${esc(targetDay.title)}</button>`;
-        }).join("")
-      : "";
-
-    state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml + addedHtml, status: "" };
-    saveLastPanel(board, "ideas", state.boardIdeas.html);
-    render();
-    await saveNow(added.length ? `AI 建議加咗 ${added.length} 個地點落「${board.name}」` : `問咗AI「${board.name}」有咩資訊`);
-
-    const savedAnswer = [
-      r.intro,
-      resources.length ? resources.map(x => `${x.name}：${x.url}`).join("\n") : "",
-      added.length ? added.map(({item}) => `${plain(item.title)}${item.tip ? `（${item.tip}）` : ""}：${item.desc||""}`).join("\n") : "",
-    ].filter(Boolean).join("\n\n");
-    if (savedAnswer) saveAiNote("board", `${board.name} 主題資訊`, savedAnswer);
-  }
-
-  // where to go and see for yourself whether something is actually trending
-  // Only one list, and it is the verifiable one: the AI merely proposes names,
-  // then the server looks every one up on Google and keeps the ones that really
-  // are well rated. Every number on screen is Google's. (There used to be a
-  // second "socially trending" list, but it was the AI's impression of buzz it
-  // cannot actually check, so it was dropped rather than shown with a warning.)
-  async function runBoardPicks(board){
-    const out = $("#boardideas-out");
-    const btn = $("#boardpicks");
-    if (!out) return;
-    const restore = () => { const b2 = $("#boardpicks"); if (b2){ b2.disabled = false; b2.textContent = "🏆 幫我搵 5 個 Google 高分地點"; } };
+    const label = `✨ 問 AI 幫我搵「${board.name}」`;
+    const restore = () => { const b2 = $("#boardai"); if (b2){ b2.disabled = false; b2.textContent = label; } };
+    const setStatus = (t) => {
+      state.boardAi = { boardId: board.id, status: t };
+      const o = $("#boardai-out");
+      if (o) o.innerHTML = t ? `<div class="ai-msg">${esc(t)}</div>` : "";
+    };
     if (btn){ btn.disabled = true; btn.textContent = "問緊 AI，再逐個去 Google 查…"; }
-    out.innerHTML = `<div class="ai-msg">諗緊「${esc(board.name)}」嘅推介，然後會逐個攞去 Google 查真實評分…</div>`;
+    setStatus(`諗緊「${board.name}」，跟住會逐個攞去 Google 查真實評分…`);
 
     let r;
     try {
       const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
-      r = await callAi({ action:"board-picks", theme: board.name, itinerary: state.snapshot, existingTitles });
+      r = await callAi({ action:"board-ai", theme: board.name, itinerary: state.snapshot, existingTitles });
     } catch (e){
-      out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`; restore(); return;
+      setStatus("出咗問題：" + e.message); restore(); return;
     }
-    if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; restore(); return; }
+    if (r.ok === false){ setStatus(r.message); restore(); return; }
 
     const topRated = r.topRated || [];
-    const introHtml = r.intro ? `<div class="ai-msg">${esc(r.intro)}</div>` : "";
+    const runId = "run" + Date.now();
+    board.aiRunLatest = runId;
 
-    state.boardIdeas = { boardId: board.id, html: introHtml, status: `加緊落「${board.name}」…` };
-    render();
-
-    // these already carry Google's own rating from the server-side check
-    const added = [];
-    for (const pl of topRated){
+    // built first, then unshifted in one go — unshifting one at a time inside
+    // the loop would reverse the server's ranking
+    const newItems = topRated.map(pl => {
       const item = Object.assign(blankBoardItem(), {
         title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "", tip: pl.dayHint || "",
         placeId: pl.placeId || "", rating: pl.rating, ratingCount: pl.ratingCount,
+        aiRun: runId, suggestDayId: pl.dayId || "",
       });
       if (Number.isFinite(pl.lat)) item.lat = pl.lat;
       if (Number.isFinite(pl.lng)) item.lng = pl.lng;
       if (!item.mapUrl && (pl.kr || pl.title)) item.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(pl.kr || pl.title)}`;
       if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
-      board.items.push(item);
-      await enrichStop(item);                    // photo (rating already known)
-      added.push({ item, dayId: pl.dayId });
-      state.boardIdeas.status = `加緊… ${added.length}／${topRated.length}`;
+      return item;
+    });
+    board.items.unshift(...newItems);
+    render();
+
+    let done = 0;
+    for (const item of newItems){
+      await enrichStop(item);                 // photo + opening hours (rating already known)
+      done++;
+      setStatus(`搵緊相同營業時間… ${done}／${newItems.length}`);
       render();
     }
 
-    const copyBtn = ({item, dayId}) => {
-      const d = dayId ? dayById(dayId) : null;
-      if (!d) return "";
-      return `<button class="btn" data-quickcopy="${board.items.indexOf(item)}" data-quickcopyday="${d.id}" style="margin:6px 6px 0 0;">📋 複製去 ${esc(d.title)}</button>`;
-    };
+    if (!Array.isArray(board.aiLog)) board.aiLog = [];
+    board.aiLog.unshift({
+      when: new Date().toLocaleString("zh-HK", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }),
+      analysis: r.analysis || "",
+      resources: r.resources || [],
+      note: newItems.length
+        ? `加咗 ${newItems.length} 個新地點喺清單最頂（AI 提咗 ${r.checked || 0} 個，Google 查到 ${r.verifiedCount || 0} 個有評分，揀返評價人數最多嗰幾個）。分數同人數係 Google 嘅數，唔係 AI 講嘅。`
+        : "今次冇加到新地點——可能同清單入面已經有嘅重複咗，或者呢個題材本身唔關地點事。",
+    });
+    // superseded by aiLog: the old scheme stored a blob of panel HTML per board
+    delete board.lastPanel;
+    delete board.lastPanels;
 
-    const topHtml = topRated.length ? `
-      <div class="pickhead verified"><span class="pt">🏆 Google 高分・多人評價</span></div>
-      <p class="picknote">下面每個都真係去咗 Google 查過（AI 提咗 ${r.checked || 0} 個，查到 ${r.verifiedCount || 0} 個有評分，揀返評價人數最多嘅 ${topRated.length} 個）。分數同人數係 Google 嘅數，唔係 AI 講嘅。</p>
-      ${added.map(a => `
-        <div class="ai-change" style="--lc:var(--ok)" data-jumpitem="${board.items.indexOf(a.item)}" title="撳一下睇低面清單嗰個">
-          <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
-          <div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>
-          ${a.item.desc ? `<div class="why">${esc(a.item.desc)}</div>` : ""}
-          ${bookingBoxHtml(a.item)}
-          ${copyBtn(a)}
-        </div>`).join("")}` : "";
-
-    state.boardIdeas = { boardId: board.id, html: introHtml + topHtml, status: "" };
-    saveLastPanel(board, "picks", state.boardIdeas.html);
+    setStatus("");
+    restore();
     render();
-    await saveNow(added.length
-      ? `AI 加咗 ${topRated.length} 個 Google 高分地點落「${board.name}」`
-      : `問咗AI「${board.name}」嘅 Google 高分推介`);
+    await saveNow(newItems.length
+      ? `AI 幫「${board.name}」搵咗 ${newItems.length} 個新地點，同埋記低咗分析`
+      : `問咗 AI 關於「${board.name}」，記低咗分析`);
 
-    const saved = [
-      r.intro,
-      topRated.length ? "【Google 高分・已核實】\n" + added.map(a =>
-        `${plain(a.item.title)}：⭐${a.item.rating}・${a.item.ratingCount} 則評價${a.item.tip ? `（${a.item.tip}）` : ""}`).join("\n") : "",
+    const saved = [r.analysis, (r.resources||[]).map(x => `${x.name}：${x.url}`).join("\n"),
+      newItems.length ? newItems.map(i => `${plain(i.title)}：⭐${i.rating}・${i.ratingCount} 則評價`).join("\n") : ""
     ].filter(Boolean).join("\n\n");
-    if (saved) saveAiNote("board", `${board.name}：Google 高分推介`, saved);
+    if (saved) saveAiNote("board", `${board.name}：AI 分析＋推介`, saved);
   }
 
   // ==================================================================
