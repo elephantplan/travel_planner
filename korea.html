@@ -1697,6 +1697,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         if (!confirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
         units.splice(i,1);
         day.items = fromUnits(units);
+        syncMapPoints(day);
         state.open.clear();
         render();
         await saveNow("刪走咗「" + (s.title || "一個地點") + "」");
@@ -1767,7 +1768,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       return moving;
     }
     function afterDetach(){
-      if (source.kind === "day") refreshTransit(source.day, [source.index]);
+      if (source.kind === "day"){ syncMapPoints(source.day); refreshTransit(source.day, [source.index]); }
     }
 
     openSheet(`
@@ -1806,6 +1807,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         const tUnits = toUnits(target.items);
         tUnits.push({ seg: null, stop: movingStop });
         target.items = fromUnits(tUnits);
+        syncMapPoints(target);
         const landedAt = tUnits.length - 1;
         closeLayer();
         state.open.clear();
@@ -1955,6 +1957,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         const [moved] = units.splice(d.from, 1);
         units.splice(d.to, 0, moved);
         day.items = fromUnits(units);
+        syncMapPoints(day);
         state.open.clear();
         render();
         // follow the card to where it landed, so the drop is never off-screen
@@ -1973,6 +1976,42 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // stored points are [lat, lng, name] tuples; the name often carries the
   // stop's own number ("1 Artist Bakery"), so use that rather than inventing one
+  // day.mapPoints is a hand-authored [lat,lng,"N 地方名"] list, kept separate
+  // from day.items so drag-reorder, cross-day moves, copies and removals never
+  // touch it — which is exactly why the mini-map used to keep the OLD
+  // order/numbering (or a stale pin for something already deleted) no matter
+  // what happened to the actual timeline. This matches each numbered point
+  // back to a stop by name and renumbers the points to follow the stops'
+  // current order. A point that matches nothing anymore (its stop got
+  // deleted) is dropped — a leftover pin for a place no longer on the day is
+  // more wrong than losing one hand-authored coordinate.
+  function syncMapPoints(day){
+    const raw = Array.isArray(day.mapPoints) ? day.mapPoints : [];
+    if (!raw.length) return;
+    const stopTitles = toUnits(day.items).map(u => u.stop).filter(Boolean).map(s => loose(plain(s.title)));
+
+    const parsed = raw.map(p => {
+      const lat = Array.isArray(p) ? p[0] : p?.lat;
+      const lng = Array.isArray(p) ? p[1] : p?.lng;
+      const name = String((Array.isArray(p) ? p[2] : p?.name) || "");
+      const m = name.match(/^\s*(\d+)\s+(.*)$/);
+      return { lat, lng, label: m ? m[1] : "", text: m ? m[2] : name };
+    });
+    const numbered = parsed.filter(p => p.label);
+    const anchors  = parsed.filter(p => !p.label);   // e.g. "酒店" — not a stop, keep up front
+    if (!numbered.length) return;
+
+    numbered.forEach(p => {
+      const l = loose(p.text);
+      let idx = stopTitles.findIndex(t => t === l);
+      if (idx < 0) idx = stopTitles.findIndex(t => t && l && (t.includes(l) || l.includes(t)));
+      p.order = idx;
+    });
+    const matched = numbered.filter(p => p.order >= 0).sort((a,b) => a.order - b.order);
+    matched.forEach((p,i) => { p.label = String(i + 1); });
+
+    day.mapPoints = [...anchors, ...matched].map(p => [p.lat, p.lng, `${p.label} ${p.text}`.trim()]);
+  }
   function normPoints(raw){
     if (!Array.isArray(raw)) return [];
     const pts = raw.map(p => {
@@ -2304,6 +2343,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           const units = toUnits(day.items);
           units.push({ seg: null, stop: copy });
           day.items = fromUnits(units);
+          syncMapPoints(day);
           const landedAt = units.length - 1;
           state.copiedPicks.add(copyKey);
           saveCopiedPicks(state.copiedPicks);
