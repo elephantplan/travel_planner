@@ -685,6 +685,15 @@ img{max-width:100%;}
 .reslink .resname{font-size:13.5px;font-weight:700;color:var(--info);}
 .reslink .resnote{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
 
+/* ---------- home page section editing ---------- */
+.secedit{
+  border:0;background:transparent;cursor:pointer;
+  font-size:13px;line-height:1;padding:2px 4px;margin-left:7px;
+  opacity:.45;vertical-align:middle;border-radius:6px;
+}
+.secedit:hover,.secedit:focus-visible{opacity:1;background:var(--surface-2);}
+.fieldhint{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin:0 0 6px;}
+
 /* ---------- AI analysis kept above the list ---------- */
 /* Deliberately a running log, not a panel: a new run appends, so nothing the
    AI said last time disappears just because you asked again. */
@@ -852,6 +861,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
   // some older records have markup baked into plain-text fields; show the words, not the tags
+  // the AI brief is free text the user typed; keep their line breaks (plain()
+  // would collapse them, so re-opening the editor would lose the formatting)
+  function briefText(snap){ return String((snap && snap.tripBrief) || "").trim(); }
   function plain(s){
     return String(s == null ? "" : s).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
   }
@@ -912,8 +924,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (!res.ok) throw new Error("儲存失敗 " + res.status + " " + (await res.text()));
     return res.json();
   }
+  // The trip background ("who's going, when, 姨姨唔可以行樓梯…") rides along on
+  // EVERY ai call, so editing it on the home page changes what all of the AI
+  // features assume. Blank means the Edge Function keeps using its built-in
+  // default, so clearing the box can't leave the AI with no context at all.
   async function callAi(payload){
-    const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(payload) });
+    const body = Object.assign({ brief: briefText(state.snapshot) }, payload);
+    const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body) });
     return res.json();
   }
 
@@ -1158,6 +1175,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // RENDER — overview
   // ==================================================================
+  // A pencil next to a heading, wired generically to HOME_EDITORS[key]
+  function secEditBtn(key){
+    return `<button class="secedit" data-editsec="${key}" title="改呢一段" aria-label="改呢一段">✏️</button>`;
+  }
+
   function overviewHtml(){
     const d = state.snapshot;
     const m = d.meta || {};
@@ -1190,12 +1212,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     return `
       <section class="hero">
-        <div class="eyebrow">10.23 — 10.28 · 2026</div>
+        <div class="eyebrow">${esc(m.eyebrow || DEFAULT_EYEBROW)}${secEditBtn("hero")}</div>
         <h1>${esc(m.title || "首爾秋楓銀杏行")}</h1>
         <div class="hero-meta">
-          <span>7 位家庭成員</span><span>·</span>
-          <span>6 日 5 夜</span><span>·</span>
-          <span>賞楓銀杏</span>
+          ${(m.facts && m.facts.length ? m.facts : DEFAULT_FACTS)
+            .map(f => `<span>${esc(f)}</span>`).join("<span>·</span>")}
         </div>
         <div class="chiprow">${(m.hotelTags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}</div>
       </section>
@@ -1220,7 +1241,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。</p>
 
         <div class="panel">
-          <div class="k">住宿</div>
+          <div class="k">住宿${secEditBtn("acc")}</div>
           <div class="v">${esc(acc.name)}</div>
           <div class="d">${esc(acc.desc)}</div>
           <div class="chiprow"><span class="meta-chip hours">${esc(acc.hoursChip)}</span></div>
@@ -1228,18 +1249,18 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ${acc.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(acc.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
         </div>
 
-        <h3>10 月下旬天氣</h3>
+        <h3>10 月下旬天氣${secEditBtn("weather")}</h3>
         <p class="sec-sub">歷年同期平均，出發前一週用 AI 助手 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
         </table>
 
-        <h3>點著衫</h3>
+        <h3>點著衫${secEditBtn("clothing")}</h3>
         <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>
 
-        <h3>無障礙標記</h3>
-        <p class="sec-sub">姨姨唔行得樓梯，每個地點都會標返路況。</p>
+        <h3>無障礙標記${secEditBtn("access")}</h3>
+        <p class="sec-sub">每個地點都會標返路況。</p>
         <div class="legend">
           <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
           <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>${esc((d.accessLegend||[])[1]||"")}</div>
@@ -1247,7 +1268,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
         <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>
 
-        <h3>銀杏同紅葉時機</h3>
+        <h3>銀杏同紅葉時機${secEditBtn("notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
 
         <h3>日程調動</h3>
@@ -1257,6 +1278,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <hr class="rule">
 
       ${transitInfoHtml(d.transitInfo)}
+
+      <section class="sec">
+        <h2 class="sec-title">AI 設定${secEditBtn("ai")}</h2>
+        <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。</p>
+        <div class="panel">
+          <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || DEFAULT_TRIP_BRIEF)}</div>
+          ${briefText(d) ? "" : `<div class="d" style="opacity:.7;margin-top:6px;">（而家用緊預設）</div>`}
+        </div>
+      </section>
 
       <section class="sec">
         <h2 class="sec-title">表妹美食清單</h2>
@@ -1324,6 +1354,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       render();
     }));
     document.querySelectorAll("[data-foodgo]").forEach(b => b.addEventListener("click", () => goToFoodCard(+b.dataset.foodgo)));
+    document.querySelectorAll("[data-editsec]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const open = HOME_EDITORS[b.dataset.editsec];
+      if (open) open();
+    }));
     initOverviewMap();
   }
 
@@ -1920,6 +1955,187 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       }));
     });
   }
+
+  // Shown when the snapshot predates these fields, and used as the placeholder
+  // in the editor so it's obvious what "leave it blank" gives you.
+  const DEFAULT_TRIP_BRIEF =
+    "你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。";
+  const DEFAULT_EYEBROW = "10.23 — 10.28 · 2026";
+  const DEFAULT_FACTS = ["7 位家庭成員", "6 日 5 夜", "賞楓銀杏"];
+
+  // ---------- editing the home page ----------
+  // One generic sheet drives every section editor, so adding a field is a line
+  // of config rather than another bespoke form. Types:
+  //   text / textarea — a single value
+  //   lines           — a list, one entry per line (far easier to edit on a
+  //                     phone than a repeatable row widget, and it round-trips)
+  function openEditSheet(title, sub, fields, onSave){
+    openSheet(`
+      <h3>${esc(title)}</h3>
+      ${sub ? `<p class="sec-sub">${esc(sub)}</p>` : ""}
+      ${fields.map((f, i) => `
+        <div class="field">
+          <label>${esc(f.label)}</label>
+          ${f.hint ? `<p class="fieldhint">${esc(f.hint)}</p>` : ""}
+          ${f.type === "text"
+            ? `<input class="input" data-ef="${i}" value="${esc(f.value || "")}" placeholder="${esc(f.placeholder || "")}">`
+            : `<textarea class="textarea" data-ef="${i}" rows="${f.rows || 4}" placeholder="${esc(f.placeholder || "")}">${esc(f.value || "")}</textarea>`}
+        </div>`).join("")}
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>儲存</button>
+      </div>
+    `, sheet => {
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        const out = {};
+        fields.forEach((f, i) => {
+          const raw = sheet.querySelector(`[data-ef="${i}"]`).value;
+          out[f.key] = f.type === "lines"
+            ? raw.split("\n").map(x => x.trim()).filter(Boolean)
+            : raw.trim();
+        });
+        closeLayer();
+        await onSave(out);
+      });
+    });
+  }
+
+  // The clothing list is stored as HTML (the seed data uses <b> for emphasis).
+  // Users edit plain text with **bold** instead, so nothing they type is ever
+  // injected as markup — the only tag that can come back out is <b>.
+  function htmlToPlainish(html){
+    return String(html || "")
+      .replace(/<\/?b>/gi, "**")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+      .trim();
+  }
+  function plainishToHtml(text){
+    return esc(String(text || "").trim()).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  }
+
+  // "icon | text" per line — compact enough to edit on a phone, and the icon
+  // stays optional (a line with no pipe is just text).
+  function pipeParts(line, n){
+    const bits = String(line).split("|").map(x => x.trim());
+    while (bits.length < n) bits.push("");
+    return bits;
+  }
+
+  // Each home-page section maps to one entry here, so the pencil buttons are
+  // wired generically and every save goes through the same version-history path
+  // as any other edit.
+  const HOME_EDITORS = {
+    ai: () => {
+      const d = state.snapshot;
+      openEditSheet("AI 設定", "呢段字會加喺每一個 AI 功能嘅開頭，AI 就係靠佢知道你哋幾多人去、幾時去、有咩要注意。改完之後所有 AI 功能（問行程、建議、清單推介、天氣、紅葉）都會跟返新嘅。", [
+        { key:"tripBrief", type:"textarea", rows:6,
+          label:"背景設定",
+          hint:"留空就會用返預設嗰段（7人家庭・10月23-28日首爾・姨姨唔行得樓梯・賞紅葉銀杏）。",
+          value: briefText(d) || DEFAULT_TRIP_BRIEF,
+          placeholder: DEFAULT_TRIP_BRIEF },
+      ], async out => {
+        d.tripBrief = out.tripBrief === DEFAULT_TRIP_BRIEF ? "" : out.tripBrief;
+        render();
+        await saveNow("改咗 AI 設定（AI 背景資料）");
+      });
+    },
+
+    hero: () => {
+      const d = state.snapshot;
+      const m = d.meta = d.meta || {};
+      openEditSheet("首頁大標題", "最頂嗰段。", [
+        { key:"eyebrow", type:"text", label:"日期細字", value: m.eyebrow || DEFAULT_EYEBROW },
+        { key:"title", type:"text", label:"標題", value: m.title || "" },
+        { key:"facts", type:"lines", rows:3, label:"標題下面嘅小字", hint:"一行一項，會用「·」分隔顯示。",
+          value: (m.facts && m.facts.length ? m.facts : DEFAULT_FACTS).join("\n") },
+        { key:"hotelTags", type:"lines", rows:3, label:"標籤", hint:"一行一個。",
+          value: (m.hotelTags || []).join("\n") },
+      ], async out => {
+        m.eyebrow = out.eyebrow; m.title = out.title;
+        m.facts = out.facts; m.hotelTags = out.hotelTags;
+        render();
+        await saveNow("改咗首頁標題");
+      });
+    },
+
+    acc: () => {
+      const d = state.snapshot;
+      const a = d.accommodation = d.accommodation || {};
+      openEditSheet("住宿", "", [
+        { key:"name", type:"text", label:"住邊度", value: a.name || "" },
+        { key:"desc", type:"textarea", rows:3, label:"描述", value: a.desc || "" },
+        { key:"hoursChip", type:"text", label:"入住／退房", value: a.hoursChip || "" },
+        { key:"warning", type:"textarea", rows:2, label:"要注意", value: a.warning || "" },
+        { key:"mapUrl", type:"text", label:"地圖連結", value: a.mapUrl || "", placeholder:"https://map.naver.com/..." },
+      ], async out => {
+        Object.assign(a, out);
+        render();
+        await saveNow("改咗住宿資料");
+      });
+    },
+
+    weather: () => {
+      const d = state.snapshot;
+      openEditSheet("10 月下旬天氣", "一行一日。", [
+        { key:"rows", type:"lines", rows:8, label:"日期 | 日高 | 晨低 | 概況",
+          hint:"用「|」分開四格，例如：10/23 | 18° | 8° | 早晚涼，日間舒服",
+          value: (d.weatherRows || []).map(r => [r.date, r.hi, r.lo, r.note].join(" | ")).join("\n") },
+      ], async out => {
+        d.weatherRows = out.rows.map(l => {
+          const [date, hi, lo, note] = pipeParts(l, 4);
+          return { date, hi, lo, note };
+        });
+        render();
+        await saveNow("改咗天氣資料");
+      });
+    },
+
+    clothing: () => {
+      const d = state.snapshot;
+      openEditSheet("點著衫", "一行一項。", [
+        { key:"rows", type:"lines", rows:8, label:"圖示 | 內容",
+          hint:"用「|」分開，例如：🧥 | 中層要有 **薄羽絨**。想加粗就用 **兩個星號** 包住。",
+          value: (d.clothing || []).map(c => `${c.icon || ""} | ${htmlToPlainish(c.html)}`).join("\n") },
+      ], async out => {
+        d.clothing = out.rows.map(l => {
+          const [icon, text] = pipeParts(l, 2);
+          return { icon, html: plainishToHtml(text) };
+        });
+        render();
+        await saveNow("改咗穿搭建議");
+      });
+    },
+
+    access: () => {
+      const d = state.snapshot;
+      openEditSheet("無障礙標記", "三個顏色代表嘅意思，同下面嗰句提示。", [
+        { key:"legend", type:"lines", rows:3, label:"綠 / 橙 / 紅 三行",
+          value: (d.accessLegend || []).slice(0, 3).join("\n") },
+        { key:"elevatorTip", type:"textarea", rows:3, label:"電梯提示", value: d.elevatorTip || "" },
+      ], async out => {
+        d.accessLegend = out.legend.slice(0, 3);
+        d.elevatorTip = out.elevatorTip;
+        render();
+        await saveNow("改咗無障礙標記");
+      });
+    },
+
+    notes: () => {
+      const d = state.snapshot;
+      openEditSheet("銀杏時機 ／ 日程調動", "", [
+        { key:"foliageNote", type:"textarea", rows:4, label:"銀杏同紅葉時機", value: d.foliageNote || "" },
+        { key:"scheduleSwapNote", type:"textarea", rows:4, label:"日程調動", value: d.scheduleSwapNote || "" },
+      ], async out => {
+        d.foliageNote = out.foliageNote;
+        d.scheduleSwapNote = out.scheduleSwapNote;
+        render();
+        await saveNow("改咗行前提示");
+      });
+    },
+  };
 
   // ---------- drag to reorder ----------
   function wireDrag(day, line){
@@ -3269,6 +3485,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     oldBoards.forEach(ob => {
       if (!newBoards.some(nb => nb.id === ob.id)) sections.push({ label:`📌 ${ob.name}`, lines:[{ type:"remove", text:"－ 成個清單被刪走咗" }] });
     });
+
+    // The home page is editable too, so a version whose ONLY change is up there
+    // would otherwise diff as "冇分別" and look like a save that did nothing.
+    const homeLines = [];
+    const changed = (label, a, b) => {
+      const sa = JSON.stringify(a ?? ""), sb = JSON.stringify(b ?? "");
+      if (sa !== sb) homeLines.push({ type:"edit", text:`改咗${label}` });
+    };
+    changed("標題", (oldSnap.meta||{}).title, (newSnap.meta||{}).title);
+    changed("標題下面嘅資料", [(oldSnap.meta||{}).eyebrow, (oldSnap.meta||{}).facts, (oldSnap.meta||{}).hotelTags],
+                              [(newSnap.meta||{}).eyebrow, (newSnap.meta||{}).facts, (newSnap.meta||{}).hotelTags]);
+    changed("住宿", oldSnap.accommodation, newSnap.accommodation);
+    changed("天氣", oldSnap.weatherRows, newSnap.weatherRows);
+    changed("穿搭建議", oldSnap.clothing, newSnap.clothing);
+    changed("無障礙標記", [oldSnap.accessLegend, oldSnap.elevatorTip], [newSnap.accessLegend, newSnap.elevatorTip]);
+    changed("銀杏時機", oldSnap.foliageNote, newSnap.foliageNote);
+    changed("日程調動", oldSnap.scheduleSwapNote, newSnap.scheduleSwapNote);
+    changed("AI 設定", oldSnap.tripBrief, newSnap.tripBrief);
+    if (homeLines.length) sections.push({ label:"🏠 首頁內容", lines: homeLines });
 
     return sections;
   }
