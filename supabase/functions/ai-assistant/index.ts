@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
       const validDayIds = new Set((itinerary?.days ?? []).map((d: any) => d.id));
       const dayIdList = [...validDayIds].join(", ");
 
-      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅清單，想要兩組唔同嘅推介。\n\n**第一組 candidates（Google 高分兼多人評）**：俾 12 個你認為評分高、評價人數多嘅候選。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同埋人數，查唔到、或者分數／人數唔夠嘅會自動篩走，同「已有」重複嘅都會自動剔除**，最後只會留低 5 個。所以\n- 唔好自己作評分或者評價人數（你寫幾多我哋都唔會用，一律以 Google 為準）\n- 寧願俾多幾個穩陣嘅、真係存在而且街知巷聞嘅老字號／人氣店，唔好俾啲查唔到嘅冷門名\n- 「kr」欄一定要填返準確嘅韓文店名，因為我哋係用韓文名去 Google 度搜\n- **如果下面「已有」個list好長，即係之前已經問過幾次，請特登諗第二層次、無咁出名但都真係高分嘅選擇，唔好淨係諗返嗰幾間最出晒名嘅**\n\n**第二組 trending（社交平台近排紅）**：俾 6 個你印象中近排喺 Instagram／小紅書／Naver blog 紅嘅。\n重要：**你冇即時上網能力，呢一組我哋會明確標示做「AI 印象・未經核實」俾用戶睇**，所以\n- 唔好扮到自己知道呢一刻嘅熱度，唔好作「最近爆紅」「上個月開幕」呢啲你查唔到嘅講法\n- 淨係揀你訓練資料入面真係有印象嘅，如果諗唔到6個，寧願俾少啲\n- 「buzz」欄用一句講返點解你有印象佢紅（例如打卡位、某劇取景、排隊名物）\n\n**兩組入面，如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"（有網上／App預約，例如 Naver Place、Catch Table）、"phone"（只可以電話訂）、"walkin"（唔接受預約，要現場排隊）、"unknown"（你唔清楚）呢四選一\n- 「bookingHow」：一句講點樣訂位（例如「Naver Place App 度預約」「淨係電話訂位，冇網上預約」「唔接受預約，現場攞籌」）\n- 「queueNote」：大概要排幾耐（例如「假日午晚市黃金時間可能要等30分鐘以上，avoid尖峰時段」「一般唔使等」）。**你冇即時資料，呢個係你憑印象嘅粗略推斷，唔肯定就寫「唔清楚，建議去到先睇現場情況或者出發前打電話確認」，唔好作實體幾多分鐘**\n如果唔係食肆（例如係景點、商場），呢4個欄位可以留空或者false。\n\n兩組都**一定唔可以**同下面「已有」重複（包括名稱好相似、明顯係同一間舖嘅都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n兩組每個都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日順路就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：呢個回覆太長會俾系統截斷，然後乜都顯示唔到。所以 intro 一句起兩句止；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字、buzz 最多 20 字。唔好寫長篇大論，夠簡潔就得。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"intro":"一句廣東話簡介","candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}],"trending":[{"title":"地點名","kr":"韓文名","desc":"簡短描述","buzz":"點解你有印象佢紅","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
+      const prompt = `你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。\n\n用戶有個叫「${theme}」嘅清單，想要一組 Google 高分推介。\n\n**candidates（Google 高分兼多人評）**：俾 12 個你認為評分高、評價人數多嘅候選。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同埋人數，查唔到、或者分數／人數唔夠嘅會自動篩走，同「已有」重複嘅都會自動剔除**，最後只會留低 5 個。所以\n- 唔好自己作評分或者評價人數（你寫幾多我哋都唔會用，一律以 Google 為準）\n- 寧願俾多幾個穩陣嘅、真係存在而且街知巷聞嘅老字號／人氣店，唔好俾啲查唔到嘅冷門名\n- 「kr」欄一定要填返準確嘅韓文店名，因為我哋係用韓文名去 Google 度搜\n- **如果下面「已有」個list好長，即係之前已經問過幾次，請特登諗第二層次、無咁出名但都真係高分嘅選擇，唔好淨係諗返嗰幾間最出晒名嘅**\n\n**如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"（有網上／App預約，例如 Naver Place、Catch Table）、"phone"（只可以電話訂）、"walkin"（唔接受預約，要現場排隊）、"unknown"（你唔清楚）呢四選一\n- 「bookingHow」：一句講點樣訂位（例如「Naver Place App 度預約」「淨係電話訂位，冇網上預約」「唔接受預約，現場攞籌」）\n- 「queueNote」：大概要排幾耐（例如「假日午晚市黃金時間可能要等30分鐘以上，avoid尖峰時段」「一般唔使等」）。**你冇即時資料，呢個係你憑印象嘅粗略推斷，唔肯定就寫「唔清楚，建議去到先睇現場情況或者出發前打電話確認」，唔好作實體幾多分鐘**\n如果唔係食肆（例如係景點、商場），呢4個欄位可以留空或者false。\n\n**一定唔可以**同下面「已有」重複（包括名稱好相似、明顯係同一間舖嘅都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n每個都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日順路就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：呢個回覆太長會俾系統截斷，然後乜都顯示唔到。所以 intro 一句起兩句止；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字。唔好寫長篇大論，夠簡潔就得。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"intro":"一句廣東話簡介","candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
 
       let aiText: string;
       try {
@@ -593,13 +593,10 @@ Deno.serve(async (req) => {
       const pool = strong.length >= 5 ? strong : verified.filter(v => v.rating >= 3.8);
       const topRated = pool.sort((a, b) => b.ratingCount - a.ratingCount).slice(0, 5);
 
-      const trending = (Array.isArray(parsed.trending) ? parsed.trending : []).map(clampDay).filter(notDup).slice(0, 5);
-
       return json({
         ok: true,
         intro: parsed.intro ?? "",
         topRated,
-        trending,
         checked: cands.length,
         verifiedCount: verified.length,
       });

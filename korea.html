@@ -896,13 +896,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // The board-ideas/board-picks panel used to live in memory only, so a page
   // reload made a just-computed recommendation vanish even though the actual
   // places it added were saved fine. It's now saved onto the board itself
-  // (board.lastPanel) as part of the normal snapshot save — real DB
-  // persistence, not just this device — so it survives a reload AND shows up
-  // on another phone. summarizeSnapshotDiff() only ever inspects board.items
-  // and board.name, so this extra field never shows up as noise in the
-  // version-history diff.
-  function saveLastPanel(board, html){
-    board.lastPanel = { html, savedAt: Date.now() };
+  // as part of the normal snapshot save — real DB persistence, not just this
+  // device — so it survives a reload AND shows up on another phone.
+  // summarizeSnapshotDiff() only ever inspects board.items and board.name, so
+  // these extra fields never show up as noise in the version-history diff.
+  //
+  // Kept per kind: both buttons used to write the same single slot, so running
+  // "問 AI 有咩資訊" silently wiped the Google-高分 result you were still
+  // reading. Each kind now keeps its own, and both are shown.
+  function saveLastPanel(board, kind, html){
+    if (!board.lastPanels) board.lastPanels = {};
+    board.lastPanels[kind] = { html, savedAt: Date.now() };
+    delete board.lastPanel;          // superseded single-slot field
+  }
+  function restoredPanelHtml(board){
+    const slots = board.lastPanels ? Object.values(board.lastPanels).filter(s => s && s.html) : [];
+    if (!slots.length) return board.lastPanel ? board.lastPanel.html : "";   // pre-split boards
+    return slots.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0)).map(s => s.html).join("");
   }
   // "already copied to Day X" buttons on a restored panel would otherwise all
   // read as un-copied again after a reload, inviting an accidental double-copy
@@ -2348,7 +2358,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ${BOARD_PALETTE.map(c => `<button type="button" class="swatch${c === board.color ? " active" : ""}" data-setcolor="${c}" style="background:${c}" aria-label="改做${c}"></button>`).join("")}
         </div>
         <button class="btn wide" id="boardideas" style="margin-top:11px;">✨ 問 AI「${esc(board.name)}」有咩資訊</button>
-        <button class="btn wide" id="boardpicks" style="margin-top:7px;">🏆 5 個 Google 高分 ＋ 🔥 5 個社交平台熱門</button>
+        <button class="btn wide" id="boardpicks" style="margin-top:7px;">🏆 幫我搵 5 個 Google 高分地點</button>
         <div id="boardideas-out"></div>
       </section>
 
@@ -2501,9 +2511,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (picksBtn) picksBtn.addEventListener("click", () => runBoardPicks(board));
 
     // a page reload clears state.boardIdeas (in-memory only) — fall back to
-    // the saved copy of the last finished panel so it doesn't just vanish
-    if ((!state.boardIdeas || state.boardIdeas.boardId !== board.id) && board.lastPanel){
-      state.boardIdeas = { boardId: board.id, html: board.lastPanel.html, status: "" };
+    // the saved copy of the last finished panels so they don't just vanish
+    if (!state.boardIdeas || state.boardIdeas.boardId !== board.id){
+      const saved = restoredPanelHtml(board);
+      if (saved) state.boardIdeas = { boardId: board.id, html: saved, status: "" };
     }
 
     // re-show the last answer for THIS board after any re-render
@@ -2761,7 +2772,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml + resourcesHtml + addedHtml, status: "" };
-    saveLastPanel(board, state.boardIdeas.html);
+    saveLastPanel(board, "ideas", state.boardIdeas.html);
     render();
     await saveNow(added.length ? `AI 建議加咗 ${added.length} 個地點落「${board.name}」` : `問咗AI「${board.name}」有咩資訊`);
 
@@ -2774,28 +2785,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   }
 
   // where to go and see for yourself whether something is actually trending
-  function buzzLinks(name){
-    const q = encodeURIComponent(name);
-    const tag = encodeURIComponent(name.replace(/[\s·・]/g, ""));
-    return [
-      { label: "Instagram", url: `https://www.instagram.com/explore/tags/${tag}/` },
-      { label: "Naver 部落格", url: `https://search.naver.com/search.naver?where=blog&query=${q}` },
-    ];
-  }
-
-  // Two lists that deserve very different levels of trust, so they are shown
-  // as two clearly-labelled sections rather than one blended ranking:
-  //  · 高分：the AI only proposes names, then the server looks every one up on
-  //    Google and keeps the ones that really are well rated. The numbers on
-  //    screen are Google's.
-  //  · 熱門：the AI has no live access to Instagram/Naver, so this is its
-  //    impression from training data. Labelled as unverified, with links to
-  //    go check each one yourself.
+  // Only one list, and it is the verifiable one: the AI merely proposes names,
+  // then the server looks every one up on Google and keeps the ones that really
+  // are well rated. Every number on screen is Google's. (There used to be a
+  // second "socially trending" list, but it was the AI's impression of buzz it
+  // cannot actually check, so it was dropped rather than shown with a warning.)
   async function runBoardPicks(board){
     const out = $("#boardideas-out");
     const btn = $("#boardpicks");
     if (!out) return;
-    const restore = () => { const b2 = $("#boardpicks"); if (b2){ b2.disabled = false; b2.textContent = "🏆 5 個 Google 高分 ＋ 🔥 5 個社交平台熱門"; } };
+    const restore = () => { const b2 = $("#boardpicks"); if (b2){ b2.disabled = false; b2.textContent = "🏆 幫我搵 5 個 Google 高分地點"; } };
     if (btn){ btn.disabled = true; btn.textContent = "問緊 AI，再逐個去 Google 查…"; }
     out.innerHTML = `<div class="ai-msg">諗緊「${esc(board.name)}」嘅推介，然後會逐個攞去 Google 查真實評分…</div>`;
 
@@ -2808,13 +2807,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }
     if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; restore(); return; }
 
-    const topRated = r.topRated || [], trending = r.trending || [];
+    const topRated = r.topRated || [];
     const introHtml = r.intro ? `<div class="ai-msg">${esc(r.intro)}</div>` : "";
 
     state.boardIdeas = { boardId: board.id, html: introHtml, status: `加緊落「${board.name}」…` };
     render();
 
-    // top-rated first: these already carry Google's own rating from the check
+    // these already carry Google's own rating from the server-side check
     const added = [];
     for (const pl of topRated){
       const item = Object.assign(blankBoardItem(), {
@@ -2827,20 +2826,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
       board.items.push(item);
       await enrichStop(item);                    // photo (rating already known)
-      added.push({ item, dayId: pl.dayId, kind:"top" });
-      state.boardIdeas.status = `加緊… ${added.length}／${topRated.length + trending.length}`;
-      render();
-    }
-    for (const pl of trending){
-      const item = Object.assign(blankBoardItem(), {
-        title: pl.title || "", kr: pl.kr || "", desc: pl.desc || "",
-        tip: `🔥 社交平台熱門（AI 印象・未經核實）${pl.dayHint ? "・" + pl.dayHint : ""}`,
-      });
-      if (pl.isFood) Object.assign(item, { isFood: true, booking: pl.booking || "unknown", bookingHow: pl.bookingHow || "", queueNote: pl.queueNote || "" });
-      board.items.push(item);
-      await enrichStop(item);                    // resolves photo + real rating
-      added.push({ item, dayId: pl.dayId, kind:"buzz", buzz: pl.buzz || "" });
-      state.boardIdeas.status = `加緊… ${added.length}／${topRated.length + trending.length}`;
+      added.push({ item, dayId: pl.dayId });
+      state.boardIdeas.status = `加緊… ${added.length}／${topRated.length}`;
       render();
     }
 
@@ -2853,7 +2840,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const topHtml = topRated.length ? `
       <div class="pickhead verified"><span class="pt">🏆 Google 高分・多人評價</span></div>
       <p class="picknote">下面每個都真係去咗 Google 查過（AI 提咗 ${r.checked || 0} 個，查到 ${r.verifiedCount || 0} 個有評分，揀返評價人數最多嘅 ${topRated.length} 個）。分數同人數係 Google 嘅數，唔係 AI 講嘅。</p>
-      ${added.filter(a => a.kind === "top").map(a => `
+      ${added.map(a => `
         <div class="ai-change" style="--lc:var(--ok)" data-jumpitem="${board.items.indexOf(a.item)}" title="撳一下睇低面清單嗰個">
           <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
           <div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>
@@ -2862,36 +2849,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ${copyBtn(a)}
         </div>`).join("")}` : "";
 
-    const buzzHtml = trending.length ? `
-      <div class="pickhead unverified"><span class="pt">🔥 社交平台熱門</span></div>
-      <p class="picknote warn">⚠️ 呢一組 AI 冇即時上網能力，查唔到 Instagram／小紅書而家實際有幾紅，所以係佢訓練資料入面嘅印象，可能已經過時或者唔準。想確認就撳下面嘅連結自己睇下最近有冇人 post。</p>
-      ${added.filter(a => a.kind === "buzz").map(a => `
-        <div class="ai-change" style="--lc:var(--warn)" data-jumpitem="${board.items.indexOf(a.item)}" title="撳一下睇低面清單嗰個">
-          <div class="ttl">${esc(plain(a.item.title))}${a.item.kr ? ` <span class="kr">${esc(a.item.kr)}</span>` : ""}</div>
-          ${ratingChip(a.item) ? `<div class="chiprow" style="margin-top:5px;">${ratingChip(a.item)}</div>` : ""}
-          ${a.item.desc ? `<div class="why">${esc(a.item.desc)}</div>` : ""}
-          ${a.buzz ? `<div class="buzz">🔥 ${esc(a.buzz)}</div>` : ""}
-          <div class="checklinks">${buzzLinks(plain(a.item.kr) || plain(a.item.title)).map(l =>
-            `<a href="${esc(l.url)}" target="_blank" rel="noopener">喺 ${esc(l.label)} 睇下</a>`).join("")}</div>
-          ${bookingBoxHtml(a.item)}
-          ${copyBtn(a)}
-        </div>`).join("")}` : "";
-
-    state.boardIdeas = { boardId: board.id, html: introHtml + topHtml + buzzHtml, status: "" };
-    saveLastPanel(board, state.boardIdeas.html);
+    state.boardIdeas = { boardId: board.id, html: introHtml + topHtml, status: "" };
+    saveLastPanel(board, "picks", state.boardIdeas.html);
     render();
     await saveNow(added.length
-      ? `AI 加咗 ${topRated.length} 個高分＋${trending.length} 個熱門地點落「${board.name}」`
-      : `問咗AI「${board.name}」嘅高分／熱門推介`);
+      ? `AI 加咗 ${topRated.length} 個 Google 高分地點落「${board.name}」`
+      : `問咗AI「${board.name}」嘅 Google 高分推介`);
 
     const saved = [
       r.intro,
-      topRated.length ? "【Google 高分・已核實】\n" + added.filter(a=>a.kind==="top").map(a =>
+      topRated.length ? "【Google 高分・已核實】\n" + added.map(a =>
         `${plain(a.item.title)}：⭐${a.item.rating}・${a.item.ratingCount} 則評價${a.item.tip ? `（${a.item.tip}）` : ""}`).join("\n") : "",
-      trending.length ? "【社交平台熱門・AI 印象未核實】\n" + added.filter(a=>a.kind==="buzz").map(a =>
-        `${plain(a.item.title)}：${a.buzz || a.item.desc || ""}`).join("\n") : "",
     ].filter(Boolean).join("\n\n");
-    if (saved) saveAiNote("board", `${board.name}：高分 ＋ 熱門推介`, saved);
+    if (saved) saveAiNote("board", `${board.name}：Google 高分推介`, saved);
   }
 
   // ==================================================================
