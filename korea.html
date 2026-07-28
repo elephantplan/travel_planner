@@ -713,6 +713,10 @@ img{max-width:100%;}
   padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
 }
 .dayai{margin-top:8px;border-color:var(--bookmark);color:var(--bookmark);font-weight:700;}
+/* the textfield clears itself once asked (so a follow-up question can be
+   typed straight away) — this is what keeps the just-asked question visible,
+   sitting right above its own answer instead of vanishing with the input */
+.askedecho{font-size:12px;color:var(--ink-faint);margin:0 0 2px;font-style:italic;}
 /* free-form sections the family adds themselves */
 .usec{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-bottom:10px;}
 .usec-head{display:flex;align-items:flex-start;gap:8px;}
@@ -1769,7 +1773,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
-        <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 幫幾日諗行程</button>
+        <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 諗行程</button>
         ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">☑️ 揀幾個一齊搬去第度</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
@@ -4272,7 +4276,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const stops = day.items.filter(i => i.kind === "stop").length;
     const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
     openSheet(`
-      <h3>✨ AI 幫幾日諗行程</h3>
+      <h3>✨ AI 諗行程</h3>
       <p class="sec-sub">${stops
         ? `「${esc(day.title)}」而家有 ${stops} 個站，AI 會補唔夠嘅位，唔會推介重複嘅地方。`
         : `「${esc(day.title)}」仲係空白嘅，AI 會由早到晚幫你砌一日出嚟。`}
@@ -4303,29 +4307,35 @@ ${stayBlock}${dayBlocks}${secBlocks}
           sheet.querySelector(`[data-dayai-pick="${d.id}"]`)?.checked)];
         const dayIds = pickedDays.map(d => d.id);
         const label = pickedDays.map(d => d.title).join("、");
+        const asked = q.value.trim();
+        // clear the box straight away so it's ready for a follow-up question
+        // while this one is still running; what was asked isn't lost, though —
+        // it stays echoed above the answer so the two read together
+        q.value = "";
+        const askedHtml = asked ? `<p class="askedecho">你啱先問：「${esc(asked)}」</p>` : "";
         go.disabled = true; go.textContent = "諗緊…";
         const stop = busyIn(out, { steps:[`AI 諗緊「${label}」`],
           hint:`AI 會睇埋其他日子避開重複，大約 ${dayIds.length > 1 ? "20-40" : "15-30"} 秒。` });
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayIds, question: q.value.trim(), itinerary: state.snapshot });
+          r = await callAi({ action:"day-plan", dayIds, question: asked, itinerary: state.snapshot });
         } catch (e){
-          stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+          stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; go.textContent = "問"; return;
         }
         stop();
         go.disabled = false; go.textContent = "再問一次";
-        if (!r || r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; return; }
+        if (!r || r.ok === false){ out.innerHTML = askedHtml + `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; return; }
         const changes = (r.changes || []).filter(c => c && (c.stop || c.matchTitle));
         if (!changes.length){
-          out.innerHTML = `<div class="ai-msg">${esc(r.notes || "AI 覺得呢幾日唔使改。")}</div>`;
+          out.innerHTML = askedHtml + `<div class="ai-msg">${esc(r.notes || "AI 覺得呢幾日唔使改。")}</div>`;
           saveAiNote("day-plan", `${label}：AI 建議`, r.notes || "冇建議");
           return;
         }
-        out.innerHTML = changeCardsHtml(changes, r.notes) +
+        out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) +
           (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個）</button>` : "");
         wireApplyButtons(out, changes);
-        saveAiNote("day-plan", `${label}：AI 建議${q.value.trim() ? "（" + q.value.trim() + "）" : ""}`,
+        saveAiNote("day-plan", `${label}：AI 建議${asked ? "（" + asked + "）" : ""}`,
           [r.notes, ...changes.map(c => `【Day ${String(c.dayId||"").replace("day","")}・${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
             .filter(Boolean).join("\n\n"));
       };
