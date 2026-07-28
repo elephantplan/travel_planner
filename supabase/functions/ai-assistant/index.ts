@@ -1,6 +1,11 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
 // Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section' | 'poster'
+// Secrets (Dashboard → Project Settings → Edge Functions → Secrets):
+//   GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, ... (scanned until one is unset)
+//   GOOGLE_PLACES_API_KEY
+//   GEMINI_TEXT_MODEL  — optional, defaults to "gemini-3.5-flash" if unset
+//   GEMINI_IMAGE_MODEL — optional, defaults to "gemini-3.1-flash-image" if unset
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -55,13 +60,23 @@ function isQuotaError(e: unknown): boolean {
   return msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || /quota/i.test(msg);
 }
 
+// Model names are Supabase secrets (not hardcoded) so a stuck/renamed/quota'd
+// model can be swapped from the Dashboard alone, no redeploy needed. Defaults
+// match what shipped originally.
+function getTextModel(): string {
+  return (Deno.env.get("GEMINI_TEXT_MODEL") || "").trim() || "gemini-3.5-flash";
+}
+function getImageModel(): string {
+  return (Deno.env.get("GEMINI_IMAGE_MODEL") || "").trim() || "gemini-3.1-flash-image";
+}
+
 // NOTE: deliberately no maxOutputTokens. Setting one caps the model BELOW its
 // own default, and since this model's thinking tokens are billed against the
 // same budget, an explicit cap is what pushed the long board-ai answer into
 // finishReason=MAX_TOKENS. Let the model use its full default budget; the
 // prompts are instead written to ask for less.
 async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: boolean }): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${getTextModel()}:generateContent?key=${apiKey}`;
   const generationConfig: Record<string, unknown> = {};
   if (opts?.json) generationConfig.responseMimeType = "application/json";
   const res = await fetch(url, {
@@ -74,6 +89,10 @@ async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: bo
   });
   if (!res.ok) {
     const errText = await res.text();
+    // Logged raw (not just the friendly-message version) so a real quota-vs-
+    // rate-limit-vs-bad-model-name mixup shows up verbatim in get_logs instead
+    // of being guessed at after the fact.
+    console.error(`Gemini text call failed (model=${getTextModel()}): ${res.status} ${errText.slice(0, 500)}`);
     throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
@@ -103,9 +122,9 @@ async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boo
 // Image generation is a different model + a different part of the response
 // (inlineData, not text), so it gets its own call path — same multi-key
 // quota fallback as callGemini, just extracting a base64 image instead of text.
-const IMAGE_MODEL = "gemini-3.1-flash-image";
 async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mimeType: string; data: string }> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`;
+  const model = getImageModel();
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -116,6 +135,7 @@ async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mi
   });
   if (!res.ok) {
     const errText = await res.text();
+    console.error(`Gemini image call failed (model=${model}): ${res.status} ${errText.slice(0, 500)}`);
     throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
@@ -140,6 +160,13 @@ async function callGeminiImage(apiKeys: string[], prompt: string): Promise<{ mim
 function friendlyGeminiError(e: unknown): string {
   const msg = String(e);
   if (msg.includes("429")) {
+    // Google's 429 body names which limit tripped via quotaId — PerMinute is a
+    // short-lived rate limit (call again in under a minute), not the daily/
+    // monthly quota the "quota exceeded" wording implies. Conflating the two
+    // is what made a real per-minute rate limit look like exhausted quota.
+    if (/PerMinute/i.test(msg)) {
+      return "⏳ Gemini 呢分鐘內叫得太密（per-minute rate limit），唔係日/月quota用晒——通常等返半分鐘到一分鐘再試就得。如果成日撞到，可能係呢個model嘅免費 rate limit 本身好低。";
+    }
     return "⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。";
   }
   if (msg.includes("TRUNCATED")) {
