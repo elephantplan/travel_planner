@@ -1349,6 +1349,41 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     render();
     await saveNow(`顯示返首頁「${label}」`);
   }
+  // A quick "check the real thing now" button sitting right under the static
+  // historical-average content, instead of only living inside the separate
+  // AI 助手 sheet — the copy said "check 返實時預報" but gave no way to
+  // actually do that without leaving the page to hunt for the right button.
+  function liveCheckButtonHtml(kind, label){
+    return `<button class="btn" data-livecheck="${kind}" style="margin-top:9px;">${esc(label)}</button>
+            <div class="ai-out" id="livecheck-${kind}"></div>`;
+  }
+  function wireLiveChecks(){
+    document.querySelectorAll("[data-livecheck]").forEach(btn => btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+      const kind = btn.dataset.livecheck;   // "weather" | "foliage"
+      const out = document.getElementById(`livecheck-${kind}`);
+      if (!out) return;
+      btn.disabled = true;
+      const stop = busyIn(out, { steps:[kind === "weather" ? "問緊實時天氣" : "問緊紅葉情況"], hint:"大約 10-30 秒。" });
+      try {
+        const r = await callAi({ action: kind });
+        stop();
+        if (kind === "weather"){
+          out.innerHTML = `<div class="ai-msg">${esc(r.summary||"")}</div>` +
+                          (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
+                          (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
+          saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
+        } else {
+          const a = r.aiSummary || r.message || "冇回覆";
+          out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+          if (r.aiSummary) saveAiNote("foliage", "紅葉情況", a);
+        }
+      } catch (e){
+        stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+      }
+      btn.disabled = false;
+    }));
+  }
   function hiddenSectionsHtml(d){
     const hidden = (Array.isArray(d.hiddenSections) ? d.hiddenSections : []).filter(k => HIDDEN_SECTION_LABELS[k]);
     if (!hidden.length) return "";
@@ -1437,11 +1472,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
         ${isSectionHidden(d,"weather") ? "" : `
         <h3>10 月下旬天氣${secTools("weather")}</h3>
-        <p class="sec-sub">歷年同期平均，出發前一週用 AI 助手 check 返實時預報。</p>
+        <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
-        </table>`}
+        </table>
+        ${liveCheckButtonHtml("weather", "☁️ Check 依家嘅實時預報")}`}
 
         ${isSectionHidden(d,"clothing") ? "" : `
         <h3>點著衫${secTools("clothing")}</h3>
@@ -1459,6 +1495,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
         <h3>銀杏同紅葉時機${secEditBtn("notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
+        ${liveCheckButtonHtml("foliage", "🍁 Check 依家嘅紅葉情況")}
 
         <h3>日程調動</h3>
         <p class="sec-sub">${d.scheduleSwapNote||""}</p>
@@ -1687,6 +1724,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       unhideSection(key, HIDDEN_SECTION_LABELS[key] || key);
     }));
     wireCustomSections();
+    wireLiveChecks();
     const ex = $("#btn-export");
     if (ex) ex.addEventListener("click", openExportSheet);
     initOverviewMap();
