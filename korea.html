@@ -4336,11 +4336,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
   // Opening hours for a newly-found place — unlike the booking/queue
   // impression on a picks card, Google Places actually has this as real
-  // structured data, so it's fetched the same way the rating is: once per
-  // place, and it's Google's own answer, not a guess.
+  // structured data, so it's fetched the same way the rating is.
+  //
+  // Gated on "does it already have an hours chip" rather than a separate
+  // done-flag: a done-flag set before the request (to avoid asking twice)
+  // used to get stuck permanently true on a transient failure — network
+  // hiccup, edge function timeout under concurrent load — leaving that one
+  // place with no hours forever, with no way to retry, while its siblings
+  // fetched fine. Re-deriving from the chip means a later retry (the
+  // ratings button, or another AI run touching the place) just tries again.
   async function enrichHours(s){
-    if (!s.placeId || s.hoursDone) return;
-    s.hoursDone = true;   // never ask twice, even if Google has nothing for it
+    if (!s.placeId) return;
+    if ((s.eatMeta || []).some(c => c.cls === "meta-chip hours")) return;
     try {
       const r = await callAi({ action:"place-hours", placeId:s.placeId });
       if (r && r.ok !== false && r.summary){
@@ -4401,7 +4408,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       // same button, same trip — while we're already asking Google about this
       // place, grab its opening hours too instead of making the user find a
       // separate way to trigger that
-      if (s.placeId && !s.hoursDone){
+      if (s.placeId){
         try { await enrichHours(s); } catch (_){}
       }
       render();
