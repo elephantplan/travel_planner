@@ -3711,7 +3711,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const bump = setTimeout(() => setStep(1, "", "AI 諗完之後同一個請求就會攞去 Google 逐個核實真實評分。"), 15000);
     try {
       const existingTitles = board.items.map(i => plain(i.title)).filter(Boolean);
-      r = await callAi({ action:"board-ai", theme: board.name, itinerary: state.snapshot, existingTitles });
+      // stops the AI writing an almost identical "analysis" paragraph every
+      // time the button is pressed — it has no memory of what it already
+      // said, so hand back its own recent write-ups and it can be told not
+      // to repeat them
+      const priorAnalyses = (board.aiLog || []).map(e => e.analysis).filter(Boolean).slice(0, 3);
+      r = await callAi({ action:"board-ai", theme: board.name, itinerary: state.snapshot, existingTitles, priorAnalyses });
     } catch (e){
       clearTimeout(bump);
       setStatus("出咗問題：" + e.message); restore(); return;
