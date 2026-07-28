@@ -31,15 +31,24 @@ async function fetchWeather() {
   return { inForecastRange, daily: data?.daily ?? null };
 }
 
-// Free-tier quota is per-key, so a second (and third) Gemini key lets a run
-// keep going once the first is exhausted rather than surfacing 429 straight
-// away. Only worth trying the next key on an actual quota/rate error — a bad
-// prompt or a malformed-JSON ask fails identically on every key, so those
-// throw immediately instead of burning through all of them.
+// Free-tier quota is per-key, so extra Gemini keys let a run keep going once
+// one is exhausted rather than surfacing 429 straight away. Only worth trying
+// the next key on an actual quota/rate error — a bad prompt or a
+// malformed-JSON ask fails identically on every key, so those throw
+// immediately instead of burning through all of them.
+// Scans GEMINI_API_KEY, then _2, _3, _4... stopping at the first unset
+// suffix, so adding a new key as a Supabase secret is enough on its own —
+// no code change or redeploy needed to pick it up.
 function getGeminiKeys(): string[] {
-  return ["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]
-    .map(name => (Deno.env.get(name) || "").trim())
-    .filter(Boolean);
+  const keys: string[] = [];
+  const first = (Deno.env.get("GEMINI_API_KEY") || "").trim();
+  if (first) keys.push(first);
+  for (let i = 2; i <= 50; i++) {
+    const v = (Deno.env.get(`GEMINI_API_KEY_${i}`) || "").trim();
+    if (!v) break;
+    keys.push(v);
+  }
+  return keys;
 }
 function isQuotaError(e: unknown): boolean {
   const msg = String(e);
