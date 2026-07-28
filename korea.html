@@ -437,6 +437,14 @@ img{max-width:100%;}
 .seg-note{font-size:12.5px;color:var(--ink-faint);}
 .seg-note.warn{color:var(--warn);font-weight:600;}
 .seg-why{display:block;margin-top:3px;font-weight:400;font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
+/* refreshes ONE leg — the old "重算全日交通" button re-asked Google about
+   every leg in the day just to fix the one that actually changed */
+.segrefresh{
+  margin-left:auto;flex:0 0 auto;width:22px;height:22px;border-radius:50%;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink-faint);
+  font-size:12px;line-height:1;cursor:pointer;
+}
+.segrefresh:active{background:var(--surface-2);color:var(--lc);border-color:var(--lc);}
 /* which station to which station, on its own line under the duration */
 .seg-route{
   display:block;width:100%;margin-top:4px;padding-left:1px;
@@ -708,6 +716,7 @@ img{max-width:100%;}
 .askrow{display:flex;gap:7px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+.posterimg{width:100%;border-radius:var(--r-lg);display:block;margin-top:10px;border:1px solid var(--rule);}
 .ai-msg{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
   padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
@@ -793,6 +802,17 @@ img{max-width:100%;}
 .secdel{margin-left:2px;}
 .secdel:hover,.secdel:focus-visible{color:var(--danger);}
 .fieldhint{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin:0 0 6px;}
+
+/* drag handle reusing the same long-press gesture as itinerary stops, but
+   for reordering whole home-page blocks instead of one day's stops */
+.sechandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
+.sechandle:active{cursor:grabbing;background:var(--lc,var(--bookmark));color:#fff;opacity:1;}
+.hsblock{position:relative;}
+.hsblock.lifted{z-index:30;outline:2px solid var(--bookmark);outline-offset:6px;border-radius:10px;}
+.hsblock.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
+.usec{position:relative;}
+.usec.lifted{z-index:30;box-shadow:var(--shadow-2);border-color:var(--bookmark);}
+.usec.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
 /* ---------- AI analysis kept above the list ---------- */
 /* Deliberately a running log, not a panel: a new run appends, so nothing the
@@ -1335,6 +1355,71 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return `<span class="sectools">${secEditBtn(key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
   }
   function isSectionHidden(snap, key){ return Array.isArray(snap.hiddenSections) && snap.hiddenSections.includes(key); }
+
+  // 「出發前必讀」入面嗰4嚿——住宿/天氣/點著衫/無障礙——用戶可以拉住 ⠿ 自己
+  // 排先後，順序存喺 snap.homeOrder。新裝／舊快照冇呢個欄嘅話，用返而家嘅
+  // 預設次序；如果之後加多種類，未存過嘅key會自動補喺尾，唔會冇咗。
+  const HOME_ORDER_KEYS = ["acc", "weather", "clothing", "access"];
+  function homeOrder(snap){
+    const saved = Array.isArray(snap.homeOrder) ? snap.homeOrder.filter(k => HOME_ORDER_KEYS.includes(k)) : [];
+    const rest = HOME_ORDER_KEYS.filter(k => !saved.includes(k));
+    return [...saved, ...rest];
+  }
+  async function reorderHomeBlocks(snap, from, to){
+    const order = homeOrder(snap);
+    const [moved] = order.splice(from, 1);
+    order.splice(to, 0, moved);
+    snap.homeOrder = order;
+    render();
+    await saveNow("調整咗主頁段落次序");
+  }
+  const HOME_DRAG_HANDLE = `<button class="secedit sechandle" data-hsdrag title="拉上拉落改次序" aria-label="拉上拉落改次序">⠿</button>`;
+  function homeBlockHtml(d, key){
+    if (isSectionHidden(d, key)) return "";
+    if (key === "acc"){
+      return `<div class="hsblock" data-hskey="acc">
+        <div class="k">住宿${secTools("acc")}${HOME_DRAG_HANDLE}</div>
+        ${(d.stays || []).length ? (d.stays || []).map(st => `
+          <div class="stayrow">
+            <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
+            <div class="v">${esc(st.name || "未填")}</div>
+            ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
+            ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
+            ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
+            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
+          </div>`).join("")
+          : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
+      </div>`;
+    }
+    if (key === "weather"){
+      return `<div class="hsblock" data-hskey="weather">
+        <h3>10 月下旬天氣${secTools("weather")}${HOME_DRAG_HANDLE}</h3>
+        <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
+        <table class="wtable">
+          <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
+          ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
+        </table>
+        ${liveCheckButtonHtml("weather", "☁️ Check 依家嘅實時預報")}
+      </div>`;
+    }
+    if (key === "clothing"){
+      return `<div class="hsblock" data-hskey="clothing">
+        <h3>點著衫${secTools("clothing")}${HOME_DRAG_HANDLE}</h3>
+        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>
+      </div>`;
+    }
+    // access
+    return `<div class="hsblock" data-hskey="access">
+      <h3>無障礙標記${secTools("access")}${HOME_DRAG_HANDLE}</h3>
+      <p class="sec-sub">每個地點都會標返路況。</p>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>${esc((d.accessLegend||[])[1]||"")}</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>${esc((d.accessLegend||[])[2]||"")}</div>
+      </div>
+      <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>
+    </div>`;
+  }
   async function hideSection(key, label){
     if (!confirm(`隱藏「${label}」呢段？資料唔會刪，隨時可以喺主頁最底「顯示返」。`)) return;
     const snap = state.snapshot;
@@ -1452,46 +1537,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <hr class="rule">
 
       <section class="sec">
+        <h2 class="sec-title">行程海報</h2>
+        <p class="sec-sub">叫 AI 將成個 6 日行程畫成一張旅行社宣傳單張咁嘅海報，有小飛象做導遊角色。圖入面嘅細字未必準（AI 畫圖生成文字時有機會出錯），實際內容請以「匯出行程」嗰份做準。</p>
+        <button class="btn wide" id="posterBtn">✨ AI 幫我畫張行程海報</button>
+        <div class="ai-out" id="poster-out"></div>
+      </section>
+
+      <hr class="rule">
+
+      <section class="sec">
         <h2 class="sec-title">出發前必讀</h2>
-        <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。</p>
+        <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。拉住 ⠿ 可以上下拉改次序。</p>
 
-        ${isSectionHidden(d,"acc") ? "" : `
-        <div class="panel">
-          <div class="k">住宿${secTools("acc")}</div>
-          ${(d.stays || []).length ? (d.stays || []).map(st => `
-            <div class="stayrow">
-              <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
-              <div class="v">${esc(st.name || "未填")}</div>
-              ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
-              ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
-              ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-              ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
-            </div>`).join("")
-            : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
-        </div>`}
-
-        ${isSectionHidden(d,"weather") ? "" : `
-        <h3>10 月下旬天氣${secTools("weather")}</h3>
-        <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
-        <table class="wtable">
-          <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
-          ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
-        </table>
-        ${liveCheckButtonHtml("weather", "☁️ Check 依家嘅實時預報")}`}
-
-        ${isSectionHidden(d,"clothing") ? "" : `
-        <h3>點著衫${secTools("clothing")}</h3>
-        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>`}
-
-        ${isSectionHidden(d,"access") ? "" : `
-        <h3>無障礙標記${secTools("access")}</h3>
-        <p class="sec-sub">每個地點都會標返路況。</p>
-        <div class="legend">
-          <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
-          <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>${esc((d.accessLegend||[])[1]||"")}</div>
-          <div class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>${esc((d.accessLegend||[])[2]||"")}</div>
-        </div>
-        <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>`}
+        <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
 
         <h3>銀杏同紅葉時機${secEditBtn("notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
@@ -1594,10 +1652,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return `
       <section class="sec">
         <h2 class="sec-title">自己加嘅資料</h2>
-        <p class="sec-sub">想記低嘅嘢都可以開一個 section —— 手信買咩、換錢、上網卡、包咩行李。自己寫，或者講個題目俾 AI 幫你整。</p>
+        <p class="sec-sub">想記低嘅嘢都可以開一個 section —— 手信買咩、換錢、上網卡、包咩行李。自己寫，或者講個題目俾 AI 幫你整。拉住 ⠿ 可以上下拉改次序。</p>
+        <div id="usecorder">
         ${secs.length ? secs.map((s, i) => `
           <div class="usec" data-usec="${i}">
             <div class="usec-head">
+              <button class="iconbtn sechandle" data-usecdrag aria-label="拉上拉落改次序" title="拉上拉落改次序">⠿</button>
               <div class="usec-title">${esc(s.icon || "📌")} ${esc(s.title || "未命名")}</div>
               <div class="usec-tools">
                 <button class="iconbtn" data-usecedit="${i}" aria-label="改">✏️</button>
@@ -1611,11 +1671,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${s.source === "ai" ? `<div class="usec-by">✨ AI 幫手整，改得㗎</div>` : ""}
           </div>`).join("")
           : `<p class="hint">仲未有。撳下面加一個。</p>`}
+        </div>
         <button class="btn wide" id="addusec" style="margin-top:10px;">＋ 加一個 section</button>
       </section>`;
   }
 
   function blankSection(){ return { icon:"📌", title:"", sub:"", lines:[], links:[], source:"manual" }; }
+  async function reorderCustomSections(snap, from, to){
+    if (!Array.isArray(snap.sections)) return;
+    const [moved] = snap.sections.splice(from, 1);
+    snap.sections.splice(to, 0, moved);
+    render();
+    await saveNow("調整咗自己加嘅 section 次序");
+  }
 
   function openSectionEditor(idx){
     const d = state.snapshot;
@@ -1701,6 +1769,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       render();
       await saveNow(`刪咗 section：${s.title || "未命名"}`);
     }));
+    wireSimpleDrag($("#usecorder"), ".usec", "[data-usecdrag]",
+      (from, to) => reorderCustomSections(state.snapshot, from, to));
   }
 
   function wireOverview(){
@@ -1725,9 +1795,40 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
     wireCustomSections();
     wireLiveChecks();
+    wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
+      (from, to) => reorderHomeBlocks(state.snapshot, from, to));
+    wirePosterButton();
     const ex = $("#btn-export");
     if (ex) ex.addEventListener("click", openExportSheet);
     initOverviewMap();
+  }
+
+  // ---------- AI 行程海報 ----------
+  function wirePosterButton(){
+    const btn = $("#posterBtn");
+    const out = $("#poster-out");
+    if (!btn || !out) return;
+    btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const stop = busyIn(out, { steps:["AI 畫緊張海報"], hint:"要生成成張圖，大約 20-40 秒。" });
+      let r;
+      try {
+        r = await callAi({ action:"poster", itinerary: state.snapshot });
+      } catch (e){
+        stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+        btn.disabled = false; return;
+      }
+      stop();
+      btn.disabled = false;
+      if (!r || r.ok === false){
+        out.innerHTML = `<div class="ai-msg">${esc((r && r.message) || "畫唔到，試多次？")}</div>`;
+        return;
+      }
+      const src = `data:${r.mimeType || "image/png"};base64,${r.data}`;
+      out.innerHTML = `<img class="posterimg" src="${src}" alt="行程海報">
+        <a class="btn wide" href="${src}" download="seoul-trip-poster.png" style="margin-top:8px;">⬇️ 下載張海報</a>`;
+    });
   }
 
   // 表妹美食清單 only ever says "Day 2" as plain text — it isn't linked to a
@@ -1792,6 +1893,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                        ${mapNoteHtml(day)}
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
+        ${sel ? "" : `<button class="btn wide dayai" id="dayai" style="margin-top:11px;">✨ AI 諗行程</button>`}
       </section>
 
       <div class="line" id="line" style="--lc:${lc}">
@@ -1811,7 +1913,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
-        <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 諗行程</button>
         ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">☑️ 揀幾個一齊搬去第度</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
@@ -1879,10 +1980,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
       u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
       u.seg.html + (u.seg.route ? `<span class="seg-route">${esc(u.seg.route)}</span>` : "");
+    // one segment, one button — refreshing all of a day's legs to update just
+    // one used to burn a Google Directions call per leg every time
+    const segRefresh = showSeg && !u.seg.checking
+      ? `<button class="segrefresh" data-segrefresh="${i}" title="淨係重新check呢一段交通" aria-label="重新check呢一段交通">↻</button>` : "";
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg.html)}">
         <div class="seg-rail"></div>
-        <div class="seg-text">${segBody}</div>
+        <div class="seg-text">${segBody}${segRefresh}</div>
       </div>` : "";
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
@@ -2092,6 +2197,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (!got) s.noPhoto = true;    // don't keep offering a button that finds nothing
       render();
       if (got) saveNow(`搵咗張相俾「${name}」`);
+    }));
+
+    document.querySelectorAll("[data-segrefresh]").forEach(btn => btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const i = +btn.dataset.segrefresh;
+      state.transitProblem = "";
+      await refreshTransit(day, [i]);
     }));
 
     const recalc = $("#recalc");
@@ -3131,6 +3243,107 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         if (landed) landed.scrollIntoView({ block:"center", behavior:"smooth" });
         saveNow("調整咗次序").then(() =>
           refreshTransit(day, [d.to, d.to + 1, d.from, d.from + 1]));
+      };
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+    });
+  }
+
+  // Same long-press-then-drag gesture as wireDrag above, generalised for any
+  // vertical list of same-class blocks (home-page sections, custom sections)
+  // instead of only itinerary stops. onDrop(from, to) does the actual array
+  // move + render + save; this only handles the pointer gesture and the
+  // visual shuffle while dragging.
+  function wireSimpleDrag(container, itemSelector, handleSelector, onDrop){
+    if (!container) return;
+    let drag = null;
+    let raf = null;
+
+    function paint(){
+      if (!drag || !drag.active) return;
+      const pageY = drag.clientY + window.scrollY;
+      drag.el.style.transform = `translateY(${pageY - drag.startPageY}px)`;
+      let to = drag.from;
+      for (let k = 0; k < drag.rects.length; k++){
+        if (k === drag.from) continue;
+        const mid = drag.rects[k].top + drag.rects[k].height / 2;
+        if (k < drag.from && pageY < mid) to = Math.min(to, k);
+        if (k > drag.from && pageY > mid) to = Math.max(to, k);
+      }
+      if (to !== drag.to){
+        drag.to = to;
+        const h = drag.rects[drag.from].height;
+        drag.items.forEach((u,k) => {
+          if (k === drag.from) return;
+          u.classList.add("shifting");
+          let shift = 0;
+          if (drag.to < drag.from && k >= drag.to && k < drag.from) shift = h;
+          if (drag.to > drag.from && k > drag.from && k <= drag.to) shift = -h;
+          u.style.transform = shift ? `translateY(${shift}px)` : "";
+        });
+      }
+    }
+    function tick(){
+      if (!drag || !drag.active){ raf = null; return; }
+      const edge = 110, vh = window.innerHeight, y = drag.clientY;
+      let step = 0;
+      if (y < edge) step = -Math.ceil((edge - y) / 5);
+      else if (y > vh - edge) step = Math.ceil((y - (vh - edge)) / 5);
+      if (step){
+        const before = window.scrollY;
+        window.scrollBy(0, Math.max(-28, Math.min(28, step)));
+        if (window.scrollY !== before) paint();
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    container.querySelectorAll(handleSelector).forEach(handle => {
+      handle.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        const itemEl = handle.closest(itemSelector);
+        const items = Array.from(container.querySelectorAll(itemSelector));
+        const sy = window.scrollY;
+        drag = {
+          el: itemEl,
+          from: items.indexOf(itemEl),
+          to: items.indexOf(itemEl),
+          startPageY: e.clientY + sy,
+          clientY: e.clientY,
+          items,
+          rects: items.map(u => { const r = u.getBoundingClientRect(); return { top: r.top + sy, height: r.height }; }),
+          active: false,
+          timer: setTimeout(() => {
+            if (!drag) return;
+            drag.active = true;
+            itemEl.classList.add("lifted");
+            if (navigator.vibrate) navigator.vibrate(12);
+            if (!raf) raf = requestAnimationFrame(tick);
+          }, 260)
+        };
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener("pointermove", e => {
+        if (!drag) return;
+        if (!drag.active){
+          if (Math.abs((e.clientY + window.scrollY) - drag.startPageY) > 6){
+            clearTimeout(drag.timer);
+            drag.active = true;
+            drag.el.classList.add("lifted");
+            if (!raf) raf = requestAnimationFrame(tick);
+          } else return;
+        }
+        e.preventDefault();
+        drag.clientY = e.clientY;
+        paint();
+      });
+      const finish = () => {
+        if (!drag) return;
+        clearTimeout(drag.timer);
+        if (raf){ cancelAnimationFrame(raf); raf = null; }
+        const d = drag; drag = null;
+        d.items.forEach(u => { u.style.transform = ""; u.classList.remove("shifting","lifted"); });
+        if (!d.active || d.to === d.from) return;
+        onDrop(d.from, d.to);
       };
       handle.addEventListener("pointerup", finish);
       handle.addEventListener("pointercancel", finish);

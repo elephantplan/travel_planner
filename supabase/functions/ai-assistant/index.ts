@@ -1,6 +1,6 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section' | 'poster'
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +86,43 @@ async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boo
     } catch (e) {
       lastErr = e;
       if (!isQuotaError(e)) throw e;   // not a quota issue — another key won't help
+    }
+  }
+  throw lastErr;
+}
+
+// Image generation is a different model + a different part of the response
+// (inlineData, not text), so it gets its own call path — same multi-key
+// quota fallback as callGemini, just extracting a base64 image instead of text.
+const IMAGE_MODEL = "gemini-2.5-flash-image";
+async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mimeType: string; data: string }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["IMAGE"] },
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imgPart = parts.find((p: any) => p?.inlineData?.data);
+  if (!imgPart) throw new Error("Gemini 冇出到圖，回覆入面搵唔到圖片資料");
+  return { mimeType: imgPart.inlineData.mimeType || "image/png", data: imgPart.inlineData.data };
+}
+async function callGeminiImage(apiKeys: string[], prompt: string): Promise<{ mimeType: string; data: string }> {
+  let lastErr: unknown = new Error("Gemini key 未設定");
+  for (const apiKey of apiKeys) {
+    try {
+      return await callGeminiImageOnce(apiKey, prompt);
+    } catch (e) {
+      lastErr = e;
+      if (!isQuotaError(e)) throw e;
     }
   }
   throw lastErr;
@@ -800,6 +837,26 @@ Deno.serve(async (req) => {
             .slice(0, 3),
         },
       });
+    }
+
+    if (action === "poster") {
+      if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
+      const itinerary = body?.itinerary;
+      const compact = compactItinerary(itinerary);
+      const hotelLine = Array.isArray(compact.酒店)
+        ? compact.酒店.map((s: any) => `${s.住邊度}${s.由邊日 ? `（${s.由邊日}至${s.住到邊日}）` : ""}`).join("、")
+        : (compact.酒店 || "");
+      const dayLines = compact.days.map((d: any) => {
+        const tops = d.stops.slice(0, 4).map((s: any) => s.title).filter(Boolean).join("、");
+        return `${d.dayId}（${d.date || ""}）${d.title || ""}：${tops || "（未排）"}`;
+      }).join("\n");
+      const prompt = `你係一個插畫師，幫一個7人家庭畫一張首爾6日親子旅行嘅宣傳海報，風格好似旅行社單張咁，主角係一隻得意可愛嘅小飛象（baby elephant，Dumbo 風格，大耳朵，圓渾卡通造型）扮導遊，戴住旅行帽或者攞住小旗仔，貫穿成張海報。\n\n設計要求：\n- 秋天銀杏／楓葉主題，暖色調（金黃、橙紅），配襯首爾地標元素（韓屋、宮殿飛簷、地鐵路線圖線條感）\n- 版面清楚分返 6 日（Day 1 到 Day 6），每日一個小區塊，用小圖示／圖畫代表嗰日重點（例如宮殿、纜車、河邊、市場），唔使逐字寫景點名\n- 圖入面如果要出現文字，一律用**極少、極短**嘅英文或數字（例如 "DAY 1"、"SEOUL"、日期數字），因為圖像生成模型寫長句中文字經常出錯變亂碼——**千萬唔好嘗試喺圖度寫大段中文或者具體地點全名**，用圖畫代替文字表達內容\n- 成體氣氛要溫馨、可愛、色彩豐富，適合一家大細（有長輩、有小朋友）睇\n- 直度（portrait）構圖，好似一張可以攞去打印嘅旅行海報\n\n呢個係佢哋嘅行程重點（畀你參考主題，唔使抄落張圖度）：\n酒店：${hotelLine || "未定"}\n${dayLines}`;
+      try {
+        const img = await callGeminiImage(apiKeys, prompt);
+        return json({ ok: true, mimeType: img.mimeType, data: img.data });
+      } catch (e) {
+        return json({ ok: false, message: friendlyGeminiError(e) });
+      }
     }
 
     if (action === "place-search") {
