@@ -779,6 +779,11 @@ img{max-width:100%;}
   color:var(--info);background:var(--info-bg);padding:7px 10px;border-radius:var(--r-sm);
 }
 .ailog-links a small{display:block;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+.ailog-entry[data-logtoggle]{cursor:pointer;}
+.ailog-entry.collapsed{padding-top:8px;margin-top:8px;}
+.ailog-entry.collapsed .ailog-when{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;}
+.ailog-entry.collapsed .ailog-note{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ailog-caret{font-size:10px;color:var(--ink-soft);flex:0 0 auto;}
 
 /* what THIS run just found, so it is obvious which entries are new */
 .ainew{
@@ -953,7 +958,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     readOnlyLabel: null,           // set when previewing an old version
     renamingBoard: null,           // boardId currently showing its rename input
     boardIdeas: null,              // last AI answer shown inline on a board page
-    selectMode: null                // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
+    selectMode: null,               // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
+    openLog: new Set()             // "boardId:logIndex" of ailog entries expanded beyond the latest
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
 
@@ -3294,17 +3300,32 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function aiLogHtml(board){
     const log = Array.isArray(board.aiLog) ? board.aiLog : [];
     if (!log.length) return "";
+    // only the latest run is shown in full by default — older ones pile up
+    // fast (every AI tap adds one) and showing them all expanded pushed the
+    // actual place list off-screen, so they collapse to a one-line summary
+    // that expands on tap, independently from any other open/edit panel
     return `
       <section class="ailog">
         <div class="ailog-head">🧠 AI 分析同建議<span class="ailog-sub">會一直記低，撳多次AI都唔會冇咗之前嘅</span></div>
-        ${log.map((e, i) => `
-          <div class="ailog-entry${i === 0 ? " latest" : ""}">
-            <div class="ailog-when">${esc(e.when || "")}${i === 0 ? " ・ 最新一次" : ""}</div>
+        ${log.map((e, i) => {
+          const key = board.id + ":" + i;
+          const expanded = i === 0 || state.openLog.has(key);
+          if (!expanded){
+            return `
+          <div class="ailog-entry collapsed" data-logtoggle="${key}">
+            <div class="ailog-when">${esc(e.when || "")}<span class="ailog-caret">▸</span></div>
+            <div class="ailog-note">${esc(e.note || "")}</div>
+          </div>`;
+          }
+          return `
+          <div class="ailog-entry${i === 0 ? " latest" : ""}"${i === 0 ? "" : ` data-logtoggle="${key}"`}>
+            <div class="ailog-when">${esc(e.when || "")}${i === 0 ? " ・ 最新一次" : `<span class="ailog-caret">▾</span>`}</div>
             ${e.analysis ? `<div class="ailog-text">${esc(e.analysis)}</div>` : ""}
             ${(e.resources || []).length ? `<div class="ailog-links">${e.resources.map(r =>
-              `<a href="${esc(r.url)}" target="_blank" rel="noopener">🔗 ${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</a>`).join("")}</div>` : ""}
+              `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</a>`).join("")}</div>` : ""}
             ${e.note ? `<div class="ailog-note">${esc(e.note)}</div>` : ""}
-          </div>`).join("")}
+          </div>`;
+        }).join("")}
       </section>`;
   }
 
@@ -3483,6 +3504,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     document.querySelectorAll("#boardline [data-copyitem]").forEach(btn =>
       btn.addEventListener("click", () => openCopyPicker(board, +btn.dataset.copyitem)));
+
+    document.querySelectorAll(".ailog [data-logtoggle]").forEach(el => el.addEventListener("click", () => {
+      const key = el.dataset.logtoggle;
+      if (state.openLog.has(key)) state.openLog.delete(key); else state.openLog.add(key);
+      render();
+    }));
 
     document.querySelectorAll("#boardline [data-inday]").forEach(btn => btn.addEventListener("click", e => {
       e.stopPropagation();
