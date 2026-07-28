@@ -55,9 +55,14 @@ function getGeminiKeys(): string[] {
   }
   return keys;
 }
-function isQuotaError(e: unknown): boolean {
+// Covers both "this key is out of quota" (429) and "this model is
+// momentarily overloaded" (503 UNAVAILABLE / "high demand") — in both cases
+// the same request on a different key is worth trying rather than giving up,
+// since Google load-balances independently per key/project.
+function isRetryableError(e: unknown): boolean {
   const msg = String(e);
-  return msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || /quota/i.test(msg);
+  return msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || /quota/i.test(msg) ||
+    msg.includes("503") || msg.includes("UNAVAILABLE") || /high demand|overloaded/i.test(msg);
 }
 
 // Model names are Supabase secrets (not hardcoded) so a stuck/renamed/quota'd
@@ -113,7 +118,7 @@ async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boo
       return await callGeminiOnce(apiKey, prompt, opts);
     } catch (e) {
       lastErr = e;
-      if (!isQuotaError(e)) throw e;   // not a quota issue — another key won't help
+      if (!isRetryableError(e)) throw e;   // not quota/overload — another key won't help
     }
   }
   throw lastErr;
@@ -151,7 +156,7 @@ async function callGeminiImage(apiKeys: string[], prompt: string): Promise<{ mim
       return await callGeminiImageOnce(apiKey, prompt);
     } catch (e) {
       lastErr = e;
-      if (!isQuotaError(e)) throw e;
+      if (!isRetryableError(e)) throw e;
     }
   }
   throw lastErr;
@@ -168,6 +173,9 @@ function friendlyGeminiError(e: unknown): string {
       return "⏳ Gemini 呢分鐘內叫得太密（per-minute rate limit），唔係日/月quota用晒——通常等返半分鐘到一分鐘再試就得。如果成日撞到，可能係呢個model嘅免費 rate limit 本身好低。";
     }
     return "⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。";
+  }
+  if (msg.includes("503") || msg.includes("UNAVAILABLE") || /high demand|overloaded/i.test(msg)) {
+    return "🌊 Gemini 依個 model 依家好多人用緊（high demand），唔係你個key有問題，已經自動試埋其他key。請等一陣（通常幾分鐘內）再試多次。";
   }
   if (msg.includes("TRUNCATED")) {
     return "✂️ AI 今次答案太長俾截斷咗，未夠格式完整。請再撳一次試多次（通常第二次就得）。";
