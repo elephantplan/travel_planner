@@ -447,6 +447,43 @@ img{max-width:100%;}
   background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);
 }
 
+/* the ＋ that lives in the gap between two stations */
+.insertrow{
+  display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:center;
+  width:100%;height:24px;padding:0;border:0;background:none;
+  position:relative;z-index:4;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.ins-plus{
+  grid-column:1;justify-self:center;
+  width:19px;height:19px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;line-height:1;color:var(--ink-faint);
+  background:var(--paper);border:1.5px dashed var(--rule);
+  transition:color .15s, border-color .15s, background .15s, transform .15s;
+}
+.insertrow:hover .ins-plus{color:var(--lc);border-color:var(--lc);}
+.insertrow:active .ins-plus{color:var(--lc);border-color:var(--lc);background:var(--surface-2);transform:scale(1.15);}
+
+/* a note pinned between two stations — deliberately not a station: no number,
+   no photo, hollow marker, so it never reads as somewhere you're going */
+.notecard{
+  background:var(--surface-2);border:1px dashed var(--rule);border-radius:var(--r-lg);
+  margin:0 0 4px 4px;overflow:hidden;position:relative;
+}
+.notecard.open{border-style:solid;border-color:var(--lc);}
+.notemain{display:flex;gap:9px;padding:10px 96px 10px 12px;align-items:flex-start;
+  -webkit-user-select:text;user-select:text;}
+.noteicon{flex:0 0 auto;font-size:14px;line-height:1.5;}
+.notetext{font-size:12.5px;line-height:1.6;color:var(--ink-soft);white-space:pre-wrap;min-width:0;}
+.notetext.empty{color:var(--ink-faint);font-style:italic;}
+/* hollow, smaller and grey — reads as "a marker on the line", not a station.
+   A dashed border is not an option at this size: 9px of circumference only
+   fits two dashes, which renders as a broken sliver rather than a ring. */
+.node.note{
+  width:7px;height:7px;background:var(--paper);border:2px solid var(--ink-faint);opacity:.9;
+}
+.notecard.open .notetext{display:none;}
+
 /* a station */
 .stop{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:start;}
 .stop-rail{position:relative;align-self:stretch;}
@@ -1066,6 +1103,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         i++;
       } else if (items[i].kind === "stop"){
         units.push({ seg: null, stop: items[i] });
+      } else if (items[i].kind === "note"){
+        // its own kind of unit — deliberately NOT a stop, so it stays out of
+        // the map, the ratings sweep and everything the AI is shown
+        units.push({ seg: null, stop: null, note: items[i] });
       } else {
         units.push({ seg: items[i], stop: null });
       }
@@ -1074,14 +1115,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   }
   function fromUnits(units){
     const out = [];
-    units.forEach(u => { if (u.seg) out.push(u.seg); if (u.stop) out.push(u.stop); });
+    units.forEach(u => {
+      if (u.seg) out.push(u.seg);
+      if (u.note) out.push(u.note);
+      if (u.stop) out.push(u.stop);
+    });
     return out;
   }
+  // index of the unit holding the first real stop — a note pinned above it
+  // must not make that stop start showing a "how you got here" line, because
+  // nothing comes before the first stop of a day
+  function firstStopUnit(units){ return units.findIndex(u => u.stop); }
   function blankStop(){
     return { kind:"stop", type:"normal", marker:"", time:"", title:"", kr:"",
              niecepick:[], desc:"", eatboxHtml:"", eatMeta:[], mapUrl:"",
              accessBadges:[], tip:"", photoUrl:"", placeId:"", lat:null, lng:null };
   }
+  // a free-text reminder that lives between two places ("買定 T-money",
+  // "呢度落車行 5 分鐘") — not a place, so it has no time, coords or rating
+  function blankNote(){ return { kind:"note", text:"" }; }
 
   // ==================================================================
   // BOOKMARK BOARDS — a place to park "maybe" spots that aren't slotted
@@ -1178,9 +1230,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   async function refreshTransit(day, indices){
     let units = toUnits(day.items);
     // nothing comes before the first stop of a day, so it carries no transit note
-    if (units[0] && units[0].seg && units[0].stop){ units[0].seg = null; day.items = fromUnits(units); }
+    const first = firstStopUnit(units);
+    if (first >= 0 && units[first].seg){ units[first].seg = null; day.items = fromUnits(units); }
+    // notes sit between stops without being one, so "the leg into this stop"
+    // starts at the previous STOP, not simply at the previous unit
+    const prevStop = i => { for (let j = i - 1; j >= 0; j--) if (units[j].stop) return units[j].stop; return null; };
     const todo = [...new Set(indices)]
-      .filter(i => i > 0 && i < units.length && units[i] && units[i].stop);
+      .filter(i => i > 0 && i < units.length && units[i] && units[i].stop && i !== first);
     if (!todo.length){ render(); return; }
 
     todo.forEach(i => {
@@ -1191,7 +1247,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     let why = "";
     for (const i of todo){
-      const from = stopRef(units[i-1].stop), to = stopRef(units[i].stop);
+      const from = stopRef(prevStop(i)), to = stopRef(units[i].stop);
       let done = false;
       if (from && to){
         try {
@@ -1668,6 +1724,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const units = toUnits(day.items);
     const mapOpen = !state.mapsShut.has(day.id);
     const sel = inSelectMode(day) ? state.selectMode : null;
+    const firstStop = firstStopUnit(units);
 
     return `
       <section class="dayhead" style="--lc:${lc}">
@@ -1696,7 +1753,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>
 
       <div class="line" id="line" style="--lc:${lc}">
-        ${units.map((u,i) => unitHtml(day, u, i, units.length, sel)).join("")}
+        ${units.map((u,i) =>
+          // a ＋ in every gap, so "between these two places" is a place you can
+          // point at rather than something you fake by adding at the end and dragging
+          (sel ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop)
+        ).join("")}
       </div>
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面嘅 ✨ 叫 AI 由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
 
@@ -1707,7 +1768,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <button class="btn primary" id="selmove" ${sel.selected.size ? "" : "disabled"}>搬去邊度</button>
         </div>
       ` : `
-        <button class="addstop" id="addstop">＋ 加一個地點落 ${esc(day.title)}</button>
+        <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
         <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 幫幾日諗行程</button>
         ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">☑️ 揀幾個一齊搬去第度</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
@@ -1721,6 +1782,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
         撳一下卡片就可以改；改完會自動儲存，唔使撳掣。<br>
+        想喺兩個地方之間插個地點或者 note，撳條線上面嘅 ＋。<br>
         想搬位就用卡片右上角嘅 ⠿ 拉上拉落，或者用「搬去第幾日」。
       </footer>
     `;
@@ -1735,13 +1797,42 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return stops.filter(s => !Number.isFinite(s.rating) && !s.noRating && (s.placeId || s.mapUrl) && plain(s.title)).length;
   }
 
-  function unitHtml(day, u, i, total, sel){
+  // a ＋ sitting on the route line, so any gap between two places is somewhere
+  // you can tap directly instead of adding at the end and dragging into place
+  function insertRowHtml(pos){
+    return `<button class="insertrow" data-insert="${pos}" aria-label="喺呢度加地點或者 note"><span class="ins-plus">＋</span></button>`;
+  }
+
+  function unitHtml(day, u, i, total, sel, firstStop){
     const key = day.id + ":" + i;
     const open = state.open.has(key);
     const s = u.stop;
     const selecting = !!sel;
     const checked = selecting && sel.selected.has(i);
-    const showSeg = u.seg && !(i === 0 && u.stop);
+
+    if (u.note){
+      const txt = plain(u.note.text);
+      return `
+        <div class="unit" data-i="${i}">
+          <div class="stop">
+            <div class="stop-rail"><span class="node note"></span></div>
+            <div class="notecard${open ? " open" : ""}">
+              <div class="notemain">
+                <span class="noteicon">📝</span>
+                <div class="notetext${txt ? "" : " empty"}">${txt ? esc(txt) : "撳 ✏️ 寫低你想記住嘅嘢…"}</div>
+              </div>
+              ${selecting ? "" : `
+              <div class="cardtools">
+                <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
+                <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+              </div>`}
+              ${!selecting && open ? noteEditorHtml(u.note, i) : ""}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const showSeg = u.seg && i !== firstStop;
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
       u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
@@ -1813,6 +1904,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </div>`;
   }
 
+  function noteEditorHtml(note, i){
+    return `
+      <div class="editor" data-noteeditor="${i}">
+        <div class="field">
+          <label>Note</label>
+          <textarea class="textarea" data-nf="text" placeholder="例如：買定 T-money／呢度落車行 5 分鐘／記得訂位">${esc(note.text || "")}</textarea>
+        </div>
+        <div class="editor-tools">
+          <button class="btn danger" data-nact="remove">刪走</button>
+          <button class="btn primary" data-nact="close">完成</button>
+        </div>
+      </div>`;
+  }
+
   function editorHtml(day, u, i, total){
     const s = u.stop;
     const mode = u.seg ? segMode(u.seg.html) : "walk";
@@ -1872,7 +1977,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (state.open.has(key)) state.open.delete(key); else { state.open.clear(); state.open.add(key); }
       render();
       if (state.open.has(key)){
-        const el = document.querySelector(`[data-editor], [data-boardeditor]`);
+        const el = document.querySelector(`[data-editor], [data-boardeditor], [data-noteeditor]`);
         if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" });
       }
     }));
@@ -1897,18 +2002,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const dayEdit = $("#dayedit");
     if (dayEdit) dayEdit.addEventListener("click", e => { e.stopPropagation(); openDayInfoEditSheet(day); });
 
+    // same picker as the in-between ＋, so every position — including the very
+    // end — can take either a place or a note
     const addBtn = $("#addstop");
-    if (addBtn) addBtn.addEventListener("click", async () => {
-      const units = toUnits(day.items);
-      units.push({ seg: buildSeg("walk", ""), stop: blankStop() });
-      day.items = fromUnits(units);
-      state.open.clear();
-      state.open.add(day.id + ":" + (units.length - 1));
-      render();
-      const inp = document.querySelector('[data-editor] [data-f="title"]');
-      if (inp){ inp.focus(); inp.scrollIntoView({ block:"center", behavior:"smooth" }); }
-      saveNow("加咗一個新地點");
-    });
+    if (addBtn) addBtn.addEventListener("click", () => openInsertSheet(day, toUnits(day.items).length));
 
     const dayAi = $("#dayai");
     if (dayAi) dayAi.addEventListener("click", () => openDayAiSheet(day));
@@ -1989,8 +2086,89 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       autoGeocodeDay(day);
     });
 
+    document.querySelectorAll("[data-insert]").forEach(btn =>
+      btn.addEventListener("click", () => openInsertSheet(day, +btn.dataset.insert)));
+
     wireEditor(day);
+    wireNoteEditor(day);
     wireDrag(day, line);
+  }
+
+  // ---------- insert a place or a note at an exact spot ----------
+  async function insertAt(day, pos, what){
+    const units = toUnits(day.items);
+    const at = Math.max(0, Math.min(pos, units.length));
+    if (what === "note"){
+      units.splice(at, 0, { seg:null, stop:null, note: blankNote() });
+    } else {
+      // a place dropped into the middle invalidates the leg into it AND the leg
+      // into whatever now follows; flag both rather than showing stale numbers.
+      // No lookup yet — it has no name to look up until they type one.
+      units.splice(at, 0, { seg:{ kind:"connector", html:"", stale:true }, stop: blankStop() });
+      const after = units[at + 1];
+      if (after && after.stop && after.seg) after.seg = Object.assign({}, after.seg, { stale:true });
+    }
+    day.items = fromUnits(units);
+    syncMapPoints(day);
+    state.open.clear();
+    state.open.add(day.id + ":" + at);
+    render();
+    const inp = document.querySelector('[data-editor] [data-f="title"], [data-noteeditor] [data-nf="text"]');
+    if (inp){ inp.focus(); inp.scrollIntoView({ block:"center", behavior:"smooth" }); }
+    await saveNow(what === "note" ? "加咗一個 note" : "加咗一個新地點");
+  }
+
+  function openInsertSheet(day, pos){
+    const units = toUnits(day.items);
+    const nameOf = u => u && u.stop ? (plain(u.stop.title) || "未改名嘅地點") : (u && u.note ? "一個 note" : "");
+    const before = nameOf(units[pos - 1]), after = nameOf(units[pos]);
+    const where = before && after ? `插喺「${before}」同「${after}」之間`
+                : before          ? `加喺「${before}」後面`
+                : after           ? `加喺「${after}」前面`
+                : "加落呢一日";
+    openSheet(`
+      <h3>加啲咩落呢度？</h3>
+      <p class="sec-sub">${esc(where)}。</p>
+      <button class="btn wide primary" id="ins-place" style="margin-top:10px;">📍 加一個地點</button>
+      <p class="sec-sub" style="margin:6px 0 0;">打名嗰陣會自動搵返 Google 地圖真實地點、評分同營業時間。</p>
+      <button class="btn wide" id="ins-note" style="margin-top:14px;">📝 加一段 note</button>
+      <p class="sec-sub" style="margin:6px 0 0;">寫低提自己嘅嘢（買定 T-money、記得訂位…），唔會當成一個景點，唔會上地圖。</p>
+    `, sheet => {
+      sheet.querySelector("#ins-place").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
+      sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
+    });
+  }
+
+  function wireNoteEditor(day){
+    const box = document.querySelector("[data-noteeditor]");
+    if (!box) return;
+    const i = +box.dataset.noteeditor;
+    const u = toUnits(day.items)[i];
+    if (!u || !u.note) return;
+
+    const ta = box.querySelector('[data-nf="text"]');
+    if (ta) ta.addEventListener("input", () => {
+      u.note.text = ta.value;
+      const shown = box.closest(".notecard").querySelector(".notetext");
+      if (shown){
+        shown.textContent = ta.value.trim() || "撳 ✏️ 寫低你想記住嘅嘢…";
+        shown.classList.toggle("empty", !ta.value.trim());
+      }
+      saveSoon("改咗一個 note");
+    });
+
+    box.querySelectorAll("[data-nact]").forEach(btn => btn.addEventListener("click", async () => {
+      if (btn.dataset.nact === "close"){ state.open.clear(); render(); return; }
+      if (btn.dataset.nact === "remove"){
+        if (!confirm("刪走呢個 note？")) return;
+        const units = toUnits(day.items);
+        units.splice(i, 1);
+        day.items = fromUnits(units);
+        state.open.clear();
+        render();
+        await saveNow("刪走咗一個 note");
+      }
+    }));
   }
 
   function wireEditor(day){
@@ -3869,6 +4047,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           const t = segPlain(u.seg.html || "");
           if (t) L.push(`   ↓ ${t}`);
         }
+        if (u.note){
+          const t = plain(u.note.text);
+          if (t) L.push(`　　📝 ${t.replace(/\n/g, "\n　　   ")}`);
+          return;
+        }
         const s = u.stop;
         if (!s) return;
         L.push(`${plain(s.time) || "　"}　${plain(s.title)}${s.kr ? `（${plain(s.kr)}）` : ""}`);
@@ -3903,6 +4086,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const dayBlocks = (snap.days || []).map(day => {
       const st = stayForDay(snap, day);
       const rows = toUnits(day.items).map((u, i) => {
+        if (u.note){
+          const t = plain(u.note.text);
+          return t ? `<div class="note">📝 ${esc(t)}</div>` : "";
+        }
         const s = u.stop;
         if (!s) return "";
         const seg = i > 0 && u.seg ? segPlain(u.seg.html || "") : "";
@@ -3957,6 +4144,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   .stop .d{color:#4B5563;font-size:12.5px;margin-top:2px}
   .stop .c{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 8px;font-size:11.5px;color:#6B7280}
   .seg{margin-left:76px;font-size:11.5px;color:#8A8F98;padding:2px 0}
+  .note{margin-left:76px;font-size:12px;color:#4B5563;padding:5px 9px;white-space:pre-wrap;
+        border-left:2px dashed #C9CDD4;background:#FAFAFA;page-break-inside:avoid}
   ul{margin:6px 0;padding-left:20px}
   li{margin-bottom:3px;font-size:13px}
   .link{font-size:12px;color:#4B5563;word-break:break-all}
