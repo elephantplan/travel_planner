@@ -1715,7 +1715,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ? `↻ 重算全日交通（有 ${staleCount(units)} 段待確認）`
             : `↻ 重算全日交通`
         }</button>` : ""}
-        ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+        ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分／營業時間（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
       `}
 
       <footer>
@@ -3284,7 +3284,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟，或者問AI攞主意。</p>` : ""}
 
       <button class="addstop" id="addboarditem">＋ 加一個地點落「${esc(board.name)}」</button>
-      ${ratableCount(board.items) ? `<button class="recalc" id="getboardratings" style="margin-top:8px;">★ 攞 Google 評分（${ratableCount(board.items)} 個地點未有）</button>` : ""}
+      ${ratableCount(board.items) ? `<button class="recalc" id="getboardratings" style="margin-top:8px;">★ 攞 Google 評分／營業時間（${ratableCount(board.items)} 個地點未有）</button>` : ""}
       <button class="btn danger wide" id="delboard" style="margin-top:8px;">🗑 刪除呢個清單</button>
 
       <footer>
@@ -4394,6 +4394,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
           if (r && r.message) why = r.message;
         }
       } catch (e){ why = e.message; }
+      // same button, same trip — while we're already asking Google about this
+      // place, grab its opening hours too instead of making the user find a
+      // separate way to trigger that
+      if (s.placeId && !s.hoursDone){
+        try { await enrichHours(s); } catch (_){}
+      }
       render();
     }
     if (done) await saveNow(`攞咗 ${done} 個地點嘅 Google 評分（${label}）`);
