@@ -103,7 +103,7 @@ async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boo
 // Image generation is a different model + a different part of the response
 // (inlineData, not text), so it gets its own call path — same multi-key
 // quota fallback as callGemini, just extracting a base64 image instead of text.
-const IMAGE_MODEL = "gemini-2.5-flash-image";
+const IMAGE_MODEL = "gemini-3.1-flash-image";
 async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mimeType: string; data: string }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
