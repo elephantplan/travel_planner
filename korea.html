@@ -787,6 +787,14 @@ img{max-width:100%;}
   border:1px solid var(--bookmark);border-radius:999px;padding:3px 8px;
 }
 .stopcard.freshai{box-shadow:0 0 0 1.5px var(--bookmark) inset;}
+/* a bookmark that's really already a stop somewhere — computed live, not stored */
+.inday{
+  display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+  font-size:11.5px;font-weight:700;line-height:1.45;
+  padding:4px 10px;border-radius:14px;max-width:100%;
+  border:1px solid var(--lc,var(--d3));background:transparent;color:var(--lc,var(--d3));
+}
+.inday:active{background:var(--surface-2);}
 
 .copyrow{
   width:100%;margin-top:9px;display:flex;align-items:center;justify-content:center;
@@ -3307,6 +3315,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return d ? `<small>AI 建議：${esc(d.title)}</small>` : "";
   }
 
+  // Whether a bookmarked place already IS a stop somewhere in the itinerary,
+  // and which day. Computed fresh every render (not stored) so renaming,
+  // moving or deleting the stop in the itinerary is reflected here
+  // automatically — there is no separate "already scheduled" flag to fall
+  // out of sync, because nothing is ever written down; it's re-derived.
+  function findInItinerary(snap, item){
+    const pid = item.placeId;
+    const terms = [loose(item.title), loose(item.kr)].filter(Boolean);
+    for (const day of (snap.days || [])){
+      for (const it of (day.items || [])){
+        if (it.kind !== "stop") continue;
+        if (pid && it.placeId && it.placeId === pid) return day;
+        const itTerms = [loose(it.title), loose(it.kr)].filter(Boolean);
+        if (terms.some(t => itTerms.includes(t))) return day;
+      }
+    }
+    return null;
+  }
+
   function boardItemHtml(board, s, i){
     const key = board.id + ":" + i;
     const open = state.open.has(key);
@@ -3320,7 +3347,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // only the newest AI batch is badged — otherwise every place the AI ever
     // found stays marked and the badge stops meaning "this is what just landed"
     const isFresh = s.aiRun && s.aiRun === board.aiRunLatest;
+    // already scheduled beats a mere AI guess at where it might fit — if it's
+    // really there, that's more useful than "AI 建議：Day X"
+    const inItin = findInItinerary(state.snapshot, s);
     const chips = (isFresh ? `<span class="ainew">✨ 今次 AI 搵</span>` : "")
+      + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${DAY_COLORS[inItin.id]||'var(--d1)'}">📍 已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
       + (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
       + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
     const links = [];
@@ -3350,7 +3381,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
-            <button class="btn copyrow" data-copyitem="${i}">📋 複製去某一日…${suggestLabel(s)}</button>
+            <button class="btn copyrow" data-copyitem="${i}">📋 複製去某一日…${inItin ? "" : suggestLabel(s)}</button>
             ${open ? boardItemEditorHtml(board, s, i) : ""}
           </div>
         </div>
@@ -3452,6 +3483,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     document.querySelectorAll("#boardline [data-copyitem]").forEach(btn =>
       btn.addEventListener("click", () => openCopyPicker(board, +btn.dataset.copyitem)));
+
+    document.querySelectorAll("#boardline [data-inday]").forEach(btn => btn.addEventListener("click", e => {
+      e.stopPropagation();
+      state.view = btn.dataset.inday;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      render();
+    }));
 
     const rateBtn = $("#getboardratings");
     if (rateBtn) rateBtn.addEventListener("click", async () => {
