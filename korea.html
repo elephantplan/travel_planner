@@ -2060,13 +2060,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             s.title = p.name; s.placeId = p.placeId;
             if (Number.isFinite(p.lat)) s.lat = p.lat;
             if (Number.isFinite(p.lng)) s.lng = p.lng;
+            // text search already returned these for free — no reason to make
+            // the user press the separate "攞評分" button for a place they
+            // just picked off Google themselves
+            if (Number.isFinite(p.rating)) s.rating = p.rating;
+            if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊張相…</p>`;
-            try {
-              const pr = await callAi({ action:"place-photo", placeId:p.placeId });
-              if (pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
-            } catch(_){}
+            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
+            await Promise.all([enrichHours(s), enrichPhoto(s, p.name)]);
             await saveNow("加咗「" + s.title + "」");
             render();
           }));
@@ -3593,13 +3595,15 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             s.title = p.name; s.placeId = p.placeId;
             if (Number.isFinite(p.lat)) s.lat = p.lat;
             if (Number.isFinite(p.lng)) s.lng = p.lng;
+            // text search already returned these for free — no reason to make
+            // the user press the separate "攞評分" button for a place they
+            // just picked off Google themselves
+            if (Number.isFinite(p.rating)) s.rating = p.rating;
+            if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊張相…</p>`;
-            try {
-              const pr = await callAi({ action:"place-photo", placeId:p.placeId });
-              if (pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
-            } catch(_){}
+            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
+            await Promise.all([enrichHours(s), enrichPhoto(s, p.name)]);
             await saveNow("加咗「" + s.title + "」落「" + board.name + "」");
             render();
           }));
