@@ -604,6 +604,20 @@ img{max-width:100%;}
 }
 .recalc:active{background:var(--surface);}
 .recalc[data-stale="1"]{border-color:var(--warn);color:var(--warn);background:var(--warn-bg);}
+
+/* ---------- 選幾個地點一齊搬 ---------- */
+.stopcard.selecting .stopmain{padding-right:12px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+.stopcard.selecting{border-color:var(--rule);}
+.stopcard.selecting.checked{border-color:var(--lc,var(--d3));box-shadow:0 0 0 1.5px var(--lc,var(--d3)) inset;}
+.selbox{flex:0 0 auto;font-size:19px;line-height:1;padding-top:2px;}
+.selectbar{
+  position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));z-index:40;
+  margin-top:12px;padding:10px 12px;border-radius:var(--r-lg);
+  background:var(--surface);border:1px solid var(--rule);box-shadow:var(--shadow-2);
+  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;
+}
+.selectbar span{flex:1;}
+.selectbar .btn{padding:8px 14px;font-size:12.5px;}
 .recalc:disabled{opacity:.55;}
 
 .photogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;}
@@ -734,6 +748,9 @@ img{max-width:100%;}
   opacity:.45;vertical-align:middle;border-radius:6px;
 }
 .secedit:hover,.secedit:focus-visible{opacity:1;background:var(--surface-2);}
+.sectools{display:inline-flex;align-items:center;}
+.secdel{margin-left:2px;}
+.secdel:hover,.secdel:focus-visible{color:var(--danger);}
 .fieldhint{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin:0 0 6px;}
 
 /* ---------- AI analysis kept above the list ---------- */
@@ -829,6 +846,13 @@ img{max-width:100%;}
 .daypick button:disabled{opacity:.42;cursor:default;}
 .daypick .bullet{width:11px;height:11px;border-radius:50%;background:var(--lc);}
 .daypick .dcode{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--lc);}
+.daypick-compact{margin-bottom:10px;}
+.daypick-check{
+  display:grid;grid-template-columns:18px 20px 52px 1fr;align-items:center;gap:11px;
+  padding:11px 14px;border-radius:var(--r-md);cursor:pointer;text-align:left;
+  border:1px solid var(--rule);background:var(--surface);font-size:13.5px;font-weight:600;margin-bottom:6px;
+}
+.daypick-check input{width:16px;height:16px;accent-color:var(--lc);}
 
 footer{padding:34px 0 18px;font-size:11.5px;color:var(--ink-faint);line-height:1.85;}
 footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bottom:7px;}
@@ -920,8 +944,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     editedBy: localStorage.getItem("seoul_trip_name") || "",
     readOnlyLabel: null,           // set when previewing an old version
     renamingBoard: null,           // boardId currently showing its rename input
-    boardIdeas: null               // last AI answer shown inline on a board page
+    boardIdeas: null,              // last AI answer shown inline on a board page
+    selectMode: null                // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
   };
+  function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
 
   // never interrupt an edit to ask who is typing; a name can be set in 歷史 if wanted
   function getEditedBy(){ return state.editedBy || "家人"; }
@@ -1071,6 +1097,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function normalizeSnapshot(snap){
     if (snap && !Array.isArray(snap.boards)) snap.boards = [];
     if (snap && !Array.isArray(snap.sections)) snap.sections = [];
+    if (snap && !Array.isArray(snap.hiddenSections)) snap.hiddenSections = [];
     migrateStays(snap);
     if (snap) snap.boards.forEach(b => { if (!b.color) b.color = pickBoardColor(snap.boards); });
     return snap;
@@ -1223,6 +1250,42 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function secEditBtn(key){
     return `<button class="secedit" data-editsec="${key}" title="改呢一段" aria-label="改呢一段">✏️</button>`;
   }
+  // edit + hide, for the fixed home-page panels ("session" 用戶叫法) that
+  // aren't custom sections but should still be removable. Hiding is soft —
+  // it only stops overviewHtml from rendering the block; the underlying data
+  // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
+  // (day pages, the AI calls) is affected, and it can always be brought back.
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定" };
+  function secTools(key){
+    const label = HIDDEN_SECTION_LABELS[key] || key;
+    return `<span class="sectools">${secEditBtn(key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
+  }
+  function isSectionHidden(snap, key){ return Array.isArray(snap.hiddenSections) && snap.hiddenSections.includes(key); }
+  async function hideSection(key, label){
+    if (!confirm(`隱藏「${label}」呢段？資料唔會刪，隨時可以喺主頁最底「顯示返」。`)) return;
+    const snap = state.snapshot;
+    if (!Array.isArray(snap.hiddenSections)) snap.hiddenSections = [];
+    if (!snap.hiddenSections.includes(key)) snap.hiddenSections.push(key);
+    render();
+    await saveNow(`隱藏咗首頁「${label}」`);
+  }
+  async function unhideSection(key, label){
+    const snap = state.snapshot;
+    snap.hiddenSections = (snap.hiddenSections || []).filter(k => k !== key);
+    render();
+    await saveNow(`顯示返首頁「${label}」`);
+  }
+  function hiddenSectionsHtml(d){
+    const hidden = (Array.isArray(d.hiddenSections) ? d.hiddenSections : []).filter(k => HIDDEN_SECTION_LABELS[k]);
+    if (!hidden.length) return "";
+    return `
+      <section class="sec">
+        <h2 class="sec-title">隱藏咗嘅段落</h2>
+        <p class="sec-sub">資料冇刪，撳「顯示返」就再出返喺主頁。</p>
+        <div class="chiprow">${hidden.map(k =>
+          `<button class="btn" data-unhidesec="${k}">👁 顯示返「${esc(HIDDEN_SECTION_LABELS[k])}」</button>`).join("")}</div>
+      </section>`;
+  }
 
   function overviewHtml(){
     const d = state.snapshot;
@@ -1283,8 +1346,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <h2 class="sec-title">出發前必讀</h2>
         <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。</p>
 
+        ${isSectionHidden(d,"acc") ? "" : `
         <div class="panel">
-          <div class="k">住宿${secEditBtn("acc")}</div>
+          <div class="k">住宿${secTools("acc")}</div>
           ${(d.stays || []).length ? (d.stays || []).map(st => `
             <div class="stayrow">
               <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
@@ -1295,26 +1359,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
               ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
             </div>`).join("")
             : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
-        </div>
+        </div>`}
 
-        <h3>10 月下旬天氣${secEditBtn("weather")}</h3>
+        ${isSectionHidden(d,"weather") ? "" : `
+        <h3>10 月下旬天氣${secTools("weather")}</h3>
         <p class="sec-sub">歷年同期平均，出發前一週用 AI 助手 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
-        </table>
+        </table>`}
 
-        <h3>點著衫${secEditBtn("clothing")}</h3>
-        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>
+        ${isSectionHidden(d,"clothing") ? "" : `
+        <h3>點著衫${secTools("clothing")}</h3>
+        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>`}
 
-        <h3>無障礙標記${secEditBtn("access")}</h3>
+        ${isSectionHidden(d,"access") ? "" : `
+        <h3>無障礙標記${secTools("access")}</h3>
         <p class="sec-sub">每個地點都會標返路況。</p>
         <div class="legend">
           <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
           <div class="legend-item"><span class="legend-dot" style="background:var(--warn)"></span>${esc((d.accessLegend||[])[1]||"")}</div>
           <div class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>${esc((d.accessLegend||[])[2]||"")}</div>
         </div>
-        <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>
+        <p class="sec-sub" style="margin-top:11px;">${d.elevatorTip||""}</p>`}
 
         <h3>銀杏同紅葉時機${secEditBtn("notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
@@ -1327,16 +1394,19 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
       ${transitInfoHtml(d.transitInfo)}
 
+      ${isSectionHidden(d,"ai") ? "" : `
       <section class="sec">
-        <h2 class="sec-title">AI 設定${secEditBtn("ai")}</h2>
+        <h2 class="sec-title">AI 設定${secTools("ai")}</h2>
         <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。</p>
         <div class="panel">
           <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || DEFAULT_TRIP_BRIEF)}</div>
           ${briefText(d) ? "" : `<div class="d" style="opacity:.7;margin-top:6px;">（而家用緊預設）</div>`}
         </div>
-      </section>
+      </section>`}
 
       ${customSectionsHtml(d)}
+
+      ${hiddenSectionsHtml(d)}
 
       <section class="sec">
         <h2 class="sec-title">表妹美食清單</h2>
@@ -1534,6 +1604,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const open = HOME_EDITORS[b.dataset.editsec];
       if (open) open();
     }));
+    document.querySelectorAll("[data-delsec]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      hideSection(b.dataset.delsec, b.dataset.seclabel);
+    }));
+    document.querySelectorAll("[data-unhidesec]").forEach(b => b.addEventListener("click", () => {
+      const key = b.dataset.unhidesec;
+      unhideSection(key, HIDDEN_SECTION_LABELS[key] || key);
+    }));
     wireCustomSections();
     const ex = $("#btn-export");
     if (ex) ex.addEventListener("click", openExportSheet);
@@ -1575,6 +1653,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const lc = DAY_COLORS[day.id] || "var(--d1)";
     const units = toUnits(day.items);
     const mapOpen = !state.mapsShut.has(day.id);
+    const sel = inSelectMode(day) ? state.selectMode : null;
 
     return `
       <section class="dayhead" style="--lc:${lc}">
@@ -1583,7 +1662,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="kline"></span>
           <span class="date">${esc(day.date)}</span>
         </div>
-        <h2>${esc(day.title)}</h2>
+        <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">✏️</button></h2>
         <p class="intro">${esc(day.desc)}</p>
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
@@ -1603,18 +1682,27 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>
 
       <div class="line" id="line" style="--lc:${lc}">
-        ${units.map((u,i) => unitHtml(day, u, i, units.length)).join("")}
+        ${units.map((u,i) => unitHtml(day, u, i, units.length, sel)).join("")}
       </div>
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面嘅 ✨ 叫 AI 由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
 
-      <button class="addstop" id="addstop">＋ 加一個地點落 ${esc(day.title)}</button>
-      <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 幫「${esc(day.title)}」諗行程</button>
-      ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
-        staleCount(units)
-          ? `↻ 重算全日交通（有 ${staleCount(units)} 段待確認）`
-          : `↻ 重算全日交通`
-      }</button>` : ""}
-      ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+      ${sel ? `
+        <div class="selectbar">
+          <span>已選 ${sel.selected.size} 個</span>
+          <button class="btn" id="selcancel">取消</button>
+          <button class="btn primary" id="selmove" ${sel.selected.size ? "" : "disabled"}>搬去邊度</button>
+        </div>
+      ` : `
+        <button class="addstop" id="addstop">＋ 加一個地點落 ${esc(day.title)}</button>
+        <button class="btn wide dayai" id="dayai" style="margin-top:8px;">✨ AI 幫幾日諗行程</button>
+        ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">☑️ 揀幾個一齊搬去第度</button>` : ""}
+        ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
+          staleCount(units)
+            ? `↻ 重算全日交通（有 ${staleCount(units)} 段待確認）`
+            : `↻ 重算全日交通`
+        }</button>` : ""}
+        ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+      `}
 
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
@@ -1633,10 +1721,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return stops.filter(s => !Number.isFinite(s.rating) && !s.noRating && (s.placeId || s.mapUrl) && plain(s.title)).length;
   }
 
-  function unitHtml(day, u, i, total){
+  function unitHtml(day, u, i, total, sel){
     const key = day.id + ":" + i;
     const open = state.open.has(key);
     const s = u.stop;
+    const selecting = !!sel;
+    const checked = selecting && sel.selected.has(i);
     const showSeg = u.seg && !(i === 0 && u.stop);
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
@@ -1684,8 +1774,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         ${segHtml}
         <div class="stop">
           <div class="stop-rail"><span class="node" data-type="${esc(s.type||'normal')}"></span></div>
-          <div class="stopcard${open ? " open" : ""}">
-            <div class="stopmain">
+          <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}">
+            <div class="stopmain"${selecting ? ` data-select="${i}"` : ""}>
+              ${selecting ? `<span class="selbox">${checked ? "☑️" : "⬜"}</span>` : ""}
               ${thumb}
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
@@ -1693,15 +1784,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
             </div>
+            ${selecting ? "" : `
             <div class="cardtools">
               <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
               <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
-            </div>
+            </div>`}
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
-            ${open ? editorHtml(day, u, i, total) : ""}
+            ${!selecting && open ? editorHtml(day, u, i, total) : ""}
           </div>
         </div>
       </div>`;
@@ -1788,7 +1880,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     wireOpenToggles();
 
-    $("#addstop").addEventListener("click", async () => {
+    const dayEdit = $("#dayedit");
+    if (dayEdit) dayEdit.addEventListener("click", e => { e.stopPropagation(); openDayInfoEditSheet(day); });
+
+    const addBtn = $("#addstop");
+    if (addBtn) addBtn.addEventListener("click", async () => {
       const units = toUnits(day.items);
       units.push({ seg: buildSeg("walk", ""), stop: blankStop() });
       day.items = fromUnits(units);
@@ -1802,6 +1898,28 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const dayAi = $("#dayai");
     if (dayAi) dayAi.addEventListener("click", () => openDayAiSheet(day));
+
+    // ---------- 選幾個地點一齊搬 ----------
+    const selStart = $("#selstart");
+    if (selStart) selStart.addEventListener("click", () => {
+      state.selectMode = { dayId: day.id, selected: new Set() };
+      render();
+    });
+    const selCancel = $("#selcancel");
+    if (selCancel) selCancel.addEventListener("click", () => { state.selectMode = null; render(); });
+    const selMove = $("#selmove");
+    if (selMove) selMove.addEventListener("click", () => {
+      if (!state.selectMode || !state.selectMode.selected.size) return;
+      openMultiMovePicker(day, [...state.selectMode.selected]);
+    });
+    if (inSelectMode(day)){
+      document.querySelectorAll("[data-select]").forEach(el => el.addEventListener("click", () => {
+        const idx = +el.dataset.select;
+        const sel = state.selectMode.selected;
+        if (sel.has(idx)) sel.delete(idx); else sel.add(idx);
+        render();
+      }));
+    }
 
     // 📷 placeholder on a photo-less stop: fetch one picture, no picker
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", async ev => {
@@ -2004,6 +2122,99 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
   // ---------- move a stop to another day, or to/from a bookmark board ----------
   // source: { kind:"day", day, index } | { kind:"board", board, index }
+  // Pulls several stops out of a day at once, keeping their original relative
+  // order. Splicing must go highest-index-first so removing one doesn't shift
+  // the position of the next one still waiting to be removed.
+  function detachStops(day, indices){
+    const units = toUnits(day.items);
+    const sorted = [...indices].sort((a, b) => a - b);
+    const moving = sorted.map(i => units[i].stop);
+    [...sorted].sort((a, b) => b - a).forEach(i => units.splice(i, 1));
+    day.items = fromUnits(units);
+    syncMapPoints(day);
+    return moving;
+  }
+
+  // Same destinations as the single-item move picker, but for a batch —
+  // "同時移動幾個行程去另一日" was a real gap: only one stop could be relocated
+  // at a time, so reshuffling a multi-stop chunk meant repeating the picker.
+  function openMultiMovePicker(day, indices){
+    const count = indices.length;
+    const days = state.snapshot.days || [];
+    const boards = state.snapshot.boards || [];
+    openSheet(`
+      <h3>搬去邊度？</h3>
+      <p class="sec-sub">揀咗 ${count} 個地點，一齊搬過去，順序唔會變。</p>
+      ${days.length ? `
+        <p class="picker-label">行程日子</p>
+        <div class="daypick">
+          ${days.map(d => {
+            const here = d.id === day.id;
+            return `<button data-today="${d.id}" ${here ? "disabled" : ""} style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+              <span class="bullet"></span>
+              <span class="dcode">Day ${d.id.replace('day','')}</span>
+              <span>${esc(d.title)}${here?"（而家喺度）":""}</span>
+            </button>`;
+          }).join("")}
+        </div>` : ""}
+      <p class="picker-label">心水清單</p>
+      <div class="daypick">
+        ${boards.map(b => `<button data-toboard="${b.id}" style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="dcode">📌</span><span>${esc(b.name)}</span>
+        </button>`).join("")}
+        <button data-newboard style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="dcode">＋</span><span>開個新清單</span>
+        </button>
+      </div>
+    `, sheet => {
+      sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", async () => {
+        const target = dayById(b.dataset.today);
+        const moving = detachStops(day, indices);
+        const tUnits = toUnits(target.items);
+        const landedFrom = tUnits.length;
+        moving.forEach(st => { st.kind = "stop"; tUnits.push({ seg:null, stop:st }); });
+        target.items = fromUnits(tUnits);
+        syncMapPoints(target);
+        closeLayer();
+        state.selectMode = null;
+        state.open.clear();
+        state.view = target.id;
+        render();
+        await saveNow(`搬咗 ${count} 個地點去 ${target.title}`);
+        refreshTransit(target, Array.from({ length: moving.length }, (_, k) => landedFrom + k));
+        refreshTransit(day, [Math.min(...indices)]);
+      }));
+
+      sheet.querySelectorAll("[data-toboard]").forEach(b => b.addEventListener("click", async () => {
+        const target = boardById(b.dataset.toboard);
+        const moving = detachStops(day, indices);
+        moving.forEach(st => target.items.push(st));
+        closeLayer();
+        state.selectMode = null;
+        state.open.clear();
+        state.view = target.id;
+        render();
+        await saveNow(`搬咗 ${count} 個地點去清單「${target.name}」`);
+      }));
+
+      const newBoardBtn = sheet.querySelector("[data-newboard]");
+      if (newBoardBtn) newBoardBtn.addEventListener("click", async () => {
+        state.snapshot.boards = state.snapshot.boards || [];
+        const b = newBoard(`清單 ${state.snapshot.boards.length + 1}`);
+        state.snapshot.boards.push(b);
+        const moving = detachStops(day, indices);
+        moving.forEach(st => b.items.push(st));
+        closeLayer();
+        state.selectMode = null;
+        state.open.clear();
+        state.view = b.id;
+        state.renamingBoard = b.id;
+        render();
+        await saveNow(`開咗個新清單「${b.name}」，${count} 個地點搬咗入去`);
+      });
+    });
+  }
+
   function openMovePicker(source){
     const days = state.snapshot.days || [];
     const boards = state.snapshot.boards || [];
@@ -2158,6 +2369,35 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   //   text / textarea — a single value
   //   lines           — a list, one entry per line (far easier to edit on a
   //                     phone than a repeatable row widget, and it round-trips)
+  // A day's own title/intro/tags used to be baked into the seed data with no
+  // way to touch them — "更改行程所有嘢都可以 edit 包括嗰一日行程嘅名啊內容 tag"
+  // asked for exactly this. Tags keep their colour variant round-trip safe by
+  // encoding it as a leading marker the user can type themselves.
+  function openDayInfoEditSheet(day){
+    const badgeLines = (day.badges || []).map(b => {
+      const cls = b.cls || "badge";
+      const prefix = cls.includes("warn") ? "!" : cls.includes("note") ? "*" : "";
+      return prefix + plain(b.text);
+    }).join("\n");
+    openEditSheet(`改「${day.title || "呢一日"}」`, "", [
+      { key:"title", label:"呢日標題", type:"text", value: day.title || "", placeholder:"例如：南怡島紅葉銀杏全日遊" },
+      { key:"desc", label:"簡介", type:"textarea", rows:3, value: day.desc || "" },
+      { key:"badges", label:"Tag（一行一個；開頭加 ! 會變黃色提醒，加 * 會變另一種底色）", type:"lines", rows:5,
+        value: badgeLines },
+    ], async out => {
+      day.title = out.title || day.title;
+      day.desc = out.desc || "";
+      day.badges = (out.badges || []).map(line => {
+        let cls = "badge", text = line;
+        if (text.startsWith("!")){ cls = "badge warn"; text = text.slice(1).trim(); }
+        else if (text.startsWith("*")){ cls = "badge note"; text = text.slice(1).trim(); }
+        return { cls, text };
+      });
+      render();
+      await saveNow(`改咗「${day.title}」嘅資料`);
+    });
+  }
+
   function openEditSheet(title, sub, fields, onSave){
     openSheet(`
       <h3>${esc(title)}</h3>
@@ -3760,13 +4000,31 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // The all-days 「執一執行程」 is the wrong tool when you're standing on one
   // day — especially an empty one — so each day gets its own button that only
   // touches that day and is told what the other days already cover.
+  // Plans several days in one AI call, not one day at a time. A one-day-at-a-
+  // time flow duplicates the "avoid what's elsewhere" reasoning for every
+  // extra day and can't coordinate between the days it's touching (e.g. not
+  // putting the same cuisine on both), so this always sends a single request
+  // covering everything ticked — the current day plus whatever else is checked.
   function openDayAiSheet(day){
     const stops = day.items.filter(i => i.kind === "stop").length;
+    const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
     openSheet(`
-      <h3>✨ AI 執「${esc(day.title)}」</h3>
+      <h3>✨ AI 幫幾日諗行程</h3>
       <p class="sec-sub">${stops
-        ? `呢日而家有 ${stops} 個站。AI 會睇埋其他日子，唔會推介重複嘅地方，淨係補呢一日。`
-        : `呢日仲係空白嘅。AI 會由早到晚幫你砌一日出嚟，順埋其他日子唔重複。`}</p>
+        ? `「${esc(day.title)}」而家有 ${stops} 個站，AI 會補唔夠嘅位，唔會推介重複嘅地方。`
+        : `「${esc(day.title)}」仲係空白嘅，AI 會由早到晚幫你砌一日出嚟。`}
+        想連埋其他日一齊諗（例如兩日一齊避免食重複嘢），落面揀埋佢哋。</p>
+      ${others.length ? `
+        <p class="picker-label">仲想埋埋邊幾日一齊諗？</p>
+        <div class="daypick daypick-compact">
+          ${others.map(d => `
+            <label class="daypick-check" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+              <input type="checkbox" data-dayai-pick="${d.id}">
+              <span class="bullet"></span>
+              <span class="dcode">Day ${d.id.replace('day','')}</span>
+              <span>${esc(d.title)}</span>
+            </label>`).join("")}
+        </div>` : ""}
       <div class="askrow">
         <input class="input" id="dayai-q" placeholder="想點？例如：想輕鬆啲、想食海鮮、想行街買嘢">
         <button class="btn primary" id="dayai-go">問</button>
@@ -3778,12 +4036,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const q = sheet.querySelector("#dayai-q");
       const go = sheet.querySelector("#dayai-go");
       const run = async () => {
+        const pickedDays = [day, ...others.filter(d =>
+          sheet.querySelector(`[data-dayai-pick="${d.id}"]`)?.checked)];
+        const dayIds = pickedDays.map(d => d.id);
+        const label = pickedDays.map(d => d.title).join("、");
         go.disabled = true; go.textContent = "諗緊…";
-        const stop = busyIn(out, { steps:[`AI 諗緊「${day.title}」`],
-          hint:"AI 會睇埋其他日子避開重複，大約 15-30 秒。" });
+        const stop = busyIn(out, { steps:[`AI 諗緊「${label}」`],
+          hint:`AI 會睇埋其他日子避開重複，大約 ${dayIds.length > 1 ? "20-40" : "15-30"} 秒。` });
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayId: day.id, question: q.value.trim(), itinerary: state.snapshot });
+          r = await callAi({ action:"day-plan", dayIds, question: q.value.trim(), itinerary: state.snapshot });
         } catch (e){
           stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; go.textContent = "問"; return;
@@ -3793,15 +4055,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
         if (!r || r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; return; }
         const changes = (r.changes || []).filter(c => c && (c.stop || c.matchTitle));
         if (!changes.length){
-          out.innerHTML = `<div class="ai-msg">${esc(r.notes || "AI 覺得呢日唔使改。")}</div>`;
-          saveAiNote("day-plan", `${day.title}：AI 建議`, r.notes || "冇建議");
+          out.innerHTML = `<div class="ai-msg">${esc(r.notes || "AI 覺得呢幾日唔使改。")}</div>`;
+          saveAiNote("day-plan", `${label}：AI 建議`, r.notes || "冇建議");
           return;
         }
         out.innerHTML = changeCardsHtml(changes, r.notes) +
           (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個）</button>` : "");
         wireApplyButtons(out, changes);
-        saveAiNote("day-plan", `${day.title}：AI 建議${q.value.trim() ? "（" + q.value.trim() + "）" : ""}`,
-          [r.notes, ...changes.map(c => `【${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
+        saveAiNote("day-plan", `${label}：AI 建議${q.value.trim() ? "（" + q.value.trim() + "）" : ""}`,
+          [r.notes, ...changes.map(c => `【Day ${String(c.dayId||"").replace("day","")}・${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
             .filter(Boolean).join("\n\n"));
       };
       go.addEventListener("click", run);
@@ -4252,6 +4514,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     changed("銀杏時機", oldSnap.foliageNote, newSnap.foliageNote);
     changed("日程調動", oldSnap.scheduleSwapNote, newSnap.scheduleSwapNote);
     changed("AI 設定", oldSnap.tripBrief, newSnap.tripBrief);
+    changed("首頁隱藏咗嘅段落", oldSnap.hiddenSections, newSnap.hiddenSections);
     // custom sections are named, so say WHICH one instead of "改咗自己加嘅資料"
     {
       const byTitle = list => new Map((list || []).map(s => [String(s.title || "未命名"), JSON.stringify(s)]));

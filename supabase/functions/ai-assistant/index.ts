@@ -658,44 +658,60 @@ Deno.serve(async (req) => {
       }
     }
 
-    // One day at a time. `suggest` deliberately sweeps all six days, which is
-    // the wrong shape when you are standing on Day 4 with an empty page and
-    // want THAT day filled — and it kept proposing places already booked on
-    // another day, because nothing told it to look sideways.
+    // Plans one day, or several at once. `suggest` deliberately sweeps all six
+    // days, which is the wrong shape when you are standing on a day (or a
+    // handful of days) with gaps and want THOSE filled — and it kept proposing
+    // places already booked on another day, because nothing told it to look
+    // sideways. `dayIds` (array) is the general form; a lone `dayId` (string,
+    // from an older client) is treated as a one-day request.
     if (action === "day-plan") {
       const brief = briefOf(body);
       if (!apiKey) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
-      const dayId = (body?.dayId ?? "").toString().trim();
+      const allDays = itinerary?.days ?? [];
+      const dayIds: string[] = (Array.isArray(body?.dayIds) && body.dayIds.length
+        ? body.dayIds
+        : [body?.dayId]
+      ).map((x: any) => String(x ?? "").trim()).filter(Boolean);
+      if (!dayIds.length) return json({ ok: false, message: "未揀邊一日。" });
+      const days = dayIds.map(id => allDays.find((d: any) => d.id === id)).filter(Boolean);
+      if (!days.length) return json({ ok: false, message: "搵唔到呢幾日。" });
+      const dayIdSet = new Set(days.map((d: any) => d.id));
       const want = (body?.question ?? "").toString().slice(0, 1000);
-      const day = (itinerary?.days ?? []).find((d: any) => d.id === dayId);
-      if (!day) return json({ ok: false, message: "搵唔到呢一日。" });
 
-      const stops = (day.items ?? []).filter((i: any) => i.kind === "stop");
-      const isEmpty = stops.length === 0;
-      // every place already spoken for on ANOTHER day — the single most useful
-      // thing to hand the model, since repeats are the usual failure
+      // every place already spoken for OUTSIDE this group — the single most
+      // useful thing to hand the model, since repeats are the usual failure
       const elsewhere: string[] = [];
-      (itinerary?.days ?? []).forEach((d: any) => {
-        if (d.id === dayId) return;
+      allDays.forEach((d: any) => {
+        if (dayIdSet.has(d.id)) return;
         (d.items ?? []).forEach((i: any) => {
           if (i.kind === "stop" && i.title) elsewhere.push(`${d.id}:${i.title}`);
         });
       });
-      // which hotel they sleep at that night, so "順路" means something
-      const dayIdx = (itinerary?.days ?? []).findIndex((d: any) => d.id === dayId);
-      const idxOf = (id: string) => (itinerary?.days ?? []).findIndex((d: any) => d.id === id);
-      const stay = (Array.isArray(itinerary?.stays) ? itinerary.stays : []).find((s: any) => {
-        const a = idxOf(s?.from), b = idxOf(s?.to);
-        return a >= 0 && b >= 0 && dayIdx >= Math.min(a, b) && dayIdx <= Math.max(a, b);
+      // which hotel they sleep at each night, so "順路" means something
+      const idxOf = (id: string) => allDays.findIndex((d: any) => d.id === id);
+      const stayFor = (id: string) => (Array.isArray(itinerary?.stays) ? itinerary.stays : []).find((s: any) => {
+        const a = idxOf(s?.from), b = idxOf(s?.to), di = idxOf(id);
+        return a >= 0 && b >= 0 && di >= Math.min(a, b) && di <= Math.max(a, b);
       });
 
+      const daysBlock = days.map((day: any) => {
+        const stops = (day.items ?? []).filter((i: any) => i.kind === "stop");
+        return {
+          dayId: day.id, date: day.date, title: day.title, desc: day.desc,
+          住嗰晚: stayFor(day.id)?.name || "",
+          係咪空白: stops.length === 0,
+          stops: stops.map((s: any) => ({ time: s.time, title: s.title, type: s.type })),
+        };
+      });
+      const multi = days.length > 1;
+
       const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘","eatboxHtml":"","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
-      const prompt = `${brief}\n\n你而家淨係負責 **${day.title}（${day.date}，${dayId}）** 呢一日，唔好去改其他日。\n\n${
-        isEmpty
-          ? "呢一日而家係完全空白嘅，請由零幫佢哋砌一日出嚟：早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排。"
-          : `呢一日已經有 ${stops.length} 個站，請睇清楚先，補返唔夠嘅嘢（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。`
-      }\n\n${stay?.name ? `佢哋嗰晚住「${stay.name}」，所以最後一個站唔好離酒店太遠。\n\n` : ""}**唔可以推介以下地方**——呢啲喺其他日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n呢一日而家嘅內容：\n${JSON.stringify({ dayId, date: day.date, title: day.title, desc: day.desc, stops: stops.map((s: any) => ({ time: s.time, title: s.title, type: s.type })) }).slice(0, 6000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 10000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"1-2句廣東話講你點砌呢一日","changes":[{"dayId":"${dayId}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。dayId 一律填 "${dayId}"。`;
+      const prompt = `${brief}\n\n你而家淨係負責以下 ${days.length} 日，唔好去改呢個範圍以外嘅日子：\n${days.map((d: any) => `- ${d.title}（${d.date}，${d.id}）`).join("\n")}\n\n${
+        multi
+          ? "**將呢幾日當一個小組一齊睇**：唔好將同一種嘢（例如同一種菜式、同一類景點）擺晒去同一日，幾日之間都唔可以重複同一個地方。"
+          : ""
+      }每一日入面，空白嘅就由零幫佢哋砌一日出嚟（早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排）；已經有嘢嘅就淨係補唔夠嘅位（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。\n\n每日最後一個站要留意返嗰晚住邊間酒店（下面每一日嘅「住嗰晚」有講），唔好離酒店太遠。\n\n**唔可以推介以下地方**——呢啲喺呢個範圍以外嘅日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n呢幾日而家嘅內容：\n${JSON.stringify(daysBlock).slice(0, 9000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 9000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"1-2句廣東話講你點砌呢${days.length > 1 ? "幾" : "一"}日","changes":[{"dayId":"${days[0].id}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。dayId 一定要係以下其中一個：${[...dayIdSet].join("、")}。`;
 
       let aiText: string;
       try {
@@ -707,10 +723,10 @@ Deno.serve(async (req) => {
       if (!parsed || !Array.isArray(parsed.changes)) {
         return json({ ok: false, message: "🔧 AI 今次冇整到有效嘅建議格式，麻煩再試一次（通常第二次就得）。" });
       }
-      // the model was told to stay on this day; enforce it rather than trust it
+      // the model was told to stay within this group; enforce it rather than
+      // trust it — a change naming a day outside the request must not slip through
       const changes = parsed.changes
-        .filter((c: any) => c?.op === "add" || c?.op === "edit")
-        .map((c: any) => ({ ...c, dayId }));
+        .filter((c: any) => (c?.op === "add" || c?.op === "edit") && dayIdSet.has(c?.dayId));
       return json({ ok: true, notes: parsed.notes ?? "", changes });
     }
 
