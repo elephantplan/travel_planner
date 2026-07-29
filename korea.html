@@ -1200,6 +1200,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (snap && !Array.isArray(snap.hiddenSections)) snap.hiddenSections = [];
     migrateStays(snap);
     if (snap) snap.boards.forEach(b => { if (!b.color) b.color = pickBoardColor(snap.boards); });
+    // the sticky day-nav's short label used to be a hardcoded DAY_SHORT
+    // lookup, completely detached from day.title — swapping/renaming a
+    // day's content never touched it, so the nav pill kept showing the
+    // OLD theme's name forever. Backfilling it into the day itself (once)
+    // makes it real, editable, swappable data instead of a fixed table.
+    if (snap && Array.isArray(snap.days)) snap.days.forEach(d => {
+      if (d.shortTag == null) d.shortTag = DAY_SHORT[d.id] || "";
+    });
     return snap;
   }
   const MODES = [
@@ -1259,12 +1267,28 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return null;
   }
 
+  // The day's first stop is usually a "leaving the hotel" logistics line
+  // ("酒店寄存行李後出發") with no coordinates or Google id of its own —
+  // stopRef() falls back to sending that whole description SENTENCE to
+  // Google as free-text origin, which can silently resolve to an arbitrary
+  // wrong place (this is what broke a leg's recomputed route after a
+  // mid-day stop between it and the hotel got deleted: the "fixed" result
+  // still looked plausible, just from the wrong starting point). Use the
+  // day's real accommodation coordinates for that leg instead.
+  function stayRef(day){
+    const stay = stayForDay(state.snapshot, day);
+    if (stay && Number.isFinite(Number(stay.lat)) && Number.isFinite(Number(stay.lng)))
+      return { lat: Number(stay.lat), lng: Number(stay.lng) };
+    return null;
+  }
+
   // After the order changes, the transit note before a stop describes a journey
   // that no longer happens. Flag those, then ask Google for the real numbers.
   async function refreshTransit(day, indices){
     let units = toUnits(day.items);
     // nothing comes before the first stop of a day, so it carries no transit note
     const first = firstStopUnit(units);
+    const firstStopObj = first >= 0 ? units[first].stop : null;
     if (first >= 0 && units[first].seg){ units[first].seg = null; day.items = fromUnits(units); }
     // notes sit between stops without being one, so "the leg into this stop"
     // starts at the previous STOP, not simply at the previous unit
@@ -1281,7 +1305,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     let why = "";
     for (const i of todo){
-      const from = stopRef(prevStop(i)), to = stopRef(units[i].stop);
+      const prev = prevStop(i);
+      const from = (prev && prev === firstStopObj && !isRealPlace(prev) && stayRef(day)) || stopRef(prev);
+      const to = stopRef(units[i].stop);
       let done = false;
       if (from && to){
         try {
@@ -1319,7 +1345,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
           <span class="bullet"></span>
           <span class="lbl">D${d.id.replace('day','')}</span>
-          <span>${esc(DAY_SHORT[d.id]||'')}</span>
+          <span>${esc(d.shortTag != null ? d.shortTag : (DAY_SHORT[d.id]||''))}</span>
         </button>`).join("")}
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
@@ -2689,7 +2715,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // stay correct automatically — the two days' internal sequencing never
   // touched each other, only which slot they're rendered under changed.
   function swapDayContent(a, b){
-    const keys = ["title", "desc", "badges", "items", "mapPoints", "mapCap"];
+    const keys = ["title", "desc", "shortTag", "badges", "items", "mapPoints", "mapCap"];
     for (const k of keys){
       const tmp = a[k];
       a[k] = b[k];
@@ -2791,11 +2817,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       return prefix + plain(b.text);
     }).join("\n");
     openEditSheet(`改「${day.title || "呢一日"}」`, "", [
+      { key:"shortTag", label:"上面日子切換條嘅短標籤（例如「南怡島」）", type:"text",
+        value: day.shortTag != null ? day.shortTag : (DAY_SHORT[day.id]||""), placeholder:"例如：南怡島" },
       { key:"title", label:"呢日標題", type:"text", value: day.title || "", placeholder:"例如：南怡島紅葉銀杏全日遊" },
       { key:"desc", label:"簡介", type:"textarea", rows:3, value: day.desc || "" },
       { key:"badges", label:"Tag（一行一個；開頭加 ! 會變黃色提醒，加 * 會變另一種底色）", type:"lines", rows:5,
         value: badgeLines },
     ], async out => {
+      day.shortTag = out.shortTag || "";
       day.title = out.title || day.title;
       day.desc = out.desc || "";
       day.badges = (out.badges || []).map(line => {
@@ -3752,7 +3781,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     if (legend){
       const dayLegend = state.snapshot.days.filter(d => layers[d.id]).map(d =>
-        `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${DAY_HEX[d.id]};color:${DAY_HEX[d.id]}">● D${d.id.replace('day','')} ${esc(DAY_SHORT[d.id]||"")}</button>`
+        `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${DAY_HEX[d.id]};color:${DAY_HEX[d.id]}">● D${d.id.replace('day','')} ${esc(d.shortTag != null ? d.shortTag : (DAY_SHORT[d.id]||""))}</button>`
       ).join("");
       const boardLegend = boardLayerKeys.map(({key, board}) =>
         `<button class="badge" data-layer="${esc(key)}" style="cursor:pointer;opacity:.35;border-color:${esc(board.color)};color:${esc(board.color)}" title="撳顯示「${esc(board.name)}」呢個清單嘅地點">📌 ${esc(board.name)}</button>`
