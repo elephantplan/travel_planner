@@ -96,9 +96,13 @@ async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: bo
     const errText = await res.text();
     // Logged raw (not just the friendly-message version) so a real quota-vs-
     // rate-limit-vs-bad-model-name mixup shows up verbatim in get_logs instead
-    // of being guessed at after the fact.
+    // of being guessed at after the fact. The model name and raw body also
+    // ride along INSIDE the thrown message (not just console.error) — the
+    // request-level logs available via the dashboard/MCP tools only show
+    // status codes, never stdout, so friendlyGeminiError() below needs the
+    // model+quotaId in the error itself to ever surface them to the user.
     console.error(`Gemini text call failed (model=${getTextModel()}): ${res.status} ${errText.slice(0, 500)}`);
-    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
+    throw new Error(`Gemini error ${res.status} (model=${getTextModel()}): ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
   // A long structured ask (e.g. a dozen detailed candidates) can hit the output
@@ -141,7 +145,7 @@ async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mi
   if (!res.ok) {
     const errText = await res.text();
     console.error(`Gemini image call failed (model=${model}): ${res.status} ${errText.slice(0, 500)}`);
-    throw new Error(`Gemini error ${res.status}: ${errText.slice(0, 300)}`);
+    throw new Error(`Gemini error ${res.status} (model=${model}): ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
   const parts = data?.candidates?.[0]?.content?.parts ?? [];
@@ -164,23 +168,39 @@ async function callGeminiImage(apiKeys: string[], prompt: string): Promise<{ mim
 
 function friendlyGeminiError(e: unknown): string {
   const msg = String(e);
+  // Pulled straight out of the thrown message so the user can see EXACTLY
+  // which model and which Google quota metric tripped, right in the app —
+  // the request logs (dashboard or MCP get_logs) only ever show a status
+  // code, never this raw body, so without this the only way to see it was
+  // asking someone to go dig through console.error output nobody can reach.
+  const modelMatch = msg.match(/\(model=([^)]+)\)/);
+  const modelNote = modelMatch ? `（用緊嘅model：${modelMatch[1]}）` : "";
+  const quotaIdMatch = msg.match(/"quotaId"\s*:\s*"([^"]+)"/);
+  const quotaValueMatch = msg.match(/"quotaValue"\s*:\s*"?(\d+)"?/);
+  const quotaNote = quotaIdMatch
+    ? `（Google話撞到嘅限制：${quotaIdMatch[1]}${quotaValueMatch ? `，上限${quotaValueMatch[1]}` : ""}）`
+    : "";
   if (msg.includes("429")) {
     // Google's 429 body names which limit tripped via quotaId — PerMinute is a
     // short-lived rate limit (call again in under a minute), not the daily/
     // monthly quota the "quota exceeded" wording implies. Conflating the two
     // is what made a real per-minute rate limit look like exhausted quota.
     if (/PerMinute/i.test(msg)) {
-      return "⏳ Gemini 呢分鐘內叫得太密（per-minute rate limit），唔係日/月quota用晒——通常等返半分鐘到一分鐘再試就得。如果成日撞到，可能係呢個model嘅免費 rate limit 本身好低。";
+      return `⏳ Gemini 呢分鐘內叫得太密（per-minute rate limit），唔係日/月quota用晒——通常等返半分鐘到一分鐘再試就得。如果成日撞到，可能係呢個model嘅免費 rate limit 本身好低。${modelNote}${quotaNote}`;
     }
-    return "⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。";
+    // A model can have its OWN daily/monthly cap completely separate from
+    // the rest of the project's quota (image models especially — often a
+    // much smaller free-tier allowance than the text model) — "整體quota未爆"
+    // 唔代表呢個specific model／metric都未爆，所以quotaId最緊要，一定要俾用戶睇到。
+    return `⏳ Gemini 免費額度暫時用晒（quota exceeded），一般幾分鐘至一日內會重置，請等陣再試。如果經常撞到，可能要去 Google AI Studio 檢查你個key嘅rate limit（ai.dev/rate-limit）。${modelNote}${quotaNote}`;
   }
   if (msg.includes("503") || msg.includes("UNAVAILABLE") || /high demand|overloaded/i.test(msg)) {
-    return "🌊 Gemini 依個 model 依家好多人用緊（high demand），唔係你個key有問題，已經自動試埋其他key。請等一陣（通常幾分鐘內）再試多次。";
+    return `🌊 Gemini 依個 model 依家好多人用緊（high demand），唔係你個key有問題，已經自動試埋其他key。請等一陣（通常幾分鐘內）再試多次。${modelNote}`;
   }
   if (msg.includes("TRUNCATED")) {
     return "✂️ AI 今次答案太長俾截斷咗，未夠格式完整。請再撳一次試多次（通常第二次就得）。";
   }
-  return "🔧 AI暫時無法回覆：" + msg.slice(0, 200);
+  return `🔧 AI暫時無法回覆：${msg.slice(0, 200)}`;
 }
 
 // Strip markdown fences, then also try the substring between the first "{"
