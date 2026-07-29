@@ -1,11 +1,15 @@
 // Supabase Edge Function: ai-assistant
 // Proxies Gemini + Google Places calls so the browser never sees the API keys.
-// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section' | 'poster'
+// Actions: 'status' | 'weather' | 'foliage' | 'suggest' | 'ask' | 'place-photo' | 'place-search' | 'place-rating' | 'place-hours' | 'transit' | 'board-ai' | 'day-plan' | 'make-section'
 // Secrets (Dashboard → Project Settings → Edge Functions → Secrets):
 //   GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3, ... (scanned until one is unset)
 //   GOOGLE_PLACES_API_KEY
 //   GEMINI_TEXT_MODEL  — optional, defaults to "gemini-3.5-flash" if unset
-//   GEMINI_IMAGE_MODEL — optional, defaults to "gemini-3.1-flash-image" if unset
+//
+// Destination is never hardcoded here — every request carries its own
+// destinationLocal/lat/lng/dateStart/dateEnd (see callAi() in korea.html,
+// which reads them off snap.meta), so this function has no idea which trip
+// it's serving and can be reused for a different one without a code change.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,9 +17,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const SEOUL_LAT = 37.5665;
-const SEOUL_LON = 126.9780;
-const TRIP_DATES = ["2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28"];
 const PHOTO_CACHE_MAX_AGE_DAYS = 90;
 
 function json(body: unknown, status = 200) {
@@ -25,10 +26,10 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function fetchWeather() {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${SEOUL_LAT}&longitude=${SEOUL_LON}` +
+async function fetchWeather(lat: number, lng: number, dateStart: string, dateEnd: string) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
-    `&timezone=Asia%2FSeoul&start_date=${TRIP_DATES[0]}&end_date=${TRIP_DATES[TRIP_DATES.length - 1]}`;
+    `&timezone=auto&start_date=${dateStart}&end_date=${dateEnd}`;
   const res = await fetch(url);
   if (!res.ok) return { inForecastRange: false, daily: null };
   const data = await res.json();
@@ -70,9 +71,6 @@ function isRetryableError(e: unknown): boolean {
 // match what shipped originally.
 function getTextModel(): string {
   return (Deno.env.get("GEMINI_TEXT_MODEL") || "").trim() || "gemini-3.5-flash";
-}
-function getImageModel(): string {
-  return (Deno.env.get("GEMINI_IMAGE_MODEL") || "").trim() || "gemini-3.1-flash-image";
 }
 
 // NOTE: deliberately no maxOutputTokens. Setting one caps the model BELOW its
@@ -123,44 +121,6 @@ async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boo
     } catch (e) {
       lastErr = e;
       if (!isRetryableError(e)) throw e;   // not quota/overload — another key won't help
-    }
-  }
-  throw lastErr;
-}
-
-// Image generation is a different model + a different part of the response
-// (inlineData, not text), so it gets its own call path — same multi-key
-// quota fallback as callGemini, just extracting a base64 image instead of text.
-async function callGeminiImageOnce(apiKey: string, prompt: string): Promise<{ mimeType: string; data: string }> {
-  const model = getImageModel();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ["IMAGE"] },
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`Gemini image call failed (model=${model}): ${res.status} ${errText.slice(0, 500)}`);
-    throw new Error(`Gemini error ${res.status} (model=${model}): ${errText.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
-  const imgPart = parts.find((p: any) => p?.inlineData?.data);
-  if (!imgPart) throw new Error("Gemini 冇出到圖，回覆入面搵唔到圖片資料");
-  return { mimeType: imgPart.inlineData.mimeType || "image/png", data: imgPart.inlineData.data };
-}
-async function callGeminiImage(apiKeys: string[], prompt: string): Promise<{ mimeType: string; data: string }> {
-  let lastErr: unknown = new Error("Gemini key 未設定");
-  for (const apiKey of apiKeys) {
-    try {
-      return await callGeminiImageOnce(apiKey, prompt);
-    } catch (e) {
-      lastErr = e;
-      if (!isRetryableError(e)) throw e;
     }
   }
   throw lastErr;
@@ -282,8 +242,19 @@ async function fetchPhotosForPlaceId(placeId: string, apiKey: string): Promise<s
   return resolvedUrls;
 }
 
-async function searchPlacePhotos(query: string, apiKey: string): Promise<string[]> {
-  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query + " 서울")}&inputtype=textquery&fields=place_id&key=${apiKey}`;
+// The destination's local-language name (e.g. "서울", "東京"), appended to a
+// search term to disambiguate it — "Artist Bakery" alone can match anywhere
+// in the world, "Artist Bakery 서울" narrows Google to the right city. Comes
+// from snap.meta.destinationLocal (see callAi() in korea.html) instead of a
+// hardcoded literal, so reusing this function for a different trip's
+// destination needs no code change — an empty hint just skips the append.
+function withHint(query: string, locationHint?: string): string {
+  const hint = (locationHint ?? "").trim();
+  return hint ? `${query} ${hint}` : query;
+}
+
+async function searchPlacePhotos(query: string, apiKey: string, locationHint?: string): Promise<string[]> {
+  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(withHint(query, locationHint))}&inputtype=textquery&fields=place_id&key=${apiKey}`;
   const findRes = await fetch(findUrl);
   const findData = await findRes.json();
   const placeId = findData?.candidates?.[0]?.place_id;
@@ -291,8 +262,8 @@ async function searchPlacePhotos(query: string, apiKey: string): Promise<string[
   return fetchPhotosForPlaceId(placeId, apiKey);
 }
 
-async function searchPlaces(query: string, apiKey: string) {
-  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + " 서울")}&key=${apiKey}`;
+async function searchPlaces(query: string, apiKey: string, locationHint?: string) {
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(withHint(query, locationHint))}&key=${apiKey}`;
   const res = await fetch(url);
   const data = await res.json();
   return (data?.results ?? []).slice(0, 5).map((r: any) => ({
@@ -337,12 +308,12 @@ function isAlreadyOnList(title: string, kr: string, existingNorm: string[]): boo
 // Run the lookups concurrently. Done one-by-one these were the bulk of a
 // 48-60s request (one already 502'd at 63s), which is the whole edge function
 // budget spent waiting on independent calls that have no reason to be ordered.
-async function verifyPlaces(cands: any[], apiKey: string, limit = 12) {
+async function verifyPlaces(cands: any[], apiKey: string, limit = 12, locationHint?: string) {
   const picked = cands.slice(0, limit).filter(c => String(c?.kr || c?.title || "").trim());
   const results = await Promise.all(picked.map(async (c) => {
     const q = String(c?.kr || c?.title || "").trim();
     try {
-      const hits = await searchPlaces(q, apiKey);
+      const hits = await searchPlaces(q, apiKey, locationHint);
       const top = hits[0];
       if (!top || typeof top.rating !== "number" || top.businessStatus === "CLOSED_PERMANENTLY") return null;
       return {
@@ -375,13 +346,13 @@ async function verifyPlaces(cands: any[], apiKey: string, limit = 12) {
 // Gemini invented from its own knowledge. A lookup failure or empty query
 // must not silently drop an otherwise-good change, so anything inconclusive
 // is kept — only a CONFIRMED "CLOSED_PERMANENTLY" from Google gets dropped.
-async function dropPermanentlyClosed(changes: any[], apiKey: string | undefined) {
+async function dropPermanentlyClosed(changes: any[], apiKey: string | undefined, locationHint?: string) {
   if (!apiKey || !changes.length) return { changes, droppedCount: 0 };
   const results = await Promise.all(changes.map(async (c: any) => {
     const q = String(c?.stop?.kr || c?.stop?.title || "").trim();
     if (!q) return { c, closed: false };
     try {
-      const hits = await searchPlaces(q, apiKey);
+      const hits = await searchPlaces(q, apiKey, locationHint);
       const top = hits[0];
       return { c, closed: !!(top && top.businessStatus === "CLOSED_PERMANENTLY") };
     } catch (_) {
@@ -396,7 +367,7 @@ async function dropPermanentlyClosed(changes: any[], apiKey: string | undefined)
 
 // Rating for a place we already identified. Place Details is the accurate
 // source once a place_id is known; fall back to a text search by name.
-async function fetchRating(placeId: string, query: string, apiKey: string) {
+async function fetchRating(placeId: string, query: string, apiKey: string, locationHint?: string) {
   if (placeId) {
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
       `&fields=rating,user_ratings_total,name&language=zh-TW&key=${apiKey}`;
@@ -414,7 +385,7 @@ async function fetchRating(placeId: string, query: string, apiKey: string) {
     }
   }
   if (!query) return { rating: null, ratingCount: null, placeId: "" };
-  const hits = await searchPlaces(query, apiKey);
+  const hits = await searchPlaces(query, apiKey, locationHint);
   const top = hits[0];
   if (!top) return { rating: null, ratingCount: null, placeId: "" };
   return { rating: top.rating, ratingCount: top.ratingCount, placeId: top.placeId };
@@ -458,11 +429,11 @@ function summarizeHours(weekdayText: string[]): string {
 
 // One endpoint of a journey: a Google place id when we have one, otherwise
 // coordinates, otherwise the place's name as free text.
-function dmRef(p: any): string | null {
+function dmRef(p: any, locationHint?: string): string | null {
   if (!p) return null;
   if (p.placeId) return `place_id:${p.placeId}`;
   if (Number.isFinite(p.lat) && Number.isFinite(p.lng)) return `${p.lat},${p.lng}`;
-  if (p.text) return p.text + " 서울";
+  if (p.text) return withHint(p.text, locationHint);
   return null;
 }
 
@@ -546,8 +517,8 @@ function describeRide(steps: any[]) {
   return { chain, transfers: rides.length - 1, sawSubway };
 }
 
-async function transitBetween(from: any, to: any, apiKey: string) {
-  const o = dmRef(from), d = dmRef(to);
+async function transitBetween(from: any, to: any, apiKey: string, locationHint?: string) {
+  const o = dmRef(from, locationHint), d = dmRef(to, locationHint);
   if (!o || !d) return { error: "呢兩個地點冇足夠資料（冇 Google 地點或座標）去計交通。" };
 
   const walk = await directions(o, d, "walking", apiKey);
@@ -614,6 +585,10 @@ Deno.serve(async (req) => {
 
   const action = body?.action;
   const apiKeys = getGeminiKeys();
+  // Destination's local-language name, sent on every callAi() from korea.html
+  // (read off snap.meta.destinationLocal) — threaded into every Google
+  // Places/Directions lookup below instead of a hardcoded city.
+  const locationHint = (body?.destinationLocal ?? "").toString().trim();
 
   try {
     if (action === "status") {
@@ -627,13 +602,22 @@ Deno.serve(async (req) => {
 
     if (action === "weather") {
       const brief = briefOf(body);
-      const weather = await fetchWeather();
+      const lat = Number(body?.lat), lng = Number(body?.lng);
+      const dateStart = (body?.dateStart ?? "").toString().trim();
+      const dateEnd = (body?.dateEnd ?? "").toString().trim();
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !dateStart || !dateEnd) {
+        return json({
+          ok: true, raw: null, aiSummary: null,
+          summary: "呢個行程重未設定目的地座標／日期，去主頁「首頁大標題」入面填返先可以check實時天氣。",
+        });
+      }
+      const weather = await fetchWeather(lat, lng, dateStart, dateEnd);
       let summary = "";
       if (weather.inForecastRange) {
         const lines = weather.daily.time.map((d: string, i: number) =>
           `${d}: ${weather.daily.temperature_2m_min[i]}–${weather.daily.temperature_2m_max[i]}°C，降雨機率${weather.daily.precipitation_probability_max[i]}%`
         );
-        summary = "首爾未來預報（真實數據）：\n" + lines.join("\n");
+        summary = "目的地未來預報（真實數據）：\n" + lines.join("\n");
       } else {
         summary = "而家距離出發日仲遠，Open-Meteo暫時未有呢幾日嘅短期預報（一般得16日內），下面沿用歷史同期平均值作參考，出發前一週請再check。";
       }
@@ -691,7 +675,7 @@ Deno.serve(async (req) => {
       const parsed = parseAiJson(aiText);
       if (parsed && Array.isArray(parsed.changes)) {
         const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
-        const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(parsed.changes, placesKey);
+        const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(parsed.changes, placesKey, locationHint);
         const notes = droppedCount
           ? `${parsed.notes ?? ""}（幫你篩走咗 ${droppedCount} 個 Google 話已經永久結業嘅推介）`.trim()
           : (parsed.notes ?? "");
@@ -751,7 +735,7 @@ Deno.serve(async (req) => {
       const cands = (Array.isArray(parsed.candidates) ? parsed.candidates : []).map(clampDay).filter(notDup);
 
       // verified against Google, then ranked by how many people actually rated
-      const verified = await verifyPlaces(cands, placesKey, 20);
+      const verified = await verifyPlaces(cands, placesKey, 20, locationHint);
       const strong = verified.filter(v => v.rating >= 4.0 && v.ratingCount >= 200);
       const pool = strong.length >= 10 ? strong : verified.filter(v => v.rating >= 3.8);
       const topRated = pool.sort((a, b) => b.ratingCount - a.ratingCount).slice(0, 10);
@@ -781,7 +765,7 @@ Deno.serve(async (req) => {
       try {
         const photos = placeId
           ? await fetchPhotosForPlaceId(placeId, placesKey)
-          : await searchPlacePhotos(query, placesKey);
+          : await searchPlacePhotos(query, placesKey, locationHint);
         if (photos.length) await saveCachedPhotos(cacheKey, photos);
         return json({ ok: true, photos, cached: false });
       } catch (e) {
@@ -793,7 +777,7 @@ Deno.serve(async (req) => {
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
       try {
-        const r = await transitBetween(body?.from, body?.to, placesKey);
+        const r = await transitBetween(body?.from, body?.to, placesKey, locationHint);
         if (!r || (r as any).error) return json({ ok: false, message: (r as any)?.error || "計唔到呢兩點之間嘅交通。" });
         return json({ ok: true, mode: (r as any).mode, text: (r as any).text, route: (r as any).route || "" });
       } catch (e) {
@@ -808,7 +792,7 @@ Deno.serve(async (req) => {
       const query = (body?.query ?? "").toString().trim();
       if (!placeId && !query) return json({ ok: false, message: "冇地點資料，攞唔到評分。" });
       try {
-        const r = await fetchRating(placeId, query, placesKey);
+        const r = await fetchRating(placeId, query, placesKey, locationHint);
         if ((r as any).problem) return json({ ok: false, message: (r as any).problem });
         return json({ ok: true, ...r });
       } catch (e) {
@@ -883,7 +867,7 @@ Deno.serve(async (req) => {
         multi
           ? "**將呢幾日當一個小組一齊睇**：唔好將同一種嘢（例如同一種菜式、同一類景點）擺晒去同一日，幾日之間都唔可以重複同一個地方。"
           : ""
-      }每一日入面，空白嘅就由零幫佢哋砌一日出嚟（早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排）；已經有嘢嘅就淨係補唔夠嘅位（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。\n\n每日最後一個站要留意返嗰晚住邊間酒店（下面每一日嘅「住嗰晚」有講），唔好離酒店太遠。\n\n**如果呢次改動令某一日成日嘅主題都變晒**（例如將兩日成日行程對調、將成日主題由A地換做B地），**個日子個標題（title）都要跟住個新主題改**，唔可以個標題仲係講緊舊主題、但入面啲景點已經係新主題嗰啲——咁樣個標題會同實際內容對唔上。呢種情況要喺 dayTitles 度俾返新標題（格式：{"dayX":"新標題"}）。如果淨係加減個別一兩個站、成日主題冇變，dayTitles 唔使提呢個dayId。\n\n**唔可以推介以下地方**——呢啲喺呢個範圍以外嘅日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n**先判斷用戶想點，呢個決定成個回覆嘅方向**：\n\n**A. 如果用戶明確講咗想加啲乜**（例如「加返明洞啱行嘅地方」「加多幾個XX」「加返…」「直接幫我加，唔好淨係叫我」呢類——即係講明咗想要嘅類型／地區／主題），呢個係實質新增要求，**優先於下面 B 嘅評估邏輯**：就算呢日已經有齊三餐、景點都幾多，都一定要按用戶講嘅類型/地區，喺 changes 度真係加返至少 1-3 個相關嘅站（用 add 加多一個，或者用 edit 將一個相對普通/唔啱主題嘅位換做用戶想要嘅嘢）。**「呢日已經幾滿」唔係唔加嘅理由**——用戶都話明想加，你要諗辦法擠得入去（例如壓縮返鬆嘅時段、換走一個弱嘅選擇），唔可以走去淨係做評估分析、留空 changes 交行貨。**每一間舖／每一個地點一定要係 changes 入面獨立一個 stop**——唔可以將幾間唔同嘅舖（例如「Daiso、Olive Young、Butter」）夾晒落同一個 stop 嘅 title/desc 度當一個站報數：用戶睇落去得返一張景點卡，同佢想要嘅「幾間舖」對唔上。如果用戶想要幾間舖，就出幾個獨立嘅 changes（各自一個 add，或者一個 edit 夾幾個 add），每個 stop 嘅 title 淨係一間舖嘅名，時間各自順序相隔15-20分鐘咁排。淨係喺佢哋真係同一個地址、同一座建築入面（例如同一座商場嘅幾間專櫃）先可以合併做一個站，喺 desc 度提返入面有邊幾間。\n\n**B. 如果用戶條問題純粹係想你評估／檢查**（例如問「順唔順」「岩唔啱」「使唔使改」「路線得唔得」，並冇講明想加咩），你要當真去睇：時間排序啱唔啱、有冇撞期、兩個站之間係咪順路定係要行返轉頭、住嗰晚間酒店遠唔遠。**notes 一定要直接回應返嗰條問題**（例如：邊度覺得順、邊度覺得繞遠咗、邊兩個站順序建議調轉），唔可以避開條問題唔答、淨係報告你加咗咩。如果检查完覺得依家排法已經幾好、冇乜好改，**changes 可以係空陣列 []**——但呢個做法淨係用喺呢種純評估嘅情況，唔可以攞嚟迴避 A 嗰種明確嘅新增要求。\n\n呢幾日而家嘅內容：\n${JSON.stringify(daysBlock).slice(0, 9000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 9000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"廣東話回覆——case A（有講明想加咩）1-2句講你加咗咩就夠；case B（純評估）要有實際內容咁答返（3-6句都得，唔好淨得一句交行貨）","changes":[{"dayId":"${days[0].id}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}],"dayTitles":{}}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。changes 冇嘢就俾空陣列 []，唔好為交行貨夾硬諗一個。dayId 一定要係以下其中一個：${[...dayIdSet].join("、")}。dayTitles 冇需要改就俾空物件 {}，key 一定要係上面嘅 dayId，value 係新標題（最多 16 字）。`;
+      }每一日入面，空白嘅就由零幫佢哋砌一日出嚟（早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排）；已經有嘢嘅就淨係補唔夠嘅位（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。\n\n每日最後一個站要留意返嗰晚住邊間酒店（下面每一日嘅「住嗰晚」有講），唔好離酒店太遠。\n\n**如果呢次改動令某一日成日嘅主題都變晒**（例如將兩日成日行程對調、將成日主題由A地換做B地），**個日子個標題（title）都要跟住個新主題改**，唔可以個標題仲係講緊舊主題、但入面啲景點已經係新主題嗰啲——咁樣個標題會同實際內容對唔上。呢種情況要喺 dayTitles 度俾返新標題（格式：{"dayX":"新標題"}）。如果淨係加減個別一兩個站、成日主題冇變，dayTitles 唔使提呢個dayId。\n\n**唔可以推介以下地方**——呢啲喺呢個範圍以外嘅日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n**先判斷用戶想點，呢個決定成個回覆嘅方向**：\n\n**A. 如果用戶明確講咗想加啲乜**（例如「加返明洞啱行嘅地方」「加多幾個XX」「加返…」「直接幫我加，唔好淨係叫我」呢類——即係講明咗想要嘅類型／地區／主題），呢個係實質新增要求，**優先於下面 B 嘅評估邏輯**：就算呢日已經有齊三餐、景點都幾多，都一定要按用戶講嘅類型/地區，喺 changes 度真係加返至少 1-3 個相關嘅站（用 add 加多一個，或者用 edit 將一個相對普通/唔啱主題嘅位換做用戶想要嘅嘢）。**「呢日已經幾滿」唔係唔加嘅理由**——用戶都話明想加，你要諗辦法擠得入去（例如壓縮返鬆嘅時段、換走一個弱嘅選擇），唔可以走去淨係做評估分析、留空 changes 交行貨。**每一間舖／每一個地點一定要係 changes 入面獨立一個 stop**——唔可以將幾間唔同嘅舖（例如「Daiso、Olive Young、Butter」）夾晒落同一個 stop 嘅 title/desc 度當一個站報數：用戶睇落去得返一張景點卡，同佢想要嘅「幾間舖」對唔上。如果用戶想要幾間舖，就出幾個獨立嘅 changes（各自一個 add，或者一個 edit 夾幾個 add），每個 stop 嘅 title 淨係一間舖嘅名，時間各自順序相隔15-20分鐘咁排。淨係喺佢哋真係同一個地址、同一座建築入面（例如同一座商場嘅幾間專櫃）先可以合併做一個站，喺 desc 度提返入面有邊幾間。\n\n**B. 如果用戶條問題純粹係想你評估／檢查**（例如問「順唔順」「岩唔啱」「使唔使改」「路線得唔得」，並冇講明想加咩），你要當真去睇：時間排序啱唔啱、有冇撞期、兩個站之間係咪順路定係要行返轉頭、住嗰晚間酒店遠唔遠。**notes 一定要直接回應返嗰條問題**（例如：邊度覺得順、邊度覺得繞遠咗、邊兩個站順序建議調轉），唔可以避開條問題唔答、淨係報告你加咗咩。如果檢查完覺得依家排法已經幾好、冇乜好改，**changes 可以係空陣列 []**——但呢個做法淨係用喺呢種純評估嘅情況，唔可以攞嚟迴避 A 嗰種明確嘅新增要求。\n\n呢幾日而家嘅內容：\n${JSON.stringify(daysBlock).slice(0, 9000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 9000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"廣東話回覆——case A（有講明想加咩）1-2句講你加咗咩就夠；case B（純評估）要有實際內容咁答返（3-6句都得，唔好淨得一句交行貨）","changes":[{"dayId":"${days[0].id}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}],"dayTitles":{}}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。changes 冇嘢就俾空陣列 []，唔好為交行貨夾硬諗一個。dayId 一定要係以下其中一個：${[...dayIdSet].join("、")}。dayTitles 冇需要改就俾空物件 {}，key 一定要係上面嘅 dayId，value 係新標題（最多 16 字）。`;
 
       let aiText: string;
       try {
@@ -911,7 +895,7 @@ Deno.serve(async (req) => {
         if (t) dayTitles[id] = t;
       }
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
-      const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(changes, placesKey);
+      const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(changes, placesKey, locationHint);
       const notes = droppedCount
         ? `${parsed.notes ?? ""}（幫你篩走咗 ${droppedCount} 個 Google 話已經永久結業嘅推介）`.trim()
         : (parsed.notes ?? "");
@@ -953,26 +937,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action === "poster") {
-      if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
-      const itinerary = body?.itinerary;
-      const compact = compactItinerary(itinerary);
-      const hotelLine = Array.isArray(compact.酒店)
-        ? compact.酒店.map((s: any) => `${s.住邊度}${s.由邊日 ? `（${s.由邊日}至${s.住到邊日}）` : ""}`).join("、")
-        : (compact.酒店 || "");
-      const dayLines = compact.days.map((d: any) => {
-        const tops = d.stops.slice(0, 4).map((s: any) => s.title).filter(Boolean).join("、");
-        return `${d.dayId}（${d.date || ""}）${d.title || ""}：${tops || "（未排）"}`;
-      }).join("\n");
-      const prompt = `你係一個插畫師，幫一個7人家庭畫一張首爾6日親子旅行嘅宣傳海報，風格好似旅行社單張咁，主角係一隻得意可愛嘅小飛象（baby elephant，Dumbo 風格，大耳朵，圓渾卡通造型）扮導遊，戴住旅行帽或者攞住小旗仔，貫穿成張海報。\n\n設計要求：\n- 秋天銀杏／楓葉主題，暖色調（金黃、橙紅），配襯首爾地標元素（韓屋、宮殿飛簷、地鐵路線圖線條感）\n- 版面清楚分返 6 日（Day 1 到 Day 6），每日一個小區塊，用小圖示／圖畫代表嗰日重點（例如宮殿、纜車、河邊、市場），唔使逐字寫景點名\n- 圖入面如果要出現文字，一律用**極少、極短**嘅英文或數字（例如 "DAY 1"、"SEOUL"、日期數字），因為圖像生成模型寫長句中文字經常出錯變亂碼——**千萬唔好嘗試喺圖度寫大段中文或者具體地點全名**，用圖畫代替文字表達內容\n- 成體氣氛要溫馨、可愛、色彩豐富，適合一家大細（有長輩、有小朋友）睇\n- 直度（portrait）構圖，好似一張可以攞去打印嘅旅行海報\n\n呢個係佢哋嘅行程重點（畀你參考主題，唔使抄落張圖度）：\n酒店：${hotelLine || "未定"}\n${dayLines}`;
-      try {
-        const img = await callGeminiImage(apiKeys, prompt);
-        return json({ ok: true, mimeType: img.mimeType, data: img.data });
-      } catch (e) {
-        return json({ ok: false, message: friendlyGeminiError(e) });
-      }
-    }
-
     if (action === "place-search") {
       const query = (body?.query ?? "").toString().trim();
       if (!query) return json({ ok: true, places: [] });
@@ -981,7 +945,7 @@ Deno.serve(async (req) => {
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
 
       try {
-        const places = await searchPlaces(query, placesKey);
+        const places = await searchPlaces(query, placesKey, locationHint);
         return json({ ok: true, places });
       } catch (e) {
         return json({ ok: false, message: "搜尋地點失敗：" + String(e) });

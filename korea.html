@@ -714,7 +714,6 @@ img{max-width:100%;}
 .askrow{display:flex;gap:7px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:12px;display:flex;flex-direction:column;gap:9px;}
-.posterimg{width:100%;border-radius:var(--r-lg);display:block;margin-top:10px;border:1px solid var(--rule);}
 .ai-msg{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
   padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
@@ -733,6 +732,8 @@ img{max-width:100%;}
 .usec-list{margin:9px 0 0;padding-left:18px;}
 .usec-list li{font-size:13.5px;line-height:1.75;margin-bottom:3px;}
 .usec-by{margin-top:9px;font-size:11px;color:var(--text-soft);}
+.airefresh-toggle{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:12px;color:var(--text-soft);cursor:pointer;width:fit-content;}
+.airefresh-toggle input{margin:0;}
 /* a long AI run needs to look alive: stage, clock, moving bar */
 .aibusy{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-top:10px;}
 .aibusy-top{display:flex;align-items:center;gap:8px;}
@@ -1069,8 +1070,21 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // EVERY ai call, so editing it on the home page changes what all of the AI
   // features assume. Blank means the Edge Function keeps using its built-in
   // default, so clearing the box can't leave the AI with no context at all.
+  // Destination coordinates/search-hint/date-range ride along on EVERY call,
+  // same as brief — so no caller has to remember to pass them, and the edge
+  // function never needs a hardcoded city to fall back on. Read fresh off
+  // meta each time (not baked into a const) so re-planning this same app for
+  // a different trip is just editing 首頁 fields, no code change anywhere.
   async function callAi(payload){
-    const body = Object.assign({ brief: briefText(state.snapshot) }, payload);
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    const body = Object.assign({
+      brief: briefText(state.snapshot),
+      destinationLocal: m.destinationLocal || "",
+      lat: Number.isFinite(m.lat) ? m.lat : null,
+      lng: Number.isFinite(m.lng) ? m.lng : null,
+      dateStart: m.dateStart || "",
+      dateEnd: m.dateEnd || "",
+    }, payload);
     const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body) });
     return res.json();
   }
@@ -1228,6 +1242,32 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // makes it real, editable, swappable data instead of a fixed table.
     if (snap && Array.isArray(snap.days)) snap.days.forEach(d => {
       if (d.shortTag == null) d.shortTag = DAY_SHORT[d.id] || "";
+    });
+    // destination coordinates / search hint / date range used to be hardcoded
+    // constants in the edge function (Seoul, Oct 23-28) — moved here as real,
+    // editable trip data so this whole app can be reused for a different
+    // trip later without touching code. Backfilled once with the values that
+    // were previously hardcoded, purely so THIS trip keeps working exactly
+    // as before until someone edits 首頁大標題 with the new fields.
+    if (snap){
+      const m = snap.meta = snap.meta || {};
+      if (m.destinationLocal == null) m.destinationLocal = "서울";
+      if (m.lat == null) m.lat = 37.5665;
+      if (m.lng == null) m.lng = 126.9780;
+      if (!m.dateStart) m.dateStart = "2026-10-23";
+      if (!m.dateEnd) m.dateEnd = "2026-10-28";
+    }
+    // per-session opt-in for "let AI refresh this with the latest info" —
+    // defaults true for the two built-in sessions (matches the behaviour
+    // they already had, since they've always had a live-check button).
+    if (snap && !snap.aiRefreshToggles) snap.aiRefreshToggles = { weather: true, foliage: true };
+    // custom sections gained the same opt-in refresh mechanism; AI-authored
+    // ones default ON (they already came from a topic, so refreshing makes
+    // sense), hand-written ones default OFF (no topic to refresh against
+    // unless the user sets one via ✏️).
+    if (snap && Array.isArray(snap.sections)) snap.sections.forEach(s => {
+      if (s.aiRefresh == null) s.aiRefresh = s.source === "ai";
+      if (s.topic == null) s.topic = s.title || "";
     });
     return snap;
   }
@@ -1495,9 +1535,39 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // historical-average content, instead of only living inside the separate
   // AI 助手 sheet — the copy said "check 返實時預報" but gave no way to
   // actually do that without leaving the page to hunt for the right button.
+  // Gated on a per-session opt-in toggle (aiRefreshToggleHtml) — a user who
+  // doesn't want THIS particular block bothering Gemini can turn it off, and
+  // the button just disappears rather than sitting there disabled.
   function liveCheckButtonHtml(kind, label){
-    return `<button class="btn" data-livecheck="${kind}" style="margin-top:9px;">${esc(label)}</button>
-            <div class="ai-out" id="livecheck-${kind}"></div>`;
+    const on = !!(state.snapshot.aiRefreshToggles || {})[kind];
+    return aiRefreshToggleHtml(kind, on) +
+      (on ? `<button class="btn" data-livecheck="${kind}" style="margin-top:9px;">${esc(label)}</button>
+             <div class="ai-out" id="livecheck-${kind}"></div>` : "");
+  }
+  // Shared by weather/foliage and every custom section — "key" is either
+  // "weather"/"foliage" (stored in snap.aiRefreshToggles) or "sec:<index>"
+  // (stored on the section object itself, since sections already use their
+  // array index as their identity everywhere else in this file).
+  function aiRefreshToggleHtml(key, on){
+    return `<label class="airefresh-toggle">
+      <input type="checkbox" data-airefresh="${esc(key)}" ${on ? "checked" : ""}>
+      <span>🔄 AI 自動更新${on ? "（開）" : "（閂）"}</span>
+    </label>`;
+  }
+  function wireAiRefreshToggles(){
+    document.querySelectorAll("[data-airefresh]").forEach(cb => cb.addEventListener("change", async () => {
+      const key = cb.dataset.airefresh;
+      if (key.startsWith("sec:")){
+        const s = (state.snapshot.sections || [])[+key.slice(4)];
+        if (!s) return;
+        s.aiRefresh = cb.checked;
+      } else {
+        state.snapshot.aiRefreshToggles = state.snapshot.aiRefreshToggles || {};
+        state.snapshot.aiRefreshToggles[key] = cb.checked;
+      }
+      render();
+      await saveNow(`${cb.checked ? "開咗" : "閂咗"}AI自動更新`);
+    }));
   }
   function wireLiveChecks(){
     document.querySelectorAll("[data-livecheck]").forEach(btn => btn.addEventListener("click", async () => {
@@ -1578,15 +1648,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div class="mapbox tall" id="map-all"></div>
         <div class="chiprow" id="map-legend"></div>
         <p class="mapcap">示意路線，非精確導航。南怡島（Day 3）離市中心較遠，比例上會壓縮顯示。📌 係清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
-      </section>
-
-      <hr class="rule">
-
-      <section class="sec">
-        <h2 class="sec-title">行程海報</h2>
-        <p class="sec-sub">叫 AI 將成個 6 日行程畫成一張旅行社宣傳單張咁嘅海報，有小飛象做導遊角色。圖入面嘅細字未必準（AI 畫圖生成文字時有機會出錯），實際內容請以「匯出行程」嗰份做準。</p>
-        <button class="btn wide" id="posterBtn">✨ AI 幫我畫張行程海報</button>
-        <div class="ai-out" id="poster-out"></div>
       </section>
 
       <hr class="rule">
@@ -1709,6 +1770,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${(s.links || []).length ? `<div class="ailog-links">${(s.links||[]).map(l =>
               `<a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
             ${s.source === "ai" ? `<div class="usec-by">✨ AI 幫手整，改得㗎</div>` : ""}
+            ${aiRefreshToggleHtml("sec:" + i, !!s.aiRefresh)}
+            ${s.aiRefresh ? `<button class="btn" data-secrefresh="${i}" style="margin-top:9px;">🔄 問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>` : ""}
           </div>`).join("")
           : `<p class="hint">仲未有。撳下面加一個。</p>`}
         </div>
@@ -1716,7 +1779,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>`;
   }
 
-  function blankSection(){ return { icon:"📌", title:"", sub:"", lines:[], links:[], source:"manual" }; }
+  function blankSection(){ return { icon:"📌", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false }; }
   async function reorderCustomSections(snap, from, to){
     if (!Array.isArray(snap.sections)) return;
     const [moved] = snap.sections.splice(from, 1);
@@ -1738,6 +1801,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         { key:"lines", label:"內容（一行一個重點）", type:"lines", value:(s.lines||[]).join("\n"), rows:9 },
         { key:"links", label:"連結（一行一個，名 | 網址）", type:"lines",
           value:(s.links||[]).map(l => `${l.name || ""} | ${l.url || ""}`).join("\n"), rows:3 },
+        { key:"topic", label:"AI 更新用嘅題目（撳「🔄 AI 自動更新」先用得着）",
+          hint:"開咗自動更新之後，撳「重新check」會攞呢個題目再問一次 AI。留空就用返標題。",
+          type:"text", value:s.topic || "", placeholder:"例如：手信買咩好" },
       ], async out => {
         const links = (out.links || []).map(row => {
           const parts = String(row).split("|");
@@ -1747,7 +1813,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         }).filter(Boolean);
         const next = Object.assign({}, s, {
           icon: out.icon || "📌", title: out.title || "未命名", sub: out.sub || "",
-          lines: out.lines || [], links,
+          lines: out.lines || [], links, topic: out.topic || "",
         });
         if (idx == null) d.sections.push(next); else d.sections[idx] = next;
         render();
@@ -1786,7 +1852,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         }
         const d = state.snapshot;
         if (!Array.isArray(d.sections)) d.sections = [];
-        d.sections.push(Object.assign(blankSection(), r.section, { source:"ai" }));
+        d.sections.push(Object.assign(blankSection(), r.section, { source:"ai", topic:t, aiRefresh:true }));
         closeLayer();
         render();
         await saveNow(`AI 加咗一個 section：${r.section.title || t}`);
@@ -1811,6 +1877,33 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
     wireSimpleDrag($("#usecorder"), ".usec", "[data-usecdrag]",
       (from, to) => reorderCustomSections(state.snapshot, from, to));
+    document.querySelectorAll("[data-secrefresh]").forEach(btn => btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+      const i = +btn.dataset.secrefresh;
+      const s = (state.snapshot.sections || [])[i];
+      if (!s) return;
+      const topic = s.topic || s.title;
+      if (!topic) return;
+      const origText = btn.textContent;
+      btn.disabled = true; btn.textContent = "AI 更新緊…";
+      try {
+        const r = await callAi({ action:"make-section", topic, itinerary: state.snapshot });
+        if (!r || r.ok === false || !r.section){
+          flash((r && r.message) || "AI 冇回覆到，試多次？");
+          btn.disabled = false; btn.textContent = origText;
+          return;
+        }
+        // keep icon/title/topic as the user has them — refresh is about the
+        // CONTENT going stale, not about undoing a rename
+        s.sub = r.section.sub || ""; s.lines = r.section.lines || []; s.links = r.section.links || [];
+        render();
+        await saveNow(`AI 更新咗「${s.title}」嘅資料`);
+        flash(`已經更新「${s.title}」`);
+      } catch (e){
+        flash("出咗問題：" + e.message);
+        btn.disabled = false; btn.textContent = origText;
+      }
+    }));
   }
 
   function wireOverview(){
@@ -1834,40 +1927,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
     wireCustomSections();
     wireLiveChecks();
+    wireAiRefreshToggles();
     wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
       (from, to) => reorderHomeBlocks(state.snapshot, from, to));
-    wirePosterButton();
     const ex = $("#btn-export");
     if (ex) ex.addEventListener("click", openExportSheet);
     initOverviewMap();
-  }
-
-  // ---------- AI 行程海報 ----------
-  function wirePosterButton(){
-    const btn = $("#posterBtn");
-    const out = $("#poster-out");
-    if (!btn || !out) return;
-    btn.addEventListener("click", async () => {
-      if (btn.disabled) return;
-      btn.disabled = true;
-      const stop = busyIn(out, { steps:["AI 畫緊張海報"], hint:"要生成成張圖，大約 20-40 秒。" });
-      let r;
-      try {
-        r = await callAi({ action:"poster", itinerary: state.snapshot });
-      } catch (e){
-        stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
-        btn.disabled = false; return;
-      }
-      stop();
-      btn.disabled = false;
-      if (!r || r.ok === false){
-        out.innerHTML = `<div class="ai-msg">${esc((r && r.message) || "畫唔到，試多次？")}</div>`;
-        return;
-      }
-      const src = `data:${r.mimeType || "image/png"};base64,${r.data}`;
-      out.innerHTML = `<img class="posterimg" src="${src}" alt="行程海報">
-        <a class="btn wide" href="${src}" download="seoul-trip-poster.png" style="margin-top:8px;">⬇️ 下載張海報</a>`;
-    });
   }
 
   // ==================================================================
@@ -2863,18 +2928,32 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     hero: () => {
       const d = state.snapshot;
       const m = d.meta = d.meta || {};
-      openEditSheet("首頁大標題", "最頂嗰段。", [
+      openEditSheet("首頁大標題", "最頂嗰段，同AI用嚟搵地點／check天氣嘅目的地資料——呢頁重用去第二個trip嘅時候，淨係要改呢度，唔使改code。", [
         { key:"eyebrow", type:"text", label:"日期細字", value: m.eyebrow || DEFAULT_EYEBROW },
         { key:"title", type:"text", label:"標題", value: m.title || "" },
         { key:"facts", type:"lines", rows:3, label:"標題下面嘅小字", hint:"一行一項，會用「·」分隔顯示。",
           value: (m.facts && m.facts.length ? m.facts : DEFAULT_FACTS).join("\n") },
         { key:"hotelTags", type:"lines", rows:3, label:"標籤", hint:"一行一個。",
           value: (m.hotelTags || []).join("\n") },
+        { key:"destinationLocal", type:"text", label:"目的地本地語言名（搜尋地點/計交通用）",
+          hint:"例如首爾就打「서울」，東京就打「東京」，留空即係搜尋唔加地區提示。",
+          value: m.destinationLocal || "" },
+        { key:"lat", type:"text", label:"目的地緯度（check實時天氣用）", value: m.lat != null ? String(m.lat) : "" },
+        { key:"lng", type:"text", label:"目的地經度（check實時天氣用）", value: m.lng != null ? String(m.lng) : "" },
+        { key:"dateStart", type:"text", label:"行程開始日期", hint:"格式 YYYY-MM-DD，例如 2026-10-23。",
+          value: m.dateStart || "" },
+        { key:"dateEnd", type:"text", label:"行程結束日期", hint:"格式 YYYY-MM-DD。",
+          value: m.dateEnd || "" },
       ], async out => {
         m.eyebrow = out.eyebrow; m.title = out.title;
         m.facts = out.facts; m.hotelTags = out.hotelTags;
+        m.destinationLocal = out.destinationLocal || "";
+        const lat = parseFloat(out.lat), lng = parseFloat(out.lng);
+        m.lat = Number.isFinite(lat) ? lat : null;
+        m.lng = Number.isFinite(lng) ? lng : null;
+        m.dateStart = out.dateStart || ""; m.dateEnd = out.dateEnd || "";
         render();
-        await saveNow("改咗首頁標題");
+        await saveNow("改咗首頁標題同目的地資料");
       });
     },
 
