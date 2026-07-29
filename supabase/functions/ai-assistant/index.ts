@@ -284,6 +284,11 @@ async function searchPlaces(query: string, apiKey: string) {
     // text search already carries these, so a rating costs no extra request
     rating: typeof r.rating === "number" ? r.rating : null,
     ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
+    // "OPERATIONAL" | "CLOSED_TEMPORARILY" | "CLOSED_PERMANENTLY" — Gemini's
+    // own knowledge of a place can be stale (it happily names a restaurant
+    // that shut down since its training data), so this is the one signal
+    // that actually catches that instead of trusting the model's say-so.
+    businessStatus: r.business_status || null,
   }));
 }
 
@@ -319,7 +324,7 @@ async function verifyPlaces(cands: any[], apiKey: string, limit = 12) {
     try {
       const hits = await searchPlaces(q, apiKey);
       const top = hits[0];
-      if (!top || typeof top.rating !== "number") return null;
+      if (!top || typeof top.rating !== "number" || top.businessStatus === "CLOSED_PERMANENTLY") return null;
       return {
         title: c.title || top.name,
         kr: c.kr || "",
@@ -343,6 +348,30 @@ async function verifyPlaces(cands: any[], apiKey: string, limit = 12) {
     }
   }));
   return results.filter(Boolean) as any[];
+}
+
+// Shared by day-plan and suggest — both hand back a `changes[]` array where
+// an "add"/"edit" carries a brand-new (or replacement) stop.title/kr that
+// Gemini invented from its own knowledge. A lookup failure or empty query
+// must not silently drop an otherwise-good change, so anything inconclusive
+// is kept — only a CONFIRMED "CLOSED_PERMANENTLY" from Google gets dropped.
+async function dropPermanentlyClosed(changes: any[], apiKey: string | undefined) {
+  if (!apiKey || !changes.length) return { changes, droppedCount: 0 };
+  const results = await Promise.all(changes.map(async (c: any) => {
+    const q = String(c?.stop?.kr || c?.stop?.title || "").trim();
+    if (!q) return { c, closed: false };
+    try {
+      const hits = await searchPlaces(q, apiKey);
+      const top = hits[0];
+      return { c, closed: !!(top && top.businessStatus === "CLOSED_PERMANENTLY") };
+    } catch (_) {
+      return { c, closed: false };
+    }
+  }));
+  return {
+    changes: results.filter(r => !r.closed).map(r => r.c),
+    droppedCount: results.filter(r => r.closed).length,
+  };
 }
 
 // Rating for a place we already identified. Place Details is the accurate
@@ -617,7 +646,7 @@ Deno.serve(async (req) => {
       if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
-      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成6日行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
+      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成6日行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n**呢度係自由文字回覆，冇機制即時核實地方仲有冇營業**：如果你提到任何未係現有行程入面嘅新地方（餐廳／景點），你嘅知識可能已經過時（間舖有機會已經結業），唔可以講到好肯定咁話個地方一定仲開緊，要提一句「建議出發前用Google地圖/Naver地圖確認吓仲有冇開」。如果想加返落行程，叫佢哋用「AI 諗行程」或者「執一執行程」，嗰邊會自動用Google核實過先至畀套用。\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
       try {
         const aiText = await callGemini(apiKeys, prompt);
         return json({ ok: true, aiSummary: aiText });
@@ -641,7 +670,12 @@ Deno.serve(async (req) => {
       }
       const parsed = parseAiJson(aiText);
       if (parsed && Array.isArray(parsed.changes)) {
-        return json({ ok: true, notes: parsed.notes ?? "", changes: parsed.changes });
+        const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+        const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(parsed.changes, placesKey);
+        const notes = droppedCount
+          ? `${parsed.notes ?? ""}（幫你篩走咗 ${droppedCount} 個 Google 話已經永久結業嘅推介）`.trim()
+          : (parsed.notes ?? "");
+        return json({ ok: true, notes, changes: liveChanges });
       }
       // Never surface the raw (possibly truncated/malformed) JSON text as if
       // it were a normal AI reply — that reads as garbage to the user.
@@ -856,7 +890,12 @@ Deno.serve(async (req) => {
         const t = String(title ?? "").trim().slice(0, 40);
         if (t) dayTitles[id] = t;
       }
-      return json({ ok: true, notes: parsed.notes ?? "", changes, dayTitles });
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      const { changes: liveChanges, droppedCount } = await dropPermanentlyClosed(changes, placesKey);
+      const notes = droppedCount
+        ? `${parsed.notes ?? ""}（幫你篩走咗 ${droppedCount} 個 Google 話已經永久結業嘅推介）`.trim()
+        : (parsed.notes ?? "");
+      return json({ ok: true, notes, changes: liveChanges, dayTitles });
     }
 
     // Free-form sections for the home page ("手信買咩好", "換錢攻略"…). The page
