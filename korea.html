@@ -509,6 +509,15 @@ img{max-width:100%;}
 /* a meal is a major stop — drawn like an interchange station */
 .node[data-type="eat"]{width:15px;height:15px;background:var(--paper);border:4px solid var(--lc);}
 .node[data-type="rest"]{width:8px;height:8px;opacity:.75;}
+/* same number as the pin this stop points to on the day's map, so the two
+   are obviously the same place instead of the map being the only place a
+   stop's position in the route is legible */
+.node.numbered{
+  width:18px;height:18px;border-radius:50%;background:var(--lc);
+  border:2px solid var(--paper);box-sizing:border-box;opacity:1;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;
+}
 
 .stopcard{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
@@ -1868,6 +1877,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const mapOpen = !state.mapsShut.has(day.id);
     const sel = inSelectMode(day) ? state.selectMode : null;
     const firstStop = firstStopUnit(units);
+    const stopNums = dayStopNumbers(day);
 
     return `
       <section class="dayhead" style="--lc:${lc}">
@@ -1900,7 +1910,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         ${units.map((u,i) =>
           // a ＋ in every gap, so "between these two places" is a place you can
           // point at rather than something you fake by adding at the end and dragging
-          (sel ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop)
+          (sel ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面嘅 ✨ 叫 AI 由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
@@ -1946,7 +1956,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return `<button class="insertrow" data-insert="${pos}" aria-label="喺呢度加地點或者 note"><span class="ins-plus">＋</span></button>`;
   }
 
-  function unitHtml(day, u, i, total, sel, firstStop){
+  function unitHtml(day, u, i, total, sel, firstStop, stopNums){
     const key = day.id + ":" + i;
     const open = state.open.has(key);
     const s = u.stop;
@@ -2025,7 +2035,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="unit" data-i="${i}">
         ${segHtml}
         <div class="stop">
-          <div class="stop-rail"><span class="node" data-type="${esc(s.type||'normal')}"></span></div>
+          <div class="stop-rail"><span class="node${stopNums && stopNums.has(i) ? " numbered" : ""}" data-type="${esc(s.type||'normal')}">${stopNums && stopNums.has(i) ? stopNums.get(i) : ""}</span></div>
           <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}">
             <div class="stopmain"${selecting ? ` data-select="${i}"` : ""}>
               ${selecting ? `<span class="selbox">${checked ? "☑️" : "⬜"}</span>` : ""}
@@ -3464,8 +3474,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const points = [];
     const unresolved = [];
+    // Keyed by the stop's index in toUnits(day.items) — the same index
+    // unitHtml renders with — so the number on a stop card can match the pin
+    // it points to on the map without re-deriving the geocoding logic twice.
+    const numberByIndex = new Map();
     let n = 0;
-    toUnits(day.items).map(u => u.stop).filter(Boolean).forEach(s => {
+    toUnits(day.items).forEach((u, idx) => {
+      const s = u.stop;
+      if (!s) return;
       const title = plain(s.title);
       if (!title) return;
       let lat = s.lat, lng = s.lng;
@@ -3476,6 +3492,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (Number.isFinite(lat) && Number.isFinite(lng)){
         n++;
         points.push([lat, lng, `${n} ${title}`]);
+        numberByIndex.set(idx, n);
       } else if (isRealPlace(s) && !s.noGeo){
         unresolved.push(s);          // a real place Google can probably find
       }
@@ -3497,10 +3514,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                ...orphans.map(p => [p.lat, p.lng, p.text]),
                ...points],
       unresolved,
+      numberByIndex,
     };
   }
   function buildDayMapPoints(day){ return resolveDayMapPoints(day).tuples; }
   function unmappedStops(day){ return resolveDayMapPoints(day).unresolved; }
+  // The same numbers shown on the day's map pins, keyed by position in
+  // toUnits(day.items) — so a stop card can show "③" and the map pin it
+  // points to shows the same "3", instead of the card being unlabeled and
+  // the map being the only place the order is visible.
+  function dayStopNumbers(day){ return resolveDayMapPoints(day).numberByIndex; }
   // Day 1 has no legacy mapPoints at all, so the map section used to be hidden
   // outright — but its stops are real places that can be looked up, so it
   // should get a map too once they are.
