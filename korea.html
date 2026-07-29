@@ -4537,6 +4537,42 @@ ${stayBlock}${dayBlocks}${secBlocks}
     });
   }
 
+  // A "對調" swaps every stop between two days via ordinary add/edit changes,
+  // but nothing in that changes array ever touches day.title — so the header
+  // kept saying the old theme after the stops underneath it were already the
+  // new one. dayTitles is AI's proposed fix for that, offered as its own
+  // small apply-card set separate from the stop changes.
+  function dayTitleCardsHtml(dayTitles){
+    const entries = Object.entries(dayTitles || {}).filter(([id, title]) => {
+      const d = dayById(id);
+      return d && plain(title) && plain(title) !== plain(d.title);
+    });
+    if (!entries.length) return "";
+    return `<div class="ai-msg" style="margin-top:8px;">呢次改動令以下日子嘅主題都變埋，標題要唔要跟住改？</div>` +
+      entries.map(([id, title]) => {
+        const d = dayById(id);
+        return `<div class="ai-change" style="--lc:${DAY_COLORS[id]||'var(--d3)'}">
+          <div class="op">Day ${id.replace("day","")} · 改標題</div>
+          <div class="ttl">${esc(title)}</div>
+          <div class="why">而家：「${esc(d.title || "")}」</div>
+          <div class="editor-tools"><button class="btn primary" data-applytitle="${esc(id)}">套用</button></div>
+        </div>`;
+      }).join("");
+  }
+  function wireDayTitleButtons(out, dayTitles){
+    out.querySelectorAll("[data-applytitle]").forEach(btn => btn.addEventListener("click", async () => {
+      const id = btn.dataset.applytitle;
+      const d = dayById(id);
+      const title = plain(dayTitles[id] || "");
+      if (!d || !title) return;
+      btn.textContent = "套用緊…"; btn.disabled = true;
+      d.title = title;
+      render();
+      await saveNow(`改咗 Day ${id.replace("day","")} 標題：${title}`);
+      btn.textContent = "已套用";
+    }));
+  }
+
   // ---------- 單日 AI：淨係執呢一日 ----------
   // The all-days 「執一執行程」 is the wrong tool when you're standing on one
   // day — especially an empty one — so each day gets its own button that only
@@ -4601,14 +4637,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
         go.disabled = false; go.textContent = "再問一次";
         if (!r || r.ok === false){ out.innerHTML = askedHtml + `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; return; }
         const changes = (r.changes || []).filter(c => c && (c.stop || c.matchTitle));
-        if (!changes.length){
+        const dayTitles = r.dayTitles && typeof r.dayTitles === "object" ? r.dayTitles : {};
+        const titleCards = dayTitleCardsHtml(dayTitles);
+        if (!changes.length && !titleCards){
           out.innerHTML = askedHtml + `<div class="ai-msg">${esc(r.notes || "AI 覺得呢幾日唔使改。")}</div>`;
           saveAiNote("day-plan", `${label}：AI 建議`, r.notes || "冇建議");
           return;
         }
         out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) +
-          (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個）</button>` : "");
+          (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個）</button>` : "") +
+          titleCards;
         wireApplyButtons(out, changes);
+        wireDayTitleButtons(out, dayTitles);
         saveAiNote("day-plan", `${label}：AI 建議${asked ? "（" + asked + "）" : ""}`,
           [r.notes, ...changes.map(c => `【Day ${String(c.dayId||"").replace("day","")}・${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
             .filter(Boolean).join("\n\n"));
