@@ -307,21 +307,9 @@ img{max-width:100%;}
 .opt-cost{font-weight:500;color:var(--warn);font-size:12.5px;}
 .opt-note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:2px;}
 
-.foodgrid{display:flex;flex-direction:column;gap:9px;margin-top:12px;}
-.foodcard{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 14px;width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit;}
-.foodcard:active{background:var(--surface-2);}
 .colorpick{display:flex;gap:8px;flex-wrap:wrap;margin:9px 2px 0;}
 .colorpick .swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;}
 .colorpick .swatch.active{border-color:var(--text);box-shadow:0 0 0 2px var(--surface);}
-@keyframes stopflash{
-  0%,100%{box-shadow:none;}
-  20%,80%{box-shadow:0 0 0 3px var(--lc,var(--bookmark));}
-}
-.unit.flash .stopcard{animation:stopflash 1.5s ease;}
-.foodcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:5px;}
-.foodcard .fname{font-size:14.5px;font-weight:700;}
-.foodcard .fname .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
-.foodcard .fmust{font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
 
 /* ---------- day header ---------- */
 .dayhead{padding:24px 0 4px;}
@@ -1191,6 +1179,38 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function boardById(id){
     return (state.snapshot.boards || []).find(b => b.id === id);
   }
+  // 表妹美食清單 used to be a standalone, hand-maintained array (snap.foodCards)
+  // completely detached from day.items — its "day" field was plain text
+  // ("Day 2"), never a real dayId, so deleting or moving the actual stop
+  // never touched it: it kept claiming a niece's pick was still scheduled
+  // long after it wasn't. Turning each entry into a real board item means it
+  // gets the SAME live re-check every other board item already has
+  // (findInItinerary, re-derived fresh every render — see boardItemHtml)
+  // instead of a second, silently-drifting copy of the same information,
+  // and it can be copied into a specific day the same way any board item can.
+  function migrateFoodCardsToBoard(snap){
+    if (!snap || !Array.isArray(snap.foodCards) || !snap.foodCards.length) return;
+    const items = snap.foodCards.map(f => {
+      const nameHtml = String(f.name || "");
+      const krMatch = nameHtml.match(/<span class="kr">([^<]*)<\/span>/);
+      return {
+        title: plain(nameHtml.split(/<span/)[0]) || plain(nameHtml),
+        kr: krMatch ? plain(krMatch[1]) : "",
+        desc: f.must || "", mapUrl: "", photoUrl: "", placeId: "", lat: null, lng: null, tip: "",
+        niecepick: f.niecepicks || [],
+        eatMeta: f.chips || [],
+      };
+    });
+    snap.boards = snap.boards || [];
+    snap.boards.push({
+      id: "board_niecepicks_" + Date.now().toString(36),
+      name: "表妹美食清單",
+      color: pickBoardColor(snap.boards),
+      items,
+    });
+    snap.foodCards = [];
+  }
+
   // older snapshots (saved before this feature existed) simply have no boards array,
   // and boards saved before per-list colour existed have no colour — assign one so
   // the overview map has something consistent to draw with
@@ -1199,6 +1219,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (snap && !Array.isArray(snap.sections)) snap.sections = [];
     if (snap && !Array.isArray(snap.hiddenSections)) snap.hiddenSections = [];
     migrateStays(snap);
+    migrateFoodCardsToBoard(snap);
     if (snap) snap.boards.forEach(b => { if (!b.color) b.color = pickBoardColor(snap.boards); });
     // the sticky day-nav's short label used to be a hardcoded DAY_SHORT
     // lookup, completely detached from day.title — swapping/renaming a
@@ -1535,17 +1556,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </button>`;
     }).join("");
 
-    const food = (d.foodCards || []).map((f,fi) => `
-      <button type="button" class="foodcard" data-foodgo="${fi}" title="睇下呢間喺行程邊度">
-        <div class="foodcard-top">
-          <span style="display:flex;gap:6px;flex-wrap:wrap;">${(f.niecepicks||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("")}</span>
-          <span class="badge note">${esc(f.day)}</span>
-        </div>
-        <div class="fname">${f.name}</div>
-        ${f.must ? `<div class="fmust">${esc(f.must)}</div>` : ""}
-        <div class="chiprow">${(f.chips||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("")}</div>
-      </button>`).join("");
-
     return `
       <section class="hero">
         <div class="eyebrow">${esc(m.eyebrow || DEFAULT_EYEBROW)}${secEditBtn("hero")}</div>
@@ -1612,12 +1622,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ${customSectionsHtml(d)}
 
       ${hiddenSectionsHtml(d)}
-
-      <section class="sec">
-        <h2 class="sec-title">表妹美食清單</h2>
-        <p class="sec-sub">標住 <span class="niecepick">💌 表妹清單</span> 嘅係表妹指定，附參考評分同訂位提示。</p>
-        <div class="foodgrid">${food}</div>
-      </section>
 
       <section class="sec">
         <h2 class="sec-title">帶走份行程</h2>
@@ -1815,7 +1819,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       window.scrollTo({ top: 0, behavior: "auto" });
       render();
     }));
-    document.querySelectorAll("[data-foodgo]").forEach(b => b.addEventListener("click", () => goToFoodCard(+b.dataset.foodgo)));
     document.querySelectorAll("[data-editsec]").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();
       const open = HOME_EDITORS[b.dataset.editsec];
@@ -1865,33 +1868,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       out.innerHTML = `<img class="posterimg" src="${src}" alt="行程海報">
         <a class="btn wide" href="${src}" download="seoul-trip-poster.png" style="margin-top:8px;">⬇️ 下載張海報</a>`;
     });
-  }
-
-  // 表妹美食清單 only ever says "Day 2" as plain text — it isn't linked to a
-  // stop id — so find the matching stop by name (same fuzzy match used for
-  // AI-applied changes) and jump the itinerary view there.
-  function goToFoodCard(fi){
-    const f = (state.snapshot.foodCards || [])[fi];
-    if (!f) return;
-    const m = String(f.day || "").match(/(\d+)/);
-    const day = m ? dayById("day" + m[1]) : null;
-    if (!day) return;
-    const title = plain(String(f.name || "").split(/<span/)[0]);
-    const units = toUnits(day.items);
-    const idx = findStopIndex(units, title);
-    state.view = day.id;
-    window.scrollTo({ top: 0, behavior: "auto" });
-    render();
-    if (idx >= 0){
-      requestAnimationFrame(() => {
-        const el = document.querySelector(`#line .unit[data-i="${idx}"]`);
-        if (el){
-          el.scrollIntoView({ behavior:"smooth", block:"center" });
-          el.classList.add("flash");
-          setTimeout(() => el.classList.remove("flash"), 1600);
-        }
-      });
-    }
   }
 
   // ==================================================================
