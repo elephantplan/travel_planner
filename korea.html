@@ -3670,7 +3670,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
 
     // bookmarked places, shown as standalone pins — never joined by a line,
-    // since they aren't a route, just a shortlist someone saved for later
+    // since they aren't a route, just a shortlist someone saved for later.
+    // Off by default: this map's job is "where does the trip go", and a
+    // wishlist with no date yet just clutters that up —撳 legend 先顯示.
     const boardLayerKeys = [];
     (state.snapshot.boards || []).forEach(b => {
       const pts = (b.items || []).filter(it => Number.isFinite(it.lat) && Number.isFinite(it.lng));
@@ -3678,11 +3680,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const color = b.color || "#6B6FD1";
       const g = L.layerGroup();
       pts.forEach(it => L.marker([it.lat, it.lng], { icon: boardPinIcon(color) }).bindPopup(esc(plain(it.title) || "")).addTo(g));
-      g.addTo(map);
       const key = "board:" + b.id;
       layers[key] = g;
       boardLayerKeys.push({ key, board: b });
-      all.push(...pts.map(it => [it.lat, it.lng]));
     });
 
     if (all.length){
@@ -3697,7 +3697,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${DAY_HEX[d.id]};color:${DAY_HEX[d.id]}">● D${d.id.replace('day','')} ${esc(DAY_SHORT[d.id]||"")}</button>`
       ).join("");
       const boardLegend = boardLayerKeys.map(({key, board}) =>
-        `<button class="badge" data-layer="${esc(key)}" style="cursor:pointer;border-color:${esc(board.color)};color:${esc(board.color)}">📌 ${esc(board.name)}</button>`
+        `<button class="badge" data-layer="${esc(key)}" style="cursor:pointer;opacity:.35;border-color:${esc(board.color)};color:${esc(board.color)}" title="撳顯示「${esc(board.name)}」呢個清單嘅地點">📌 ${esc(board.name)}</button>`
       ).join("");
       legend.innerHTML = dayLegend + boardLegend;
       legend.querySelectorAll("[data-layer]").forEach(b => b.addEventListener("click", () => {
