@@ -2252,10 +2252,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // doesn't know this place"
     const getmappoints = $("#getmappoints");
     if (getmappoints) getmappoints.addEventListener("click", () => {
-      unmappedStops(day).forEach(s => { delete s.noGeo; });
-      toUnits(day.items).map(u => u.stop).filter(Boolean).forEach(s => { delete s.noGeo; });
+      const stops = toUnits(day.items).map(u => u.stop).filter(Boolean);
+      stops.forEach(s => { delete s.noGeo; if (state.geoTried) state.geoTried.delete(s); });
       state.geoProblem = "";
-      if (state.geocodedDays) state.geocodedDays.delete(day.id);
       autoGeocodeDay(day);
     });
 
@@ -3600,15 +3599,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // Almost every stop in this trip predates coordinates being stored at all —
   // they only ever had a Naver link. Rather than making someone hunt for a
   // button on all six days, look the missing ones up the first time a day is
-  // opened. One Google text search each, saved permanently, so it never runs
-  // for the same stop twice.
+  // opened. Dedup is per STOP (not per day): an earlier version remembered
+  // "already swept this day" once and never looked again, so a place added
+  // later — after the day had already been opened once this session — sat
+  // forever with no coordinate and no map number, looking hardcoded even
+  // though the resolver itself is fully dynamic. Tracking which individual
+  // stops were already tried means a freshly added one is picked up on the
+  // very next render, same as any other missing stop.
   async function autoGeocodeDay(day){
-    if (!state.geocodedDays) state.geocodedDays = new Set();
-    if (state.geocodedDays.has(day.id)) return;
-    state.geocodedDays.add(day.id);
+    if (state.geoBusy && state.geoBusy.dayId === day.id) return;   // a sweep is already running for this day
+    if (!state.geoTried) state.geoTried = new WeakSet();
 
-    const missing = unmappedStops(day);
+    const missing = unmappedStops(day).filter(s => !state.geoTried.has(s));
     if (!missing.length) return;
+    missing.forEach(s => state.geoTried.add(s));
 
     state.geoBusy = { dayId: day.id, done: 0, total: missing.length, why: "" };
     render();
