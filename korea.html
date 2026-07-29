@@ -264,6 +264,7 @@ img{max-width:100%;}
 .meta-chip.hours{background:var(--ok-bg);border-color:transparent;color:var(--ok);}
 .meta-chip.book{background:var(--info-bg);border-color:transparent;color:var(--info);}
 .meta-chip.book.warn{background:var(--danger-bg);color:var(--danger);}
+.meta-chip.closed{background:var(--danger-bg);border-color:transparent;color:var(--danger);font-weight:600;}
 .niecepick{background:var(--niece-bg);border-color:transparent;color:var(--niece);}
 .chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
 
@@ -1903,7 +1904,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                        ${mapNoteHtml(day)}
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
-        ${sel ? "" : `<button class="btn wide dayai" id="dayai" style="margin-top:11px;">✨ AI 諗行程</button>`}
+        ${sel ? "" : `
+          <button class="btn wide dayai" id="dayai" style="margin-top:11px;">✨ AI 諗行程</button>
+          <button class="btn wide" id="swapday" style="margin-top:8px;">🔄 同另一日成日對調</button>
+        `}
       </section>
 
       <div class="line" id="line" style="--lc:${lc}">
@@ -2012,8 +2016,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         ? `<div class="thumb ghost" data-getphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
         : "";
 
+    const closedToday = stopClosedOnDay(s, day);
     const chips = []
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
+      .concat(closedToday ? [`<span class="meta-chip closed">⚠️ 呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`] : [])
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
@@ -2166,6 +2172,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const dayAi = $("#dayai");
     if (dayAi) dayAi.addEventListener("click", () => openDayAiSheet(day));
+
+    const swapDayBtn = $("#swapday");
+    if (swapDayBtn) swapDayBtn.addEventListener("click", () => openDaySwapPicker(day));
 
     // ---------- 選幾個地點一齊搬 ----------
     const selStart = $("#selstart");
@@ -2669,6 +2678,51 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         await saveNow(`開咗個新清單「${b.name}」，「${name}」搬咗入去`);
         afterDetach();
       });
+    });
+  }
+
+  // A full day-to-day swap — unlike AI 諗行程 (which edits individual stops
+  // and can leave the title mismatched, see dayTitleCardsHtml above), this
+  // trades EVERYTHING a day's content is made of in one shot, so the result
+  // is always internally consistent. `id`/`num`/`date` stay put (the slot on
+  // the calendar doesn't move), only the content living in that slot does.
+  // Items carry their own connector `seg` data, so segments between stops
+  // stay correct automatically — the two days' internal sequencing never
+  // touched each other, only which slot they're rendered under changed.
+  function swapDayContent(a, b){
+    const keys = ["title", "desc", "badges", "items", "mapPoints", "mapCap"];
+    for (const k of keys){
+      const tmp = a[k];
+      a[k] = b[k];
+      b[k] = tmp;
+    }
+    syncMapPoints(a);
+    syncMapPoints(b);
+  }
+
+  function openDaySwapPicker(day){
+    const days = (state.snapshot.days || []).filter(d => d.id !== day.id);
+    openSheet(`
+      <h3>同邊一日成日對調？</h3>
+      <p class="sec-sub">會將 Day ${day.id.replace('day','')}（${esc(day.date)}）同揀嘅嗰日，成日內容（標題、簡介、全部地點）完全對調；日期同 Day 編號本身唔會變，淨係內容搬咗位。</p>
+      <div class="daypick">
+        ${days.map(d => `<button data-swapto="${d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+          <span class="bullet"></span>
+          <span class="dcode">Day ${d.id.replace('day','')}</span>
+          <span>${esc(d.date)} · ${esc(d.title)}</span>
+        </button>`).join("")}
+      </div>
+    `, sheet => {
+      sheet.querySelectorAll("[data-swapto]").forEach(b => b.addEventListener("click", async () => {
+        const other = dayById(b.dataset.swapto);
+        if (!other) return;
+        const aNum = day.id.replace('day',''), bNum = other.id.replace('day','');
+        swapDayContent(day, other);
+        closeLayer();
+        state.open.clear();
+        render();
+        await saveNow(`Day ${aNum} 同 Day ${bNum} 成日行程完全對調咗`);
+      }));
     });
   }
 
@@ -4867,7 +4921,35 @@ ${stayBlock}${dayBlocks}${secBlocks}
         s.eatMeta = (s.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
         s.eatMeta.push({ text:`🕒 ${r.summary}`, cls:"meta-chip hours" });
       }
+      // raw per-weekday lines, kept separately from the summarized chip text
+      // so stopClosedOnDay() can check a specific weekday later without
+      // re-parsing the (possibly grouped/summarized) display string
+      if (r && r.ok !== false && Array.isArray(r.weekdayText)) s.weekdayText = r.weekdayText;
     } catch (_){}
+  }
+
+  // day.date is a hand-authored "10月24日（六）" string — the weekday
+  // character in the brackets is the only source of truth we have for which
+  // day of the week a day slot falls on, so pull it from there.
+  function weekdayCharOfDate(dateStr){
+    const m = String(dateStr || "").match(/[（(]([一二三四五六日天])[)）]/);
+    if (!m) return null;
+    return m[1] === "天" ? "日" : m[1];
+  }
+  // Cross-references a stop's Google-verified weekly hours against the
+  // weekday its day slot actually falls on — this is exactly the kind of
+  // mismatch that caused the Deoksugung Monday-closure conflict earlier in
+  // this trip's planning, so it's worth flagging automatically on every stop
+  // rather than relying on someone remembering to check by hand.
+  function stopClosedOnDay(s, day){
+    if (!Array.isArray(s.weekdayText) || !s.weekdayText.length) return false;
+    const wd = weekdayCharOfDate(day.date);
+    if (!wd) return false;
+    const line = s.weekdayText.find(l => l.startsWith(`星期${wd}`));
+    if (!line) return false;
+    const idx = line.indexOf(":");
+    const hoursText = idx < 0 ? "" : line.slice(idx + 1).trim();
+    return !hoursText || /休息|公休|closed/i.test(hoursText);
   }
 
   async function enrichPhoto(s, name){
