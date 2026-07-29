@@ -2109,8 +2109,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
   function editorHtml(day, u, i, total){
     const s = u.stop;
-    const mode = u.seg ? segMode(u.seg.html) : "walk";
-    const segText = u.seg ? segPlain(u.seg.html) : "";
     return `
       <div class="editor" data-editor="${i}">
         <div class="field">
@@ -2119,7 +2117,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <div class="suggest" data-suggest></div>
         </div>
         <div class="row2">
-          <div class="field"><label>時間</label><input class="input" data-f="time" value="${esc(s.time)}" placeholder="約 14:00"></div>
+          <div class="field"><label>時間（唔一定要填）</label><input class="input" data-f="time" value="${esc(s.time)}" placeholder="約 14:00"></div>
           <div class="field"><label>類型</label>
             <select class="select" data-f="type">
               <option value="normal" ${s.type==="normal"?"selected":""}>景點</option>
@@ -2130,16 +2128,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
         <div class="field"><label>韓文名</label><input class="input" data-f="kr" value="${esc(s.kr)}" placeholder="남산골한옥마을"></div>
         <div class="field"><label>描述</label><textarea class="textarea" data-f="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
-
-        ${i > 0 ? `
-        <div class="row2">
-          <div class="field"><label>點樣去</label>
-            <select class="select" data-seg="mode">
-              ${MODES.map(m=>`<option value="${m.key}" ${mode===m.key?"selected":""}>${m.icon} ${m.label}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field"><label>要幾耐</label><input class="input" data-seg="text" value="${esc(segText)}" placeholder="約 10 分鐘"></div>
-        </div>` : ""}
 
         <div class="field">
           <label>相片</label>
@@ -2396,22 +2384,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         saveSoon("改咗「" + (s.title || "一個地點") + "」");
       });
     });
-
-    // transit segment
-    const segMode_ = box.querySelector('[data-seg="mode"]');
-    const segText_ = box.querySelector('[data-seg="text"]');
-    function writeSeg(){
-      if (!segMode_ || !segText_) return;
-      // the station list still applies if it is still a train or bus ride
-      const keepRoute = (segMode_.value === "metro" || segMode_.value === "bus") ? (u.seg && u.seg.route) : "";
-      u.seg = buildSeg(segMode_.value, segText_.value, keepRoute);
-      day.items = fromUnits(units);
-      const segEl = box.closest(".unit").querySelector(".seg");
-      if (segEl){ segEl.dataset.mode = segMode_.value; segEl.querySelector(".seg-text").innerHTML = u.seg.html; }
-      saveSoon("改咗去「" + (s.title || "一個地點") + "」嘅交通");
-    }
-    if (segMode_) segMode_.addEventListener("change", writeSeg);
-    if (segText_) segText_.addEventListener("input", writeSeg);
 
     // google place autocomplete on the name field
     const titleInput = box.querySelector('[data-f="title"]');
