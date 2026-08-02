@@ -397,6 +397,12 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
         tripBrief: `你係一個廣東話（香港口語）旅遊助理，幫緊去 ${destinationLocal}` +
           `（${dateStart} 至 ${dateEnd}）嘅一次旅行。${requirements || ""}`,
         days,
+        // "銀杏同紅葉時機" is baked into korea.html's overview page as a
+        // fixed block — it was written for the original Seoul-autumn trip
+        // and makes no sense for most destinations/seasons, so a brand-new
+        // trip starts with it hidden (still viewable/unhide-able from 主頁
+        // 最底 for anyone who genuinely wants it, e.g. another Korea trip).
+        hiddenSections: ["foliage"],
       };
       const verRes = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
         method: "POST",

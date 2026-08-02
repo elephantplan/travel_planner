@@ -1497,7 +1497,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定" };
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"銀杏紅葉時機" };
   function secTools(key){
     const label = HIDDEN_SECTION_LABELS[key] || key;
     return `<span class="sectools">${secEditBtn(key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
@@ -1723,9 +1723,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
         <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
 
-        <h3>銀杏同紅葉時機${secEditBtn("notes")}</h3>
+        ${isSectionHidden(d,"foliage") ? "" : `
+        <h3>銀杏同紅葉時機${secEditBtn("notes")}${secTools("foliage")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
         ${liveCheckButtonHtml("foliage", "🍁 Check 依家嘅紅葉情況")}
+        `}
 
         <h3>日程調動</h3>
         <p class="sec-sub">${d.scheduleSwapNote||""}</p>
