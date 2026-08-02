@@ -693,6 +693,24 @@ img{max-width:100%;}
 }
 .savestate.on{opacity:1;}
 
+/* fixed banner shown while a brand-new trip's blank days are being
+   generated — lives outside #app (render() wipes that on every view
+   change) so the progress survives normal navigation while it runs */
+.genbanner{
+  position:fixed;left:14px;right:14px;top:calc(10px + env(safe-area-inset-top));z-index:70;
+  max-width:520px;margin:0 auto;
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-2);padding:13px 16px;font-size:13.5px;display:none;
+}
+.genbanner.on{display:flex;align-items:center;gap:10px;}
+.genbanner .spin{
+  width:16px;height:16px;border-radius:999px;border:2.5px solid var(--rule);
+  border-top-color:var(--ink);flex:none;animation:genspin .8s linear infinite;
+}
+.genbanner.done .spin{display:none;}
+@keyframes genspin{to{transform:rotate(360deg);}}
+.genbanner .txt{flex:1;line-height:1.5;}
+
 /* ---------- sheet + modal ---------- */
 .scrim{position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);backdrop-filter:blur(3px);}
 .sheet{
@@ -974,6 +992,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   <button class="dockbtn accent" id="btn-ai">✨ AI 助手</button>
 </div>
 <div class="savestate" id="savestate"></div>
+<div class="genbanner" id="genbanner"></div>
 <div id="layer"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1011,6 +1030,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ---------- state ----------
   const state = {
     snapshot: null,
+    tripId: null,                  // which row in `trips` this page is showing — set once in boot()
     view: "overview",              // "overview" | dayId
     open: new Set(),               // "dayId:unitIndex" currently expanded
     mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
@@ -1042,13 +1062,17 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // DATA
   // ==================================================================
+  // Every trip's rows share the same append-only tables, distinguished only
+  // by trip_id (see index.html, which creates this row and hands off here
+  // via ?trip=<id>) — every read/write below is scoped to state.tripId so
+  // one family's other trips never bleed into each other.
   async function fetchLatestVersion(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=*&order=created_at.desc&limit=1`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=*&order=created_at.desc&limit=1`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取行程失敗 " + res.status);
     return (await res.json())[0] || null;
   }
   async function fetchAllVersions(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?select=id,created_at,edited_by,source,summary&order=created_at.desc`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,created_at,edited_by,source,summary&order=created_at.desc`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取歷史失敗 " + res.status);
     return res.json();
   }
@@ -1061,7 +1085,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
       method: "POST",
       headers: sbHeaders({ "Prefer": "return=representation" }),
-      body: JSON.stringify({ edited_by: getEditedBy(), source, summary, snapshot })
+      body: JSON.stringify({ trip_id: state.tripId, edited_by: getEditedBy(), source, summary, snapshot })
     });
     if (!res.ok) throw new Error("儲存失敗 " + res.status + " " + (await res.text()));
     return res.json();
@@ -1096,12 +1120,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       await fetch(`${SUPABASE_URL}/rest/v1/ai_notes`, {
         method: "POST",
         headers: sbHeaders(),
-        body: JSON.stringify({ asked_by: getEditedBy(), kind, question: question || null, answer })
+        body: JSON.stringify({ trip_id: state.tripId, asked_by: getEditedBy(), kind, question: question || null, answer })
       });
     } catch (e) { /* an unsaved note must never block the answer on screen */ }
   }
   async function fetchAiNotes(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?trip_id=eq.${state.tripId}&select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取紀錄失敗 " + res.status);
     return res.json();
   }
@@ -1299,22 +1323,28 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return seg;
   }
 
-  // Quick outbound links for a stop. Korean name searches better than the
-  // Cantonese title, so prefer it; " 서울" narrows a bare name like "황생가칼국수".
+  // Quick outbound links for a stop. Local-language name searches better than
+  // the Cantonese title, so prefer it; appending the trip's destination hint
+  // narrows a bare name like "황생가칼국수" to the right city — read fresh off
+  // meta (not hardcoded) so this works for whichever trip is loaded.
   function searchTerm(s){
     const kr = plain(s.kr), title = plain(s.title);
     return kr || title;
   }
+  function destHint(){
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    return m.destinationLocal ? " " + m.destinationLocal : "";
+  }
   function googleSearchUrl(s){
     const q = searchTerm(s);
-    return q ? `https://www.google.com/search?q=${encodeURIComponent(q + " 서울")}` : null;
+    return q ? `https://www.google.com/search?q=${encodeURIComponent(q + destHint())}` : null;
   }
   // The Maps "search action" URL (Google's documented format) lands on the
   // place card with its star rating and review count visible immediately.
   function googleReviewsUrl(s){
     const q = searchTerm(s);
     if (!q) return null;
-    const base = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + " 서울")}`;
+    const base = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + destHint())}`;
     return s.placeId ? `${base}&query_place_id=${encodeURIComponent(s.placeId)}` : base;
   }
 
@@ -5165,6 +5195,110 @@ ${stayBlock}${dayBlocks}${secBlocks}
     return "呢個建議睇唔明，冇改到行程";
   }
 
+  // ==================================================================
+  // NEW-TRIP GENERATION — turns a blank day skeleton (from index.html)
+  // into a real itinerary by calling day-plan repeatedly.
+  //
+  // This does NOT reuse the interactive "套用晒" loop (wireApplyButtons
+  // above): that loop fires each applyAiChange() 60ms apart without
+  // awaiting it, which is fine for the few changes a manual AI suggestion
+  // produces, but for a from-scratch multi-day trip (dozens of stops) it
+  // means dozens of overlapping, un-awaited saveNow() calls — a real
+  // lost-update race, not just noisy history. batchApplyChunk() instead
+  // merges a whole day-plan response into memory first, enriches the new
+  // stops with bounded concurrency, then saves once for the whole chunk.
+  // ==================================================================
+
+  // Splices every "add" change into its day's items (in memory, no
+  // render/save yet) and returns the list of newly-inserted stop objects
+  // so the caller can enrich/save them as one batch.
+  function mergeChangesIntoDays(changes){
+    const touched = new Map();   // dayId -> { day, units, newStops[] }
+    (changes || []).forEach(c => {
+      if (c.op !== "add" || !c.stop) return;   // a blank day only ever gets "add"s
+      const day = dayById(c.dayId);
+      if (!day) return;
+      if (!touched.has(day.id)) touched.set(day.id, { day, units: toUnits(day.items), newStops: [] });
+      const rec = touched.get(day.id);
+      const stop = Object.assign(blankStop(), c.stop, { kind:"stop" });
+      delete stop.transitBefore;   // describes a leg we're about to compute for real
+      const at = slotForTime(rec.units, stop.time);
+      rec.units.splice(at, 0, { seg:null, stop });
+      rec.newStops.push(stop);
+    });
+    touched.forEach(rec => { rec.day.items = fromUnits(rec.units); });
+    return touched;
+  }
+  function applyDayTitles(dayTitles){
+    Object.entries(dayTitles || {}).forEach(([id, title]) => {
+      const d = dayById(id);
+      if (d && title) d.title = title;
+    });
+  }
+  // Runs `fn` over `items` with at most `n` in flight at once — enrichStop
+  // makes 2-3 edge-function calls each, so a fresh day's worth done fully
+  // in parallel would fan out into dozens of concurrent requests at once.
+  async function runBounded(items, n, fn){
+    for (let i = 0; i < items.length; i += n){
+      await Promise.all(items.slice(i, i + n).map(x => fn(x).catch(() => {})));
+    }
+  }
+  async function batchApplyChunk(changes, summary){
+    const touched = mergeChangesIntoDays(changes);
+    if (!touched.size) return;
+    render();
+    const allNew = [...touched.values()].flatMap(r => r.newStops);
+    await runBounded(allNew, 4, enrichStop);
+    render();
+    for (const { day, units } of touched.values()){
+      const idxs = units.map((u, i) => i).filter(i => units[i].stop);
+      await refreshTransit(day, idxs);   // recomputes every leg + renders + saves
+    }
+    await saveNow(summary);
+  }
+
+  // One chunk of blank days -> one day-plan call -> merged in. Retries a
+  // TRUNCATED response (the model's JSON got cut off) by splitting the
+  // chunk in half rather than giving up outright — this is genuinely new
+  // territory for day-plan's prompt (every requested day blank at once,
+  // not the usual "fill a gap or two"), so an oversized response is the
+  // expected failure mode to guard against, not an edge case.
+  async function generateDaysChunk(dayIds, onProgress){
+    if (!dayIds.length) return;
+    const label = dayIds.map(id => (dayById(id) || {}).title || id).join("、");
+    onProgress && onProgress(`AI 諗緊「${label}」…`);
+    let r;
+    try {
+      r = await callAi({ action:"day-plan", dayIds, question: briefText(state.snapshot), itinerary: state.snapshot });
+    } catch (e){
+      r = { ok:false, message: e.message };
+    }
+    if (r && r.ok !== false && Array.isArray(r.changes)){
+      await batchApplyChunk(r.changes, `AI 生成咗「${label}」`);
+      if (r.dayTitles) applyDayTitles(r.dayTitles);
+      render();
+      return;
+    }
+    const msg = (r && r.message) || "";
+    if (dayIds.length > 1 && /太長|截斷/.test(msg)){
+      const mid = Math.ceil(dayIds.length / 2);
+      await generateDaysChunk(dayIds.slice(0, mid), onProgress);
+      await generateDaysChunk(dayIds.slice(mid), onProgress);
+      return;
+    }
+    onProgress && onProgress(`⚠️「${label}」生成失敗：${msg || "未知錯誤"}（可以之後入返嗰日撳「✨ AI 諗行程」補返）`);
+  }
+  // Sequential, not parallel: each chunk's itinerary payload must include
+  // the previous chunk's already-generated stops, so day-plan's own
+  // cross-day dedup ("呢個地方已經去緊 elsewhere") actually sees them.
+  async function generateTripFromScratch(onProgress){
+    const blankDayIds = state.snapshot.days.filter(d => !(d.items || []).length).map(d => d.id);
+    const CHUNK = 3;
+    for (let i = 0; i < blankDayIds.length; i += CHUNK){
+      await generateDaysChunk(blankDayIds.slice(i, i + CHUNK), onProgress);
+    }
+  }
+
   // ---------- human-readable version comparison ----------
   // A raw JSON diff is unreadable (photo URLs, HTML blobs, coordinates all
   // shift line numbers around). Compare what a reader actually cares about:
@@ -5413,13 +5547,46 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // ==================================================================
   // BOOT
   // ==================================================================
+  function genBanner(text, opts){
+    const el = $("#genbanner");
+    if (!el) return;
+    if (text == null){ el.className = "genbanner"; el.innerHTML = ""; return; }
+    el.className = "genbanner on" + (opts && opts.done ? " done" : "");
+    el.innerHTML = `<span class="spin"></span><span class="txt">${esc(text)}</span>`;
+  }
+  // A brand-new trip (index.html just created it and handed off here with
+  // ?new=1) starts with every day blank — walk through generateTripFromScratch
+  // once, showing progress in the fixed banner (not #app: render() wipes
+  // that on every navigation, and this can take a couple of minutes for a
+  // multi-day trip), then drop ?new=1 from the URL so a refresh mid-way or
+  // after completion never re-triggers it.
+  async function runInitialGeneration(){
+    genBanner("AI 幫你砌緊行程，可以留喺呢版等，或者切去第日睇——完成會有提示。");
+    try {
+      await generateTripFromScratch(msg => genBanner(msg));
+      genBanner("🎉 行程生成完成！可以逐日睇同再微調。", { done:true });
+    } catch (e){
+      genBanner("⚠️ 生成中途出咗問題：" + e.message + "（已經生成嘅日子已經存低，可以入返個別日子撳「✨ AI 諗行程」補返）", { done:true });
+    }
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
+    setTimeout(() => genBanner(null), 6000);
+  }
+
   async function boot(){
+    const params = new URLSearchParams(location.search);
+    const tripId = params.get("trip");
+    if (!tripId){
+      location.replace("index.html");
+      return;
+    }
+    state.tripId = tripId;
+
     let row;
     try {
       row = await fetchLatestVersion();
-      if (!row) throw new Error("資料庫入面仲未有行程版本。");
+      if (!row) throw new Error("呢個行程重未有版本紀錄。");
     } catch (e){
-      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理。</div></div>`;
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理，或者<a href="index.html">返去主頁</a>。</div></div>`;
       return;
     }
     state.snapshot = normalizeSnapshot(row.snapshot);
@@ -5430,7 +5597,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
       geocodeStays(state.snapshot);
     } catch (e){
       $("#app").innerHTML = `<div class="sec"><div class="errbox">行程讀到咗，但畫唔出嚟：${esc(e.message)}<br>可以撳上面日子掣試下第二日。</div></div>`;
+      return;
     }
+    if (params.get("new") === "1") runInitialGeneration();
   }
   boot();
 })();
