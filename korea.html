@@ -149,10 +149,11 @@ img{max-width:100%;}
   letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
 }
 .brandmark .ko{font-size:12px;color:var(--ink-faint);}
+.topbtns{display:flex;gap:8px;flex:0 0 auto;}
 .iconbtn{
   width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;
   border:1px solid var(--rule);border-radius:11px;background:var(--surface);
-  cursor:pointer;font-size:15px;line-height:1;
+  cursor:pointer;font-size:15px;line-height:1;color:inherit;text-decoration:none;
 }
 .iconbtn:active{transform:scale(.94);}
 
@@ -973,10 +974,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   <div class="topbar-inner">
     <div class="brandrow">
       <div class="brandmark">
-        <span class="sys">Seoul</span>
-        <span class="ko">서울 · 가을</span>
+        <span class="sys"></span>
+        <span class="ko"></span>
       </div>
-      <button class="iconbtn" id="btn-theme" aria-label="切換深淺色">◐</button>
+      <div class="topbtns">
+        <a class="iconbtn" href="index.html" aria-label="返主頁" title="返主頁">🏠</a>
+        <button class="iconbtn" id="btn-theme" aria-label="切換深淺色">◐</button>
+      </div>
     </div>
     <div class="lines" id="lines" role="tablist" aria-label="揀日子"></div>
   </div>
@@ -1072,7 +1076,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return (await res.json())[0] || null;
   }
   async function fetchAllVersions(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,created_at,edited_by,source,summary&order=created_at.desc`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,created_at,edited_by,source,summary,trivial&order=created_at.desc`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取歷史失敗 " + res.status);
     return res.json();
   }
@@ -1081,11 +1085,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (!res.ok) throw new Error("讀取版本失敗 " + res.status);
     return (await res.json())[0]?.snapshot || null;
   }
-  async function saveVersion(snapshot, source, summary){
+  async function saveVersion(snapshot, source, summary, trivial){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
       method: "POST",
       headers: sbHeaders({ "Prefer": "return=representation" }),
-      body: JSON.stringify({ trip_id: state.tripId, edited_by: getEditedBy(), source, summary, snapshot })
+      body: JSON.stringify({ trip_id: state.tripId, edited_by: getEditedBy(), source, summary, snapshot, trivial: !!trivial })
     });
     if (!res.ok) throw new Error("儲存失敗 " + res.status + " " + (await res.text()));
     return res.json();
@@ -1137,15 +1141,21 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     el.classList.add("on");
     if (!keep) setTimeout(() => el.classList.remove("on"), 1900);
   }
-  async function saveNow(summary){
+  // "trivial" marks background/technical upkeep saves (a recomputed transit
+  // time, a fetched Google rating, a geocoded hotel pin) that carry no
+  // content a person actually asked for — they still get saved (nothing is
+  // ever lost), but the 歷史 list hides them by default so "加咗個地點"
+  // doesn't get buried under a dozen "更新咗交通時間" rows from the same
+  // single edit.
+  async function saveNow(summary, trivial){
     clearTimeout(saveTimer);
     flash("儲存緊…", true);
-    try { await saveVersion(state.snapshot, "manual", summary); flash("已儲存"); }
+    try { await saveVersion(state.snapshot, "manual", summary, trivial); flash("已儲存"); }
     catch (e) { flash("儲存唔到，改動只留喺呢部機"); }
   }
-  function saveSoon(summary){
+  function saveSoon(summary, trivial){
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveNow(summary), 900);
+    saveTimer = setTimeout(() => saveNow(summary, trivial), 900);
   }
 
   // ==================================================================
@@ -1413,7 +1423,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }
     if (why) state.transitProblem = why;
     render();
-    await saveNow("更新咗交通時間");
+    await saveNow("更新咗交通時間", true);
   }
 
   // ==================================================================
@@ -1453,7 +1463,18 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
   }
 
+  // The topbar brandmark sits outside #app (it's part of the fixed header,
+  // not the per-view render), so it needs its own explicit update — it used
+  // to be static markup hardcoded to "Seoul"/"서울 · 가을", which silently
+  // kept saying Seoul on every other trip.
+  function renderBrandmark(){
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    const sys = $(".brandmark .sys"), ko = $(".brandmark .ko");
+    if (sys) sys.textContent = m.title || m.destinationLocal || "行程";
+    if (ko) ko.textContent = (m.destinationLocal && m.destinationLocal !== m.title) ? m.destinationLocal : (m.eyebrow || "");
+  }
   function render(){
+    renderBrandmark();
     renderLines();
     const app = $("#app");
     if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
@@ -1501,6 +1522,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     await saveNow("調整咗主頁段落次序");
   }
   const HOME_DRAG_HANDLE = `<button class="secedit sechandle" data-hsdrag title="拉上拉落改次序" aria-label="拉上拉落改次序">⠿</button>`;
+  // Used to say "10 月下旬天氣" no matter what trip was loaded — a leftover
+  // Seoul-trip literal that silently mislabelled every other destination's
+  // weather block. Derived from the trip's own dates instead.
+  function weatherHeadingLabel(meta){
+    const ds = String((meta && meta.dateStart) || "").split("-");
+    const de = String((meta && meta.dateEnd) || "").split("-");
+    if (ds.length < 2) return "天氣參考";
+    const sm = +ds[1], sd = +ds[2];
+    if (de.length < 2 || +de[1] === sm){
+      const third = sd <= 10 ? "上旬" : sd <= 20 ? "中旬" : "下旬";
+      return `${sm} 月${third}天氣`;
+    }
+    return `${sm} 月 — ${+de[1]} 月天氣`;
+  }
   function homeBlockHtml(d, key){
     if (isSectionHidden(d, key)) return "";
     if (key === "acc"){
@@ -1520,7 +1555,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }
     if (key === "weather"){
       return `<div class="hsblock" data-hskey="weather">
-        <h3>10 月下旬天氣${secTools("weather")}${HOME_DRAG_HANDLE}</h3>
+        <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}${HOME_DRAG_HANDLE}</h3>
         <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
@@ -3121,7 +3156,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         }
       } catch (_){ break; }
     }
-    if (found){ render(); await saveNow(`搵返住宿喺地圖上面嘅位置`); }
+    if (found){ render(); await saveNow(`搵返住宿喺地圖上面嘅位置`, true); }
     else render();
   }
   // which stay covers this day (first match wins if ranges overlap)
@@ -3728,7 +3763,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }
     state.geoBusy = null;
     state.geoProblem = why;
-    if (done) await saveNow(`搵返 ${done} 個地點嘅地圖座標（${day.title}）`);
+    if (done) await saveNow(`搵返 ${done} 個地點嘅地圖座標（${day.title}）`, true);
     else render();
   }
 
@@ -5098,7 +5133,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       }
       render();
     }
-    if (done) await saveNow(`攞咗 ${done} 個地點嘅 Google 評分（${label}）`);
+    if (done) await saveNow(`攞咗 ${done} 個地點嘅 Google 評分（${label}）`, true);
     return { done, why };
   }
 
@@ -5263,13 +5298,23 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // territory for day-plan's prompt (every requested day blank at once,
   // not the usual "fill a gap or two"), so an oversized response is the
   // expected failure mode to guard against, not an edge case.
-  async function generateDaysChunk(dayIds, onProgress){
+  // `edges` flags whether this chunk contains the trip's very first/last
+  // day — day-plan's own baked-in prompt has no notion of "this is day
+  // one" or "this is the last day", so a from-scratch generation happily
+  // filled the last day right up to bedtime with no time left to actually
+  // reach the airport. Spelling it out here (client-side, via `question`)
+  // fixes that without touching the shared day-plan prompt every other
+  // caller also uses (which usually isn't planning a trip's bookend days).
+  async function generateDaysChunk(dayIds, onProgress, edges){
     if (!dayIds.length) return;
     const label = dayIds.map(id => (dayById(id) || {}).title || id).join("、");
     onProgress && onProgress(`AI 諗緊「${label}」…`);
+    const notes = [];
+    if (edges && edges.first) notes.push("呢批入面有成個行程嘅第一日：一定要留返啱啱抵達目的地嘅安排（例如「抵達機場／車站」、「前往酒店」），唔好一開波就當人已經喺市中心。");
+    if (edges && edges.last) notes.push("呢批入面有成個行程嘅最尾一日：一定要預留返足夠時間去機場——最後一個站要係「前往機場」或者類似安排，之前嗰個站要預至少2-3個鐘畀退房／去機場／辦理登機，唔可以行程排到好夜先冇處理返程。");
     let r;
     try {
-      r = await callAi({ action:"day-plan", dayIds, question: briefText(state.snapshot), itinerary: state.snapshot });
+      r = await callAi({ action:"day-plan", dayIds, question: notes.join("\n"), itinerary: state.snapshot });
     } catch (e){
       r = { ok:false, message: e.message };
     }
@@ -5282,8 +5327,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const msg = (r && r.message) || "";
     if (dayIds.length > 1 && /太長|截斷/.test(msg)){
       const mid = Math.ceil(dayIds.length / 2);
-      await generateDaysChunk(dayIds.slice(0, mid), onProgress);
-      await generateDaysChunk(dayIds.slice(mid), onProgress);
+      const firstHalf = dayIds.slice(0, mid), secondHalf = dayIds.slice(mid);
+      await generateDaysChunk(firstHalf, onProgress, { first: edges && edges.first, last: edges && edges.last && !secondHalf.length });
+      await generateDaysChunk(secondHalf, onProgress, { first: false, last: edges && edges.last });
       return;
     }
     onProgress && onProgress(`⚠️「${label}」生成失敗：${msg || "未知錯誤"}（可以之後入返嗰日撳「✨ AI 諗行程」補返）`);
@@ -5292,10 +5338,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // the previous chunk's already-generated stops, so day-plan's own
   // cross-day dedup ("呢個地方已經去緊 elsewhere") actually sees them.
   async function generateTripFromScratch(onProgress){
-    const blankDayIds = state.snapshot.days.filter(d => !(d.items || []).length).map(d => d.id);
+    const days = state.snapshot.days;
+    const blankDayIds = days.filter(d => !(d.items || []).length).map(d => d.id);
+    if (!blankDayIds.length) return;
+    const firstId = days[0] && days[0].id;
+    const lastId = days[days.length - 1] && days[days.length - 1].id;
     const CHUNK = 3;
     for (let i = 0; i < blankDayIds.length; i += CHUNK){
-      await generateDaysChunk(blankDayIds.slice(i, i + CHUNK), onProgress);
+      const chunk = blankDayIds.slice(i, i + CHUNK);
+      await generateDaysChunk(chunk, onProgress, { first: chunk.includes(firstId), last: chunk.includes(lastId) });
     }
   }
 
@@ -5464,14 +5515,27 @@ ${stayBlock}${dayBlocks}${secBlocks}
   $("#btn-history").addEventListener("click", async () => {
     openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p><div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
       const list = layer.querySelector("#vlist");
-      try {
-        const rows = await fetchAllVersions();
-        if (!rows.length){ list.innerHTML = `<p class="hint">仲未有任何紀錄。</p>`; return; }
+      let rows, showTrivial = false;
+      // background/technical saves (交通時間／評分／地圖座標呢類) are marked
+      // trivial:true — they're never lost, just hidden from this list by
+      // default so a handful of them left over from ONE actual edit don't
+      // bury the edit itself. rows[0] (真・最新版本) always stays visible
+      // and keeps its「而家」badge even if the very latest save happened to
+      // be a trivial one, so "同而家比較" always has something to anchor on.
+      function visibleRows(){
+        return showTrivial ? rows : rows.filter((r, idx) => idx === 0 || !r.trivial);
+      }
+      function paint(){
+        const vRows = visibleRows();
+        const hiddenCount = rows.length - vRows.length;
         list.innerHTML = `
-          <div class="editor-tools" style="margin:0 0 4px;">
+          <div class="editor-tools" style="margin:0 0 4px;flex-wrap:wrap;">
             <button class="btn" id="cmp">比較揀咗嘅兩個</button>
+            ${hiddenCount || showTrivial
+              ? `<button class="btn" id="toggletrivial">${showTrivial ? "淨係顯示重要更新" : `顯示埋自動更新（${hiddenCount}）`}</button>`
+              : ""}
           </div>
-          ${rows.map((r,idx) => `
+          ${vRows.map((r, idx) => `
             <label class="vrow">
               <input type="checkbox" value="${r.id}">
               <span style="flex:1 1 auto;min-width:0;">
@@ -5486,6 +5550,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
                 </span>
               </span>
             </label>`).join("")}`;
+
+        const toggle = list.querySelector("#toggletrivial");
+        if (toggle) toggle.addEventListener("click", e => { e.preventDefault(); showTrivial = !showTrivial; paint(); });
 
         list.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", async e => {
           e.preventDefault();
@@ -5540,6 +5607,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
             holder.innerHTML = `<div class="diffwrap-title">兩個版本嘅分別</div>${diffSummaryHtml(sections)}`;
           } catch (err){ holder.innerHTML = `<p class="hint">比較唔到：${esc(err.message)}</p>`; }
         });
+      }
+      try {
+        rows = await fetchAllVersions();
+        if (!rows.length){ list.innerHTML = `<p class="hint">仲未有任何紀錄。</p>`; return; }
+        paint();
       } catch (e){ list.innerHTML = `<div class="errbox">載入唔到紀錄：${esc(e.message)}</div>`; }
     });
   });
@@ -5554,6 +5626,54 @@ ${stayBlock}${dayBlocks}${secBlocks}
     el.className = "genbanner on" + (opts && opts.done ? " done" : "");
     el.innerHTML = `<span class="spin"></span><span class="txt">${esc(text)}</span>`;
   }
+  // Reuses board-ai (same "propose places, verify via Google, rank by
+  // rating" pipeline the wishlist boards use) with a hotel-flavoured theme,
+  // once the days are populated — Gemini can then actually reason about
+  // which area is central to the generated stops instead of guessing blind.
+  // Only fills stays[] if it's still empty, so this never clobbers a hotel
+  // the family already entered by hand.
+  async function recommendAccommodation(onProgress){
+    if ((state.snapshot.stays || []).length) return;
+    const days = state.snapshot.days;
+    onProgress && onProgress("AI 諗緊住邊度方便…");
+    let r;
+    try {
+      r = await callAi({ action:"board-ai", theme:"住宿建議", itinerary: state.snapshot, existingTitles:[] });
+    } catch (e){ return; }
+    if (!r || r.ok === false) return;
+    const pick = (r.topRated || [])[0];
+    if (!pick) return;
+    state.snapshot.stays = [{
+      name: pick.title || "", desc: pick.desc || "", hoursChip: "", warning: "",
+      mapUrl: (pick.kr || pick.title) ? `https://map.naver.com/p/search/${encodeURIComponent(pick.kr || pick.title)}` : "",
+      lat: Number.isFinite(pick.lat) ? pick.lat : undefined,
+      lng: Number.isFinite(pick.lng) ? pick.lng : undefined,
+      from: days[0] && days[0].id, to: days[days.length - 1] && days[days.length - 1].id,
+    }];
+    syncAccommodation(state.snapshot);
+    render();
+  }
+  // The fixed "10 月下旬天氣" block wants real historical-average numbers,
+  // which nobody has for an arbitrary new destination — rather than fabricate
+  // figures (this app's rule everywhere else: don't invent numbers), the
+  // destination-relevant weather/clothing guidance instead becomes a proper
+  // AI-authored section (same make-section action the "手信買咩好" style
+  // custom sections already use), which persists and already has its own
+  // topic-based refresh built in.
+  async function recommendWeatherSection(onProgress){
+    const m = state.snapshot.meta || {};
+    const topic = `${m.destinationLocal || m.title || "呢次旅程"} 天氣同著衫建議`;
+    if ((state.snapshot.sections || []).some(s => s.topic === topic)) return;
+    onProgress && onProgress("AI 幫你寫緊天氣同著衫建議…");
+    let r;
+    try {
+      r = await callAi({ action:"make-section", topic, itinerary: state.snapshot });
+    } catch (e){ return; }
+    if (!r || r.ok === false || !r.section) return;
+    if (!Array.isArray(state.snapshot.sections)) state.snapshot.sections = [];
+    state.snapshot.sections.push(Object.assign(blankSection(), r.section, { source:"ai", topic, aiRefresh:true }));
+    render();
+  }
   // A brand-new trip (index.html just created it and handed off here with
   // ?new=1) starts with every day blank — walk through generateTripFromScratch
   // once, showing progress in the fixed banner (not #app: render() wipes
@@ -5564,9 +5684,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
     genBanner("AI 幫你砌緊行程，可以留喺呢版等，或者切去第日睇——完成會有提示。");
     try {
       await generateTripFromScratch(msg => genBanner(msg));
+      await recommendAccommodation(msg => genBanner(msg));
+      await recommendWeatherSection(msg => genBanner(msg));
+      await saveNow("AI 建議咗住宿同天氣著衫提示");
       genBanner("🎉 行程生成完成！可以逐日睇同再微調。", { done:true });
     } catch (e){
-      genBanner("⚠️ 生成中途出咗問題：" + e.message + "（已經生成嘅日子已經存低，可以入返個別日子撳「✨ AI 諗行程」補返）", { done:true });
+      genBanner("⚠️ 生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「✨ AI 諗行程」補返）", { done:true });
     }
     history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
     setTimeout(() => genBanner(null), 6000);
