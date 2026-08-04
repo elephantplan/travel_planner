@@ -436,12 +436,11 @@ section.triplist{margin-bottom:30px;}
         tripBrief: `你係一個廣東話（香港口語）旅遊助理，幫緊去 ${destinationLocal}` +
           `（${dateStart} 至 ${dateEnd}）嘅一次旅行。${requirements || ""}`,
         days,
-        // "銀杏同紅葉時機" is baked into trip.html's overview page as a
-        // fixed block — it was written for the original Seoul-autumn trip
-        // and makes no sense for most destinations/seasons, so a brand-new
-        // trip starts with it hidden (still viewable/unhide-able from 主頁
-        // 最底 for anyone who genuinely wants it, e.g. another Korea trip).
-        hiddenSections: ["foliage"],
+        // Two of trip.html's fixed overview blocks only make sense for some
+        // trips: the seasonal note, and the accessibility legend (which came
+        // from one family's specific needs). A new trip starts with both
+        // hidden — nothing is deleted, and 主頁最底 has a 「顯示返」 for each.
+        hiddenSections: ["foliage", "access"],
       };
       const verRes = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
         method: "POST",

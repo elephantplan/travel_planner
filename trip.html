@@ -1116,12 +1116,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // via ?trip=<id>) — every read/write below is scoped to state.tripId so
   // one family's other trips never bleed into each other.
   async function fetchLatestVersion(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=*&order=created_at.desc&limit=1`, { headers: sbHeaders() });
+    // snapshot=not.is.null skips pruned rows — old versions get their payload
+    // nulled out to save space, but stay in the history list (see below).
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&snapshot=not.is.null&select=*&order=created_at.desc&limit=1`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取行程失敗 " + res.status);
     return (await res.json())[0] || null;
   }
   async function fetchAllVersions(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,created_at,edited_by,source,summary,trivial&order=created_at.desc`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,created_at,edited_by,source,summary,trivial,has_snapshot&order=created_at.desc`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取歷史失敗 " + res.status);
     return res.json();
   }
@@ -5964,16 +5966,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
           </div>
           ${vRows.map((r, idx) => `
             <label class="vrow">
-              <input type="checkbox" value="${r.id}">
+              <input type="checkbox" value="${r.id}"${r.has_snapshot === false ? " disabled" : ""}>
               <span style="flex:1 1 auto;min-width:0;">
                 <span class="who">${esc(r.edited_by||"匿名")}</span>
                 <span class="when"> · ${esc(new Date(r.created_at).toLocaleString("zh-HK",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}))}</span>
                 ${idx===0 ? `<span class="badge now">而家</span>` : ""}
                 <span class="sum">${esc(r.summary||"")}</span>
                 <span class="acts">
-                  <button class="btn" data-view="${r.id}">睇呢版</button>
-                  ${idx!==0 ? `<button class="btn" data-cmpnow="${r.id}">同而家比較</button>` : ""}
-                  <button class="btn" data-restore="${r.id}">還原</button>
+                  ${r.has_snapshot === false
+                    ? `<span class="hint">舊紀錄・內容已精簡，還原唔到</span>`
+                    : `<button class="btn" data-view="${r.id}">睇呢版</button>
+                       ${idx!==0 ? `<button class="btn" data-cmpnow="${r.id}">同而家比較</button>` : ""}
+                       <button class="btn" data-restore="${r.id}">還原</button>`}
                 </span>
               </span>
             </label>`).join("")}`;
@@ -6092,19 +6096,56 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // AI-authored section (same make-section action the "手信買咩好" style
   // custom sections already use), which persists and already has its own
   // topic-based refresh built in.
-  async function recommendWeatherSection(onProgress){
-    const m = state.snapshot.meta || {};
-    const topic = `${m.destinationLocal || m.title || "呢次旅程"} 天氣同著衫建議`;
-    if ((state.snapshot.sections || []).some(s => s.topic === topic)) return;
-    onProgress && onProgress("AI 幫你寫緊天氣同著衫建議…");
+  // Fills the 天氣 table with the REAL forecast rather than leaving it blank
+  // (or, worse, asking the model to invent temperatures — the whole app's rule
+  // is that numbers come from a real source). Open-Meteo only forecasts ~16
+  // days out, so anything past that is left for the user to check later.
+  async function fillWeatherRows(onProgress){
+    const snap = state.snapshot;
+    if ((snap.weatherRows || []).length) return;
+    onProgress && onProgress("攞緊真實天氣預報…");
     let r;
-    try {
-      r = await callAi({ action:"make-section", topic, itinerary: state.snapshot });
-    } catch (e){ return; }
-    if (!r || r.ok === false || !r.section) return;
-    if (!Array.isArray(state.snapshot.sections)) state.snapshot.sections = [];
-    state.snapshot.sections.push(Object.assign(blankSection(), r.section, { source:"ai", topic, aiRefresh:true }));
+    try { r = await callAi({ action:"weather" }); } catch (e){ return; }
+    const daily = r && r.raw && r.raw.daily;
+    if (!daily || !Array.isArray(daily.time) || !daily.time.length) return;
+    snap.weatherRows = daily.time.map((iso, i) => {
+      const hi = daily.temperature_2m_max?.[i], lo = daily.temperature_2m_min?.[i];
+      const rain = daily.precipitation_probability_max?.[i];
+      const d = isoToUtc(iso);
+      return {
+        date: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`,
+        hi: hi == null ? "" : `${Math.round(hi)}°`,
+        lo: lo == null ? "" : `${Math.round(lo)}°`,
+        note: rain == null ? "" : `降雨機率 ${rain}%`,
+      };
+    });
     render();
+  }
+  // The standard notes every trip wants, whatever the destination. Each is an
+  // AI section with a stored topic, so it gets the same 🔄 refresh button as
+  // any other section instead of going stale.
+  function standardSectionTopics(){
+    const m = state.snapshot.meta || {};
+    const where = m.destinationLocal || m.title || "呢次旅程";
+    return [
+      { topic: `${where} 天氣同點著衫`, label: "天氣同著衫建議" },
+      { topic: `${where} 交通、上網卡同貨幣`, label: "交通／上網／貨幣" },
+      { topic: `${where} 行李同出發前準備清單`, label: "行李清單" },
+    ];
+  }
+  async function recommendStandardSections(onProgress){
+    const snap = state.snapshot;
+    if (!Array.isArray(snap.sections)) snap.sections = [];
+    for (const { topic, label } of standardSectionTopics()){
+      if (snap.sections.some(s => s.topic === topic)) continue;
+      onProgress && onProgress(`AI 幫你寫緊${label}…`);
+      let r;
+      try { r = await callAi({ action:"make-section", topic, itinerary: snap }); }
+      catch (e){ continue; }
+      if (!r || r.ok === false || !r.section) continue;
+      snap.sections.push(Object.assign(blankSection(), r.section, { source:"ai", topic, aiRefresh:true }));
+      render();
+    }
   }
   // A brand-new trip (index.html just created it and handed off here with
   // ?new=1) starts with every day blank — walk through generateTripFromScratch
@@ -6117,8 +6158,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     try {
       await generateTripFromScratch(msg => genBanner(msg));
       await recommendAccommodation(msg => genBanner(msg));
-      await recommendWeatherSection(msg => genBanner(msg));
-      await saveNow("AI 建議咗住宿同天氣著衫提示");
+      await fillWeatherRows(msg => genBanner(msg));
+      await recommendStandardSections(msg => genBanner(msg));
+      await saveNow("AI 補齊咗住宿、天氣、著衫、交通同行李清單");
       genBanner("🎉 行程生成完成！可以逐日睇同再微調。", { done:true });
     } catch (e){
       genBanner("⚠️ 生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「✨ AI 諗行程」補返）", { done:true });
