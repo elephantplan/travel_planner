@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0D1014" media="(prefers-color-scheme: dark)">
-<title>首爾秋楓銀杏行 ｜ 10.23–10.28</title>
+<title>行程</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -30,13 +30,15 @@
   --shadow-1:0 1px 2px rgba(20,23,28,.05), 0 6px 16px -10px rgba(20,23,28,.16);
   --shadow-2:0 2px 6px rgba(20,23,28,.08), 0 18px 40px -18px rgba(20,23,28,.28);
 
-  /* Seoul Metro line colours, one per day */
-  --d1:#8A94A6;  /* 抵達 — night flight, off-network */
-  --d2:#0FA958;  /* 古宮 — line 2 green */
-  --d3:#00A5DE;  /* 南怡島 — line 4 blue */
-  --d4:#EF7C1C;  /* 聖水洞 — line 3 orange */
-  --d5:#9B6FB0;  /* 德壽宮 — line 5 purple */
-  --d6:#BB8336;  /* 銀杏尾聲 — line 9 gold */
+  /* One accent per day. Days beyond the sixth are generated at runtime
+     (see dayColorVar) using --day-l for the theme's lightness. */
+  --d1:#8A94A6;
+  --d2:#0FA958;
+  --d3:#00A5DE;
+  --d4:#EF7C1C;
+  --d5:#9B6FB0;
+  --d6:#BB8336;
+  --day-l:45%;
 
   --ok:#0E9E52;
   --ok-bg:#E7F6ED;
@@ -78,6 +80,7 @@
     --d4:#F79240;
     --d5:#B287C5;
     --d6:#D2A055;
+    --day-l:62%;
     --ok:#3CC177; --ok-bg:#12291C;
     --warn:#E5964A; --warn-bg:#2C2013;
     --danger:#E8695C; --danger-bg:#2E1917;
@@ -103,6 +106,7 @@
   --d4:#F79240;
   --d5:#B287C5;
   --d6:#D2A055;
+  --day-l:62%;
   --ok:#3CC177; --ok-bg:#12291C;
   --warn:#E5964A; --warn-bg:#2C2013;
   --danger:#E8695C; --danger-bg:#2E1917;
@@ -612,7 +616,8 @@ img{max-width:100%;}
 .textarea{resize:vertical;min-height:74px;}
 .select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px;}
 .input:focus,.textarea:focus,.select:focus{outline:2px solid var(--lc,var(--d3));outline-offset:-1px;border-color:transparent;}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;}
+.row2 > *{min-width:0;}
 
 .suggest{margin-top:5px;display:flex;flex-direction:column;gap:5px;}
 .suggest-item{
@@ -1008,9 +1013,49 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
-  const DAY_COLORS = { day1:"var(--d1)", day2:"var(--d2)", day3:"var(--d3)", day4:"var(--d4)", day5:"var(--d5)", day6:"var(--d6)" };
-  const DAY_HEX    = { day1:"#8A94A6", day2:"#0FA958", day3:"#00A5DE", day4:"#EF7C1C", day5:"#9B6FB0", day6:"#BB8336" };
-  const DAY_SHORT  = { day1:"抵達", day2:"古宮", day3:"南怡島", day4:"聖水洞", day5:"德壽宮", day6:"銀杏" };
+  // Day accent colours. The first six are the original hand-picked hues, so
+  // trips that already exist look pixel-identical; past that they're generated
+  // on the golden angle, because a trip can be any length and a 15-day trip
+  // used to render every day from the 7th onward in the same grey (and one
+  // call site emitted `border-color:undefined` outright).
+  const DAY_SEED_HEX = ["#8A94A6", "#0FA958", "#00A5DE", "#EF7C1C", "#9B6FB0", "#BB8336"];
+  function dayIndexOfId(id){
+    const n = parseInt(String(id || "").replace("day", ""), 10);
+    return Number.isFinite(n) && n > 0 ? n - 1 : -1;
+  }
+  function dayHue(i){ return (28 + (i - 6) * 137.508) % 360; }
+  function hslToHex(h, s, l){
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+      const k = (n + h / 30) % 12;
+      const c = l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)));
+      return Math.round(255 * c).toString(16).padStart(2, "0");
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  }
+  function isDarkNow(){
+    const t = localStorage.getItem("seoul_theme") || "auto";
+    if (t === "dark") return true;
+    if (t === "light") return false;
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+  // Resolved colour, for Leaflet/canvas which can't read CSS custom properties.
+  function dayHex(id){
+    const i = dayIndexOfId(id);
+    if (i < 0) return "#8A94A6";
+    if (i < DAY_SEED_HEX.length) return DAY_SEED_HEX[i];
+    return hslToHex(dayHue(i), 0.62, isDarkNow() ? 0.62 : 0.45);
+  }
+  // CSS colour for --lc. Keeps the theme-aware custom properties for the first
+  // six days. MUST never throw and must always return something paintable:
+  // several call sites pass a dayId straight out of an AI response, which can
+  // name a day that doesn't exist.
+  function dayColorVar(id){
+    const i = dayIndexOfId(id);
+    if (i < 0) return "var(--ink-faint)";
+    if (i < DAY_SEED_HEX.length) return `var(--d${i + 1})`;
+    return `hsl(${dayHue(i).toFixed(1)} 62% var(--day-l))`;
+  }
 
   function sbHeaders(extra){
     return Object.assign({
@@ -1269,28 +1314,17 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     migrateStays(snap);
     migrateFoodCardsToBoard(snap);
     if (snap) snap.boards.forEach(b => { if (!b.color) b.color = pickBoardColor(snap.boards); });
-    // the sticky day-nav's short label used to be a hardcoded DAY_SHORT
-    // lookup, completely detached from day.title — swapping/renaming a
-    // day's content never touched it, so the nav pill kept showing the
-    // OLD theme's name forever. Backfilling it into the day itself (once)
-    // makes it real, editable, swappable data instead of a fixed table.
+    // The sticky day-nav's short label is per-day editable data. It used to
+    // fall back to a fixed table of one particular trip's day themes, which
+    // meant every OTHER trip's nav pills showed that trip's place names.
     if (snap && Array.isArray(snap.days)) snap.days.forEach(d => {
-      if (d.shortTag == null) d.shortTag = DAY_SHORT[d.id] || "";
+      if (d.shortTag == null) d.shortTag = "";
     });
-    // destination coordinates / search hint / date range used to be hardcoded
-    // constants in the edge function (Seoul, Oct 23-28) — moved here as real,
-    // editable trip data so this whole app can be reused for a different
-    // trip later without touching code. Backfilled once with the values that
-    // were previously hardcoded, purely so THIS trip keeps working exactly
-    // as before until someone edits 首頁大標題 with the new fields.
-    if (snap){
-      const m = snap.meta = snap.meta || {};
-      if (m.destinationLocal == null) m.destinationLocal = "서울";
-      if (m.lat == null) m.lat = 37.5665;
-      if (m.lng == null) m.lng = 126.9780;
-      if (!m.dateStart) m.dateStart = "2026-10-23";
-      if (!m.dateEnd) m.dateEnd = "2026-10-28";
-    }
+    // Destination coordinates / search hint / date range are per-trip data,
+    // set when the trip is created. Deliberately NOT backfilled with any
+    // default here: a missing field must render blank and prompt the user to
+    // fill it in, never silently inherit some other trip's city or dates.
+    if (snap) snap.meta = snap.meta || {};
     // per-session opt-in for "let AI refresh this with the latest info" —
     // defaults true for the two built-in sessions (matches the behaviour
     // they already had, since they've always had a live-check button).
@@ -1443,10 +1477,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <span class="bullet"></span><span class="lbl">全程</span>
       </button>
       ${days.map(d => `
-        <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+        <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span>
           <span class="lbl">D${d.id.replace('day','')}</span>
-          <span>${esc(d.shortTag != null ? d.shortTag : (DAY_SHORT[d.id]||''))}</span>
+          <span>${esc(d.shortTag || '')}</span>
         </button>`).join("")}
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
@@ -1472,6 +1506,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const sys = $(".brandmark .sys"), ko = $(".brandmark .ko");
     if (sys) sys.textContent = m.title || m.destinationLocal || "行程";
     if (ko) ko.textContent = (m.destinationLocal && m.destinationLocal !== m.title) ? m.destinationLocal : (m.eyebrow || "");
+    // The tab title is markup, so it can't come from the snapshot at parse
+    // time — set it here or every trip shares whatever was typed in the file.
+    const t = plain(m.title || "").trim();
+    document.title = t ? `${t}${m.eyebrow ? " ｜ " + plain(m.eyebrow) : ""}` : "行程";
   }
   function render(){
     renderBrandmark();
@@ -1497,7 +1535,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"銀杏紅葉時機" };
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示" };
   function secTools(key){
     const label = HIDDEN_SECTION_LABELS[key] || key;
     return `<span class="sectools">${secEditBtn(key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
@@ -1548,7 +1586,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map 開啟</a></div>` : ""}
+            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 喺地圖開啟</a></div>` : ""}
           </div>`).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
       </div>`;
@@ -1641,7 +1679,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const out = document.getElementById(`livecheck-${kind}`);
       if (!out) return;
       btn.disabled = true;
-      const stop = busyIn(out, { steps:[kind === "weather" ? "問緊實時天氣" : "問緊紅葉情況"], hint:"大約 10-30 秒。" });
+      const stop = busyIn(out, { steps:[kind === "weather" ? "問緊實時天氣" : "問緊當地季節情況"], hint:"大約 10-30 秒。" });
       try {
         const r = await callAi({ action: kind });
         stop();
@@ -1653,7 +1691,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         } else {
           const a = r.aiSummary || r.message || "冇回覆";
           out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
-          if (r.aiSummary) saveAiNote("foliage", "紅葉情況", a);
+          if (r.aiSummary) saveAiNote("foliage", "季節情況", a);
         }
       } catch (e){
         stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
@@ -1680,7 +1718,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const board = d.days.map(day => {
       const stops = day.items.filter(i => i.kind === "stop").length;
       return `
-        <button class="board-row" data-go="${day.id}" style="--lc:${DAY_COLORS[day.id]||'var(--d1)'}">
+        <button class="board-row" data-go="${day.id}" style="--lc:${dayColorVar(day.id)}">
           <span class="dcode">Day ${day.id.replace('day','')}</span>
           <span class="track"></span>
           <span class="stack">
@@ -1693,10 +1731,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     return `
       <section class="hero">
-        <div class="eyebrow">${esc(m.eyebrow || DEFAULT_EYEBROW)}${secEditBtn("hero")}</div>
-        <h1>${esc(m.title || "首爾秋楓銀杏行")}</h1>
+        <div class="eyebrow">${esc(m.eyebrow || defaultEyebrow(d))}${secEditBtn("hero")}</div>
+        <h1>${esc(m.title || "我嘅行程")}</h1>
         <div class="hero-meta">
-          ${(m.facts && m.facts.length ? m.facts : DEFAULT_FACTS)
+          ${(m.facts && m.facts.length ? m.facts : defaultFacts(d))
             .map(f => `<span>${esc(f)}</span>`).join("<span>·</span>")}
         </div>
         <div class="chiprow">${(m.hotelTags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}</div>
@@ -1709,28 +1747,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
       <section class="sec">
         <h2 class="sec-title">全程地圖</h2>
-        <p class="sec-sub">6 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
+        <p class="sec-sub">${d.days.length} 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
         <div class="mapbox tall" id="map-all"></div>
         <div class="chiprow" id="map-legend"></div>
-        <p class="mapcap">示意路線，非精確導航。南怡島（Day 3）離市中心較遠，比例上會壓縮顯示。📌 係清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
+        <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。📌 係清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
       </section>
 
       <hr class="rule">
 
       <section class="sec">
         <h2 class="sec-title">出發前必讀</h2>
-        <p class="sec-sub">住宿、天氣、穿搭同無障礙安排。拉住 ⠿ 可以上下拉改次序。</p>
+        <p class="sec-sub">出發前要記住嘅嘢。拉住 ⠿ 可以上下拉改次序。</p>
 
         <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
 
         ${isSectionHidden(d,"foliage") ? "" : `
-        <h3>銀杏同紅葉時機${secEditBtn("notes")}${secTools("foliage")}</h3>
+        <h3>季節提示${secEditBtn("notes")}${secTools("foliage")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
-        ${liveCheckButtonHtml("foliage", "🍁 Check 依家嘅紅葉情況")}
+        ${liveCheckButtonHtml("foliage", "🌤 Check 依家嘅季節情況")}
         `}
 
-        <h3>日程調動</h3>
-        <p class="sec-sub">${d.scheduleSwapNote||""}</p>
+        ${plain(d.scheduleSwapNote || "") ? `
+        <h3>日程調動${secEditBtn("notes")}</h3>
+        <p class="sec-sub">${d.scheduleSwapNote}</p>` : ""}
       </section>
 
       <hr class="rule">
@@ -1742,7 +1781,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <h2 class="sec-title">AI 設定${secTools("ai")}</h2>
         <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。</p>
         <div class="panel">
-          <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || DEFAULT_TRIP_BRIEF)}</div>
+          <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || defaultTripBrief(d))}</div>
           ${briefText(d) ? "" : `<div class="d" style="opacity:.7;margin-top:6px;">（而家用緊預設）</div>`}
         </div>
       </section>`}
@@ -1758,11 +1797,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>
 
       <footer>
-        <div class="fbrand">首爾秋楓銀杏行</div>
-        營業時間、評分同 Naver Map 連結僅供參考，出發前請再確認一次。<br>
-        地圖為示意路線，實際導航請以各站 Naver Map 為準。<br>
-        地點相片由 Google Places 提供。行程由家人共同編輯，每次改動都會自動存低版本。<br>
-        祝 7 位旅途愉快 🍁
+        <div class="fbrand">${esc(m.title || "我嘅行程")}</div>
+        營業時間、評分同地圖連結僅供參考，出發前請再確認一次。<br>
+        地圖為示意路線，實際導航請以地圖 app 為準。<br>
+        地點相片由 Google Places 提供。行程可以一齊編輯，每次改動都會自動存低版本。<br>
+        祝旅途愉快 ✈️
       </footer>
     `;
   }
@@ -2007,7 +2046,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   function dayHtml(day){
     if (!day) return `<p class="loading">搵唔到呢一日。</p>`;
-    const lc = DAY_COLORS[day.id] || "var(--d1)";
+    const lc = dayColorVar(day.id);
     const units = toUnits(day.items);
     const mapOpen = !state.mapsShut.has(day.id);
     const sel = inSelectMode(day) ? state.selectMode : null;
@@ -2164,7 +2203,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // quick outbound links — only for stops that are a real, named place
     // (logistics rows like "酒店出發" have no mapUrl and get none of this)
     const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 地圖</a>`);
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
@@ -2221,7 +2260,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="editor" data-editor="${i}">
         <div class="field">
           <label>名 — 打字會搵返 Google 地圖真實地點</label>
-          <input class="input" data-f="title" value="${esc(plain(s.title))}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+          <input class="input" data-f="title" value="${esc(plain(s.title))}" placeholder="例如：某某市場" autocomplete="off">
           <div class="suggest" data-suggest></div>
         </div>
         <div class="row2">
@@ -2234,7 +2273,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             </select>
           </div>
         </div>
-        <div class="field"><label>韓文名</label><input class="input" data-f="kr" value="${esc(s.kr)}" placeholder="남산골한옥마을"></div>
+        <div class="field"><label>當地語言名</label><input class="input" data-f="kr" value="${esc(s.kr)}" placeholder="當地語言寫法，方便搵地點"></div>
         <div class="field"><label>描述</label><textarea class="textarea" data-f="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
 
         <div class="field">
@@ -2521,7 +2560,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             // just picked off Google themselves
             if (Number.isFinite(p.rating)) s.rating = p.rating;
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
-            s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+            s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
             sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name)]);
@@ -2622,7 +2661,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div class="daypick">
           ${days.map(d => {
             const here = d.id === day.id;
-            return `<button data-today="${d.id}" ${here ? "disabled" : ""} style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+            return `<button data-today="${d.id}" ${here ? "disabled" : ""} style="--lc:${dayColorVar(d.id)}">
               <span class="bullet"></span>
               <span class="dcode">Day ${d.id.replace('day','')}</span>
               <span>${esc(d.title)}${here?"（而家喺度）":""}</span>
@@ -2717,7 +2756,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div class="daypick">
           ${days.map(d => {
             const here = source.kind === "day" && source.day.id === d.id;
-            return `<button data-today="${d.id}" ${here?"disabled":""} style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+            return `<button data-today="${d.id}" ${here?"disabled":""} style="--lc:${dayColorVar(d.id)}">
               <span class="bullet"></span>
               <span class="dcode">Day ${d.id.replace('day','')}</span>
               <span>${esc(d.title)}${here?"（而家喺度）":""}</span>
@@ -2811,7 +2850,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <h3>同邊一日成日對調？</h3>
       <p class="sec-sub">會將 Day ${day.id.replace('day','')}（${esc(day.date)}）同揀嘅嗰日，成日內容（標題、簡介、全部地點）完全對調；日期同 Day 編號本身唔會變，淨係內容搬咗位。</p>
       <div class="daypick">
-        ${days.map(d => `<button data-swapto="${d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+        ${days.map(d => `<button data-swapto="${d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span>
           <span class="dcode">Day ${d.id.replace('day','')}</span>
           <span>${esc(d.date)} · ${esc(d.title)}</span>
@@ -2847,7 +2886,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <p class="sec-sub">「${esc(name)}」會複製一份入去嗰日，清單度呢個仍然留低，之後仲可以再複製去第二日。</p>
       <div class="daypick">
         ${days.map(d => `
-          <button data-copyday="${d.id}" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+          <button data-copyday="${d.id}" style="--lc:${dayColorVar(d.id)}">
             <span class="bullet"></span>
             <span class="dcode">Day ${d.id.replace('day','')}</span>
             <span>${esc(d.title)}${d.id === suggested ? ` <b class="sugg">⭐ AI 話呢日順路</b>` : ""}</span>
@@ -2873,12 +2912,29 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     });
   }
 
-  // Shown when the snapshot predates these fields, and used as the placeholder
-  // in the editor so it's obvious what "leave it blank" gives you.
-  const DEFAULT_TRIP_BRIEF =
-    "你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。";
-  const DEFAULT_EYEBROW = "10.23 — 10.28 · 2026";
-  const DEFAULT_FACTS = ["7 位家庭成員", "6 日 5 夜", "賞楓銀杏"];
+  // Fallbacks for the hero and the AI brief when a trip hasn't filled them in.
+  // Every one is derived from THIS trip's own meta/days — they used to be
+  // fixed strings describing one particular trip (a 7-person family going to
+  // one city on set dates), which then showed up on every other trip.
+  function formatEyebrow(dateStart, dateEnd){
+    const a = String(dateStart || "").split("-"), b = String(dateEnd || "").split("-");
+    if (a.length < 3 || b.length < 3) return "";
+    return `${a[1]}.${a[2]} — ${b[1]}.${b[2]} · ${a[0]}`;
+  }
+  function defaultEyebrow(snap){
+    const m = (snap && snap.meta) || {};
+    return formatEyebrow(m.dateStart, m.dateEnd);
+  }
+  function defaultFacts(snap){
+    const n = ((snap && snap.days) || []).length;
+    return n ? [`${n} 日行程`] : [];
+  }
+  function defaultTripBrief(snap){
+    const m = (snap && snap.meta) || {};
+    const where = (m.destinationLocal || m.title || "").trim();
+    const when = (m.dateStart && m.dateEnd) ? `（${m.dateStart} 至 ${m.dateEnd}）` : "";
+    return `你係一個廣東話（香港口語）旅遊助理，幫緊一次${where ? "去 " + where + " " : ""}嘅旅行${when}。`;
+  }
 
   // ---------- editing the home page ----------
   // One generic sheet drives every section editor, so adding a field is a line
@@ -2897,9 +2953,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       return prefix + plain(b.text);
     }).join("\n");
     openEditSheet(`改「${day.title || "呢一日"}」`, "", [
-      { key:"shortTag", label:"上面日子切換條嘅短標籤（例如「南怡島」）", type:"text",
-        value: day.shortTag != null ? day.shortTag : (DAY_SHORT[day.id]||""), placeholder:"例如：南怡島" },
-      { key:"title", label:"呢日標題", type:"text", value: day.title || "", placeholder:"例如：南怡島紅葉銀杏全日遊" },
+      { key:"shortTag", label:"上面日子切換條嘅短標籤（例如「舊城區」）", type:"text",
+        value: day.shortTag || "", placeholder:"例如：舊城區" },
+      { key:"title", label:"呢日標題", type:"text", value: day.title || "", placeholder:"例如：舊城區散步全日遊" },
       { key:"desc", label:"簡介", type:"textarea", rows:3, value: day.desc || "" },
       { key:"badges", label:"Tag（一行一個；開頭加 ! 會變黃色提醒，加 * 會變另一種底色）", type:"lines", rows:5,
         value: badgeLines },
@@ -2979,14 +3035,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   const HOME_EDITORS = {
     ai: () => {
       const d = state.snapshot;
-      openEditSheet("AI 設定", "呢段字會加喺每一個 AI 功能嘅開頭，AI 就係靠佢知道你哋幾多人去、幾時去、有咩要注意。改完之後所有 AI 功能（問行程、建議、清單推介、天氣、紅葉）都會跟返新嘅。", [
+      openEditSheet("AI 設定", "呢段字會加喺每一個 AI 功能嘅開頭，AI 就係靠佢知道你哋幾多人去、幾時去、有咩要注意。改完之後所有 AI 功能（問行程、建議、清單推介、天氣、季節）都會跟返新嘅。", [
         { key:"tripBrief", type:"textarea", rows:6,
           label:"背景設定",
-          hint:"留空就會用返預設嗰段（7人家庭・10月23-28日首爾・姨姨唔行得樓梯・賞紅葉銀杏）。",
-          value: briefText(d) || DEFAULT_TRIP_BRIEF,
-          placeholder: DEFAULT_TRIP_BRIEF },
+          hint:"留空就會用返一句通用嘅背景（目的地同日期）。寫低有咩人去、有咩限制、想點玩，所有 AI 功能都會跟住呢段。",
+          value: briefText(d) || defaultTripBrief(d),
+          placeholder: defaultTripBrief(d) },
       ], async out => {
-        d.tripBrief = out.tripBrief === DEFAULT_TRIP_BRIEF ? "" : out.tripBrief;
+        d.tripBrief = out.tripBrief === defaultTripBrief(d) ? "" : out.tripBrief;
         render();
         await saveNow("改咗 AI 設定（AI 背景資料）");
       });
@@ -2996,14 +3052,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const d = state.snapshot;
       const m = d.meta = d.meta || {};
       openEditSheet("首頁大標題", "最頂嗰段，同AI用嚟搵地點／check天氣嘅目的地資料——呢頁重用去第二個trip嘅時候，淨係要改呢度，唔使改code。", [
-        { key:"eyebrow", type:"text", label:"日期細字", value: m.eyebrow || DEFAULT_EYEBROW },
+        { key:"eyebrow", type:"text", label:"日期細字", value: m.eyebrow || defaultEyebrow(d) },
         { key:"title", type:"text", label:"標題", value: m.title || "" },
         { key:"facts", type:"lines", rows:3, label:"標題下面嘅小字", hint:"一行一項，會用「·」分隔顯示。",
-          value: (m.facts && m.facts.length ? m.facts : DEFAULT_FACTS).join("\n") },
+          value: (m.facts && m.facts.length ? m.facts : defaultFacts(d)).join("\n") },
         { key:"hotelTags", type:"lines", rows:3, label:"標籤", hint:"一行一個。",
           value: (m.hotelTags || []).join("\n") },
         { key:"destinationLocal", type:"text", label:"目的地本地語言名（搜尋地點/計交通用）",
-          hint:"例如首爾就打「서울」，東京就打「東京」，留空即係搜尋唔加地區提示。",
+          hint:"用當地語言／文字寫，Google 搵地點同計交通會準好多。留空即係搵地點唔加地區提示。",
           value: m.destinationLocal || "" },
         { key:"lat", type:"text", label:"目的地緯度（check實時天氣用）", value: m.lat != null ? String(m.lat) : "" },
         { key:"lng", type:"text", label:"目的地經度（check實時天氣用）", value: m.lng != null ? String(m.lng) : "" },
@@ -3028,7 +3084,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     weather: () => {
       const d = state.snapshot;
-      openEditSheet("10 月下旬天氣", "一行一日。", [
+      openEditSheet(weatherHeadingLabel(d.meta), "一行一日。", [
         { key:"rows", type:"lines", rows:8, label:"日期 | 日高 | 晨低 | 概況",
           hint:"用「|」分開四格，例如：10/23 | 18° | 8° | 早晚涼，日間舒服",
           value: (d.weatherRows || []).map(r => [r.date, r.hi, r.lo, r.note].join(" | ")).join("\n") },
@@ -3074,8 +3130,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     notes: () => {
       const d = state.snapshot;
-      openEditSheet("銀杏時機 ／ 日程調動", "", [
-        { key:"foliageNote", type:"textarea", rows:4, label:"銀杏同紅葉時機", value: d.foliageNote || "" },
+      openEditSheet("季節提示 ／ 日程調動", "", [
+        { key:"foliageNote", type:"textarea", rows:4, label:"季節提示", value: d.foliageNote || "" },
         { key:"scheduleSwapNote", type:"textarea", rows:4, label:"日程調動", value: d.scheduleSwapNote || "" },
       ], async out => {
         d.foliageNote = out.foliageNote;
@@ -3815,7 +3871,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       if (!pts.length){ el.innerHTML = `<div class="mapfallback">呢日仲未有地圖座標。</div>`; return; }
       const map = L.map(el, { scrollWheelZoom:false, dragging:false, tap:false, zoomControl:false, attributionControl:false });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18 }).addTo(map);
-      const color = DAY_HEX[day.id] || "#8A94A6";
+      const color = dayHex(day.id);
       const latlngs = pts.map(p => [p.lat, p.lng]);
       L.polyline(latlngs, { color, weight:4, opacity:.85 }).addTo(map);
       pts.forEach(p => L.marker([p.lat,p.lng], { icon: mapIcon(color, p.label) }).addTo(map).bindPopup(p.name || ""));
@@ -3840,7 +3896,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     state.snapshot.days.forEach(day => {
       const pts = normPoints(buildDayMapPoints(day));
       if (!pts.length) return;
-      const color = DAY_HEX[day.id] || "#8A94A6";
+      const color = dayHex(day.id);
       const latlngs = pts.map(p => [p.lat,p.lng]);
       const g = L.layerGroup();
       L.polyline(latlngs, { color, weight:4, opacity:.8 }).addTo(g);
@@ -3875,7 +3931,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     if (legend){
       const dayLegend = state.snapshot.days.filter(d => layers[d.id]).map(d =>
-        `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${DAY_HEX[d.id]};color:${DAY_HEX[d.id]}">● D${d.id.replace('day','')} ${esc(d.shortTag != null ? d.shortTag : (DAY_SHORT[d.id]||""))}</button>`
+        `<button class="badge" data-layer="${d.id}" style="cursor:pointer;border-color:${dayHex(d.id)};color:${dayHex(d.id)}">● D${d.id.replace('day','')} ${esc(d.shortTag || "")}</button>`
       ).join("");
       const boardLegend = boardLayerKeys.map(({key, board}) =>
         `<button class="badge" data-layer="${esc(key)}" style="cursor:pointer;opacity:.35;border-color:${esc(board.color)};color:${esc(board.color)}" title="撳顯示「${esc(board.name)}」呢個清單嘅地點">📌 ${esc(board.name)}</button>`
@@ -4011,11 +4067,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // really there, that's more useful than "AI 建議：Day X"
     const inItin = findInItinerary(state.snapshot, s);
     const chips = (isFresh ? `<span class="ainew">✨ 今次 AI 搵</span>` : "")
-      + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${DAY_COLORS[inItin.id]||'var(--d1)'}">📍 已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
+      + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${dayColorVar(inItin.id)}">📍 已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
       + (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
       + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
     const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 Naver Map</a>`);
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 地圖</a>`);
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
@@ -4053,10 +4109,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <div class="editor" data-boardeditor="${i}">
         <div class="field">
           <label>名 — 打字會搵返 Google 地圖真實地點</label>
-          <input class="input" data-bf="title" value="${esc(plain(s.title))}" placeholder="例如：南山谷韓屋村" autocomplete="off">
+          <input class="input" data-bf="title" value="${esc(plain(s.title))}" placeholder="例如：某某市場" autocomplete="off">
           <div class="suggest" data-bsuggest></div>
         </div>
-        <div class="field"><label>韓文名</label><input class="input" data-bf="kr" value="${esc(s.kr)}" placeholder="남산골한옥마을"></div>
+        <div class="field"><label>當地語言名</label><input class="input" data-bf="kr" value="${esc(s.kr)}" placeholder="當地語言寫法，方便搵地點"></div>
         <div class="field"><label>記低啲乜</label><textarea class="textarea" data-bf="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
 
         <div class="field">
@@ -4237,7 +4293,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             // just picked off Google themselves
             if (Number.isFinite(p.rating)) s.rating = p.rating;
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
-            s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+            s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
             sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name)]);
@@ -4483,7 +4539,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function exportText(snap){
     const L = [];
     const m = snap.meta || {};
-    L.push(m.title || "首爾行程");
+    L.push(m.title || "我嘅行程");
     if ((m.facts || []).length) L.push((m.facts || []).join(" · "));
     L.push("");
     const stays = snap.stays || [];
@@ -4586,7 +4642,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>` : "";
     return `<!doctype html><html lang="zh-HK"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(m.title || "首爾行程")}</title>
+<title>${esc(m.title || "我嘅行程")}</title>
 <style>
   *{box-sizing:border-box}
   body{margin:0;padding:24px 18px 60px;font:14px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang HK",sans-serif;color:#16181D;background:#fff;max-width:760px;margin:0 auto;}
@@ -4611,7 +4667,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   .foot{margin-top:30px;color:#8A8F98;font-size:11.5px}
   @media print{body{padding:0}}
 </style></head><body>
-<h1>${esc(m.title || "首爾行程")}</h1>
+<h1>${esc(m.title || "我嘅行程")}</h1>
 <div class="facts">${esc((m.facts || []).join(" · "))}</div>
 ${stayBlock}${dayBlocks}${secBlocks}
 <div class="foot">匯出時間：${esc(new Date().toLocaleString("zh-HK"))}　·　營業時間同評分僅供參考，出發前請再確認。</div>
@@ -4630,12 +4686,19 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const d = new Date();
     return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
   }
+  // Download filenames used to be a fixed trip name, so every trip's export
+  // landed on disk under the wrong title. Strip characters that browsers or
+  // filesystems mangle rather than letting a title break the download.
+  function exportBase(){
+    const t = plain(((state.snapshot && state.snapshot.meta) || {}).title || "").trim();
+    return (t || "行程").replace(/[\\/:*?"<>|]/g, "").slice(0, 60);
+  }
 
   function openExportSheet(){
     const snap = state.snapshot;
     openSheet(`
       <h3>📤 匯出行程</h3>
-      <p class="sec-sub">帶走成個 6 日行程 —— 貼上 WhatsApp、印出嚟、或者留份備份。匯出係即時嘅，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
+      <p class="sec-sub">帶走成個行程 —— 貼上 WhatsApp、印出嚟、或者留份備份。匯出係即時嘅，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
       <button class="btn wide" id="ex-copy">📋 複製成文字（可以直接貼落 WhatsApp）</button>
       <button class="btn wide" id="ex-txt" style="margin-top:8px;">⬇️ 下載文字檔 .txt</button>
       <button class="btn wide" id="ex-print" style="margin-top:8px;">🖨 開列印版（可以存做 PDF）</button>
@@ -4658,17 +4721,17 @@ ${stayBlock}${dayBlocks}${secBlocks}
         }
       });
       sheet.querySelector("#ex-txt").addEventListener("click", () =>
-        downloadFile(`首爾行程-${exportStamp()}.txt`, exportText(snap)));
+        downloadFile(`${exportBase()}-${exportStamp()}.txt`, exportText(snap)));
       sheet.querySelector("#ex-html").addEventListener("click", () =>
-        downloadFile(`首爾行程-${exportStamp()}.html`, exportHtmlDoc(snap), "text/html;charset=utf-8"));
+        downloadFile(`${exportBase()}-${exportStamp()}.html`, exportHtmlDoc(snap), "text/html;charset=utf-8"));
       sheet.querySelector("#ex-json").addEventListener("click", () =>
-        downloadFile(`首爾行程備份-${exportStamp()}.json`, JSON.stringify(snap, null, 2), "application/json"));
+        downloadFile(`${exportBase()}備份-${exportStamp()}.json`, JSON.stringify(snap, null, 2), "application/json"));
       sheet.querySelector("#ex-print").addEventListener("click", () => {
         const doc = exportHtmlDoc(snap);
         const w = window.open("", "_blank");
         if (!w){
           // pop-up blocked (common on iOS): give them the file instead of nothing
-          downloadFile(`首爾行程-${exportStamp()}.html`, doc, "text/html;charset=utf-8");
+          downloadFile(`${exportBase()}-${exportStamp()}.html`, doc, "text/html;charset=utf-8");
           flash("個瀏覽器擋咗新視窗，改為下載咗，開個檔案再印");
           return;
         }
@@ -4685,7 +4748,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       changes.map((c, i) => {
         const label = c.op === "add" ? "加" : c.op === "remove" ? "刪" : "改";
         const name = (c.stop && c.stop.title) || c.matchTitle || "";
-        return `<div class="ai-change" style="--lc:${DAY_COLORS[c.dayId]||'var(--d3)'}">
+        return `<div class="ai-change" style="--lc:${dayColorVar(c.dayId)}">
           <div class="op">Day ${String(c.dayId||"").replace("day","")} · ${label}${c.stop && c.stop.time ? " · " + esc(c.stop.time) : ""}</div>
           <div class="ttl">${esc(name)}</div>
           ${c.stop && c.stop.transitBefore ? `<div class="why">${esc(c.stop.transitBefore)}</div>` : ""}
@@ -4732,7 +4795,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     return `<div class="ai-msg" style="margin-top:8px;">呢次改動令以下日子嘅主題都變埋，標題要唔要跟住改？</div>` +
       entries.map(([id, title]) => {
         const d = dayById(id);
-        return `<div class="ai-change" style="--lc:${DAY_COLORS[id]||'var(--d3)'}">
+        return `<div class="ai-change" style="--lc:${dayColorVar(id)}">
           <div class="op">Day ${id.replace("day","")} · 改標題</div>
           <div class="ttl">${esc(title)}</div>
           <div class="why">而家：「${esc(d.title || "")}」</div>
@@ -4776,7 +4839,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <p class="picker-label">仲想埋埋邊幾日一齊諗？</p>
         <div class="daypick daypick-compact">
           ${others.map(d => `
-            <label class="daypick-check" style="--lc:${DAY_COLORS[d.id]||'var(--d1)'}">
+            <label class="daypick-check" style="--lc:${dayColorVar(d.id)}">
               <input type="checkbox" data-dayai-pick="${d.id}">
               <span class="bullet"></span>
               <span class="dcode">Day ${d.id.replace('day','')}</span>
@@ -4843,10 +4906,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
   $("#btn-ai").addEventListener("click", () => {
     openSheet(`
       <h3>AI 助手</h3>
-      <p class="sec-sub">問實時天氣同紅葉情況，或者叫佢執一執行程。問過嘅嘢會自動存底，去頂部「問過啲咩」睇返。</p>
+      <p class="sec-sub">問實時天氣同當地季節情況，或者叫佢執一執行程。問過嘅嘢會自動存底，去頂部「問過啲咩」睇返。</p>
       <div class="aibtns">
         <button class="btn" data-ai="weather">☁️ 實時天氣</button>
-        <button class="btn" data-ai="foliage">🍁 紅葉情況</button>
+        <button class="btn" data-ai="foliage">🌤 季節情況</button>
         <button class="btn" data-ai="suggest">💡 執一執行程</button>
       </div>
       <div class="askrow">
@@ -4874,7 +4937,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
       layer.querySelectorAll("[data-ai]").forEach(b => b.addEventListener("click", async () => {
         const act = b.dataset.ai;
-        busy({ weather:"問緊實時天氣", foliage:"問緊紅葉情況", ask:"AI 睇緊你個行程", suggest:"AI 掃緊成 6 日" }[act]);
+        busy({ weather:"問緊實時天氣", foliage:"問緊季節情況", ask:"AI 睇緊你個行程", suggest:`AI 掃緊成 ${(state.snapshot.days||[]).length} 日` }[act]);
         try {
           if (act === "weather"){
             const r = await callAi({ action:"weather" });
@@ -4886,7 +4949,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
             const r = await callAi({ action:"foliage" });
             const a = r.aiSummary || r.message || "冇回覆";
             out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
-            if (r.aiSummary) saveAiNote("foliage", "紅葉情況", a);
+            if (r.aiSummary) saveAiNote("foliage", "季節情況", a);
           } else if (act === "ask"){
             const question = q.value.trim();
             if (!question){ out.innerHTML = ""; q.focus(); return; }
@@ -4920,7 +4983,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // ==================================================================
   // ASKED / ANSWERED — its own page, so a long history stays readable
   // ==================================================================
-  const AI_KIND = { weather:"☁️ 天氣", foliage:"🍁 紅葉", ask:"💬 問嘢", suggest:"💡 執行程", board:"📌 清單主題" };
+  const AI_KIND = { weather:"☁️ 天氣", foliage:"🌤 季節", ask:"💬 問嘢", suggest:"💡 執行程", board:"📌 清單主題" };
 
   function notesPageHtml(){
     return `
@@ -5018,7 +5081,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         s.placeId = p.placeId;
         if (Number.isFinite(p.lat)) s.lat = p.lat;
         if (Number.isFinite(p.lng)) s.lng = p.lng;
-        if (!s.mapUrl) s.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(p.name)}`;
+        if (!s.mapUrl) s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
         // text search carries the rating already — no extra request for it
         if (Number.isFinite(p.rating)) s.rating = p.rating;
         if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
@@ -5440,7 +5503,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     changed("天氣", oldSnap.weatherRows, newSnap.weatherRows);
     changed("穿搭建議", oldSnap.clothing, newSnap.clothing);
     changed("無障礙標記", [oldSnap.accessLegend, oldSnap.elevatorTip], [newSnap.accessLegend, newSnap.elevatorTip]);
-    changed("銀杏時機", oldSnap.foliageNote, newSnap.foliageNote);
+    changed("季節提示", oldSnap.foliageNote, newSnap.foliageNote);
     changed("日程調動", oldSnap.scheduleSwapNote, newSnap.scheduleSwapNote);
     changed("AI 設定", oldSnap.tripBrief, newSnap.tripBrief);
     changed("首頁隱藏咗嘅段落", oldSnap.hiddenSections, newSnap.hiddenSections);
@@ -5647,7 +5710,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!pick) return;
     state.snapshot.stays = [{
       name: pick.title || "", desc: pick.desc || "", hoursChip: "", warning: "",
-      mapUrl: (pick.kr || pick.title) ? `https://map.naver.com/p/search/${encodeURIComponent(pick.kr || pick.title)}` : "",
+      mapUrl: (pick.kr || pick.title) ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pick.kr || pick.title)}` : "",
       lat: Number.isFinite(pick.lat) ? pick.lat : undefined,
       lng: Number.isFinite(pick.lng) ? pick.lng : undefined,
       from: days[0] && days[0].id, to: days[days.length - 1] && days[days.length - 1].id,

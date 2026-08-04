@@ -67,7 +67,10 @@ body{
   line-height:1.65;
   -webkit-font-smoothing:antialiased;
   padding-bottom:calc(48px + env(safe-area-inset-bottom));
+  overflow-wrap:break-word;
+  overflow-x:hidden;
 }
+img{max-width:100%;}
 :focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:4px;}
 button{font-family:inherit;color:inherit;}
 .mono{font-family:'JetBrains Mono',monospace;}
@@ -109,13 +112,21 @@ a{color:inherit;}
 .field label{display:block; font-size:13px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;}
 .field .hint{font-size:12.5px; color:var(--ink-faint); margin-top:5px;}
 .input, textarea.input{
-  width:100%; border:1.5px solid var(--rule); background:var(--paper); color:var(--ink);
+  width:100%; min-width:0; border:1.5px solid var(--rule); background:var(--paper); color:var(--ink);
   border-radius:var(--r-md); padding:12px 14px; font-size:15px; font-family:inherit;
   min-height:var(--tap);
 }
+/* iOS gives date inputs an intrinsic min-content width based on the native
+   picker text, which is wider than half this card at phone widths — without
+   these it blows the grid out and the whole page scrolls sideways. */
+input[type="date"].input{
+  appearance:none; -webkit-appearance:none;
+  display:block; width:100%; min-width:0;
+}
 textarea.input{min-height:84px; resize:vertical; line-height:1.55;}
 .input:focus, textarea.input:focus{border-color:var(--accent);}
-.daterow{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.daterow{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px;}
+.daterow > *{min-width:0;}
 
 .suggest{
   position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5;
@@ -152,13 +163,39 @@ textarea.input{min-height:84px; resize:vertical; line-height:1.55;}
 .triplist-head .count{color:var(--ink-faint); font-size:13px;}
 section.triplist{margin-bottom:30px;}
 .tripgrid{display:grid; gap:12px;}
-a.tripcard{
-  display:block; text-decoration:none; color:inherit;
+.tripcard{
   background:var(--surface); border:1px solid var(--rule); border-radius:var(--r-lg);
-  box-shadow:var(--shadow-1); padding:16px 18px; position:relative; overflow:hidden;
+  box-shadow:var(--shadow-1); padding:16px 18px; position:relative;
   border-left:5px solid var(--tc, var(--accent));
 }
-a.tripcard:hover{box-shadow:var(--shadow-2);}
+.tripcard:hover{box-shadow:var(--shadow-2);}
+/* stretched link: covers the card so the whole thing is tappable, but sits
+   BELOW the delete button so that button still gets its own clicks */
+.tripcard-link{position:absolute; inset:0; z-index:1; border-radius:inherit;}
+.tripdel{
+  position:absolute; top:10px; right:10px; z-index:2;
+  width:36px; height:36px; display:grid; place-items:center;
+  border:1px solid var(--rule); border-radius:999px; background:var(--surface);
+  cursor:pointer; font-size:15px; line-height:1; opacity:.65;
+}
+.tripdel:hover, .tripdel:focus-visible{opacity:1; color:var(--danger); border-color:var(--danger);}
+.tripcard .row1, .tripcard .dates, .tripcard .name{position:relative; z-index:0; pointer-events:none;}
+.tripcard .dest{padding-right:40px;}
+
+/* ---------- sheet (delete confirm) ---------- */
+.scrim{position:fixed; inset:0; z-index:80; background:rgba(10,12,16,.5); backdrop-filter:blur(3px);}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:81;
+  max-width:720px; margin:0 auto;
+  background:var(--surface); border-radius:var(--r-xl) var(--r-xl) 0 0;
+  padding:22px 18px calc(22px + env(safe-area-inset-bottom));
+  box-shadow:var(--shadow-2); max-height:86vh; overflow:auto;
+}
+.sheet h3{margin:0 0 8px; font-family:'Bricolage Grotesque',system-ui,sans-serif; font-size:19px;}
+.sheet-sub{color:var(--ink-soft); font-size:14px; margin:0 0 10px;}
+.sheet-btns{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
+.btn.danger{background:var(--danger); border-color:var(--danger); color:#fff;}
+.btn.danger:disabled{background:var(--ink-faint); border-color:var(--ink-faint);}
 .tripcard .row1{display:flex; align-items:center; gap:8px; margin-bottom:4px;}
 .tripcard .emoji{font-size:19px;}
 .tripcard .dest{font-family:'Bricolage Grotesque',system-ui,sans-serif; font-weight:700; font-size:17px;}
@@ -177,10 +214,12 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
   </div>
 </header>
 
+<div id="layer"></div>
+
 <main class="wrap">
   <div class="hero">
     <h1>今次想去邊度？</h1>
-    <p>打低目的地、日期同要求，AI 幫你由零砌一個完整行程——連天氣、建議、地圖都齊晒，好似而家嘅首爾行程咁。</p>
+    <p>打低目的地、日期同要求，AI 幫你由零砌一個完整行程——連天氣、住宿、建議、地圖都齊晒。</p>
   </div>
 
   <div class="card formcard">
@@ -221,7 +260,7 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
 (function(){
   "use strict";
 
-  // ---------- config (same project as korea.html; no shared JS module in
+  // ---------- config (same project as trip.html; no shared JS module in
   // this app, each page is self-contained by convention) ----------
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -240,7 +279,7 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
   }
   const $ = sel => document.querySelector(sel);
 
-  // ---------- theme (shares the same toggle/localStorage key as korea.html) ----------
+  // ---------- theme (shares the same toggle/localStorage key as trip.html) ----------
   function applyTheme(t){
     if (t === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", t);
@@ -328,7 +367,7 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
   updateGoState();
 
   // day.date is a hand-authored "10月24日（六）" style label, not ISO — this
-  // is what korea.html's weekday-closure check (weekdayCharOfDate) parses,
+  // is what trip.html's weekday-closure check (weekdayCharOfDate) parses,
   // so a fresh trip's skeleton has to match that shape exactly.
   const WD = ["日","一","二","三","四","五","六"];
   function dateLabel(d){ return `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`; }
@@ -381,7 +420,7 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
       const trip = (await tripRes.json())[0];
 
       // 2) seed the first snapshot — meta/tripBrief/eyebrow/facts must all be
-      // set explicitly and non-empty here: korea.html's normalizeSnapshot()
+      // set explicitly and non-empty here: trip.html's normalizeSnapshot()
       // and its hero fallback constants (DEFAULT_EYEBROW/DEFAULT_FACTS/
       // DEFAULT_BRIEF) are Seoul-specific, and only backfill a field that is
       // still null/empty — leaving any of these blank would silently show
@@ -397,7 +436,7 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
         tripBrief: `你係一個廣東話（香港口語）旅遊助理，幫緊去 ${destinationLocal}` +
           `（${dateStart} 至 ${dateEnd}）嘅一次旅行。${requirements || ""}`,
         days,
-        // "銀杏同紅葉時機" is baked into korea.html's overview page as a
+        // "銀杏同紅葉時機" is baked into trip.html's overview page as a
         // fixed block — it was written for the original Seoul-autumn trip
         // and makes no sense for most destinations/seasons, so a brand-new
         // trip starts with it hidden (still viewable/unhide-able from 主頁
@@ -411,11 +450,11 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
       });
       if (!verRes.ok) throw new Error("儲存唔到初始行程 " + verRes.status);
 
-      // 3) hand off to korea.html, which auto-generates the blank days on
+      // 3) hand off to trip.html, which auto-generates the blank days on
       // load — it reads the requirements straight off tripBrief (already
       // seeded above and sent on every AI call automatically), no need to
       // pass them again via the URL.
-      location.href = "korea.html?" + new URLSearchParams({ trip: trip.id, new: "1" }).toString();
+      location.href = "trip.html?" + new URLSearchParams({ trip: trip.id, new: "1" }).toString();
     } catch (e){
       errBox.innerHTML = `<div class="errbox">${esc(e.message || "出咗問題，試多次啦。")}</div>`;
       goBtn.disabled = false;
@@ -426,13 +465,59 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
   // ==================================================================
   // Trip list — upcoming vs past
   // ==================================================================
+  // The whole card used to be one <a>, so there was nowhere to put an action
+  // button (a <button> inside an <a> is invalid and swallows the click). The
+  // link is now a stretched overlay and the 🗑 sits above it on its own.
   function tripCardHtml(t, i){
     const color = CARD_PALETTE[i % CARD_PALETTE.length];
-    return `<a class="tripcard" style="--tc:${color}" href="korea.html?trip=${t.id}">
+    return `<div class="tripcard" style="--tc:${color}">
+      <a class="tripcard-link" href="trip.html?trip=${t.id}" aria-label="${esc(t.name)}"></a>
+      <button class="tripdel" data-del="${t.id}" data-delname="${esc(t.destination_local || t.name)}" title="刪除呢個行程" aria-label="刪除呢個行程">🗑</button>
       <div class="row1"><span class="emoji">${esc(t.cover_emoji || "🧳")}</span><span class="dest">${esc(t.destination_local || t.name)}</span></div>
       <div class="dates mono">${esc(t.date_start)} — ${esc(t.date_end)}</div>
       <div class="name">${esc(t.name)}</div>
-    </a>`;
+    </div>`;
+  }
+
+  // Deleting is irreversible (the DB cascades every version + AI note away),
+  // so it asks for the destination name to be typed rather than a single
+  // mis-tappable confirm.
+  function openDeleteSheet(id, name){
+    const layer = $("#layer");
+    layer.innerHTML = `
+      <div class="scrim" data-close></div>
+      <div class="sheet">
+        <h3>刪除「${esc(name)}」？</h3>
+        <p class="sheet-sub">會連埋成個行程嘅所有版本紀錄同 AI 問答一齊永久刪除，<b>冇得復原</b>。</p>
+        <p class="sheet-sub">如果確定，請喺下面打返 <b>${esc(name)}</b>：</p>
+        <input class="input" id="del-confirm" autocomplete="off" placeholder="${esc(name)}">
+        <div id="del-err"></div>
+        <div class="sheet-btns">
+          <button class="btn" data-close>取消</button>
+          <button class="btn danger" id="del-go" disabled>永久刪除</button>
+        </div>
+      </div>`;
+    const inp = layer.querySelector("#del-confirm");
+    const go = layer.querySelector("#del-go");
+    const err = layer.querySelector("#del-err");
+    const close = () => { layer.innerHTML = ""; };
+    layer.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", close));
+    inp.addEventListener("input", () => { go.disabled = inp.value.trim() !== name; });
+    inp.focus();
+    go.addEventListener("click", async () => {
+      go.disabled = true; go.textContent = "刪緊…";
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(id)}`, {
+          method: "DELETE", headers: sbHeaders(),
+        });
+        if (!res.ok) throw new Error("刪唔到 " + res.status + " " + (await res.text()));
+        close();
+        loadTrips();
+      } catch (e){
+        err.innerHTML = `<div class="errbox" style="margin-top:10px;">${esc(e.message)}</div>`;
+        go.disabled = false; go.textContent = "永久刪除";
+      }
+    });
   }
 
   async function loadTrips(){
@@ -454,6 +539,10 @@ a.tripcard:hover{box-shadow:var(--shadow-2);}
     $("#pastcount").textContent = past.length ? past.length + " 個" : "";
     upEl.innerHTML = upcoming.length ? upcoming.map(tripCardHtml).join("") : `<div class="empty">重未有未去嘅行程，上面開一個啦。</div>`;
     pastEl.innerHTML = past.length ? past.map(tripCardHtml).join("") : `<div class="empty">重未有去過嘅行程。</div>`;
+    document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      openDeleteSheet(b.dataset.del, b.dataset.delname);
+    }));
   }
   loadTrips();
 })();

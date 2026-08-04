@@ -7,7 +7,7 @@
 //   GEMINI_TEXT_MODEL  — optional, defaults to "gemini-3.5-flash" if unset
 //
 // Destination is never hardcoded here — every request carries its own
-// destinationLocal/lat/lng/dateStart/dateEnd (see callAi() in korea.html,
+// destinationLocal/lat/lng/dateStart/dateEnd (see callAi() in trip.html,
 // which reads them off snap.meta), so this function has no idea which trip
 // it's serving and can be reused for a different one without a code change.
 
@@ -182,13 +182,13 @@ function parseAiJson(aiText: string): any {
   return null;
 }
 
-// The trip's background facts (who's going, dates, constraints like "姨姨唔可以
-// 行樓梯", the theme). Every prompt starts with this, so it used to be the one
+// The trip's background facts (who's going, dates, constraints like "有人唔
+// 行得樓梯", the theme). Every prompt starts with this, so it used to be the one
 // thing you could not change without redeploying the function. It now comes
 // from the page — editable by the family — and falls back to the original text
 // so an older client, or a snapshot saved before the field existed, still works.
 const DEFAULT_BRIEF =
-  "你係一個廣東話（香港口語）旅遊助理，幫緊一個7人家庭（爸爸/媽媽/呀哥/姨姨/表妹/男友/我）10月23-28日去首爾。姨姨唔可以行樓梯，主題係賞紅葉銀杏。";
+  "你係一個廣東話（香港口語）旅遊助理，幫緊人哋計劃一次旅行。";
 function briefOf(body: any): string {
   const b = (body?.brief ?? "").toString().trim().slice(0, 800);
   return b || DEFAULT_BRIEF;
@@ -245,7 +245,7 @@ async function fetchPhotosForPlaceId(placeId: string, apiKey: string): Promise<s
 // The destination's local-language name (e.g. "서울", "東京"), appended to a
 // search term to disambiguate it — "Artist Bakery" alone can match anywhere
 // in the world, "Artist Bakery 서울" narrows Google to the right city. Comes
-// from snap.meta.destinationLocal (see callAi() in korea.html) instead of a
+// from snap.meta.destinationLocal (see callAi() in trip.html) instead of a
 // hardcoded literal, so reusing this function for a different trip's
 // destination needs no code change — an empty hint just skips the append.
 function withHint(query: string, locationHint?: string): string {
@@ -449,14 +449,25 @@ function problemHint(status: string, msg?: string): string {
   return full;
 }
 
-// Station and bus-stop names come back in Korean on purpose. Asking Google for
-// zh-TW gave Simplified Chinese for Korean stops ("龙岩小学入口"), which is both
-// wrong for the page and useless on the ground — the signs, the announcements
-// and Kakao/Naver are all in Korean.
-async function directions(o: string, d: string, mode: string, apiKey: string) {
+// Station and stop names are asked for in the destination's OWN language,
+// because that is what the signage, the announcements and the local map apps
+// use. This used to be pinned to Korean for every trip, so a Hong Kong or
+// Tokyo itinerary got Korean-language directions. `lang` is derived from the
+// trip's own destinationLocal (see langOfHint) and simply omitted when we
+// can't tell, which lets Google pick the local default.
+function langOfHint(locationHint?: string): string {
+  const h = (locationHint ?? "").trim();
+  if (!h) return "";
+  if (/[가-힯]/.test(h)) return "ko";        // Hangul
+  if (/[぀-ヿ]/.test(h)) return "ja";        // Kana
+  if (/[一-鿿]/.test(h)) return "zh-TW";     // Han
+  return "";
+}
+async function directions(o: string, d: string, mode: string, apiKey: string, lang?: string) {
+  const langParam = lang ? `&language=${encodeURIComponent(lang)}` : "";
   const url = `https://maps.googleapis.com/maps/api/directions/json` +
     `?origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}` +
-    `&mode=${mode}&language=ko&region=kr&key=${apiKey}`;
+    `&mode=${mode}${langParam}&key=${apiKey}`;
   const res = await fetch(url);
   const data = await res.json();
   // Google reports failures in the body, not the HTTP status
@@ -466,8 +477,10 @@ async function directions(o: string, d: string, mode: string, apiKey: string) {
   return { seconds: leg.duration?.value ?? 0, steps: leg.steps ?? [] };
 }
 
-// Named lines Google returns in Korean, spelled the way a Cantonese reader
-// expects. Numbered lines are handled by the pattern below instead.
+// OPTIONAL regional niceness, not required logic: named rail lines that Google
+// returns in Korean, spelled the way a Cantonese reader expects. Anything not
+// in here (any other country's lines) falls through to Google's own name, so
+// this table never has to grow for a new destination to work.
 const KO_LINES: Record<string, string> = {
   "경의중앙선": "京義中央線",
   "수인분당선": "水仁盆唐線",
@@ -521,13 +534,14 @@ async function transitBetween(from: any, to: any, apiKey: string, locationHint?:
   const o = dmRef(from, locationHint), d = dmRef(to, locationHint);
   if (!o || !d) return { error: "呢兩個地點冇足夠資料（冇 Google 地點或座標）去計交通。" };
 
-  const walk = await directions(o, d, "walking", apiKey);
+  const lang = langOfHint(locationHint);
+  const walk = await directions(o, d, "walking", apiKey, lang);
   // under ~15 minutes on foot, walking is simply the better answer
   if (!("problem" in walk) && walk.seconds && walk.seconds <= 900) {
     return { mode: "walk", text: `步行約 ${Math.max(1, Math.round(walk.seconds / 60))} 分鐘` };
   }
 
-  const tr = await directions(o, d, "transit", apiKey);
+  const tr = await directions(o, d, "transit", apiKey, lang);
   if (!("problem" in tr) && tr.seconds) {
     const mins = Math.max(1, Math.round(tr.seconds / 60));
     const ride = describeRide(tr.steps);
@@ -548,7 +562,7 @@ async function transitBetween(from: any, to: any, apiKey: string, locationHint?:
 // A snapshot is ~29 KB, most of it photo URLs, HTML blobs and map coordinates
 // the planner has no use for. Slicing that to fit the prompt cut the trip off
 // after Day 2 — which is why suggestions only ever touched the first day or two.
-// Keep the planning facts, drop the rest, and the whole 6 days fits easily.
+// Keep the planning facts, drop the rest, and the whole trip fits easily.
 function compactItinerary(it: any) {
   const days = (it?.days ?? []).map((d: any) => ({
     dayId: d.id,
@@ -559,7 +573,7 @@ function compactItinerary(it: any) {
       if (s.desc) o.desc = String(s.desc).slice(0, 140);
       const access = (s.accessBadges ?? []).map((b: any) => b?.text).filter(Boolean);
       if (access.length) o.已核實無障礙安排 = access;
-      if ((s.niecepick ?? []).length) o.表妹指定要去 = true;
+      if ((s.niecepick ?? []).length) o.家人指定要去 = true;
       return o;
     }),
   }));
@@ -585,7 +599,7 @@ Deno.serve(async (req) => {
 
   const action = body?.action;
   const apiKeys = getGeminiKeys();
-  // Destination's local-language name, sent on every callAi() from korea.html
+  // Destination's local-language name, sent on every callAi() from trip.html
   // (read off snap.meta.destinationLocal) — threaded into every Google
   // Places/Directions lookup below instead of a hardcoded city.
   const locationHint = (body?.destinationLocal ?? "").toString().trim();
@@ -636,7 +650,7 @@ Deno.serve(async (req) => {
     if (action === "foliage") {
       const brief = briefOf(body);
       if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
-      const prompt = `${brief}\n\n請用廣東話（香港口語）簡短講吓佢哋今次去嗰陣賞紅葉銀杏嘅情況：\n1. 一般嚟講呢段時間銀杏／楓葉大約去到咩程度（用你所知嘅歷年規律推斷，唔使假裝有即時數據）\n2. 提醒用戶你冇即時上網能力，實際情況要去南怡島官網／Naver Blog／首爾市公園局網站做最後確認\n3. 語氣親切，300字以內`;
+      const prompt = `${brief}\n\n請用廣東話（香港口語）簡短講吓佢哋今次去嗰陣，當地嘅季節情況：\n1. 呢段時間當地大概咩天氣、有咩當造嘅嘢食、有咩應節嘅景色或者節慶活動（用你所知嘅歷年規律推斷，唔使假裝有即時數據）\n2. 有咩季節性嘅注意事項（例如雨季、颱風、酷熱、嚴寒、旺季人多、某啲景點季節性休息）\n3. 提醒用戶你冇即時上網能力，實際情況要去當地官方旅遊網站或者天氣台做最後確認\n4. 語氣親切，300字以內`;
       try {
         const aiText = await callGemini(apiKeys, prompt);
         return json({ ok: true, aiSummary: aiText });
@@ -650,7 +664,7 @@ Deno.serve(async (req) => {
       if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
-      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成6日行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n**呢度係自由文字回覆，冇機制即時核實地方仲有冇營業**：如果你提到任何未係現有行程入面嘅新地方（餐廳／景點），你嘅知識可能已經過時（間舖有機會已經結業），唔可以講到好肯定咁話個地方一定仲開緊，要提一句「建議出發前用Google地圖/Naver地圖確認吓仲有冇開」。如果想加返落行程，叫佢哋用「AI 諗行程」或者「執一執行程」，嗰邊會自動用Google核實過先至畀套用。\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
+      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成個行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n**呢度係自由文字回覆，冇機制即時核實地方仲有冇營業**：如果你提到任何未係現有行程入面嘅新地方（餐廳／景點），你嘅知識可能已經過時（間舖有機會已經結業），唔可以講到好肯定咁話個地方一定仲開緊，要提一句「建議出發前用Google地圖或者當地慣用嘅地圖app確認吓仲有冇開」。如果想加返落行程，叫佢哋用「AI 諗行程」或者「執一執行程」，嗰邊會自動用Google核實過先至畀套用。\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
       try {
         const aiText = await callGemini(apiKeys, prompt);
         return json({ ok: true, aiSummary: aiText });
@@ -664,8 +678,8 @@ Deno.serve(async (req) => {
       if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
-      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
-      const prompt = `${brief}\n\n你而家幫佢哋調整呢個行程。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個6日行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過6日，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶小食，唔算一餐。每一日嘅午餐同晚餐都要係正餐（韓式或其他熟食），唔可以用麵包、吐司、蛋糕頂數。如果某一日由早到晚都冇一餐正餐，嗰日就係有問題，要提議加一餐。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如南山塔已經寫明「循環巴士無台階＋塔內電梯直達展望台」）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「表妹指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級景點（例如南山塔、景福宮、南怡島）唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成6日行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
+      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"當地語言名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘 或 🚇地鐵約15分鐘（由上一個景點點樣去到呢度）","eatboxHtml":"必點推介HTML或留空","mapUrl":"地圖搜尋連結或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
+      const prompt = `${brief}\n\n你而家幫佢哋調整呢個行程。加景點時請確保同嗰日其他景點順路（唔好搞到要走返回頭路）。\n\n**你見到嘅係成個行程，請當成個trip一齊睇。** 除非用戶指明咗邊一日，否則唔好淨係執一日 —— 你嘅建議應該掃過成個行程，起碼掂到兩日以上，並且睇下有冇跨日嘅問題（例如同一個地方去咗兩日、某一日塞到爆而另一日好空、連續幾日都食同一種嘢）。\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶小食，唔算一餐。每一日嘅午餐同晚餐都要係正餐（當地菜式或者其他熟食），唔可以用麵包、吐司、蛋糕頂數。如果某一日由早到晚都冇一餐正餐，嗰日就係有問題，要提議加一餐。\n\n**唔好隨便叫人刪景點。** 呢個行程係人手排過㗎：\n- 每個景點嘅「已核實無障礙安排」欄係實地核實過嘅安排（例如寫明「有升降機直達，唔使行樓梯」呢類）。當佢係真，唔好當睇唔到，更加唔好講一啲同佢相反嘅嘢。\n- 標住「家人指定要去」嘅地方係家人講明要去，一律唔准提議刪。\n- 地標級／招牌景點唔好因為「可能辛苦」「可能人多」就叫人拎走。\n- 只有真係有硬衝突先至用 remove：嗰日休館、時間夾唔到、同一個地方行程入面去咗兩次、或者要走大幅回頭路。其餘一律用 edit 改時間／改交通方式，或者根本唔使改。\n- 唔好作具體數字（幾多米、幾多度斜、要排幾耐隊）。你冇即時資料，講唔準就唔好講。\n\n**"time" 好緊要**：系統會按你俾嘅時間自動插入去嗰日行程嘅正確位置，所以個時間一定要合理——要夾得返上一個同下一個景點嘅時間（例如上午景點就唔好寫 20:00），亦都要留返足夠時間俾之前嗰個景點，格式用「約 HH:MM」。交通時間我哋會自己向 Google 查，你唔使準確計，transitBefore 隨便寫個大概就得。\n\n**matchTitle 要照抄行程入面個 title 全個字**（連括號同分店名），唔好縮寫。\n\n用戶要求：${question || "掃一次成個行程，建議2-4個調整，唔好集中喺同一日"}\n\n現有行程（dayId對應每一日）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence），格式如下：\n{"notes":"一句廣東話簡介你嘅建議","changes":[{"dayId":"day3","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}]}\nop可以係 "add"（新增，stop填滿）、"remove"（移除，matchTitle係現有stop嘅title，stop留null）、"edit"（修改，matchTitle係現有title，stop係新內容）。如果冇建議就 changes 用空陣列。`;
       let aiText: string;
       try {
         aiText = await callGemini(apiKeys, prompt, { json: true });
@@ -717,7 +731,7 @@ Deno.serve(async (req) => {
         ? `\n\n你之前已經答過以下嘢：\n${priorAnalyses.map((a, i) => `(第${i + 1}次) ${a}`).join("\n")}\n**唔好再逐段重複返上面已經講過嘅要點**。如果冇新角度，analysis 就用一句講明「同之前差唔多，冇新資訊，主要係補新地點」，唔使砌返成段大同小異嘅文字；如果諗到真係新嘅重點（未講過嘅街／時段／伏位），先至寫多啲。`
         : "";
 
-      const prompt = `${brief}\n\n用戶有個叫「${theme}」嘅心水清單。請做三樣嘢：\n\n**1) analysis（最重要）**：用2-4句廣東話講你點理解「${theme}」呢個題材，同埋針對佢哋呢個行程俾實際建議（例如擺喺邊一日最順路、有咩伏位、要唔要預約、姨姨行唔行到）。呢段會存低做紀錄一直留喺清單頂，所以要有實質內容，唔好求其。**唔可以喺呢段度指名道姓提任何具體地點**（例如「景福宮、明洞、南山塔一定要去」）——用戶淨係會喺下面 candidates 見到實際加咗嘅地點，喺 analysis 度講一個名但冇出現喺 candidates，會令佢哋以為個名冇加到，其實係兩件事講漏咗。想推介邊個具體地方，一律要喺 candidates 度出返個名，唔好淨係喺 analysis 度講。${priorAnalysesBlock}\n\n**2) resources**：如果呢個題材需要實時／官方資料先準（天氣、紅葉/銀杏情況、滙率、開放時間、車票預約），俾2-4個官方網站。你冇即時上網能力，唔好扮到自己知道最新情況，亦都唔好亂作URL，只可以喺下面呢堆揀：\n- 天氣：기상청 https://www.weather.go.kr 、Naver 날씨 https://weather.naver.com\n- 紅葉/銀杏：산림청 https://www.forest.go.kr 、南怡島官網 https://namisum.com\n- 滙率：Naver 환율 https://finance.naver.com/marketindex/\n- 火車車票：Korail https://www.letskorail.com\n- 旅遊官方：Visit Korea https://korean.visitkorea.or.kr 、Visit Seoul https://korean.visitseoul.net\n- 地圖：Naver Map https://map.naver.com 、Kakao Map https://map.kakao.com\n唔啱題材就俾空陣列，唔好夾硬列。\n\n**3) candidates**：俾 20 個同「${theme}」相關、你認為評分高兼多人評嘅地點。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同人數，查唔到或者分數唔夠嘅會自動篩走**，最後只留 10 個。所以：\n- 唔好自己作評分或者評價人數（一律以 Google 為準）\n- 「kr」欄一定要填準確韓文名，因為我哋用韓文名去搜\n- **如果下面「已有」個list好長，即係問過幾次，請特登諗第二層次、無咁出名但真係高分嘅選擇**\n- 如果呢個題材根本唔關地點事（例如只係問天氣），candidates 可以係空陣列\n\n**如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"、"phone"、"walkin"、"unknown" 四選一\n- 「bookingHow」：一句講點樣訂位\n- 「queueNote」：大概要排幾耐。**你冇即時資料，唔肯定就寫「唔清楚，建議出發前確認」，唔好作實體幾多分鐘**\n唔係食肆就留空或者false。\n\n**一定唔可以**同下面「已有」（呢個清單自己已經有嘅地點）重複（名稱好相似、明顯同一間舖都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n下面「現有6日行程」入面已經有嘅地點（例如景福宮呢類已經排咗喺行程度嘅），**唔使刻意避開**——清單同行程係獨立嘅兩樣嘢，如果個地點啱「${theme}」呢個題材，一樣可以攞嚟做 candidate。唔好因為個名已經喺行程度出現過，就唔敢再提佢。\n\n每個地點都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：回覆太長會俾系統截斷，然後乜都顯示唔到。analysis 最多 4 句；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字。\n\n現有6日行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"analysis":"2-4句廣東話分析同建議","resources":[{"name":"網站名","url":"https://...","note":"可以查到咩"}],"candidates":[{"title":"地點名","kr":"準確韓文名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
+      const prompt = `${brief}\n\n用戶有個叫「${theme}」嘅心水清單。請做三樣嘢：\n\n**1) analysis（最重要）**：用2-4句廣東話講你點理解「${theme}」呢個題材，同埋針對佢哋呢個行程俾實際建議（例如擺喺邊一日最順路、有咩伏位、要唔要預約、有冇無障礙／體力上嘅考慮）。呢段會存低做紀錄一直留喺清單頂，所以要有實質內容，唔好求其。**唔可以喺呢段度指名道姓提任何具體地點**（例如「邊個邊個景點一定要去」）——用戶淨係會喺下面 candidates 見到實際加咗嘅地點，喺 analysis 度講一個名但冇出現喺 candidates，會令佢哋以為個名冇加到，其實係兩件事講漏咗。想推介邊個具體地方，一律要喺 candidates 度出返個名，唔好淨係喺 analysis 度講。${priorAnalysesBlock}\n\n**2) resources**：如果呢個題材需要實時／官方資料先準（天氣、季節情況、滙率、開放時間、車票預約），俾2-4個官方網站。你冇即時上網能力，唔好扮到自己知道最新情況，亦都唔好亂作URL，只可以俾你真係知道存在嘅當地官方網站（例如當地氣象台、政府旅遊局、鐵路公司官網、當地慣用嘅地圖app）。**絕對唔好作URL**——唔肯定個網址就唔好列，寧願少啲。唔啱題材就俾空陣列，唔好夾硬列。\n\n**3) candidates**：俾 20 個同「${theme}」相關、你認為評分高兼多人評嘅地點。\n重要：**我哋收到之後會逐個攞去 Google Places 查真實評分同人數，查唔到或者分數唔夠嘅會自動篩走**，最後只留 10 個。所以：\n- 唔好自己作評分或者評價人數（一律以 Google 為準）\n- 「kr」欄一定要填準確嘅當地語言名，因為我哋用佢去搜\n- **如果下面「已有」個list好長，即係問過幾次，請特登諗第二層次、無咁出名但真係高分嘅選擇**\n- 如果呢個題材根本唔關地點事（例如只係問天氣），candidates 可以係空陣列\n\n**如果嗰個地方係食肆（餐廳／cafe／小食店）**，請額外填低：\n- 「isFood」：true\n- 「booking」："online"、"phone"、"walkin"、"unknown" 四選一\n- 「bookingHow」：一句講點樣訂位\n- 「queueNote」：大概要排幾耐。**你冇即時資料，唔肯定就寫「唔清楚，建議出發前確認」，唔好作實體幾多分鐘**\n唔係食肆就留空或者false。\n\n**一定唔可以**同下面「已有」（呢個清單自己已經有嘅地點）重複（名稱好相似、明顯同一間舖都算）：${existing.length ? existing.join("、") : "（未有）"}\n\n下面「現有行程」入面已經有嘅地點（即係已經排咗入行程嗰啲），**唔使刻意避開**——清單同行程係獨立嘅兩樣嘢，如果個地點啱「${theme}」呢個題材，一樣可以攞嚟做 candidate。唔好因為個名已經喺行程度出現過，就唔敢再提佢。\n\n每個地點都要對照返成個行程，講低邊一日順路。dayId 只可以用以下其中一個真實 id：${dayIdList || "（冇）"}；唔啱邊日就填 null，唔好靠估。dayHint 係俾人睇嘅文字。\n\n**要寫得短**：回覆太長會俾系統截斷，然後乜都顯示唔到。analysis 最多 4 句；每個地方嘅 desc 最多 25 字、dayHint 最多 20 字、bookingHow 同 queueNote 各最多 25 字。\n\n現有行程（參考用）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 14000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"analysis":"2-4句廣東話分析同建議","resources":[{"name":"網站名","url":"https://...","note":"可以查到咩"}],"candidates":[{"title":"地點名","kr":"準確當地語言名","desc":"簡短描述","dayHint":"...","dayId":"dayX或null","isFood":true,"booking":"online","bookingHow":"...","queueNote":"..."}]}`;
 
       let aiText: string;
       try {
@@ -814,8 +828,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Plans one day, or several at once. `suggest` deliberately sweeps all six
-    // days, which is the wrong shape when you are standing on a day (or a
+    // Plans one day, or several at once. `suggest` deliberately sweeps the whole
+    // trip, which is the wrong shape when you are standing on a day (or a
     // handful of days) with gaps and want THOSE filled — and it kept proposing
     // places already booked on another day, because nothing told it to look
     // sideways. `dayIds` (array) is the general form; a lone `dayId` (string,
@@ -862,12 +876,12 @@ Deno.serve(async (req) => {
       });
       const multi = days.length > 1;
 
-      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"韓文名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘","eatboxHtml":"","mapUrl":"https://map.naver.com/p/search/關鍵字或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
+      const stopSchema = `{"type":"normal|eat|rest","time":"約 14:00","title":"景點名","kr":"當地語言名或留空","desc":"描述","transitBefore":"例如 🚶步行約10分鐘","eatboxHtml":"","mapUrl":"地圖搜尋連結或留空","accessBadges":[{"text":"🟢 描述","cls":"badge"}],"niecepick":[],"eatMeta":[],"tip":""}`;
       const prompt = `${brief}\n\n你而家淨係負責以下 ${days.length} 日，唔好去改呢個範圍以外嘅日子：\n${days.map((d: any) => `- ${d.title}（${d.date}，${d.id}）`).join("\n")}\n\n${
         multi
           ? "**將呢幾日當一個小組一齊睇**：唔好將同一種嘢（例如同一種菜式、同一類景點）擺晒去同一日，幾日之間都唔可以重複同一個地方。"
           : ""
-      }每一日入面，空白嘅就由零幫佢哋砌一日出嚟（早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排）；已經有嘢嘅就淨係補唔夠嘅位（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。\n\n每日最後一個站要留意返嗰晚住邊間酒店（下面每一日嘅「住嗰晚」有講），唔好離酒店太遠。\n\n**如果呢次改動令某一日成日嘅主題都變晒**（例如將兩日成日行程對調、將成日主題由A地換做B地），**個日子個標題（title）都要跟住個新主題改**，唔可以個標題仲係講緊舊主題、但入面啲景點已經係新主題嗰啲——咁樣個標題會同實際內容對唔上。呢種情況要喺 dayTitles 度俾返新標題（格式：{"dayX":"新標題"}）。如果淨係加減個別一兩個站、成日主題冇變，dayTitles 唔使提呢個dayId。\n\n**唔可以推介以下地方**——呢啲喺呢個範圍以外嘅日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙**：姨姨行唔到樓梯呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n**先判斷用戶想點，呢個決定成個回覆嘅方向**：\n\n**A. 如果用戶明確講咗想加啲乜**（例如「加返明洞啱行嘅地方」「加多幾個XX」「加返…」「直接幫我加，唔好淨係叫我」呢類——即係講明咗想要嘅類型／地區／主題），呢個係實質新增要求，**優先於下面 B 嘅評估邏輯**：就算呢日已經有齊三餐、景點都幾多，都一定要按用戶講嘅類型/地區，喺 changes 度真係加返至少 1-3 個相關嘅站（用 add 加多一個，或者用 edit 將一個相對普通/唔啱主題嘅位換做用戶想要嘅嘢）。**「呢日已經幾滿」唔係唔加嘅理由**——用戶都話明想加，你要諗辦法擠得入去（例如壓縮返鬆嘅時段、換走一個弱嘅選擇），唔可以走去淨係做評估分析、留空 changes 交行貨。**每一間舖／每一個地點一定要係 changes 入面獨立一個 stop**——唔可以將幾間唔同嘅舖（例如「Daiso、Olive Young、Butter」）夾晒落同一個 stop 嘅 title/desc 度當一個站報數：用戶睇落去得返一張景點卡，同佢想要嘅「幾間舖」對唔上。如果用戶想要幾間舖，就出幾個獨立嘅 changes（各自一個 add，或者一個 edit 夾幾個 add），每個 stop 嘅 title 淨係一間舖嘅名，時間各自順序相隔15-20分鐘咁排。淨係喺佢哋真係同一個地址、同一座建築入面（例如同一座商場嘅幾間專櫃）先可以合併做一個站，喺 desc 度提返入面有邊幾間。\n\n**B. 如果用戶條問題純粹係想你評估／檢查**（例如問「順唔順」「岩唔啱」「使唔使改」「路線得唔得」，並冇講明想加咩），你要當真去睇：時間排序啱唔啱、有冇撞期、兩個站之間係咪順路定係要行返轉頭、住嗰晚間酒店遠唔遠。**notes 一定要直接回應返嗰條問題**（例如：邊度覺得順、邊度覺得繞遠咗、邊兩個站順序建議調轉），唔可以避開條問題唔答、淨係報告你加咗咩。如果檢查完覺得依家排法已經幾好、冇乜好改，**changes 可以係空陣列 []**——但呢個做法淨係用喺呢種純評估嘅情況，唔可以攞嚟迴避 A 嗰種明確嘅新增要求。\n\n呢幾日而家嘅內容：\n${JSON.stringify(daysBlock).slice(0, 9000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 9000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"廣東話回覆——case A（有講明想加咩）1-2句講你加咗咩就夠；case B（純評估）要有實際內容咁答返（3-6句都得，唔好淨得一句交行貨）","changes":[{"dayId":"${days[0].id}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}],"dayTitles":{}}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。changes 冇嘢就俾空陣列 []，唔好為交行貨夾硬諗一個。dayId 一定要係以下其中一個：${[...dayIdSet].join("、")}。dayTitles 冇需要改就俾空物件 {}，key 一定要係上面嘅 dayId，value 係新標題（最多 16 字）。`;
+      }每一日入面，空白嘅就由零幫佢哋砌一日出嚟（早餐、上午景點、午餐、下午景點、晚餐，大約 4-6 個站，時間由早到晚順住排）；已經有嘢嘅就淨係補唔夠嘅位（例如冇正餐、上晝或者下晝太空、兩個站之間爭一個順路嘅點），唔好推翻佢哋已經排好嘅嘢。\n\n每日最後一個站要留意返嗰晚住邊間酒店（下面每一日嘅「住嗰晚」有講），唔好離酒店太遠。\n\n**如果呢次改動令某一日成日嘅主題都變晒**（例如將兩日成日行程對調、將成日主題由A地換做B地），**個日子個標題（title）都要跟住個新主題改**，唔可以個標題仲係講緊舊主題、但入面啲景點已經係新主題嗰啲——咁樣個標題會同實際內容對唔上。呢種情況要喺 dayTitles 度俾返新標題（格式：{"dayX":"新標題"}）。如果淨係加減個別一兩個站、成日主題冇變，dayTitles 唔使提呢個dayId。\n\n**唔可以推介以下地方**——呢啲喺呢個範圍以外嘅日子已經去緊，重複咗就白行一次：\n${elsewhere.length ? elsewhere.join("、") : "（其他日暫時未有）"}\n\n**飲食規則**：麵包店／咖啡店只算早餐或下午茶，唔算一餐。午餐同晚餐要係正餐。\n**無障礙／體力**：有邊個行唔到樓梯、要慢啲呢類限制寫咗喺上面背景度，揀地方同寫 accessBadges 嗰陣要當真。\n**唔好作數字**（幾多米、幾多度斜、排幾耐隊）。唔肯定就寫「建議出發前確認」。\n**time 好緊要**：系統會照你俾嘅時間插入去嗰日正確位置，所以要順住已有嘅時間排，格式「約 HH:MM」。交通時間我哋會自己向 Google 查，transitBefore 求其寫個大概就得。\n\n用戶想點：${want || "（冇特別要求，你自己睇住辦）"}\n\n**先判斷用戶想點，呢個決定成個回覆嘅方向**：\n\n**A. 如果用戶明確講咗想加啲乜**（例如「加返某區啱行嘅地方」「加多幾個XX」「加返…」「直接幫我加，唔好淨係叫我」呢類——即係講明咗想要嘅類型／地區／主題），呢個係實質新增要求，**優先於下面 B 嘅評估邏輯**：就算呢日已經有齊三餐、景點都幾多，都一定要按用戶講嘅類型/地區，喺 changes 度真係加返至少 1-3 個相關嘅站（用 add 加多一個，或者用 edit 將一個相對普通/唔啱主題嘅位換做用戶想要嘅嘢）。**「呢日已經幾滿」唔係唔加嘅理由**——用戶都話明想加，你要諗辦法擠得入去（例如壓縮返鬆嘅時段、換走一個弱嘅選擇），唔可以走去淨係做評估分析、留空 changes 交行貨。**每一間舖／每一個地點一定要係 changes 入面獨立一個 stop**——唔可以將幾間唔同嘅舖夾晒落同一個 stop 嘅 title/desc 度當一個站報數：用戶睇落去得返一張景點卡，同佢想要嘅「幾間舖」對唔上。如果用戶想要幾間舖，就出幾個獨立嘅 changes（各自一個 add，或者一個 edit 夾幾個 add），每個 stop 嘅 title 淨係一間舖嘅名，時間各自順序相隔15-20分鐘咁排。淨係喺佢哋真係同一個地址、同一座建築入面（例如同一座商場嘅幾間專櫃）先可以合併做一個站，喺 desc 度提返入面有邊幾間。\n\n**B. 如果用戶條問題純粹係想你評估／檢查**（例如問「順唔順」「岩唔啱」「使唔使改」「路線得唔得」，並冇講明想加咩），你要當真去睇：時間排序啱唔啱、有冇撞期、兩個站之間係咪順路定係要行返轉頭、住嗰晚間酒店遠唔遠。**notes 一定要直接回應返嗰條問題**（例如：邊度覺得順、邊度覺得繞遠咗、邊兩個站順序建議調轉），唔可以避開條問題唔答、淨係報告你加咗咩。如果檢查完覺得依家排法已經幾好、冇乜好改，**changes 可以係空陣列 []**——但呢個做法淨係用喺呢種純評估嘅情況，唔可以攞嚟迴避 A 嗰種明確嘅新增要求。\n\n呢幾日而家嘅內容：\n${JSON.stringify(daysBlock).slice(0, 9000)}\n\n其他日子概況（只係俾你避開重複同睇路線走向）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 9000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"notes":"廣東話回覆——case A（有講明想加咩）1-2句講你加咗咩就夠；case B（純評估）要有實際內容咁答返（3-6句都得，唔好淨得一句交行貨）","changes":[{"dayId":"${days[0].id}","op":"add","matchTitle":null,"stop":${stopSchema},"reason":"廣東話講點解"}],"dayTitles":{}}\nop 只可以用 "add"（新增）或者 "edit"（改現有嘅，matchTitle 照抄全個 title）。唔好用 "remove"。changes 冇嘢就俾空陣列 []，唔好為交行貨夾硬諗一個。dayId 一定要係以下其中一個：${[...dayIdSet].join("、")}。dayTitles 冇需要改就俾空物件 {}，key 一定要係上面嘅 dayId，value 係新標題（最多 16 字）。`;
 
       let aiText: string;
       try {
@@ -911,7 +925,7 @@ Deno.serve(async (req) => {
       const topic = (body?.topic ?? "").toString().trim().slice(0, 200);
       if (!topic) return json({ ok: false, message: "未講低想開咩題目。" });
       const itinerary = body?.itinerary;
-      const prompt = `${brief}\n\n幫佢哋喺行程主頁開一個新 section，題目係「${topic}」。\n\n寫成一份佢哋出發前／喺當地真係用得着嘅筆記：\n- 6 至 10 條重點，每條一行，唔好過 40 字，可以喺開頭用一個 emoji\n- 講得實在啲（買咩、去邊度買、幾錢上落、幾時做、要注意乜），唔好講廢話同客套說話\n- **唔好作數字或者價錢**如果你唔肯定；唔肯定就寫「出發前 check 返」\n- 如果呢個題目要實時／官方資料先準（天氣、紅葉情況、滙率、車票），喺 links 度俾 1-3 個官方網站，唔好亂作 URL\n- 全部用廣東話（香港口語）\n\n佢哋個行程概況（參考，唔使覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"title":"section 標題（短，最多 10 字）","icon":"一個 emoji","sub":"一句副標題","lines":["重點一","重點二"],"links":[{"name":"網站名","url":"https://..."}]}`;
+      const prompt = `${brief}\n\n幫佢哋喺行程主頁開一個新 section，題目係「${topic}」。\n\n寫成一份佢哋出發前／喺當地真係用得着嘅筆記：\n- 6 至 10 條重點，每條一行，唔好過 40 字，可以喺開頭用一個 emoji\n- 講得實在啲（買咩、去邊度買、幾錢上落、幾時做、要注意乜），唔好講廢話同客套說話\n- **唔好作數字或者價錢**如果你唔肯定；唔肯定就寫「出發前 check 返」\n- 如果呢個題目要實時／官方資料先準（天氣、季節情況、滙率、車票），喺 links 度俾 1-3 個官方網站，唔好亂作 URL\n- 全部用廣東話（香港口語）\n\n佢哋個行程概況（參考，唔使覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 8000)}\n\n請只回覆一個JSON物件（唔好有其他文字、唔好用markdown code fence）：\n{"title":"section 標題（短，最多 10 字）","icon":"一個 emoji","sub":"一句副標題","lines":["重點一","重點二"],"links":[{"name":"網站名","url":"https://..."}]}`;
       let aiText: string;
       try {
         aiText = await callGemini(apiKeys, prompt, { json: true });
