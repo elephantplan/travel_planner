@@ -1251,6 +1251,177 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function blankNote(){ return { kind:"note", text:"" }; }
 
   // ==================================================================
+  // DATES ⇄ DAYS
+  // Changing the trip's dates used to touch nothing but meta, so the day
+  // list kept the old count and — worse — kept the old weekday in each
+  // day.date label, which stopClosedOnDay() parses to decide whether a
+  // place is shut. A stale label therefore produced confidently WRONG
+  // closure warnings. These keep the two in step.
+  //
+  // Invariant: only ever grow or shrink the TAIL. Moving the start date
+  // slides the whole trip, so day1..dayN keep their ids and just get
+  // relabelled. That's what lets `day.id.replace('day','')` (used at every
+  // render site), stays.from/to, state.open keys and in-flight AI dayIds
+  // all stay valid without remapping.
+  // ==================================================================
+  const WEEKDAY_CH = ["日","一","二","三","四","五","六"];
+  function isValidIso(s){
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ""))) return false;
+    const t = Date.parse(String(s) + "T00:00:00Z");
+    return Number.isFinite(t);
+  }
+  // All arithmetic in UTC: a local-midnight day count is off by one across a
+  // DST boundary, which would silently add or drop a day.
+  function isoToUtc(iso){ return new Date(String(iso) + "T00:00:00Z"); }
+  function isoAddDays(iso, n){
+    const d = isoToUtc(iso);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function isoDayLabel(iso){
+    const d = isoToUtc(iso);
+    return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${WEEKDAY_CH[d.getUTCDay()]}）`;
+  }
+  function isoSpan(a, b){
+    if (!isValidIso(a) || !isValidIso(b)) return 0;
+    const days = Math.round((isoToUtc(b) - isoToUtc(a)) / 86400000) + 1;
+    return days > 0 ? days : 0;
+  }
+  function blankDay(n, iso){
+    // shortTag MUST be an explicit "" — normalizeSnapshot only backfills when
+    // it is null, and a null here would inherit a label meant for another day.
+    return { id: "day" + n, num: "DAY " + n, date: isoDayLabel(iso), title: "第 " + n + " 日",
+             desc: "", shortTag: "", badges: [], items: [], mapPoints: null, mapCap: "" };
+  }
+
+  // Works out what changing the dates would do, without touching anything —
+  // so the UI can show the consequences and let the user back out.
+  function planDayReconcile(snap, newStart, newEnd){
+    const m = snap.meta || {};
+    const oldStart = m.dateStart, oldEnd = m.dateEnd;
+    if (!isValidIso(newStart) || !isValidIso(newEnd)) return { ok:false, error:"日期格式要係 YYYY-MM-DD。" };
+    const newCount = isoSpan(newStart, newEnd);
+    if (!newCount) return { ok:false, error:"結束日期唔可以早過開始日期。" };
+    if (newCount > 60) return { ok:false, error:"行程超過 60 日，應該分開幾個行程會好用啲。" };
+
+    const days = snap.days || [];
+    const oldCount = days.length;
+    const relabel = [], added = [], dropped = [], closureFlips = [];
+
+    for (let i = 0; i < Math.min(oldCount, newCount); i++){
+      const iso = isoAddDays(newStart, i);
+      const to = isoDayLabel(iso);
+      if (days[i].date !== to) relabel.push({ id: days[i].id, fromDate: days[i].date, toDate: to });
+      // Opening-hours warnings are derived at render time from day.date, so
+      // they fix themselves — but the user deserves to know which places
+      // change state, since that's the whole point of moving dates.
+      (days[i].items || []).forEach(it => {
+        if (it.kind !== "stop") return;
+        const was = stopClosedOnDay(it, days[i]);
+        const now = stopClosedOnDay(it, { date: to });
+        if (was !== now) closureFlips.push({ dayId: days[i].id, title: plain(it.title), wasClosed: was, nowClosed: now });
+      });
+    }
+    for (let i = oldCount; i < newCount; i++) added.push({ n: i + 1, iso: isoAddDays(newStart, i) });
+    for (let i = newCount; i < oldCount; i++){
+      const d = days[i];
+      const stops = (d.items || []).filter(x => x.kind === "stop");
+      dropped.push({ id: d.id, date: d.date, title: d.title,
+                     stops, stopTitles: stops.map(x => plain(x.title)).filter(Boolean),
+                     noteCount: (d.items || []).filter(x => x.kind === "note").length });
+    }
+
+    // meta.eyebrow / the "N 日行程" fact are only auto-updated when the user
+    // hasn't hand-written something — detectable exactly, because the value
+    // we'd have generated is a pure function of the OLD dates.
+    const derivedOldEyebrow = formatEyebrow(oldStart, oldEnd);
+    const eyebrowCustomised = !!(m.eyebrow && m.eyebrow !== derivedOldEyebrow);
+    const factIdx = (m.facts || []).findIndex(f => /^\s*\d+\s*日行程\s*$/.test(String(f)));
+
+    const monthChanged = String(oldStart || "").slice(0, 7) !== String(newStart).slice(0, 7);
+    const shifted = isValidIso(oldStart) ? Math.abs(Math.round((isoToUtc(newStart) - isoToUtc(oldStart)) / 86400000)) : 0;
+
+    return {
+      ok: true, oldStart, oldEnd, newStart, newEnd, oldCount, newCount,
+      relabel, added, dropped, closureFlips,
+      eyebrowCustomised, derivedNewEyebrow: formatEyebrow(newStart, newEnd), factIdx,
+      seasonShift: monthChanged || shifted > 20,
+    };
+  }
+
+  // Applies a plan. Dropped stops go to a board by default rather than being
+  // deleted — boards exist exactly for "somewhere to park a place that isn't
+  // scheduled", and losing hand-picked places to a date typo would be brutal.
+  function applyDayReconcile(snap, plan){
+    const m = snap.meta;
+    const notices = [];
+    const days = snap.days || [];
+
+    let parked = 0, boardName = "";
+    if (plan.dropped.length){
+      const withStops = plan.dropped.filter(d => d.stops.length);
+      if (withStops.length){
+        snap.boards = snap.boards || [];
+        const lo = plan.newCount + 1, hi = plan.oldCount;
+        boardName = `原本 Day ${lo}${hi > lo ? "-" + hi : ""}（改咗日期）`;
+        const b = newBoard(boardName);
+        withStops.forEach(d => d.stops.forEach(st => { b.items.push(st); parked++; }));
+        snap.boards.push(b);
+        notices.push(`${parked} 個地點搬咗去新清單「${boardName}」，時間同交通資料會冇咗，但地點本身留返。`);
+      }
+      const lostNotes = plan.dropped.reduce((n, d) => n + d.noteCount, 0);
+      if (lostNotes) notices.push(`${lostNotes} 個 note 跟住嗰幾日一齊冇咗（清單度冇 note 呢種嘢）。`);
+      days.length = plan.newCount;
+    }
+
+    for (let i = 0; i < Math.min(days.length, plan.newCount); i++){
+      const iso = isoAddDays(plan.newStart, i);
+      days[i].id = "day" + (i + 1);
+      days[i].num = "DAY " + (i + 1);
+      days[i].date = isoDayLabel(iso);
+    }
+    plan.added.forEach(a => days.push(blankDay(a.n, a.iso)));
+
+    m.dateStart = plan.newStart;
+    m.dateEnd = plan.newEnd;
+    if (!plan.eyebrowCustomised) m.eyebrow = plan.derivedNewEyebrow;
+    else notices.push("「日期細字」你自己改過，所以冇動佢——想更新就入去改返。");
+    if (plan.factIdx >= 0) m.facts[plan.factIdx] = `${plan.newCount} 日行程`;
+
+    // A stay whose whole range fell off the end must not silently re-point at
+    // the entire trip — that would invent a hotel booking nobody made.
+    const validIds = new Set(days.map(d => d.id));
+    (snap.stays || []).forEach(s => {
+      const fromGone = s.from && !validIds.has(s.from);
+      const toGone = s.to && !validIds.has(s.to);
+      if (!fromGone && !toGone) return;
+      const last = days[days.length - 1] ? days[days.length - 1].id : "";
+      if (fromGone && toGone){
+        s.from = last; s.to = last;
+        notices.push(`「${plain(s.name) || "住宿"}」本來排喺已經冇咗嘅日子，暫時擺咗喺最後一日，記得改返。`);
+      } else {
+        if (fromGone) s.from = days[0] ? days[0].id : "";
+        if (toGone) s.to = last;
+      }
+      if (dayIndexById(snap, s.from) > dayIndexById(snap, s.to)){ const t = s.from; s.from = s.to; s.to = t; }
+    });
+    syncAccommodation(snap);
+
+    // a view/selection pointing at a day that no longer exists
+    if (!dayById(state.view) && state.view !== "overview" && state.view !== "notes" && !boardById(state.view)) state.view = "overview";
+    state.open.clear(); state.mapsShut.clear(); state.selectMode = null;
+
+    const bits = [];
+    if (plan.added.length) bits.push(`加咗 ${plan.added.length} 日`);
+    if (plan.dropped.length) bits.push(`減咗 ${plan.dropped.length} 日`);
+    if (plan.relabel.length) bits.push(`更新咗 ${plan.relabel.length} 日嘅日期`);
+    return {
+      notices, parked, boardName,
+      summary: `改咗行程日期（${plan.oldStart || "?"} → ${plan.newStart}）${bits.length ? "：" + bits.join("、") : ""}`,
+    };
+  }
+
+  // ==================================================================
   // BOOKMARK BOARDS — a place to park "maybe" spots that aren't slotted
   // into a day yet. Same stop shape as an itinerary stop (so nothing is
   // lost moving a place either direction), just no time/connectors.
@@ -3029,6 +3200,57 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return bits;
   }
 
+  // Shown after the dates change. A plain confirm() can't list what would be
+  // lost, and losing hand-picked places to a mistyped year would be brutal —
+  // so this spells out the damage and defaults to parking stops on a board.
+  function openDateReconcileSheet(snap, plan, prevStart, prevEnd){
+    const droppedWithStops = plan.dropped.filter(x => x.stops.length);
+    const stopCount = droppedWithStops.reduce((n, x) => n + x.stops.length, 0);
+    const names = droppedWithStops.flatMap(x => x.stopTitles).slice(0, 8);
+    const flipsClosed = plan.closureFlips.filter(f => f.nowClosed);
+    const flipsOpen = plan.closureFlips.filter(f => !f.nowClosed);
+
+    openSheet(`
+      <h3>行程日期改咗</h3>
+      <p class="sec-sub">${esc(plan.oldStart || "?")} → <b>${esc(plan.newStart)}</b>，
+        ${plan.oldCount} 日 → <b>${plan.newCount} 日</b>。</p>
+      ${plan.added.length ? `<div class="ai-msg">➕ 會加 ${plan.added.length} 日空白行程（Day ${plan.oldCount + 1}${plan.added.length > 1 ? "-" + plan.newCount : ""}），可以之後叫 AI 幫手諗。</div>` : ""}
+      ${plan.dropped.length ? `<div class="ai-msg">➖ Day ${plan.newCount + 1}${plan.dropped.length > 1 ? "-" + plan.oldCount : ""} 會冇咗。${
+        stopCount ? `入面有 <b>${stopCount} 個地點</b>：${esc(names.join("、"))}${stopCount > names.length ? " …" : ""}<br>
+        撳「確認」會自動搬去一個新清單度收好，唔會消失（但時間、交通、營業時間呢啲會冇咗）。` : "入面冇地點，直接刪走。"}</div>` : ""}
+      ${flipsClosed.length ? `<div class="ai-msg">⚠️ 改完之後，呢啲地點會撞正公休：${esc(flipsClosed.map(f => f.title).join("、"))}</div>` : ""}
+      ${flipsOpen.length ? `<div class="ai-msg">✅ 原本撞公休、改完之後冇事：${esc(flipsOpen.map(f => f.title).join("、"))}</div>` : ""}
+      ${plan.seasonShift ? `<div class="ai-msg">🗓 日期搬咗好遠／換咗月份，每日嘅標題同季節相關嘅內容可能唔啱用，可以之後叫 AI 重新諗過。</div>` : ""}
+      <div class="editor-tools" style="margin-top:14px;flex-wrap:wrap;">
+        <button class="btn" data-datecancel>取消（唔改日期）</button>
+        <button class="btn primary" data-dateok>確認</button>
+      </div>`, layer => {
+      layer.querySelector("[data-datecancel]").addEventListener("click", async () => {
+        // Only the dates roll back; whatever else they typed in the sheet stays.
+        snap.meta.dateStart = prevStart; snap.meta.dateEnd = prevEnd;
+        closeLayer(); render();
+        await saveNow("改咗首頁標題同目的地資料（日期冇改）");
+      });
+      layer.querySelector("[data-dateok]").addEventListener("click", async () => {
+        const res = applyDayReconcile(snap, plan);
+        closeLayer(); render();
+        await saveNow(res.summary);
+        if (res.notices.length) alert(res.notices.join("\n\n"));
+        if (plan.added.length && confirm(`加咗 ${plan.added.length} 日空白行程，而家叫 AI 幫你諗返呢幾日？`)){
+          const ids = plan.added.map(a => "day" + a.n);
+          genBanner("AI 幫你諗緊新加嗰幾日…");
+          try {
+            await generateDaysFor(ids, msg => genBanner(msg));
+            genBanner("🎉 新加嘅日子諗好喇。", { done:true });
+          } catch (e){
+            genBanner("⚠️ 生成失敗：" + e.message, { done:true });
+          }
+          setTimeout(() => genBanner(null), 6000);
+        }
+      });
+    });
+  }
+
   // Each home-page section maps to one entry here, so the pencil buttons are
   // wired generically and every save goes through the same version-history path
   // as any other edit.
@@ -3068,15 +3290,33 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         { key:"dateEnd", type:"text", label:"行程結束日期", hint:"格式 YYYY-MM-DD。",
           value: m.dateEnd || "" },
       ], async out => {
+        const prevStart = m.dateStart, prevEnd = m.dateEnd;
         m.eyebrow = out.eyebrow; m.title = out.title;
         m.facts = out.facts; m.hotelTags = out.hotelTags;
         m.destinationLocal = out.destinationLocal || "";
         const lat = parseFloat(out.lat), lng = parseFloat(out.lng);
         m.lat = Number.isFinite(lat) ? lat : null;
         m.lng = Number.isFinite(lng) ? lng : null;
-        m.dateStart = out.dateStart || ""; m.dateEnd = out.dateEnd || "";
-        render();
-        await saveNow("改咗首頁標題同目的地資料");
+
+        const nextStart = (out.dateStart || "").trim(), nextEnd = (out.dateEnd || "").trim();
+        const datesChanged = nextStart !== prevStart || nextEnd !== prevEnd;
+        if (!datesChanged){
+          render();
+          await saveNow("改咗首頁標題同目的地資料");
+          return;
+        }
+        // Dates moved: the day list has to move with them, and that can cost
+        // the user content, so it gets its own confirm step. Everything else
+        // they just typed is already applied and kept either way.
+        const plan = planDayReconcile(d, nextStart, nextEnd);
+        if (!plan.ok){
+          m.dateStart = prevStart; m.dateEnd = prevEnd;
+          render();
+          await saveNow("改咗首頁標題同目的地資料");
+          flash("日期改唔到：" + plan.error);
+          return;
+        }
+        openDateReconcileSheet(d, plan, prevStart, prevEnd);
       });
     },
 
@@ -5402,17 +5642,23 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // Sequential, not parallel: each chunk's itinerary payload must include
   // the previous chunk's already-generated stops, so day-plan's own
   // cross-day dedup ("呢個地方已經去緊 elsewhere") actually sees them.
-  async function generateTripFromScratch(onProgress){
+  // Generates a specific set of days, chunked. Shared by the brand-new-trip
+  // flow and by "the dates grew, fill in the days that appeared".
+  async function generateDaysFor(dayIds, onProgress){
     const days = state.snapshot.days;
-    const blankDayIds = days.filter(d => !(d.items || []).length).map(d => d.id);
-    if (!blankDayIds.length) return;
+    const ids = dayIds.filter(id => dayById(id));
+    if (!ids.length) return;
     const firstId = days[0] && days[0].id;
     const lastId = days[days.length - 1] && days[days.length - 1].id;
     const CHUNK = 3;
-    for (let i = 0; i < blankDayIds.length; i += CHUNK){
-      const chunk = blankDayIds.slice(i, i + CHUNK);
+    for (let i = 0; i < ids.length; i += CHUNK){
+      const chunk = ids.slice(i, i + CHUNK);
       await generateDaysChunk(chunk, onProgress, { first: chunk.includes(firstId), last: chunk.includes(lastId) });
     }
+  }
+  async function generateTripFromScratch(onProgress){
+    const blankDayIds = state.snapshot.days.filter(d => !(d.items || []).length).map(d => d.id);
+    return generateDaysFor(blankDayIds, onProgress);
   }
 
   // ---------- human-readable version comparison ----------
