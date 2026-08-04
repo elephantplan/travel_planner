@@ -1179,29 +1179,141 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return res.json();
   }
 
-  let saveTimer = null;
   function flash(msg, keep){
     const el = $("#savestate");
     el.textContent = msg;
     el.classList.add("on");
     if (!keep) setTimeout(() => el.classList.remove("on"), 1900);
   }
-  // "trivial" marks background/technical upkeep saves (a recomputed transit
-  // time, a fetched Google rating, a geocoded hotel pin) that carry no
-  // content a person actually asked for — they still get saved (nothing is
-  // ever lost), but the 歷史 list hides them by default so "加咗個地點"
-  // doesn't get buried under a dozen "更新咗交通時間" rows from the same
-  // single edit.
-  async function saveNow(summary, trivial){
-    clearTimeout(saveTimer);
+
+  // ==================================================================
+  // SAVING — coalesced
+  //
+  // Every save POSTs the ENTIRE snapshot as a new append-only row (~100 KB
+  // each). One trip had accumulated 792 rows / 83 MB that way, because every
+  // background touch wrote its own row: applying one AI suggestion produced
+  // 2-3 rows, generating a fresh trip produced 40+.
+  //
+  // So writes are now queued instead of fired:
+  //   • "user" changes debounce ~1s and collapse into ONE row
+  //   • "upkeep" (recomputed transit, fetched ratings, geocoding, photos)
+  //     NEVER starts a timer of its own — it just marks the snapshot dirty
+  //     and rides along with the next real save. That is the whole mechanism
+  //     for "background work doesn't get its own history entry".
+  //   • a flush whose snapshot is byte-identical to the last persisted one
+  //     is skipped entirely
+  // Nothing is lost: a periodic flush covers long runs (generation takes
+  // minutes), hiding the tab flushes immediately, and a failed write falls
+  // back to a localStorage mirror.
+  // ==================================================================
+  const saver = {
+    lastPersistedJson: "",
+    pendingUser: [],          // human summaries, in order, deduped
+    pendingUpkeep: false,
+    timer: null, maxTimer: null, periodic: null,
+    inFlight: null, again: false,
+    paused: false,            // true while previewing an old version
+  };
+  function snapJson(){ try { return JSON.stringify(state.snapshot); } catch (e){ return ""; } }
+  function saverDirty(){ return saver.pendingUser.length > 0 || saver.pendingUpkeep; }
+  function combinedSummary(){
+    const seen = [], out = [];
+    saver.pendingUser.forEach(s => { const t = String(s || "").trim(); if (t && !seen.includes(t)){ seen.push(t); out.push(t); } });
+    if (!out.length) return "自動更新（交通／評分／座標）";
+    if (out.length === 1) return out[0];
+    if (out.length === 2) return out[0] + "、" + out[1];
+    return `${out[0]} 等 ${out.length} 項改動`;
+  }
+  function mirrorPending(){
+    if (!saverDirty() || !state.tripId) return;
+    try { localStorage.setItem(`trip:${state.tripId}:pending`, JSON.stringify({ at: Date.now(), snapshot: state.snapshot })); }
+    catch (e){ /* quota — nothing better to do than drop the mirror */ }
+  }
+  function clearMirror(){
+    try { localStorage.removeItem(`trip:${state.tripId}:pending`); } catch (e){}
+  }
+  function cancelPending(){
+    clearTimeout(saver.timer); clearTimeout(saver.maxTimer);
+    saver.timer = saver.maxTimer = null;
+    saver.pendingUser = []; saver.pendingUpkeep = false;
+  }
+  function scheduleFlush(delay){
+    clearTimeout(saver.timer);
+    saver.timer = setTimeout(() => flushSaves("debounce"), delay);
+    // however fast edits keep arriving, land something within 8s
+    if (!saver.maxTimer) saver.maxTimer = setTimeout(() => flushSaves("max"), 8000);
+  }
+  function queueSave(summary, kind){
+    if (kind === "upkeep"){ saver.pendingUpkeep = true; return; }
+    saver.pendingUser.push(summary);
+    flash("改咗，未存…", true);
+    scheduleFlush(1000);
+  }
+  async function flushSaves(reason){
+    clearTimeout(saver.timer); clearTimeout(saver.maxTimer);
+    saver.timer = saver.maxTimer = null;
+    if (saver.paused || !saverDirty() || !state.snapshot) return;
+    if (saver.inFlight){ saver.again = true; return saver.inFlight; }
+
+    const json = snapJson();
+    if (json && json === saver.lastPersistedJson){   // nothing actually changed
+      saver.pendingUser = []; saver.pendingUpkeep = false;
+      flash("已儲存");
+      return;
+    }
+    const summary = combinedSummary();
+    const trivial = saver.pendingUser.length === 0;
+    saver.pendingUser = []; saver.pendingUpkeep = false;
+
     flash("儲存緊…", true);
-    try { await saveVersion(state.snapshot, "manual", summary, trivial); flash("已儲存"); }
-    catch (e) { flash("儲存唔到，改動只留喺呢部機"); }
+    saver.inFlight = (async () => {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 3; attempt++){
+        try {
+          await saveVersion(state.snapshot, "manual", summary, trivial);
+          saver.lastPersistedJson = json;
+          clearMirror();
+          flash("已儲存");
+          return true;
+        } catch (e){
+          lastErr = e;
+          await new Promise(r => setTimeout(r, [1000, 4000, 0][attempt]));
+        }
+      }
+      // put the work back so a later flush retries it, and keep a local copy
+      saver.pendingUser.unshift(summary);
+      mirrorPending();
+      flash("儲存唔到，改動暫時只留喺呢部機");
+      return false;
+    })();
+    try { await saver.inFlight; } finally { saver.inFlight = null; }
+    if (saver.again){ saver.again = false; return flushSaves("again"); }
+  }
+
+  // Resolve on ENQUEUE, not on persistence: ~50 call sites `await saveNow(...)`,
+  // and if each of those waited for a real POST the coalescing would never
+  // happen. Nothing reads a version row back after saving, so this is safe.
+  function saveNow(summary, trivial){
+    queueSave(summary, trivial ? "upkeep" : "user");
+    if (!trivial) scheduleFlush(600);
+    return Promise.resolve();
   }
   function saveSoon(summary, trivial){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveNow(summary, trivial), 900);
+    queueSave(summary, trivial ? "upkeep" : "user");
+    if (!trivial) scheduleFlush(1200);
+    return Promise.resolve();
   }
+  // Long AI runs mutate the snapshot for minutes at a time; without this a
+  // crash mid-generation would lose everything, which the old save-on-every-
+  // step behaviour did not.
+  setInterval(() => { if (saverDirty()) flushSaves("periodic"); }, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && saverDirty()) flushSaves("hidden");
+  });
+  // pagehide is too late for a 100 KB POST (fetch keepalive caps at 64 KiB and
+  // sendBeacon can't set the auth headers PostgREST needs), so mirror instead.
+  window.addEventListener("pagehide", mirrorPending);
+  window.addEventListener("online", () => { if (saverDirty()) flushSaves("online"); });
 
   // ==================================================================
   // MODEL HELPERS
@@ -2547,7 +2659,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       } catch (_){}
       if (!got) s.noPhoto = true;    // don't keep offering a button that finds nothing
       render();
-      if (got) saveNow(`搵咗張相俾「${name}」`);
+      if (got) saveNow(`搵咗張相俾「${name}」`, true);   // background enrichment, not its own history entry
     }));
 
     document.querySelectorAll("[data-segrefresh]").forEach(btn => btn.addEventListener("click", async e => {
@@ -4479,7 +4591,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       } catch (_){}
       if (!got) s.noPhoto = true;
       render();
-      if (got) saveNow(`搵咗張相俾「${name}」`);
+      if (got) saveNow(`搵咗張相俾「${name}」`, true);   // background enrichment, not its own history entry
     }));
 
     wireBoardItemEditor(board);
@@ -4998,23 +5110,27 @@ ${stayBlock}${dayBlocks}${secBlocks}
       }).join("");
   }
   function wireApplyButtons(out, changes, onAll){
-    out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", async () => {
+    // one change → one awaited apply, so "apply all" can reuse it
+    async function applyOne(ab){
       const c = changes[+ab.dataset.apply];
       ab.textContent = "套用緊…"; ab.disabled = true;
       // inserts by time, then fills in photo and transit; "" means it worked
       const why = await applyAiChange(c);
-      if (why){ ab.textContent = "⚠️ " + why; ab.disabled = false; }
-      else ab.textContent = "已套用";
-    }));
+      if (why){ ab.textContent = "⚠️ " + why; ab.disabled = false; return false; }
+      ab.textContent = "已套用";
+      return true;
+    }
+    out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => applyOne(ab)));
     const all = out.querySelector("[data-applyall]");
     if (all) all.addEventListener("click", async () => {
       all.disabled = true; all.textContent = "套用緊…";
       let n = 0;
+      // Awaited one at a time. This used to fire each button 60ms apart
+      // WITHOUT awaiting, so several applies mutated (and saved) the same
+      // snapshot concurrently and could lose each other's edits.
       for (const btn of out.querySelectorAll("[data-apply]")){
         if (btn.disabled) continue;
-        btn.click();
-        await new Promise(r => setTimeout(r, 60));
-        n++;
+        if (await applyOne(btn)) n++;
       }
       all.textContent = `已經全部套用（${n} 個）`;
       if (onAll) onAll();
@@ -5870,9 +5986,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
           try {
             const snap = await fetchVersionSnapshot(b.dataset.view);
             if (!snap) return;
+            cancelPending();
+            saver.paused = true;          // don't persist a version being previewed
             state.snapshot = normalizeSnapshot(snap); state.open.clear();
             closeLayer(); render();
-            flash("而家睇緊舊版本（未還原）");
+            flash("而家睇緊舊版本（未還原・唔會存）");
           } catch (err){ alert("睇唔到呢版：" + err.message); }
         }));
 
@@ -5882,7 +6000,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
           try {
             const snap = await fetchVersionSnapshot(b.dataset.restore);
             if (!snap) return;
+            cancelPending();
             state.snapshot = normalizeSnapshot(snap);
+            saver.paused = false;
+            saver.lastPersistedJson = snapJson();
             await saveVersion(snap, "restore", "還原到版本 #" + b.dataset.restore);
             closeLayer(); render(); flash("已還原");
           } catch (err){ alert("還原唔到：" + err.message); }
@@ -6024,6 +6145,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     state.snapshot = normalizeSnapshot(row.snapshot);
+    saver.lastPersistedJson = snapJson();
     try {
       render();
       // snapshots saved before stays carried their own coordinate still have
