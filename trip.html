@@ -1082,6 +1082,24 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // the AI brief is free text the user typed; keep their line breaks (plain()
   // would collapse them, so re-opening the editor would lose the formatting)
   function briefText(snap){ return String((snap && snap.tripBrief) || "").trim(); }
+  // The brief is free text the family wrote, so it may not say where or when
+  // they're going — the Seoul trip predates the field and has none at all,
+  // which is why asking it about the season came back as「話我知你去邊度、
+  //幾月出發呀」. Every AI action starts from this string, so state the two
+  // facts outright instead of hoping the prose mentions them. Kept on this
+  // side rather than in the edge function so the trip stays the single source
+  // of truth for its own details.
+  function briefForAi(snap){
+    const m = (snap && snap.meta) || {};
+    const head = briefText(snap) || defaultTripBrief(snap);
+    const facts = [];
+    const where = String(m.destinationLocal || m.title || "").trim();
+    // a brief that already names them (the generated default does) doesn't
+    // need the same facts repeated back at the model
+    if (where && !head.includes(where)) facts.push("目的地：" + where);
+    if (m.dateStart && m.dateEnd && !head.includes(m.dateStart)) facts.push(`日期：${m.dateStart} 至 ${m.dateEnd}`);
+    return facts.length ? `${head}\n（今次行程 —— ${facts.join("；")}）` : head;
+  }
   function plain(s){
     return String(s == null ? "" : s).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
   }
@@ -1164,7 +1182,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   async function callAi(payload){
     const m = (state.snapshot && state.snapshot.meta) || {};
     const body = Object.assign({
-      brief: briefText(state.snapshot),
+      brief: briefForAi(state.snapshot),
       destinationLocal: m.destinationLocal || "",
       lat: Number.isFinite(m.lat) ? m.lat : null,
       lng: Number.isFinite(m.lng) ? m.lng : null,
@@ -1832,9 +1850,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
   const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示" };
-  function secTools(key){
+  // editKey lets a block whose editor lives under a different name (季節提示 is
+  // edited by the shared "notes" sheet) still get exactly ONE pencil — passing
+  // the editor key here instead of adding a second secEditBtn beside it.
+  function secTools(key, editKey){
     const label = HIDDEN_SECTION_LABELS[key] || key;
-    return `<span class="sectools">${secEditBtn(key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
+    return `<span class="sectools">${secEditBtn(editKey || key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
   }
   function isSectionHidden(snap, key){ return Array.isArray(snap.hiddenSections) && snap.hiddenSections.includes(key); }
 
@@ -2058,7 +2079,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
 
         ${isSectionHidden(d,"foliage") ? "" : `
-        <h3>季節提示${secEditBtn("notes")}${secTools("foliage")}</h3>
+        <h3>季節提示${secTools("foliage", "notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
         ${liveCheckButtonHtml("foliage", "🌤 Check 依家嘅季節情況")}
         `}
