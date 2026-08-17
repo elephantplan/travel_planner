@@ -1067,6 +1067,17 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+  // When fetch can't reach the server at all it rejects with a TypeError whose
+  // message is whatever the browser feels like ("Load failed" on Safari,
+  // "Failed to fetch" on Chrome) — which tells the family nothing. The most
+  // common real cause is the free-tier database auto-pausing after a week with
+  // no traffic, so say that instead. Server-side errors keep their own message,
+  // which already names the status code.
+  function netMsg(e){
+    return (e instanceof TypeError)
+      ? "連唔到伺服器。可能係個資料庫暫時瞓着咗（免費方案冇人用夠一個星期就會自動暫停），等一兩分鐘再試下。"
+      : e.message;
+  }
   // some older records have markup baked into plain-text fields; show the words, not the tags
   // the AI brief is free text the user typed; keep their line breaks (plain()
   // would collapse them, so re-opening the editor would lose the formatting)
@@ -6183,7 +6194,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
       row = await fetchLatestVersion();
       if (!row) throw new Error("呢個行程重未有版本紀錄。");
     } catch (e){
-      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(e.message)}<br>檢查下網絡再重新整理，或者<a href="index.html">返去主頁</a>。</div></div>`;
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(netMsg(e))}<br>
+        <div style="margin-top:10px;"><button class="btn" id="retryboot">再試一次</button>
+        <a class="btn" href="index.html">返去主頁</a></div></div></div>`;
+      $("#retryboot").addEventListener("click", () => {
+        $("#app").innerHTML = `<div class="sec"><p class="hint">載入緊…</p></div>`;
+        boot();
+      });
       return;
     }
     state.snapshot = normalizeSnapshot(row.snapshot);

@@ -277,6 +277,17 @@ section.triplist{margin-bottom:30px;}
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+  // When fetch can't reach the server at all it rejects with a TypeError whose
+  // message is whatever the browser feels like ("Load failed" on Safari,
+  // "Failed to fetch" on Chrome) — which tells the family nothing. The most
+  // common real cause is the free-tier database auto-pausing after a week with
+  // no traffic, so say that instead. Server-side errors keep their own message,
+  // which already names the status code.
+  function netMsg(e){
+    return (e instanceof TypeError)
+      ? "連唔到伺服器。可能係個資料庫暫時瞓着咗（免費方案冇人用夠一個星期就會自動暫停），等一兩分鐘再試下。"
+      : e.message;
+  }
   const $ = sel => document.querySelector(sel);
 
   // ---------- theme (shares the same toggle/localStorage key as trip.html) ----------
@@ -527,8 +538,13 @@ section.triplist{margin-bottom:30px;}
       if (!res.ok) throw new Error("讀取行程清單失敗 " + res.status);
       trips = await res.json();
     } catch (e){
-      upEl.innerHTML = `<div class="errbox">${esc(e.message)}</div>`;
+      upEl.innerHTML = `<div class="errbox">${esc(netMsg(e))}
+        <div style="margin-top:10px;"><button class="btn" id="retrytrips">再試一次</button></div></div>`;
       pastEl.innerHTML = "";
+      $("#retrytrips").addEventListener("click", () => {
+        upEl.innerHTML = `<div class="empty">載入緊…</div>`;
+        loadTrips();
+      });
       return;
     }
     const today = todayIso();
