@@ -756,8 +756,11 @@ img{max-width:100%;}
 .usec-list{margin:9px 0 0;padding-left:18px;}
 .usec-list li{font-size:13.5px;line-height:1.75;margin-bottom:3px;}
 .usec-by{margin-top:9px;font-size:11px;color:var(--text-soft);}
-.airefresh-toggle{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:12px;color:var(--text-soft);cursor:pointer;width:fit-content;}
-.airefresh-toggle input{margin:0;}
+/* freshness stamp under every AI-updatable block — without it there's no way
+   to tell content written five minutes ago from content written in July */
+.lastupd{margin-top:6px;font-size:12px;color:var(--text-soft);}
+.lastupd:empty{display:none;}
+.ai-msg.ok{border-color:var(--d2);}
 /* a long AI run needs to look alive: stage, clock, moving bar */
 .aibusy{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-top:10px;}
 .aibusy-top{display:flex;align-items:center;gap:8px;}
@@ -1990,36 +1993,40 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // doesn't want THIS particular block bothering Gemini can turn it off, and
   // the button just disappears rather than sitting there disabled.
   function liveCheckButtonHtml(kind, label){
-    const on = !!(state.snapshot.aiRefreshToggles || {})[kind];
-    return aiRefreshToggleHtml(kind, on) +
-      (on ? `<button class="btn" data-livecheck="${kind}" style="margin-top:9px;">${esc(label)}</button>
-             <div class="ai-out" id="livecheck-${kind}"></div>` : "");
+    const last = (state.snapshot.lastLiveCheck || {})[kind];
+    return `<button class="btn" data-livecheck="${kind}" style="margin-top:9px;">${esc(label)}</button>
+            <div class="lastupd" id="lastupd-${kind}">${last ? "上次 check：" + esc(whenLabel(last)) : ""}</div>
+            <div class="ai-out" id="livecheck-${kind}"></div>`;
   }
-  // Shared by weather/foliage and every custom section — "key" is either
-  // "weather"/"foliage" (stored in snap.aiRefreshToggles) or "sec:<index>"
-  // (stored on the section object itself, since sections already use their
-  // array index as their identity everywhere else in this file).
-  function aiRefreshToggleHtml(key, on){
-    return `<label class="airefresh-toggle">
-      <input type="checkbox" data-airefresh="${esc(key)}" ${on ? "checked" : ""}>
-      <span>🔄 AI 自動更新${on ? "（開）" : "（閂）"}</span>
-    </label>`;
+  // "16:20" today, "8月15日 16:20" before that — a bare ISO string tells the
+  // reader nothing about whether what they're looking at is fresh.
+  function whenLabel(iso){
+    const t = new Date(iso);
+    if (!Number.isFinite(t.getTime())) return "";
+    const now = new Date();
+    const mins = Math.round((now - t) / 60000);
+    if (mins < 1) return "啱啱";
+    if (mins < 60) return mins + " 分鐘前";
+    const sameDay = t.toDateString() === now.toDateString();
+    const hm = t.toLocaleTimeString("zh-HK", { hour:"2-digit", minute:"2-digit", hour12:false });
+    return sameDay ? "今日 " + hm : `${t.getMonth() + 1}月${t.getDate()}日 ${hm}`;
   }
-  function wireAiRefreshToggles(){
-    document.querySelectorAll("[data-airefresh]").forEach(cb => cb.addEventListener("change", async () => {
-      const key = cb.dataset.airefresh;
-      if (key.startsWith("sec:")){
-        const s = (state.snapshot.sections || [])[+key.slice(4)];
-        if (!s) return;
-        s.aiRefresh = cb.checked;
-      } else {
-        state.snapshot.aiRefreshToggles = state.snapshot.aiRefreshToggles || {};
-        state.snapshot.aiRefreshToggles[key] = cb.checked;
-      }
-      render();
-      await saveNow(`${cb.checked ? "開咗" : "閂咗"}AI自動更新`);
-    }));
+  function markLiveChecked(kind){
+    const d = state.snapshot;
+    d.lastLiveCheck = d.lastLiveCheck || {};
+    d.lastLiveCheck[kind] = new Date().toISOString();
+    // patch the label in place — a full render would wipe the answer the user
+    // is reading right now
+    const el = document.getElementById("lastupd-" + kind);
+    if (el) el.textContent = "上次 check：啱啱";
+    saveNow("check 咗最新資料", true);
   }
+  // There used to be a 「🔄 AI 自動更新（開）」 checkbox in front of every one of
+  // these buttons, gating whether the button showed at all. It never actually
+  // auto-updated anything — nothing here runs without someone tapping it — so
+  // the checkbox was one extra line of UI per block explaining a setting that
+  // did nothing but hide a button. The stored aiRefresh / aiRefreshToggles
+  // fields are left alone in old snapshots; they're simply not read any more.
   function wireLiveChecks(){
     document.querySelectorAll("[data-livecheck]").forEach(btn => btn.addEventListener("click", async () => {
       if (btn.disabled) return;
@@ -2036,10 +2043,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
                           (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
                           (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
           saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
+          if (r.summary || r.aiSummary) markLiveChecked(kind);
         } else {
           const a = r.aiSummary || r.message || "冇回覆";
           out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
-          if (r.aiSummary) saveAiNote("foliage", "季節情況", a);
+          if (r.aiSummary){ saveAiNote("foliage", "季節情況", a); markLiveChecked(kind); }
         }
       } catch (e){
         stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
@@ -2223,9 +2231,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${(s.lines || []).length ? `<ul class="usec-list">${(s.lines||[]).map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
             ${(s.links || []).length ? `<div class="ailog-links">${(s.links||[]).map(l =>
               `<a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
-            ${s.source === "ai" ? `<div class="usec-by">✨ AI 幫手整，改得㗎</div>` : ""}
-            ${aiRefreshToggleHtml("sec:" + i, !!s.aiRefresh)}
-            ${s.aiRefresh ? `<button class="btn" data-secrefresh="${i}" style="margin-top:9px;">🔄 問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>` : ""}
+            <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">🔄 問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
+            <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
+            <div class="ai-out" id="secout-${i}"></div>
           </div>`).join("")
           : `<p class="hint">仲未有。撳下面加一個。</p>`}
         </div>
@@ -2255,8 +2263,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         { key:"lines", label:"內容（一行一個重點）", type:"lines", value:(s.lines||[]).join("\n"), rows:9 },
         { key:"links", label:"連結（一行一個，名 | 網址）", type:"lines",
           value:(s.links||[]).map(l => `${l.name || ""} | ${l.url || ""}`).join("\n"), rows:3 },
-        { key:"topic", label:"AI 更新用嘅題目（撳「🔄 AI 自動更新」先用得着）",
-          hint:"開咗自動更新之後，撳「重新check」會攞呢個題目再問一次 AI。留空就用返標題。",
+        { key:"topic", label:"AI 更新用嘅題目",
+          hint:"撳嗰粒「🔄 問 AI 攞最新資料」嗰陣，會攞呢個題目再問一次 AI。留空就用返標題。",
           type:"text", value:s.topic || "", placeholder:"例如：手信買咩好" },
       ], async out => {
         const links = (out.links || []).map(row => {
@@ -2339,22 +2347,36 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const topic = s.topic || s.title;
       if (!topic) return;
       const origText = btn.textContent;
+      // A button that only changes its own label gives no way to tell "still
+      // thinking" from "hung" — busyIn paints a spinner, a bar and a running
+      // seconds counter, which is what makes a slow answer legible as slow.
+      const out = document.getElementById("secout-" + i);
+      const stop = out ? busyIn(out, { steps:[`AI 更新緊「${topic}」`], hint:"大約 10-30 秒。行得太耐會自動停，唔會一路吊住。" }) : () => {};
       btn.disabled = true; btn.textContent = "AI 更新緊…";
       try {
         const r = await callAi({ action:"make-section", topic, itinerary: state.snapshot });
+        stop();
         if (!r || r.ok === false || !r.section){
-          flash((r && r.message) || "AI 冇回覆到，試多次？");
+          if (out) out.innerHTML = `<div class="ai-msg">${esc((r && r.message) || "AI 冇回覆到，試多次？")}</div>`;
+          else flash((r && r.message) || "AI 冇回覆到，試多次？");
           btn.disabled = false; btn.textContent = origText;
           return;
         }
         // keep icon/title/topic as the user has them — refresh is about the
         // CONTENT going stale, not about undoing a rename
         s.sub = r.section.sub || ""; s.lines = r.section.lines || []; s.links = r.section.links || [];
+        s.updatedAt = new Date().toISOString();
         render();
+        // render() rebuilt the block, so the "just updated" note goes into the
+        // FRESH element — otherwise it lands on a node already thrown away
+        const after = document.getElementById("secout-" + i);
+        if (after) after.innerHTML = `<div class="ai-msg ok">✅ 更新咗，內容係上面嗰啲。</div>`;
         await saveNow(`AI 更新咗「${s.title}」嘅資料`);
         flash(`已經更新「${s.title}」`);
       } catch (e){
-        flash("出咗問題：" + e.message);
+        stop();
+        if (out) out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
+        else flash("出咗問題：" + e.message);
         btn.disabled = false; btn.textContent = origText;
       }
     }));
@@ -2381,7 +2403,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     }));
     wireCustomSections();
     wireLiveChecks();
-    wireAiRefreshToggles();
     wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
       (from, to) => reorderHomeBlocks(state.snapshot, from, to));
     const ex = $("#btn-export");
