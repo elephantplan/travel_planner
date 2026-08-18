@@ -1189,8 +1189,39 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       dateStart: m.dateStart || "",
       dateEnd: m.dateEnd || "",
     }, payload);
-    const res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body) });
-    return res.json();
+    // Everything that can go wrong INSIDE the edge function comes back as
+    // {ok:false, message} with CORS headers on it. So if fetch itself rejects,
+    // or the reply has no readable JSON, the request died before the function
+    // could answer — the worker was killed mid-call (a Gemini call that never
+    // returns keeps it running until the platform pulls the plug), or the
+    // network dropped. Both surface as a bare TypeError whose message is the
+    // browser's own wording ("Load failed" / "Failed to fetch"), so translate.
+    const ctl = new AbortController();
+    // Long enough for a slow generate, short enough that the user isn't left
+    // staring at a spinner — the edge function is killed around 150s anyway,
+    // and its death is silent, so bail first and say something useful.
+    const timer = setTimeout(() => ctl.abort(), 100000);
+    let res;
+    try {
+      res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
+    } catch (e){
+      if (e && e.name === "AbortError"){
+        throw new Error("AI 諗咗超過 100 秒都未有回音，可能係 Gemini 塞緊車。等一陣再撳多次。");
+      }
+      if (e instanceof TypeError){
+        // NOT the same story as a dead database — the page itself is clearly
+        // loading, so blame the call, not the DB.
+        throw new Error("連唔到 AI 服務。可能係今次 call 做得太耐俾系統中斷咗，或者網絡斷開咗，再試一次通常就得。");
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+    try {
+      return await res.json();
+    } catch (e){
+      throw new Error(`AI 服務答咗個空白／壞咗嘅回覆（HTTP ${res.status}）。多數係今次 call 做得太耐俾系統中斷咗，再試一次通常就得。`);
+    }
   }
 
   // Every AI answer is kept, so the family can read back what was asked.
