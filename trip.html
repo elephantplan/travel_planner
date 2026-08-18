@@ -1197,16 +1197,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // network dropped. Both surface as a bare TypeError whose message is the
     // browser's own wording ("Load failed" / "Failed to fetch"), so translate.
     const ctl = new AbortController();
-    // Long enough for a slow generate, short enough that the user isn't left
-    // staring at a spinner — the edge function is killed around 150s anyway,
-    // and its death is silent, so bail first and say something useful.
-    const timer = setTimeout(() => ctl.abort(), 100000);
+    // A Gemini text call that hasn't answered in a minute is not about to.
+    // Bail well before the platform's own ~150s kill, which closes the socket
+    // with no status and no CORS header — i.e. silently, with nothing to show.
+    const timer = setTimeout(() => ctl.abort(), 60000);
     let res;
     try {
       res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
     } catch (e){
       if (e && e.name === "AbortError"){
-        throw new Error("AI 諗咗超過 100 秒都未有回音，可能係 Gemini 塞緊車。等一陣再撳多次。");
+        throw new Error("AI 諗咗超過 60 秒都未有回音，可能係 Gemini 塞緊車。等一陣再撳多次。");
       }
       if (e instanceof TypeError){
         // NOT the same story as a dead database — the page itself is clearly
