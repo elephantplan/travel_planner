@@ -1,0 +1,10 @@
+{
+  "name": "麻雀計分",
+  "short_name": "麻雀計分",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1f17",
+  "theme_color": "#0d1f17",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

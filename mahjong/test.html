@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-HK">
+<head><meta charset="utf-8"><title>計分自測</title>
+<style>body{font-family:ui-monospace,monospace;background:#0d1f17;color:#eef6f0;padding:20px;line-height:1.6}
+.pass{color:#4ade80}.fail{color:#f87171}h1{font-size:18px}</style></head>
+<body><h1>麻雀計分邏輯自測</h1><div id="out"></div>
+<script type="module">
+import { settleRound, fanFromTypes, applyExclusions, playerLedger, settlement } from './core.js';
+
+const R = { name:'25雞', minFan:3, maxFan:10, payMode:'half',
+  table:{3:25,4:50,5:100,6:150,7:200,8:250,9:300,10:400} };
+const RF = { ...R, payMode:'full' };
+
+let pass = 0, fail = 0;
+const out = document.getElementById('out');
+function eq(name, got, want) {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  ok ? pass++ : fail++;
+  out.insertAdjacentHTML('beforeend',
+    `<div class="${ok?'pass':'fail'}">${ok?'✅':'❌'} ${name}` +
+    (ok ? '' : `<br>&nbsp;&nbsp;得到 ${JSON.stringify(got)}<br>&nbsp;&nbsp;應該 ${JSON.stringify(want)}`) + '</div>');
+}
+const zero = (d) => Math.abs(d.reduce((a, b) => a + b, 0)) < 1e-9;
+
+// 每局加減
+eq('自摸 4 番', settleRound(R,{kind:'win',winner:0,loser:null,fan:4}), [150,-50,-50,-50]);
+eq('半銃 4 番', settleRound(R,{kind:'win',winner:0,loser:2,fan:4}), [100,-25,-50,-25]);
+eq('全銃 4 番', settleRound(RF,{kind:'win',winner:0,loser:2,fan:4}), [150,0,-150,0]);
+eq('流局', settleRound(R,{kind:'draw'}), [0,0,0,0]);
+eq('詐糊（封頂賠三家）', settleRound(R,{kind:'false_win',winner:1}), [400,-1200,400,400]);
+eq('封頂：13 番當 10 番', settleRound(R,{kind:'win',winner:0,loser:null,fan:13}),
+                          settleRound(R,{kind:'win',winner:0,loser:null,fan:10}));
+eq('低過起糊當起糊', settleRound(R,{kind:'win',winner:0,loser:null,fan:1}),
+                    settleRound(R,{kind:'win',winner:0,loser:null,fan:3}));
+
+// 總和必為 0
+for (const c of [
+  {kind:'win',winner:0,loser:null,fan:7}, {kind:'win',winner:3,loser:1,fan:5},
+  {kind:'false_win',winner:2}, {kind:'draw'},
+]) eq('加減總和為 0 · ' + JSON.stringify(c), zero(settleRound(R,c)), true);
+
+// 番種
+eq('番種加總', fanFromTypes(['ping','duidui'], R), 4);
+eq('大牌直接封頂', fanFromTypes(['shisanyao'], R), 10);
+eq('清一色取消混一色', applyExclusions(['hunyi','qingyi'],'qingyi'), ['qingyi']);
+eq('大三元取消小三元', applyExclusions(['xiaosan','dasan'],'dasan'), ['dasan']);
+
+// 換人：數跟返個人
+const seats = [
+  {seat:0,player_name:'阿明',from_seq:0,to_seq:null},
+  {seat:1,player_name:'阿華',from_seq:0,to_seq:null},
+  {seat:2,player_name:'阿強',from_seq:0,to_seq:1},
+  {seat:2,player_name:'阿德',from_seq:1,to_seq:null},
+  {seat:3,player_name:'阿珊',from_seq:0,to_seq:null},
+];
+const rounds = [
+  {seq:1,kind:'win',winner_seat:0,loser_seat:2,fan:4,deltas:[100,-25,-50,-25]},
+  {seq:2,kind:'win',winner_seat:1,loser_seat:null,fan:5,deltas:[-100,300,-100,-100]},
+];
+const led = playerLedger(seats, rounds);
+eq('阿強只計換走前嗰局', led.find(p=>p.name==='阿強').total, -50);
+eq('阿德只計接手之後', led.find(p=>p.name==='阿德').total, -100);
+eq('阿明兩局都計', led.find(p=>p.name==='阿明').total, 0);
+
+// 找數
+const tx = settlement(led);
+const net = {};
+for (const p of led) net[p.name] = (net[p.name]||0) + p.total;
+for (const t of tx) { net[t.from] += t.amt; net[t.to] -= t.amt; }
+eq('找數後個個歸零', Object.values(net).every(v => Math.abs(v) < 1e-9), true);
+eq('找數交易數目 <= 人數-1', tx.length <= Object.keys(net).length - 1, true);
+
+out.insertAdjacentHTML('beforeend',
+  `<h1 class="${fail?'fail':'pass'}">${pass} 個通過 · ${fail} 個失敗</h1>`);
+</script></body></html>

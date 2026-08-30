@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>麻雀計分</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1f17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="icon.svg">
+<style>
+  :root {
+    --bg: #0d1f17; --card: #14301f; --card2: #1b3d2a; --line: #2a5a3d;
+    --ink: #eef6f0; --dim: #9dbfab; --up: #4ade80; --down: #f87171;
+    --accent: #d4af37; --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans HK", "PingFang HK", "Microsoft JhengHei", sans-serif;
+    padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 8px);
+  }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 12px; }
+  h1 { font-size: 20px; margin: 4px 0 14px; letter-spacing: .05em; }
+  h2 { font-size: 15px; margin: 18px 0 8px; color: var(--dim); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+  button { font: inherit; color: inherit; border: 0; border-radius: 12px; padding: 14px; background: var(--card2); cursor: pointer; }
+  button:active { transform: scale(.98); }
+  button[disabled] { opacity: .4; }
+  .primary { background: var(--accent); color: #22190a; font-weight: 700; width: 100%; font-size: 17px; }
+  .ghost { background: transparent; border: 1px solid var(--line); }
+  input, select {
+    font: inherit; color: var(--ink); background: #0a170f; border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; width: 100%;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .muted { color: var(--dim); font-size: 13px; }
+  .hidden { display: none !important; }
+
+  /* 四家分數卡 */
+  .seats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .seat .wind { color: var(--accent); font-size: 12px; letter-spacing: .2em; }
+  .seat .name { font-size: 16px; font-weight: 600; margin: 2px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat .amt { font-size: 26px; font-weight: 700; }
+  .seat.sel { outline: 2px solid var(--accent); }
+
+  .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .actions button { padding: 16px 8px; font-size: 16px; }
+  .actions .win { background: var(--accent); color: #22190a; font-weight: 700; grid-column: span 3; font-size: 19px; }
+
+  /* 番數鍵盤 */
+  .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .keys button { font-size: 20px; padding: 16px 0; font-variant-numeric: tabular-nums; }
+  .keys button.on { background: var(--accent); color: #22190a; font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 14px; background: transparent; }
+  .chip.on { background: var(--accent); color: #22190a; border-color: var(--accent); font-weight: 600; }
+
+  /* 對話框 */
+  dialog { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 16px; padding: 0; width: min(94vw, 500px); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  .dlg { padding: 16px; }
+  .dlg h3 { margin: 0 0 12px; font-size: 17px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--dim); font-weight: 600; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .tabs { display: flex; gap: 6px; margin: 12px 0; }
+  .tabs button { flex: 1; padding: 10px; font-size: 14px; background: transparent; border: 1px solid var(--line); }
+  .tabs button.on { background: var(--card2); border-color: var(--accent); }
+
+  .banner { background: var(--card2); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+  .status { font-size: 12px; color: var(--dim); text-align: center; padding: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── 開局 ───────────────────────────── -->
+  <section id="setup">
+    <h1>🀄 麻雀計分</h1>
+    <div class="card">
+      <h2 style="margin-top:0">玩法</h2>
+      <div id="presetList" class="grid2"></div>
+      <div id="tableEdit" class="hidden" style="margin-top:12px">
+        <div class="muted" style="margin-bottom:6px">番數換錢對照表（可改）</div>
+        <div id="tableInputs" class="grid4"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <label class="muted" style="flex:1">出銃付法</label>
+        <select id="payMode" style="width:auto">
+          <option value="half">半銃（出銃全數，另兩家各半）</option>
+          <option value="full">全銃（出銃者獨付）</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">四位玩家</h2>
+      <div id="nameInputs"></div>
+    </div>
+
+    <button id="startBtn" class="primary">開始牌局</button>
+    <p class="muted" style="text-align:center;margin-top:14px">
+      開局後會有一條分享連結，朋友開條 link 就睇到實時成績。
+    </p>
+  </section>
+
+  <!-- ── 牌局 ───────────────────────────── -->
+  <section id="game" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h1 style="margin:0">🀄 <span id="rulesetName"></span></h1>
+      <button id="shareBtn" class="ghost" style="padding:8px 12px;font-size:14px">分享</button>
+    </div>
+    <div id="viewerBanner" class="banner hidden">👀 觀戰中 · 實時更新（唔改得到分數）</div>
+    <div id="finishedBanner" class="banner hidden">✅ 呢局牌已經完咗，下面係最終結果</div>
+
+    <div id="seats" class="seats"></div>
+
+    <div id="hostActions" class="actions">
+      <button class="win" id="winBtn">食糊</button>
+      <button id="drawBtn" class="ghost">流局</button>
+      <button id="falseWinBtn" class="ghost">詐糊</button>
+      <button id="subBtn" class="ghost">換人</button>
+      <button id="undoBtn" class="ghost">撤銷上局</button>
+      <button id="finishBtn" class="ghost">結束找數</button>
+      <button id="reopenBtn" class="ghost hidden">重開牌局</button>
+    </div>
+
+    <div class="tabs">
+      <button data-tab="log" class="on">逐局記錄</button>
+      <button data-tab="settle">結算 · 找數</button>
+    </div>
+
+    <div id="tabLog" class="card"></div>
+    <div id="tabSettle" class="card hidden"></div>
+    <div id="status" class="status"></div>
+  </section>
+
+</div>
+
+<!-- 食糊 / 詐糊 對話框 -->
+<dialog id="winDlg"><div class="dlg">
+  <h3 id="winTitle">邊個食糊？</h3>
+  <div id="winSeats" class="grid4" style="margin-bottom:14px"></div>
+
+  <div id="loserBlock">
+    <div class="muted" style="margin-bottom:6px">點食？</div>
+    <div id="loserSeats" class="grid4" style="margin-bottom:14px"></div>
+  </div>
+
+  <div id="fanBlock">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <span class="muted">幾多番</span>
+      <button id="toggleFanTypes" class="chip">勾番種計番</button>
+    </div>
+    <div id="fanKeys" class="keys" style="margin-bottom:10px"></div>
+    <div id="fanTypeChips" class="chips hidden" style="margin-bottom:10px"></div>
+  </div>
+
+  <div id="preview" class="card" style="margin:12px 0 14px;background:var(--card2)"></div>
+  <div class="grid2">
+    <button id="winCancel" class="ghost">取消</button>
+    <button id="winOk" class="primary">確認</button>
+  </div>
+</div></dialog>
+
+<!-- 換人 -->
+<dialog id="subDlg"><div class="dlg">
+  <h3>邊個位換人？</h3>
+  <div id="subSeats" class="grid4" style="margin-bottom:14px"></div>
+  <input id="subName" placeholder="新玩家名" autocomplete="off">
+  <p class="muted">舊玩家嘅數會封盤停喺呢一刻，新玩家由下一局計起。</p>
+  <div class="grid2">
+    <button id="subCancel" class="ghost">取消</button>
+    <button id="subOk" class="primary">確認換人</button>
+  </div>
+</div></dialog>
+
+<!-- 分享 -->
+<dialog id="shareDlg"><div class="dlg">
+  <h3>分享俾同枱朋友</h3>
+  <p class="muted">開條 link 就實時睇到成績（改唔到分數）。</p>
+  <input id="shareUrl" readonly>
+  <div class="grid2" style="margin-top:12px">
+    <button id="shareClose" class="ghost">閂</button>
+    <button id="shareCopy" class="primary">複製連結</button>
+  </div>
+</div></dialog>
+
+<!-- Supabase client 收埋喺 vendor/，唔靠 CDN：離線同封閉網絡都用得 -->
+<script src="vendor/supabase.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
