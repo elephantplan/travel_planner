@@ -1,0 +1,32 @@
+# Supabase 嘅免費方案會將「一連 7 日冇任何 API 流量」嘅 project 自動暫停。
+# 一暫停，成個 host 就連唔到，主頁同行程頁都會 fetch 失敗（瀏覽器報
+# 「Load failed」／「Failed to fetch」）—— 2026-08 就發生過一次。
+# 每日打一次 REST endpoint 就當有流量，唔會再瞓着。
+#
+# 順帶做埋每日健康檢查：curl -f 會令 HTTP 4xx/5xx 都 fail 個 job，
+# 所以 RLS 改壞咗、key 過咗期呢類問題，GitHub 會即刻 email 你。
+#
+# 已知限制：GitHub 對連續 60 日冇 commit 嘅 repo 會自動停用 scheduled
+# workflow（會 email 提你一撳 re-enable）。即係話呢個大幅減少但唔係
+# 完全杜絕瞓着嘅機會。
+name: keep-supabase-awake
+
+on:
+  schedule:
+    - cron: "17 3 * * *"      # 每日 03:17 UTC = 香港時間 11:17
+  workflow_dispatch:           # 可以隨時手動撳一次
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping Supabase REST
+        # 呢條 anon key 本身就係公開嘅（明碼寫喺 index.html，成個 app 靠
+        # 「唔公開條 link」做保護而唔係密碼），所以刻意唔放 secret —— 放咗
+        # 只會製造一種安全嘅錯覺。
+        env:
+          KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA
+        run: |
+          curl -fsS -o /dev/null -w 'HTTP %{http_code} in %{time_total}s\n' \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            "https://aczykqleoamxdekfsgqh.supabase.co/rest/v1/trips?select=id&limit=1"
