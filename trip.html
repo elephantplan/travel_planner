@@ -3,116 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0D1014" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
 <title>行程</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* ============================================================
-   SEOUL TRANSIT DIAGRAM — design tokens
-   The trip is a transit system: each day is a line, each stop a
-   station, each connector a segment whose stroke encodes the mode.
+   DEPARTURE BOARD — design tokens
+
+   A day is a timetable: times aligned in one column on the left,
+   a hairline rail beside them, and what happens at each time to
+   the right. Density is fine — a real itinerary IS dense — as
+   long as everything hangs off one vertical axis.
+
+   The page carries ONE accent at a time, and it is the day you
+   are reading: --lc is set per day, and the rail, the active tab,
+   focus rings and primary buttons all take it. On the overview
+   the accent is plain ink. That is what keeps a screen full of
+   information from turning into confetti.
    ============================================================ */
 :root{
   color-scheme: light dark;
 
-  --paper:#F4F5F7;
+  --paper:#F7F7F5;
   --surface:#FFFFFF;
-  --surface-2:#EAEDF2;
-  --ink:#14171C;
-  --ink-soft:#5C6472;
-  --ink-faint:#949CAA;
-  --rule:#DDE2E9;
-  --rule-soft:#EBEEF2;
-  --shadow-1:0 1px 2px rgba(20,23,28,.05), 0 6px 16px -10px rgba(20,23,28,.16);
-  --shadow-2:0 2px 6px rgba(20,23,28,.08), 0 18px 40px -18px rgba(20,23,28,.28);
+  --surface-2:#F0F0ED;
+  --ink:#15181A;
+  --ink-soft:#5B6166;
+  --ink-faint:#8B9197;
+  --rule:#E4E4DF;
+  --rule-soft:#EFEFEB;
 
-  /* One accent per day. Days beyond the sixth are generated at runtime
-     (see dayColorVar) using --day-l for the theme's lightness. */
-  --d1:#8A94A6;
-  --d2:#0FA958;
-  --d3:#00A5DE;
-  --d4:#EF7C1C;
-  --d5:#9B6FB0;
-  --d6:#BB8336;
-  --day-l:45%;
+  /* barely-there elevation: hairlines do the work, not shadows */
+  --shadow-1:0 1px 2px rgba(20,23,26,.04);
+  --shadow-2:0 8px 30px -12px rgba(20,23,26,.22), 0 2px 6px rgba(20,23,26,.05);
 
-  --ok:#0E9E52;
-  --ok-bg:#E7F6ED;
-  --warn:#C96A10;
-  --warn-bg:#FDF0E1;
-  --danger:#CE4034;
-  --danger-bg:#FBEBE9;
-  --niece:#C93B92;
-  --niece-bg:#FCEBF5;
-  --info:#1D7FC4;
-  --info-bg:#E7F2FB;
-  --bookmark:#6B6FD1;
-  --bookmark-bg:#EDECFB;
+  /* One hue per day, at signage saturation rather than fluorescent.
+     Days past the sixth are generated at runtime (see dayColorVar). */
+  --d1:#6B7785;
+  --d2:#3F7D58;
+  --d3:#2F6E9E;
+  --d4:#B4682A;
+  --d5:#7A5E96;
+  --d6:#8A6B34;
+  --day-l:38%;
 
-  --r-sm:8px;
-  --r-md:12px;
-  --r-lg:18px;
-  --r-xl:26px;
+  --ok:#3F7D58;
+  --ok-bg:#EDF3EF;
+  --warn:#8A5B17;
+  --warn-bg:#F7F1E6;
+  --danger:#A8382C;
+  --danger-bg:#F8EDEB;
+  /* legacy aliases: these class names are baked into saved itinerary data,
+     so they still resolve — they just stop shouting */
+  --niece:#8A4C72;
+  --niece-bg:#F7EDF3;
+  --info:#2F6E9E;
+  --info-bg:#EDF2F6;
+  --bookmark:#5B6166;
+  --bookmark-bg:#F0F0ED;
 
-  --rail-w:30px;
+  --f-disp:'Instrument Sans','Noto Sans TC',system-ui,sans-serif;
+  --f-body:'Noto Sans TC','Hiragino Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --mono:var(--f-mono);
+
+  --r-sm:6px;
+  --r-md:10px;
+  --r-lg:14px;
+  --r-xl:22px;
+
+  /* the timetable gutter: time column + the rail it aligns to */
+  --gutter:66px;
+  --rail-w:var(--gutter);
   --tap:44px;
 }
 
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#0D1014;
-    --surface:#161A20;
-    --surface-2:#1E232B;
-    --ink:#E9ECF1;
-    --ink-soft:#98A1B0;
-    --ink-faint:#6C7686;
-    --rule:#272D37;
-    --rule-soft:#1E232B;
-    --shadow-1:0 1px 2px rgba(0,0,0,.5), 0 6px 16px -10px rgba(0,0,0,.7);
-    --shadow-2:0 2px 6px rgba(0,0,0,.55), 0 18px 40px -18px rgba(0,0,0,.85);
-    --d1:#98A2B4;
-    --d2:#2ABE72;
-    --d3:#38B8E8;
-    --d4:#F79240;
-    --d5:#B287C5;
-    --d6:#D2A055;
-    --day-l:62%;
-    --ok:#3CC177; --ok-bg:#12291C;
-    --warn:#E5964A; --warn-bg:#2C2013;
-    --danger:#E8695C; --danger-bg:#2E1917;
-    --niece:#EC81C0; --niece-bg:#2C1727;
-    --info:#54AEEA; --info-bg:#122534;
-    --bookmark:#9B9EFA; --bookmark-bg:#211F3C;
+    --paper:#0E1011;
+    --surface:#17191B;
+    --surface-2:#1F2225;
+    --ink:#ECEDEB;
+    --ink-soft:#9BA1A6;
+    --ink-faint:#6A7076;
+    --rule:#262A2D;
+    --rule-soft:#1E2124;
+    --shadow-1:0 1px 2px rgba(0,0,0,.35);
+    --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
+    --d1:#97A3B1; --d2:#63B183; --d3:#6BA8D6; --d4:#DD9457; --d5:#AE92C9; --d6:#C3A05F;
+    --day-l:66%;
+    --ok:#63B183;      --ok-bg:#16241C;
+    --warn:#D6A15C;    --warn-bg:#241E14;
+    --danger:#E0796B;  --danger-bg:#261715;
+    --niece:#D291B4;   --niece-bg:#241A20;
+    --info:#6BA8D6;    --info-bg:#141D24;
+    --bookmark:#9BA1A6;--bookmark-bg:#1F2225;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0D1014;
-  --surface:#161A20;
-  --surface-2:#1E232B;
-  --ink:#E9ECF1;
-  --ink-soft:#98A1B0;
-  --ink-faint:#6C7686;
-  --rule:#272D37;
-  --rule-soft:#1E232B;
-  --shadow-1:0 1px 2px rgba(0,0,0,.5), 0 6px 16px -10px rgba(0,0,0,.7);
-  --shadow-2:0 2px 6px rgba(0,0,0,.55), 0 18px 40px -18px rgba(0,0,0,.85);
-  --d1:#98A2B4;
-  --d2:#2ABE72;
-  --d3:#38B8E8;
-  --d4:#F79240;
-  --d5:#B287C5;
-  --d6:#D2A055;
-  --day-l:62%;
-  --ok:#3CC177; --ok-bg:#12291C;
-  --warn:#E5964A; --warn-bg:#2C2013;
-  --danger:#E8695C; --danger-bg:#2E1917;
-  --niece:#EC81C0; --niece-bg:#2C1727;
-  --info:#54AEEA; --info-bg:#122534;
-  --bookmark:#9B9EFA; --bookmark-bg:#211F3C;
+  --paper:#0E1011;
+  --surface:#17191B;
+  --surface-2:#1F2225;
+  --ink:#ECEDEB;
+  --ink-soft:#9BA1A6;
+  --ink-faint:#6A7076;
+  --rule:#262A2D;
+  --rule-soft:#1E2124;
+  --shadow-1:0 1px 2px rgba(0,0,0,.35);
+  --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
+  --d1:#97A3B1; --d2:#63B183; --d3:#6BA8D6; --d4:#DD9457; --d5:#AE92C9; --d6:#C3A05F;
+  --day-l:66%;
+  --ok:#63B183;      --ok-bg:#16241C;
+  --warn:#D6A15C;    --warn-bg:#241E14;
+  --danger:#E0796B;  --danger-bg:#261715;
+  --niece:#D291B4;   --niece-bg:#241A20;
+  --info:#6BA8D6;    --info-bg:#141D24;
+  --bookmark:#9BA1A6;--bookmark-bg:#1F2225;
 }
 
 *{box-sizing:border-box;}
@@ -121,492 +131,511 @@ body{
   margin:0;
   background:var(--paper);
   color:var(--ink);
-  font-family:'Noto Sans TC','Hiragino Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+  font-family:var(--f-body);
   font-size:15px;
-  line-height:1.65;
+  line-height:1.7;
   -webkit-font-smoothing:antialiased;
-  padding-bottom:calc(76px + env(safe-area-inset-bottom));
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
   overflow-wrap:break-word;
 }
-:focus-visible{outline:2.5px solid var(--d3);outline-offset:2px;border-radius:4px;}
+:focus-visible{outline:2px solid var(--lc,var(--ink));outline-offset:2px;border-radius:4px;}
 button{font-family:inherit;color:inherit;}
 img{max-width:100%;}
 
-.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;}
-.disp{font-family:'Bricolage Grotesque','Noto Sans TC',system-ui,sans-serif;font-optical-sizing:auto;}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;}
+.disp{font-family:var(--f-disp);}
 
-.wrap{max-width:720px;margin:0 auto;padding:0 16px;}
+/* every icon inherits the colour and optical weight of its text */
+.i{
+  width:1.15em;height:1.15em;flex:0 0 auto;display:inline-block;vertical-align:-.2em;
+  fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;
+}
+
+.wrap{max-width:720px;margin:0 auto;padding:0 18px;}
 
 /* ---------- top bar ---------- */
 .topbar{
   position:sticky;top:0;z-index:50;
-  background:color-mix(in srgb, var(--paper) 88%, transparent);
-  backdrop-filter:saturate(180%) blur(14px);
-  -webkit-backdrop-filter:saturate(180%) blur(14px);
+  background:color-mix(in srgb, var(--paper) 90%, transparent);
+  backdrop-filter:saturate(150%) blur(16px);
+  -webkit-backdrop-filter:saturate(150%) blur(16px);
   border-bottom:1px solid var(--rule);
 }
-.topbar-inner{max-width:720px;margin:0 auto;padding:8px 16px 0;}
-.brandrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:6px;}
+.topbar-inner{max-width:720px;margin:0 auto;padding:10px 18px 0;}
+.brandrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:9px;}
 .brandmark{display:flex;align-items:baseline;gap:8px;min-width:0;}
 .brandmark .sys{
-  font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
+  font-family:var(--f-body);font-weight:700;font-size:13.5px;letter-spacing:-.01em;
+  color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
-.brandmark .ko{font-size:12px;color:var(--ink-faint);}
-.topbtns{display:flex;gap:8px;flex:0 0 auto;}
+.brandmark .ko{font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);white-space:nowrap;}
+
+/* Labelled, always there. An emoji in a circle told you nothing about what
+   the control did, and Export was buried at the bottom of the overview. */
+.topbtns{display:flex;gap:6px;flex:0 0 auto;align-items:center;}
+.topbtn{
+  display:inline-flex;align-items:center;gap:6px;
+  height:34px;padding:0 12px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--surface);
+  font-family:var(--f-body);font-size:12.5px;font-weight:500;line-height:1;
+  color:var(--ink-soft);text-decoration:none;cursor:pointer;white-space:nowrap;
+  transition:color .15s, border-color .15s;
+}
+.topbtn .i{width:15px;height:15px;}
+.topbtn:hover{color:var(--ink);border-color:var(--ink-faint);}
+.topbtn:active{transform:scale(.96);}
+.topbtn.icononly{padding:0;width:34px;justify-content:center;}
 .iconbtn{
-  width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;
-  border:1px solid var(--rule);border-radius:11px;background:var(--surface);
-  cursor:pointer;font-size:15px;line-height:1;color:inherit;text-decoration:none;
+  width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;
+  border:1px solid var(--rule);border-radius:999px;background:var(--surface);
+  cursor:pointer;font-size:14px;line-height:1;color:var(--ink-soft);text-decoration:none;
 }
+.iconbtn .i{width:16px;height:16px;}
 .iconbtn:active{transform:scale(.94);}
 
-/* segmented day switcher — the line selector */
-.lines{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;scrollbar-width:none;scroll-behavior:smooth;}
+/* day switcher: an underline, not a filled pill — the active day's hue is
+   the only colour in the bar */
+.lines{display:flex;gap:2px;overflow-x:auto;padding:0;scrollbar-width:none;scroll-behavior:smooth;}
 .lines::-webkit-scrollbar{display:none;}
 .linebtn{
   flex:0 0 auto;display:flex;align-items:center;gap:7px;
-  padding:7px 13px 7px 10px;border-radius:999px;cursor:pointer;
-  border:1px solid var(--rule);background:var(--surface);
-  font-size:13px;font-weight:500;color:var(--ink-soft);
-  white-space:nowrap;transition:border-color .15s, color .15s, background .15s;
+  padding:9px 12px 11px;cursor:pointer;
+  border:0;border-bottom:2px solid transparent;background:transparent;
+  font-family:var(--f-body);font-size:13px;font-weight:500;color:var(--ink-faint);
+  white-space:nowrap;transition:color .15s, border-color .15s;
 }
 .linebtn .bullet{
-  width:9px;height:9px;border-radius:50%;flex:0 0 auto;
-  background:var(--lc,var(--ink-faint));
+  width:7px;height:7px;border-radius:50%;flex:0 0 auto;
+  background:var(--lc,var(--ink-faint));opacity:.5;transition:opacity .15s;
 }
-.linebtn .lbl{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;letter-spacing:.04em;}
-.linebtn[aria-selected="true"]{
-  color:var(--ink);border-color:var(--lc,var(--ink));
-  background:color-mix(in srgb, var(--lc,var(--ink)) 11%, var(--surface));
-}
-.linebtn[aria-selected="true"] .bullet{box-shadow:0 0 0 3px color-mix(in srgb, var(--lc) 26%, transparent);}
+.linebtn .lbl{font-family:var(--f-mono);font-weight:500;font-size:11.5px;letter-spacing:.02em;}
+.linebtn:hover{color:var(--ink-soft);}
+.linebtn[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--lc,var(--ink));}
+.linebtn[aria-selected="true"] .bullet{opacity:1;}
+.linebtn[aria-selected="true"] .lbl{color:var(--lc,var(--ink));font-weight:600;}
 
 /* ---------- hero / route board ---------- */
-.hero{padding:26px 0 6px;}
+.hero{padding:30px 0 4px;}
 .eyebrow{
-  font-family:'Bricolage Grotesque',sans-serif;font-size:11.5px;font-weight:700;
-  letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);
+  font-family:var(--f-mono);font-size:11px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
 }
 .hero h1{
-  font-family:'Noto Sans TC',sans-serif;font-weight:900;
-  font-size:clamp(30px,8.6vw,42px);line-height:1.14;letter-spacing:-.02em;
-  margin:8px 0 10px;
+  font-family:var(--f-body);font-weight:700;
+  font-size:clamp(27px,7.4vw,38px);line-height:1.22;letter-spacing:-.025em;
+  margin:10px 0 12px;
 }
 .hero-meta{
-  display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;
-  font-size:13px;color:var(--ink-soft);
+  display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;
+  font-size:12.5px;color:var(--ink-faint);
 }
-.hero-meta b{font-family:'JetBrains Mono',monospace;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;}
+.hero-meta b{font-family:var(--f-mono);font-weight:500;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
 
-/* The signature: a route board. Each row is a day = a line. */
-.board{margin:22px 0 6px;border:1px solid var(--rule);border-radius:var(--r-lg);background:var(--surface);overflow:hidden;}
+/* the route board: one row per day, the rail running through it */
+.board{margin:24px 0 4px;border-top:1px solid var(--rule);}
 .board-head{
   display:flex;align-items:center;justify-content:space-between;
-  padding:11px 15px;border-bottom:1px solid var(--rule);
+  padding:12px 2px 10px;
 }
-.board-head .t{font-family:'Bricolage Grotesque',sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);}
+.board-head .t{
+  font-family:var(--f-mono);font-size:10.5px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+}
 .board-row{
-  display:grid;grid-template-columns:52px 20px 1fr auto;align-items:center;gap:11px;
-  width:100%;padding:12px 15px;border:0;border-top:1px solid var(--rule-soft);
+  display:grid;grid-template-columns:42px 18px 1fr auto;align-items:center;gap:12px;
+  width:100%;padding:13px 2px;border:0;border-top:1px solid var(--rule-soft);
   background:transparent;text-align:left;cursor:pointer;
 }
-.board-row:first-of-type{border-top:0;}
+.board-row:first-of-type{border-top:1px solid var(--rule-soft);}
 .board-row:active{background:var(--surface-2);}
 .board-row .dcode{
-  font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;
-  letter-spacing:.08em;color:var(--lc);text-transform:uppercase;
+  font-family:var(--f-mono);font-weight:500;font-size:11.5px;
+  letter-spacing:.02em;color:var(--lc);text-transform:uppercase;
 }
-.board-row .track{position:relative;height:100%;min-height:30px;}
+.board-row .dcode .i{width:14px;height:14px;}
+.board-row .track{position:relative;height:100%;min-height:32px;}
 .board-row .track::before{
-  content:"";position:absolute;left:50%;top:-13px;bottom:-13px;width:4px;
-  transform:translateX(-50%);background:var(--lc);border-radius:2px;
+  content:"";position:absolute;left:50%;top:-14px;bottom:-14px;width:2px;
+  transform:translateX(-50%);background:var(--lc);opacity:.45;
 }
-.board-row:first-of-type .track::before{top:50%;border-radius:2px 2px 0 0;}
-.board-row:last-of-type .track::before{bottom:50%;border-radius:0 0 2px 2px;}
+.board-row:first-of-type .track::before{top:50%;}
+.board-row:last-of-type .track::before{bottom:50%;}
 .board-row .track::after{
-  content:"";position:absolute;left:50%;top:50%;width:11px;height:11px;
+  content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;
   transform:translate(-50%,-50%);border-radius:50%;
-  background:var(--surface);border:3px solid var(--lc);
+  background:var(--paper);border:2px solid var(--lc);
 }
 .board-row .stack{min-width:0;}
-.board-row .name{display:block;font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.35;}
-.board-row .sub{display:block;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);margin-top:2px;}
+.board-row .name{display:block;font-size:14.5px;font-weight:500;color:var(--ink);line-height:1.4;}
+.board-row .sub{display:block;font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);margin-top:1px;}
 .board-row .count{
-  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);
   font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 
 /* ---------- generic section ---------- */
-.sec{padding:26px 0 4px;}
+.sec{padding:30px 0 4px;}
 .sec-title{
-  font-family:'Noto Sans TC',sans-serif;font-weight:900;font-size:19px;
-  letter-spacing:-.01em;margin:0 0 3px;
+  font-family:var(--f-body);font-weight:700;font-size:18px;
+  letter-spacing:-.015em;margin:0 0 4px;
 }
-.sec-sub{font-size:13px;color:var(--ink-soft);margin:0 0 14px;line-height:1.6;}
-.sec h3{font-size:15px;font-weight:700;margin:22px 0 4px;}
-.rule{border:0;border-top:1px solid var(--rule);margin:24px 0 0;}
+.sec-sub{font-size:13px;color:var(--ink-faint);margin:0 0 16px;line-height:1.65;}
+.sec h3{font-size:15px;font-weight:700;margin:26px 0 6px;display:flex;align-items:center;gap:2px;}
+.rule{border:0;border-top:1px solid var(--rule);margin:28px 0 0;}
 
-.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:15px;}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:16px;}
 .panel + .panel{margin-top:10px;}
 .panel .k{
-  font-family:'Bricolage Grotesque',sans-serif;font-size:10.5px;font-weight:700;
-  letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);
+  font-size:11.5px;font-weight:500;letter-spacing:.01em;color:var(--ink-faint);
+  display:flex;align-items:center;gap:5px;
 }
-.panel .v{font-size:16px;font-weight:700;margin-top:3px;}
-.panel .d{font-size:13px;color:var(--ink-soft);margin-top:5px;line-height:1.6;}
+.panel .k .i{width:13px;height:13px;}
+.panel .v{font-size:16px;font-weight:600;margin-top:4px;}
+.panel .d{font-size:13px;color:var(--ink-soft);margin-top:6px;line-height:1.65;}
 
-/* chips — class names must match values stored in the itinerary data */
+/* Chips used to be filled lozenges in six colours, which is most of what made
+   a stop card look like a fruit machine. Now: hairline outline, ink text, and
+   only a real warning gets colour. Class names come from stored data. */
 .badge,.meta-chip,.niecepick{
   display:inline-flex;align-items:center;gap:4px;
-  font-size:11.5px;font-weight:600;line-height:1.45;
-  padding:4px 10px;border-radius:14px;max-width:100%;
-  border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-soft);
+  font-size:11.5px;font-weight:400;line-height:1.5;
+  padding:2px 8px;border-radius:var(--r-sm);max-width:100%;
+  border:1px solid var(--rule);background:transparent;color:var(--ink-soft);
 }
-.badge.note{background:var(--info-bg);border-color:transparent;color:var(--info);}
-.badge.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn);}
-.meta-chip.rating{background:var(--warn-bg);border-color:transparent;color:var(--warn);}
-.meta-chip.hours{background:var(--ok-bg);border-color:transparent;color:var(--ok);}
-.meta-chip.book{background:var(--info-bg);border-color:transparent;color:var(--info);}
-.meta-chip.book.warn{background:var(--danger-bg);color:var(--danger);}
-.meta-chip.closed{background:var(--danger-bg);border-color:transparent;color:var(--danger);font-weight:600;}
-.niecepick{background:var(--niece-bg);border-color:transparent;color:var(--niece);}
-.chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.badge .i,.meta-chip .i,.niecepick .i{width:12px;height:12px;}
+.badge.note{color:var(--ink-soft);}
+.badge.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 32%,transparent);}
+.meta-chip.rating{font-family:var(--f-mono);border-color:transparent;padding-left:0;color:var(--ink-soft);}
+.meta-chip.rating b{font-weight:600;color:var(--ink);}
+.meta-chip.hours{color:var(--ink-soft);}
+.meta-chip.book{color:var(--ink-soft);}
+.meta-chip.book.warn{color:var(--warn);}
+.meta-chip.closed{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 32%,transparent);}
+.niecepick{color:var(--niece);border-color:color-mix(in srgb,var(--niece) 34%,transparent);}
+.chiprow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center;}
 
-.wtable{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.wtable{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
 .wtable th{
-  font-family:'Bricolage Grotesque',sans-serif;font-size:10.5px;font-weight:700;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);
-  text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule);
+  font-size:11.5px;font-weight:500;letter-spacing:.01em;color:var(--ink-faint);
+  text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--rule);
 }
-.wtable td{padding:8px 9px;border-bottom:1px solid var(--rule-soft);}
-.wtable td.hi{color:var(--warn);font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
-.wtable td.lo{color:var(--info);font-weight:700;font-family:'JetBrains Mono',monospace;}
+.wtable td{padding:9px 10px 9px 0;border-bottom:1px solid var(--rule-soft);color:var(--ink-soft);}
+.wtable td.hi,.wtable td.lo{
+  font-family:var(--f-mono);font-weight:500;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.wtable td.hi{color:var(--ink);}
+.wtable td.lo{color:var(--ink-faint);}
 
-.clist{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:9px;}
-.clist li{display:flex;gap:10px;font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
-.clist .ico{flex:0 0 auto;font-size:16px;line-height:1.4;}
-.clist b{color:var(--ink);}
+.clist{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:10px;}
+.clist li{display:flex;gap:10px;font-size:13.5px;line-height:1.7;color:var(--ink-soft);}
+.clist li::before{
+  content:"";flex:0 0 auto;width:4px;height:4px;border-radius:50%;
+  background:var(--ink-faint);margin-top:.7em;
+}
+.clist .ico{flex:0 0 auto;font-size:15px;line-height:1.5;}
+.clist b{color:var(--ink);font-weight:600;}
 
-.legend{display:flex;flex-direction:column;gap:7px;margin-top:8px;}
-.legend-item{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);}
-.legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+.legend{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
+.legend-item{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-soft);}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
 
 /* ---------- paying for transport ---------- */
-.panel.verdict{border-left:4px solid var(--ok);margin-bottom:12px;}
+.panel.verdict{border-left:2px solid var(--ok);margin-bottom:12px;}
 .panel.verdict .k{color:var(--ok);}
-.panel.callout{border-left:4px solid var(--warn);margin-top:14px;}
+.panel.callout{border-left:2px solid var(--warn);margin-top:14px;}
 .panel.callout .k{color:var(--warn);}
-.fare-grid{display:flex;flex-direction:column;gap:9px;}
-.fare-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 14px;}
-.fare-card.pick{border-color:var(--ok);background:color-mix(in srgb, var(--ok) 6%, var(--surface));}
+.fare-grid{display:flex;flex-direction:column;gap:10px;}
+.fare-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:13px 15px;}
+.fare-card.pick{border-color:var(--ok);}
 .fare-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
-.fare-name{font-size:14.5px;font-weight:700;}
-.fare-name .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
-.fare-price{font-size:12.5px;color:var(--ink-soft);margin-top:3px;}
-.fare-line{font-size:12.5px;line-height:1.55;margin-top:5px;}
+.fare-name{font-size:14.5px;font-weight:600;}
+.fare-name .kr{font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:6px;}
+.fare-price{font-family:var(--f-mono);font-size:12px;color:var(--ink-soft);margin-top:3px;}
+.fare-line{font-size:12.5px;line-height:1.6;margin-top:5px;display:flex;gap:6px;align-items:flex-start;}
+.fare-line .i{width:14px;height:14px;margin-top:.25em;}
 .fare-line.good{color:var(--ok);}
 .fare-line.bad{color:var(--danger);}
-.opt{margin-top:10px;padding-top:10px;border-top:1px dashed var(--rule);}
-.opt-name{font-size:13.5px;font-weight:700;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
-.opt-cost{font-weight:500;color:var(--warn);font-size:12.5px;}
-.opt-note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:2px;}
+.opt{margin-top:11px;padding-top:11px;border-top:1px solid var(--rule-soft);}
+.opt-name{font-size:13.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.opt-cost{font-family:var(--f-mono);font-weight:500;color:var(--warn);font-size:12px;}
+.opt-note{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-top:3px;}
 
-.colorpick{display:flex;gap:8px;flex-wrap:wrap;margin:9px 2px 0;}
-.colorpick .swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;}
-.colorpick .swatch.active{border-color:var(--text);box-shadow:0 0 0 2px var(--surface);}
+.colorpick{display:flex;gap:8px;flex-wrap:wrap;margin:10px 2px 0;}
+.colorpick .swatch{width:24px;height:24px;border-radius:50%;border:2px solid transparent;padding:0;cursor:pointer;}
+.colorpick .swatch.active{border-color:var(--ink);box-shadow:0 0 0 2px var(--paper);}
 
 /* ---------- day header ---------- */
-.dayhead{padding:24px 0 4px;}
-.dayhead .kicker{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
+.dayhead{padding:28px 0 4px;}
+.dayhead .kicker{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
 .dayhead .dno{
-  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:12px;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--lc);
+  font-family:var(--f-mono);font-weight:600;font-size:11.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--lc);
 }
-.dayhead .kline{flex:1 1 auto;height:4px;border-radius:2px;background:var(--lc);opacity:.9;}
-.dayhead .date{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-faint);}
+.dayhead .kline{flex:1 1 auto;height:1px;background:var(--lc);opacity:.4;}
+.dayhead .date{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-faint);}
 .dayhead h2{
-  font-family:'Noto Sans TC',sans-serif;font-weight:900;
-  font-size:clamp(24px,6.6vw,32px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
+  font-family:var(--f-body);font-weight:700;
+  font-size:clamp(24px,6.6vw,32px);line-height:1.25;letter-spacing:-.025em;margin:0 0 8px;
 }
-.dayhead .intro{font-size:13.5px;color:var(--ink-soft);line-height:1.65;margin:0;}
-.dayhead .chiprow{margin-top:11px;}
+.dayhead .intro{font-size:13.5px;color:var(--ink-soft);line-height:1.7;margin:0;}
+.dayhead .chiprow{margin-top:12px;}
 
-/* bookmark board title — tap to rename, no separate "mode" */
 .boardname{
-  font-family:'Noto Sans TC',sans-serif;font-weight:900;
-  font-size:clamp(24px,6.6vw,32px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
-  cursor:pointer;display:inline-flex;align-items:baseline;gap:8px;
+  font-family:var(--f-body);font-weight:700;
+  font-size:clamp(24px,6.6vw,32px);line-height:1.25;letter-spacing:-.025em;margin:0 0 8px;
+  cursor:pointer;display:inline-flex;align-items:baseline;gap:9px;
 }
-.boardname .editpencil{font-size:14px;opacity:.45;}
+.boardname .editpencil{opacity:.35;}
+.boardname .editpencil .i{width:16px;height:16px;}
 .boardname-input{
-  display:block;width:100%;font-family:'Noto Sans TC',sans-serif;font-weight:900;
-  font-size:clamp(22px,6vw,30px);line-height:1.2;letter-spacing:-.02em;margin:0 0 7px;
-  padding:4px 2px 6px;border:0;border-bottom:2px solid var(--lc,var(--bookmark));
+  display:block;width:100%;font-family:var(--f-body);font-weight:700;
+  font-size:clamp(22px,6vw,30px);line-height:1.25;letter-spacing:-.025em;margin:0 0 8px;
+  padding:4px 2px 6px;border:0;border-bottom:1px solid var(--lc,var(--ink));
   background:transparent;color:var(--ink);
 }
 .boardname-input:focus{outline:none;}
 .picker-label{
-  font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--ink-faint);margin:16px 2px 7px;
+  font-size:11.5px;font-weight:500;letter-spacing:.01em;
+  color:var(--ink-faint);margin:18px 2px 8px;
 }
 .picker-label:first-child{margin-top:0;}
 
 .maptoggle{
-  display:flex;align-items:center;gap:7px;margin-top:14px;
+  display:inline-flex;align-items:center;gap:8px;margin-top:16px;
   padding:9px 14px;border-radius:999px;cursor:pointer;
   border:1px solid var(--rule);background:var(--surface);
-  font-size:13px;font-weight:600;color:var(--ink-soft);
+  font-size:12.5px;font-weight:500;color:var(--ink-soft);
 }
-.maptoggle .chev{transition:transform .2s;font-size:11px;}
-.maptoggle[aria-expanded="true"] .chev{transform:rotate(180deg);}
+.maptoggle .mapi .i,.maptoggle .chev .i{width:15px;height:15px;}
+.maptoggle .chev{display:inline-flex;transition:transform .2s;color:var(--ink-faint);transform:rotate(90deg);}
+.maptoggle[aria-expanded="true"] .chev{transform:rotate(-90deg);}
 .mapbox{
-  height:230px;margin-top:11px;border-radius:var(--r-lg);overflow:hidden;
+  height:240px;margin-top:12px;border-radius:var(--r-lg);overflow:hidden;
   border:1px solid var(--rule);background:var(--surface-2);
   /* Leaflet gives its panes z-index up to 1000. Without a stacking context of
      its own the map floats over the sticky nav and the AI sheet. */
   position:relative;z-index:0;isolation:isolate;
 }
-.mapbox.tall{height:300px;}
-.mapcap{font-size:11.5px;color:var(--ink-faint);margin:7px 2px 0;line-height:1.55;}
-.mapnote{font-size:12px;margin:8px 2px 0;line-height:1.6;color:var(--ink-soft);}
+.mapbox.tall{height:310px;}
+.mapcap{font-size:11.5px;color:var(--ink-faint);margin:8px 2px 0;line-height:1.6;}
+.mapnote{font-size:12px;margin:9px 2px 0;line-height:1.65;color:var(--ink-soft);}
 .mapnote.warn{color:var(--warn);}
 .mapnote .linkbtn{
-  background:none;border:0;padding:0 0 0 6px;font:inherit;color:var(--info);
-  text-decoration:underline;cursor:pointer;
+  background:none;border:0;padding:0 0 0 6px;font:inherit;color:var(--ink);
+  text-decoration:underline;text-underline-offset:2px;cursor:pointer;
 }
 .mapnote .geowhy{color:var(--ink-faint);font-size:11px;}
 .mapfallback{display:grid;place-items:center;height:100%;padding:20px;text-align:center;font-size:12.5px;color:var(--ink-faint);}
 .leaflet-container{background:var(--surface-2);font:inherit;}
 .mapnode{
-  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
-  color:#fff;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
-  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);
+  display:grid;place-items:center;width:20px;height:20px;border-radius:50%;
+  color:#fff;font-size:10px;font-weight:600;font-family:var(--f-mono);
+  border:2px solid var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.35);
 }
-/* an anchor such as the hotel: a plain dot, never a stop number */
-.mapnode.plain{width:13px;height:13px;border-width:2px;}
-/* a bookmarked list item on the overview map: a pin, not a route stop —
-   these are never connected by a line, so they must not look like one */
+.mapnode.plain{width:12px;height:12px;border-width:2px;}
 .mapboardpin{
-  display:grid;place-items:center;width:20px;height:20px;border-radius:50% 50% 50% 0;
-  transform:rotate(-45deg);color:#fff;font-size:10px;
-  border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);
+  width:14px;height:14px;border-radius:50% 50% 50% 0;
+  transform:rotate(-45deg);border:2px solid var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.35);
 }
-.mapboardpin span{transform:rotate(45deg);}
 
-/* ---------- the line: stops + segments ---------- */
-.line{margin-top:18px;}
-.unit{position:relative;}
+/* ---------- the timetable: times, rail, stops ---------- */
+.line{margin-top:22px;}
+.unit{position:relative;scroll-margin-top:120px;}
 .unit.lifted{position:relative;z-index:30;}
 .unit.lifted .stopcard{box-shadow:var(--shadow-2);border-color:var(--lc);}
 .unit.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
-/* segment between two stations; stroke encodes the transit mode */
-.seg{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:stretch;min-height:42px;}
+/* a leg between two stops. The stroke says how you get there. */
+.seg{display:grid;grid-template-columns:var(--gutter) 1fr;align-items:stretch;min-height:40px;}
 .seg-rail{position:relative;}
-/* the stroke of a segment says how you get there: on foot, by train, bus or car */
 .seg-rail::before{
-  content:"";position:absolute;left:calc(var(--rail-w)/2);top:0;bottom:0;
-  transform:translateX(-50%);width:4px;background:var(--lc);
+  content:"";position:absolute;right:10px;top:0;bottom:0;
+  transform:translateX(50%);width:2px;background:var(--lc);opacity:.4;
 }
 .seg[data-mode="walk"] .seg-rail::before{
-  background:repeating-linear-gradient(to bottom, var(--lc) 0 4px, transparent 4px 9px);
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 3px, transparent 3px 7px);
 }
 .seg[data-mode="bus"] .seg-rail::before{
-  background:repeating-linear-gradient(to bottom, var(--lc) 0 12px, transparent 12px 20px);
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 10px, transparent 10px 16px);
 }
 .seg[data-mode="taxi"] .seg-rail::before{
-  width:9px;
-  background:linear-gradient(90deg, var(--lc) 0 3px, transparent 3px 6px, var(--lc) 6px 9px);
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 6px, transparent 6px 10px);
 }
 .seg[data-mode="air"] .seg-rail::before{
-  background:repeating-linear-gradient(to bottom, var(--lc) 0 2px, transparent 2px 8px);opacity:.7;
+  background:repeating-linear-gradient(to bottom, var(--lc) 0 2px, transparent 2px 8px);
 }
 .seg-text{
-  font-size:12.5px;color:var(--ink-soft);padding:9px 0 9px 4px;line-height:1.5;
+  font-size:12.5px;color:var(--ink-faint);padding:9px 0 9px 14px;line-height:1.6;
   display:flex;align-items:center;gap:7px;flex-wrap:wrap;
 }
-.seg-text b{color:var(--ink);font-weight:700;font-family:'JetBrains Mono',monospace;}
-.seg-text .icon{font-size:14px;}
+.seg-text b{color:var(--ink-soft);font-weight:500;font-family:var(--f-mono);}
+.seg-text .icon{display:inline-flex;color:var(--ink-faint);}
+.seg-text .icon .i{width:14px;height:14px;}
 .seg-note{font-size:12.5px;color:var(--ink-faint);}
-.seg-note.warn{color:var(--warn);font-weight:600;}
-.seg-why{display:block;margin-top:3px;font-weight:400;font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
-/* refreshes ONE leg — the old "重算全日交通" button re-asked Google about
-   every leg in the day just to fix the one that actually changed */
+.seg-note.warn{color:var(--warn);display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.seg-why{display:block;margin-top:3px;font-weight:400;font-size:11.5px;color:var(--ink-faint);line-height:1.55;}
 .segrefresh{
-  margin-left:auto;flex:0 0 auto;width:22px;height:22px;border-radius:50%;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink-faint);
-  font-size:12px;line-height:1;cursor:pointer;
+  margin-left:auto;flex:0 0 auto;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid transparent;background:transparent;color:var(--ink-faint);cursor:pointer;
 }
-.segrefresh:active{background:var(--surface-2);color:var(--lc);border-color:var(--lc);}
-/* which station to which station, on its own line under the duration */
+.segrefresh .i{width:14px;height:14px;}
+.segrefresh:hover{color:var(--ink-soft);border-color:var(--rule);}
+.segrefresh:active{color:var(--lc);border-color:var(--lc);}
 .seg-route{
-  display:block;width:100%;margin-top:4px;padding-left:1px;
-  font-size:11.5px;line-height:1.6;color:var(--ink-faint);
-  font-family:'JetBrains Mono',monospace;letter-spacing:-.01em;
+  display:block;width:100%;margin-top:4px;
+  font-size:11px;line-height:1.7;color:var(--ink-faint);
+  font-family:var(--f-mono);letter-spacing:-.01em;
 }
 .seg.stale .seg-rail::before{
-  background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);
+  background:repeating-linear-gradient(to bottom, var(--warn) 0 3px, transparent 3px 8px);opacity:1;
 }
 
-/* the ＋ that lives in the gap between two stations */
+/* the ＋ living in the gap between two stops */
 .insertrow{
-  display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:center;
-  width:100%;height:24px;padding:0;border:0;background:none;
+  display:grid;grid-template-columns:var(--gutter) 1fr;align-items:center;
+  width:100%;height:22px;padding:0;border:0;background:none;
   position:relative;z-index:4;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 .ins-plus{
-  grid-column:1;justify-self:center;
-  width:19px;height:19px;border-radius:50%;
+  grid-column:1;justify-self:end;margin-right:10px;transform:translateX(50%);
+  width:17px;height:17px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-size:13px;line-height:1;color:var(--ink-faint);
-  background:var(--paper);border:1.5px dashed var(--rule);
-  transition:color .15s, border-color .15s, background .15s, transform .15s;
+  font-size:12px;line-height:1;color:var(--ink-faint);
+  background:var(--paper);border:1px dashed var(--rule);
+  transition:color .15s, border-color .15s, transform .15s;
 }
 .insertrow:hover .ins-plus{color:var(--lc);border-color:var(--lc);}
-.insertrow:active .ins-plus{color:var(--lc);border-color:var(--lc);background:var(--surface-2);transform:scale(1.15);}
+.insertrow:active .ins-plus{color:var(--lc);border-color:var(--lc);transform:translateX(50%) scale(1.15);}
 
-/* a note pinned between two stations — deliberately not a station: no number,
-   no photo, hollow marker, so it never reads as somewhere you're going */
+/* a note pinned between two stops — deliberately not a stop */
 .notecard{
-  background:var(--surface-2);border:1px dashed var(--rule);border-radius:var(--r-lg);
-  margin:0 0 4px 4px;overflow:hidden;position:relative;
+  border:0;border-left:1px solid var(--rule);border-radius:0;
+  background:transparent;margin:0 0 2px 14px;padding-left:12px;
+  overflow:hidden;position:relative;
 }
-.notecard.open{border-style:solid;border-color:var(--lc);}
-.notemain{display:flex;gap:9px;padding:10px 96px 10px 12px;align-items:flex-start;
+.notecard.open{border-left-color:var(--lc);}
+.notemain{display:flex;gap:8px;padding:8px 42px 8px 0;align-items:flex-start;
   -webkit-user-select:text;user-select:text;}
-.noteicon{flex:0 0 auto;font-size:14px;line-height:1.5;}
-.notetext{font-size:12.5px;line-height:1.6;color:var(--ink-soft);white-space:pre-wrap;min-width:0;}
-.notetext.empty{color:var(--ink-faint);font-style:italic;}
-/* hollow, smaller and grey — reads as "a marker on the line", not a station.
-   A dashed border is not an option at this size: 9px of circumference only
-   fits two dashes, which renders as a broken sliver rather than a ring. */
+.noteicon{flex:0 0 auto;color:var(--ink-faint);line-height:1.5;}
+.noteicon .i{width:14px;height:14px;}
+.notetext{font-size:12.5px;line-height:1.7;color:var(--ink-soft);white-space:pre-wrap;min-width:0;}
+.notetext.empty{color:var(--ink-faint);}
 .node.note{
-  width:7px;height:7px;background:var(--paper);border:2px solid var(--ink-faint);opacity:.9;
+  width:5px;height:5px;background:var(--paper);border:1.5px solid var(--ink-faint);
 }
 .notecard.open .notetext{display:none;}
 
-/* a station */
-.stop{display:grid;grid-template-columns:var(--rail-w) 1fr;align-items:start;}
+/* a stop */
+.stop{display:grid;grid-template-columns:var(--gutter) 1fr;align-items:start;}
 .stop-rail{position:relative;align-self:stretch;}
 .stop-rail::before{
-  content:"";position:absolute;left:calc(var(--rail-w)/2);top:0;bottom:0;
-  transform:translateX(-50%);width:4px;background:var(--lc);
+  content:"";position:absolute;right:10px;top:0;bottom:0;
+  transform:translateX(50%);width:2px;background:var(--lc);opacity:.4;
 }
-.unit:first-child .stop-rail::before{top:26px;}
-.unit:last-child .stop-rail::before{bottom:calc(100% - 26px);}
+.unit:first-child .stop-rail::before{top:22px;}
+.unit:last-child .stop-rail::before{bottom:calc(100% - 22px);}
+
+/* the time column — the axis everything else lines up against */
+.stoptime{
+  position:absolute;right:24px;top:22px;transform:translateY(-50%);
+  font-family:var(--f-mono);font-size:11.5px;font-weight:500;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+  color:var(--ink-soft);white-space:nowrap;text-align:right;
+}
+.stoptime:empty{display:none;}
+.stoptime .approx{color:var(--ink-faint);}
+.stoptime .raw{font-family:var(--f-body);font-size:10.5px;color:var(--ink-faint);}
+
 .node{
-  position:absolute;left:calc(var(--rail-w)/2);top:26px;transform:translate(-50%,-50%);
-  width:13px;height:13px;border-radius:50%;background:var(--lc);
-  border:2.5px solid var(--paper);box-sizing:content-box;z-index:2;
+  position:absolute;right:10px;top:22px;transform:translate(50%,-50%);
+  width:9px;height:9px;border-radius:50%;background:var(--lc);
+  border:2px solid var(--paper);box-sizing:content-box;z-index:2;
 }
-/* a meal is a major stop — drawn like an interchange station */
-.node[data-type="eat"]{width:15px;height:15px;background:var(--paper);border:4px solid var(--lc);}
-.node[data-type="rest"]{width:8px;height:8px;opacity:.75;}
-/* same number as the pin this stop points to on the day's map, so the two
-   are obviously the same place instead of the map being the only place a
-   stop's position in the route is legible */
+/* a meal is a major stop — drawn hollow, like an interchange */
+.node[data-type="eat"]{width:9px;height:9px;background:var(--paper);border:2.5px solid var(--lc);}
+.node[data-type="rest"]{width:6px;height:6px;opacity:.7;}
 .node.numbered{
-  width:18px;height:18px;border-radius:50%;background:var(--lc);
+  width:17px;height:17px;border-radius:50%;background:var(--lc);
   border:2px solid var(--paper);box-sizing:border-box;opacity:1;
   display:flex;align-items:center;justify-content:center;
-  color:#fff;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;
+  color:var(--paper);font-size:9.5px;font-weight:600;font-family:var(--f-mono);
 }
 
 .stopcard{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
-  margin:0 0 4px 4px;overflow:hidden;box-shadow:var(--shadow-1);
-  transition:border-color .15s, box-shadow .15s;
+  margin:0 0 8px 14px;overflow:hidden;position:relative;
+  transition:border-color .15s;
 }
-/* not a button — the name/desc text needs to stay long-press-selectable so it
-   can be copied; editing now happens through the explicit ✏️ button instead */
-.stopmain{display:flex;gap:12px;padding:12px 96px 12px 12px;align-items:flex-start;text-align:left;width:100%;-webkit-user-select:text;user-select:text;}
+.stopmain{display:flex;gap:12px;padding:13px 42px 13px 14px;align-items:flex-start;text-align:left;width:100%;-webkit-user-select:text;user-select:text;}
 .thumb{
-  flex:0 0 auto;width:76px;height:76px;border-radius:var(--r-md);overflow:hidden;
+  flex:0 0 auto;width:62px;height:62px;border-radius:var(--r-md);overflow:hidden;
   background:var(--surface-2);position:relative;
 }
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
-/* a real place with no picture yet: one tap fetches one */
 .thumb.ghost{
   display:flex;align-items:center;justify-content:center;cursor:pointer;
-  border:1.5px dashed var(--rule);background:transparent;
-  font-size:19px;color:var(--ink-faint);line-height:1.15;text-align:center;
+  border:1px dashed var(--rule);background:transparent;color:var(--ink-faint);
 }
-.thumb.ghost small{display:block;font-size:9.5px;margin-top:2px;}
+.thumb.ghost .i{width:20px;height:20px;}
 .thumb.ghost:active{background:var(--surface-2);}
-/* when a stop has no photo we show no box at all — the row just gets shorter.
-   while editing, the summary collapses to photo + time + name so the form stays reachable */
+.thumb.ghost small{display:none;}
 .stopcard.open .stopdesc,
 .stopcard.open .stopmain .chiprow,
 .stopcard.open .eatbox,
 .stopcard.open .tipbox,
 .stopcard.open .stopfoot{display:none;}
 .stopcard.open{border-color:var(--lc);}
-.unit{scroll-margin-top:112px;}
 .stopbody{flex:1 1 auto;min-width:0;}
-.stopname{font-size:15.5px;font-weight:700;line-height:1.35;margin:1px 0 0;}
-.stopname .kr{font-size:11.5px;color:var(--ink-faint);font-weight:400;margin-left:5px;}
-.stopname.unnamed{color:var(--ink-faint);font-weight:500;font-style:italic;}
-.stopdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:4px;}
-.stopcard .chiprow{margin-top:7px;}
-.eatbox{
-  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
-  background:var(--warn-bg);font-size:12.5px;line-height:1.55;color:var(--ink);
+.stopname{font-size:15px;font-weight:600;line-height:1.45;margin:0;letter-spacing:-.01em;}
+.stopname .kr{font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:7px;}
+.stopname.unnamed{color:var(--ink-faint);font-weight:400;}
+.stopdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.65;margin-top:5px;}
+.stopcard .chiprow{margin-top:8px;}
+
+/* notes attached to a stop: an indent and a rule, not a coloured slab */
+.eatbox,.tipbox,.bookbox{
+  margin:0 14px 12px;padding:0 0 0 12px;border-left:1px solid var(--rule);
+  background:transparent;font-size:12.5px;line-height:1.7;color:var(--ink-soft);
 }
-.eatbox b{
-  display:block;font-family:'Bricolage Grotesque',sans-serif;
-  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--warn);margin-bottom:2px;
+.eatbox b,.tipbox b,.bookbox b{
+  display:block;font-size:11px;font-weight:500;letter-spacing:.01em;
+  color:var(--ink-faint);margin-bottom:3px;
 }
-.tipbox{
-  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
-  background:var(--ok-bg);font-size:12.5px;line-height:1.55;color:var(--ink);
-}
-.tipbox b{
-  display:block;font-family:'Bricolage Grotesque',sans-serif;
-  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--ok);margin-bottom:2px;
-}
-/* booking/queue info on an AI-recommended restaurant — Google has no API for
-   this, so it's always the model's impression, never verified like the
-   rating chip is; the warning line makes that impossible to miss */
-.bookbox{
-  margin:9px 12px 0;padding:10px 12px;border-radius:var(--r-md);
-  background:var(--warn-bg);font-size:12.5px;line-height:1.6;color:var(--ink);
-}
-.bookbox b{
-  display:block;font-family:'Bricolage Grotesque',sans-serif;
-  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--warn);margin-bottom:2px;
-}
-.bookbox .warnline{display:block;color:var(--warn);font-size:11px;margin-top:4px;}
-.stopfoot{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px 12px;}
+.bookbox .warnline{display:flex;align-items:center;gap:5px;color:var(--warn);font-size:11px;margin-top:5px;}
+.bookbox .warnline .i{width:12px;height:12px;}
+
+/* outbound links: quiet text, not a row of coloured pills */
+.stopfoot{display:flex;gap:16px;flex-wrap:wrap;padding:0 14px 13px;}
 .maplink{
-  display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
-  color:var(--info);background:var(--info-bg);padding:6px 11px;border-radius:999px;
-  text-decoration:none;
+  display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:400;
+  color:var(--ink-faint);background:transparent;padding:0;border:0;border-radius:0;
+  font-family:inherit;cursor:pointer;
+  text-decoration:none;transition:color .15s;
 }
-.cardtools{position:absolute;top:6px;right:6px;display:flex;gap:6px;}
+.maplink .i{width:13px;height:13px;}
+.maplink:hover{color:var(--ink);}
+
+.cardtools{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:2px;}
 .editbtn,.draghandle{
-  width:38px;height:38px;display:grid;place-items:center;
-  border-radius:11px;background:var(--surface-2);border:1px solid var(--rule);
-  color:var(--ink-soft);font-size:15px;line-height:1;
+  width:32px;height:32px;display:grid;place-items:center;
+  border-radius:var(--r-sm);background:transparent;border:1px solid transparent;
+  color:var(--ink-faint);line-height:1;
 }
+.editbtn .i,.draghandle .i{width:16px;height:16px;}
 .editbtn{cursor:pointer;}
-.editbtn:active{background:var(--lc);color:#fff;border-color:transparent;}
-.stopcard.open .editbtn{background:var(--lc);color:#fff;border-color:transparent;}
+.editbtn:hover{color:var(--ink);background:var(--surface-2);}
+.editbtn:active,.stopcard.open .editbtn{background:var(--lc);color:var(--paper);}
 .draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
-.draghandle:active{cursor:grabbing;background:var(--lc);color:#fff;border-color:transparent;}
-.unit.lifted .draghandle{background:var(--lc);color:#fff;border-color:transparent;}
-.stopcard{position:relative;}
+.draghandle:active,.unit.lifted .draghandle{cursor:grabbing;background:var(--lc);color:var(--paper);}
 
 /* expanded editor */
-.editor{border-top:1px solid var(--rule);padding:13px 12px 14px;background:var(--surface-2);}
-.field{margin-bottom:11px;}
+.editor{border-top:1px solid var(--rule);padding:14px;background:var(--surface-2);}
+.field{margin-bottom:12px;}
 .field:last-child{margin-bottom:0;}
 .field label{
-  display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px;
+  display:block;font-size:11.5px;font-weight:500;letter-spacing:.01em;
+  color:var(--ink-faint);margin-bottom:6px;
 }
 .input,.textarea,.select{
   width:100%;font-family:inherit;font-size:16px;color:var(--ink);
@@ -615,359 +644,377 @@ img{max-width:100%;}
 }
 .textarea{resize:vertical;min-height:74px;}
 .select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%);background-position:calc(100% - 18px) 52%,calc(100% - 13px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:36px;}
-.input:focus,.textarea:focus,.select:focus{outline:2px solid var(--lc,var(--d3));outline-offset:-1px;border-color:transparent;}
-.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;}
+.input:focus,.textarea:focus,.select:focus{outline:2px solid var(--lc,var(--ink));outline-offset:-1px;border-color:transparent;}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;}
 .row2 > *{min-width:0;}
 
-.suggest{margin-top:5px;display:flex;flex-direction:column;gap:5px;}
+.suggest{margin-top:6px;display:flex;flex-direction:column;gap:5px;}
 .suggest-item{
   text-align:left;width:100%;cursor:pointer;
-  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:9px 11px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:10px 12px;
 }
 .suggest-item:active{background:var(--surface-2);}
-.suggest-item .n{font-size:13.5px;font-weight:700;}
-.suggest-item .a{font-size:11.5px;color:var(--ink-faint);margin-top:1px;}
-.hint{font-size:11.5px;color:var(--ink-faint);margin:5px 2px 0;line-height:1.5;}
+.suggest-item .n{font-size:13.5px;font-weight:600;}
+.suggest-item .a{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+.hint{font-size:11.5px;color:var(--ink-faint);margin:6px 2px 0;line-height:1.6;}
 
-.editor-tools{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px;}
+.editor-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
 .btn{
-  display:inline-flex;align-items:center;gap:6px;cursor:pointer;
-  font-size:12.5px;font-weight:600;padding:9px 14px;border-radius:999px;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft);
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;
+  font-family:var(--f-body);font-size:13px;font-weight:500;padding:10px 16px;
+  border-radius:999px;min-height:40px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink);
+  transition:border-color .15s, background .15s;
 }
-.btn:active{transform:scale(.97);}
+.btn .i{width:15px;height:15px;}
+.btn:hover{border-color:var(--ink-faint);}
+.btn:active{transform:scale(.98);}
 .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);}
-.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 32%,transparent);}
-.btn.wide{width:100%;justify-content:center;}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent);}
+.btn.wide{width:100%;}
+.btn.wide + .btn.wide{margin-top:8px;}
 .addstop{
-  width:100%;margin-top:12px;padding:14px;cursor:pointer;
-  border:1.5px dashed var(--rule);border-radius:var(--r-lg);background:transparent;
-  color:var(--ink-soft);font-size:13.5px;font-weight:700;
+  width:100%;margin-top:14px;padding:14px;cursor:pointer;
+  border:1px dashed var(--rule);border-radius:var(--r-lg);background:transparent;
+  color:var(--ink-faint);font-size:13px;font-weight:500;
 }
-.addstop:active{background:var(--surface);}
+.addstop:hover{color:var(--ink-soft);border-color:var(--ink-faint);}
 
 .recalc{
   width:100%;margin-top:8px;padding:12px;cursor:pointer;
-  border:1.5px solid var(--rule);border-radius:var(--r-lg);background:transparent;
-  color:var(--ink-soft);font-size:13px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border:1px solid var(--rule);border-radius:var(--r-lg);background:transparent;
+  color:var(--ink-soft);font-size:12.5px;font-weight:500;
 }
-.recalc:active{background:var(--surface);}
-.recalc[data-stale="1"]{border-color:var(--warn);color:var(--warn);background:var(--warn-bg);}
+.recalc .i{width:15px;height:15px;}
+.recalc:hover{border-color:var(--ink-faint);color:var(--ink);}
+.recalc[data-stale="1"]{border-color:color-mix(in srgb,var(--warn) 40%,transparent);color:var(--warn);}
+.recalc:disabled{opacity:.5;}
 
 /* ---------- 選幾個地點一齊搬 ---------- */
-.stopcard.selecting .stopmain{padding-right:12px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+.stopcard.selecting .stopmain{padding-right:14px;cursor:pointer;-webkit-user-select:none;user-select:none;}
 .stopcard.selecting{border-color:var(--rule);}
-.stopcard.selecting.checked{border-color:var(--lc,var(--d3));box-shadow:0 0 0 1.5px var(--lc,var(--d3)) inset;}
-.selbox{flex:0 0 auto;font-size:19px;line-height:1;padding-top:2px;}
+.stopcard.selecting.checked{border-color:var(--lc,var(--ink));}
+.selbox{
+  flex:0 0 auto;width:20px;height:20px;border-radius:var(--r-sm);margin-top:1px;
+  border:1px solid var(--rule);display:grid;place-items:center;color:var(--paper);
+}
+.stopcard.checked .selbox{background:var(--lc,var(--ink));border-color:transparent;}
+.selbox .i{width:13px;height:13px;}
 .selectbar{
-  position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));z-index:40;
-  margin-top:12px;padding:10px 12px;border-radius:var(--r-lg);
+  position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));z-index:40;
+  margin-top:14px;padding:11px 14px;border-radius:var(--r-lg);
   background:var(--surface);border:1px solid var(--rule);box-shadow:var(--shadow-2);
-  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;
+  display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;
 }
 .selectbar span{flex:1;}
-.selectbar .btn{padding:8px 14px;font-size:12.5px;}
-.recalc:disabled{opacity:.55;}
+.selectbar .btn{padding:8px 14px;font-size:12.5px;min-height:36px;}
 
-.photogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;}
+.photogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
 .photogrid img{width:100%;height:70px;object-fit:cover;border-radius:var(--r-sm);cursor:pointer;border:2px solid transparent;display:block;}
-.photogrid img.on{border-color:var(--lc,var(--d3));}
+.photogrid img.on{border-color:var(--lc,var(--ink));}
 
-/* ---------- floating dock ---------- */
+/* ---------- bottom dock ---------- */
 .dock{
   position:fixed;left:0;right:0;bottom:0;z-index:60;
   display:flex;gap:8px;align-items:center;justify-content:center;
-  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
-  background:linear-gradient(to top, var(--paper) 62%, transparent);
+  padding:10px 16px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top, var(--paper) 58%, transparent);
   pointer-events:none;
 }
 .dock > *{pointer-events:auto;}
 .dockbtn{
   display:inline-flex;align-items:center;gap:7px;cursor:pointer;
-  font-size:13px;font-weight:700;padding:11px 17px;border-radius:999px;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink);
+  font-family:var(--f-body);font-size:12.5px;font-weight:500;
+  padding:10px 16px;border-radius:999px;min-height:40px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft);
   box-shadow:var(--shadow-1);
 }
+.dockbtn .dockbtn-i{display:inline-flex;}
+.dockbtn .i{width:15px;height:15px;}
+.dockbtn:hover{color:var(--ink);}
 .dockbtn.accent{background:var(--ink);color:var(--paper);border-color:var(--ink);}
 .dockbtn:active{transform:scale(.96);}
 .savestate{
-  position:fixed;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));
+  position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));
   transform:translateX(-50%);z-index:61;
-  font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px;
+  font-size:11.5px;font-weight:500;padding:6px 13px;border-radius:999px;
   background:var(--ink);color:var(--paper);box-shadow:var(--shadow-1);
   opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;
 }
 .savestate.on{opacity:1;}
 
-/* fixed banner shown while a brand-new trip's blank days are being
-   generated — lives outside #app (render() wipes that on every view
-   change) so the progress survives normal navigation while it runs */
 .genbanner{
   position:fixed;left:14px;right:14px;top:calc(10px + env(safe-area-inset-top));z-index:70;
   max-width:520px;margin:0 auto;
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
-  box-shadow:var(--shadow-2);padding:13px 16px;font-size:13.5px;display:none;
+  box-shadow:var(--shadow-2);padding:14px 16px;font-size:13.5px;display:none;
 }
-.genbanner.on{display:flex;align-items:center;gap:10px;}
-.genbanner .spin{
-  width:16px;height:16px;border-radius:999px;border:2.5px solid var(--rule);
-  border-top-color:var(--ink);flex:none;animation:genspin .8s linear infinite;
+.genbanner.on{display:flex;align-items:center;gap:11px;}
+.genbanner .spin,.spin{
+  width:15px;height:15px;border-radius:999px;border:2px solid var(--rule);
+  border-top-color:var(--ink);flex:none;display:inline-block;animation:genspin .8s linear infinite;
 }
 .genbanner.done .spin{display:none;}
 @keyframes genspin{to{transform:rotate(360deg);}}
-.genbanner .txt{flex:1;line-height:1.5;}
+.genbanner .txt{flex:1;line-height:1.6;}
 
 /* ---------- sheet + modal ---------- */
-.scrim{position:fixed;inset:0;z-index:80;background:rgba(10,12,16,.5);backdrop-filter:blur(3px);}
+.scrim{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--ink) 42%,transparent);backdrop-filter:blur(3px);}
 .sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:81;
   max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   background:var(--paper);border-radius:var(--r-xl) var(--r-xl) 0 0;
-  box-shadow:var(--shadow-2);
-  padding:8px 16px calc(22px + env(safe-area-inset-bottom));
+  box-shadow:var(--shadow-2);border-top:1px solid var(--rule);
+  padding:10px 18px calc(24px + env(safe-area-inset-bottom));
   animation:rise .26s cubic-bezier(.2,.8,.3,1);
 }
 .sheet-wide{max-width:720px;margin:0 auto;}
 @keyframes rise{from{transform:translateY(14px);opacity:.4;}to{transform:none;opacity:1;}}
-.grabber{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:0 auto 12px;}
-.sheet h3{font-size:17px;font-weight:900;margin:0 0 3px;}
-.sheet .sec-sub{margin-bottom:12px;}
-.sheet-close{position:absolute;top:14px;right:16px;}
+.grabber{width:34px;height:3px;border-radius:2px;background:var(--rule);margin:0 auto 14px;}
+.sheet h3{font-size:17px;font-weight:700;margin:0 0 4px;letter-spacing:-.015em;}
+.sheet .sec-sub{margin-bottom:14px;}
+.sheet-close{position:absolute;top:14px;right:18px;}
 
-.aibtns{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;}
-.askrow{display:flex;gap:7px;}
+/* export sheet: grouped by what you're actually trying to do */
+.exgroup{margin-top:18px;}
+.exgroup:first-of-type{margin-top:6px;}
+.exgroup-label{
+  font-size:11.5px;font-weight:500;letter-spacing:.01em;
+  color:var(--ink-faint);margin-bottom:9px;
+}
+.exhint{font-size:12px;color:var(--ink-faint);line-height:1.65;margin:8px 2px 0;}
+
+.aibtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.askrow{display:flex;gap:8px;}
 .askrow .input{flex:1 1 auto;}
-.ai-out{margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+.ai-out{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
 .ai-msg{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
-  padding:12px 13px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;
+  padding:13px 14px;font-size:13.5px;line-height:1.75;white-space:pre-wrap;
 }
-.dayai{margin-top:8px;border-color:var(--bookmark);color:var(--bookmark);font-weight:700;}
-/* the textfield clears itself once asked (so a follow-up question can be
-   typed straight away) — this is what keeps the just-asked question visible,
-   sitting right above its own answer instead of vanishing with the input */
-.askedecho{font-size:12px;color:var(--ink-faint);margin:0 0 2px;font-style:italic;}
+.ai-msg .i{width:14px;height:14px;margin-right:5px;}
+.ai-msg.ok{border-color:color-mix(in srgb,var(--ok) 40%,transparent);}
+.dayai{margin-top:10px;}
+.askedecho{font-size:12px;color:var(--ink-faint);margin:0 0 3px;}
+
 /* free-form sections the family adds themselves */
-.usec{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-bottom:10px;}
+.usec{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 15px;margin-bottom:10px;position:relative;}
 .usec-head{display:flex;align-items:flex-start;gap:8px;}
-.usec-title{flex:1;font-size:15px;font-weight:700;line-height:1.4;}
-.usec-tools{display:flex;gap:4px;flex:none;}
-.usec-sub{margin-top:4px;font-size:12px;color:var(--text-soft);line-height:1.6;}
-.usec-list{margin:9px 0 0;padding-left:18px;}
-.usec-list li{font-size:13.5px;line-height:1.75;margin-bottom:3px;}
-.usec-by{margin-top:9px;font-size:11px;color:var(--text-soft);}
-/* freshness stamp under every AI-updatable block — without it there's no way
-   to tell content written five minutes ago from content written in July */
-.lastupd{margin-top:6px;font-size:12px;color:var(--text-soft);}
+.usec-title{flex:1;font-size:15px;font-weight:600;line-height:1.45;letter-spacing:-.01em;}
+.usec-tools{display:flex;gap:2px;flex:none;}
+.usec-sub{margin-top:5px;font-size:12px;color:var(--ink-faint);line-height:1.65;}
+.usec-list{margin:11px 0 0;padding-left:16px;}
+.usec-list li{font-size:13.5px;line-height:1.8;margin-bottom:4px;color:var(--ink-soft);}
+.usec-list li::marker{color:var(--ink-faint);}
+.usec-by{margin-top:10px;font-size:11px;color:var(--ink-faint);}
+.lastupd{margin-top:8px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);letter-spacing:.01em;}
 .lastupd:empty{display:none;}
-.ai-msg.ok{border-color:var(--d2);}
+.usec.lifted{z-index:30;box-shadow:var(--shadow-2);border-color:var(--ink-faint);}
+.usec.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
+
 /* a long AI run needs to look alive: stage, clock, moving bar */
-.aibusy{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-top:10px;}
-.aibusy-top{display:flex;align-items:center;gap:8px;}
-.aibusy-now{font-size:13.5px;font-weight:650;flex:1;}
-.aibusy-secs{font-size:12px;color:var(--text-soft);}
+.aibusy{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:13px 14px;margin-top:10px;}
+.aibusy-top{display:flex;align-items:center;gap:9px;}
+.aibusy-now{font-size:13.5px;font-weight:500;flex:1;}
+.aibusy-secs{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-faint);}
 .aibusy-spin{width:14px;height:14px;border-radius:50%;flex:none;
-  border:2px solid var(--rule);border-top-color:var(--bookmark);animation:aispin .8s linear infinite;}
+  border:2px solid var(--rule);border-top-color:var(--ink);animation:aispin .8s linear infinite;}
 @keyframes aispin{to{transform:rotate(360deg)}}
-.aibusy-bar{margin-top:9px;height:4px;border-radius:99px;background:var(--surface-2);overflow:hidden;}
-.aibusy-bar i{display:block;height:100%;width:38%;border-radius:99px;background:var(--bookmark);animation:aislide 1.5s ease-in-out infinite;}
+.aibusy-bar{margin-top:10px;height:2px;border-radius:99px;background:var(--surface-2);overflow:hidden;}
+.aibusy-bar i{display:block;height:100%;width:38%;border-radius:99px;background:var(--ink-faint);animation:aislide 1.5s ease-in-out infinite;}
 @keyframes aislide{0%{margin-left:-38%}100%{margin-left:100%}}
-.aibusy-steps{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:9px;font-size:11.5px;color:var(--text-soft);}
-.aibusy-steps .now{color:var(--text);font-weight:650;}
+.aibusy-steps{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11.5px;color:var(--ink-faint);}
+.aibusy-steps .now{color:var(--ink);font-weight:500;}
 .aibusy-steps .done{color:var(--ok);}
-.aibusy-note{margin-top:8px;font-size:11.5px;line-height:1.6;color:var(--text-soft);}
-@media (prefers-reduced-motion:reduce){.aibusy-spin,.aibusy-bar i{animation:none}}
-.ai-change{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--lc,var(--d3));border-radius:var(--r-md);padding:12px 13px;}
+.aibusy-steps .i{width:12px;height:12px;}
+.aibusy-note{margin-top:9px;font-size:11.5px;line-height:1.65;color:var(--ink-faint);}
+@media (prefers-reduced-motion:reduce){.aibusy-spin,.aibusy-bar i,.spin{animation:none}}
+
+.ai-change{background:var(--surface);border:1px solid var(--rule);border-left:2px solid var(--lc,var(--ink));border-radius:var(--r-md);padding:13px 14px;}
 .ai-change[data-jumpitem]{cursor:pointer;}
 .ai-change[data-jumpitem]:active{background:var(--surface-2);}
 .ai-change .op{
-  font-family:'Bricolage Grotesque',sans-serif;font-size:10px;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+  font-size:11px;font-weight:500;letter-spacing:.01em;color:var(--ink-faint);
 }
-.ai-change .ttl{font-size:14.5px;font-weight:700;margin:3px 0;}
-.ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.6;}
-.idea-dayhint{font-size:12px;color:var(--bookmark);margin-top:6px;font-weight:600;}
+.ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
+.ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
+.idea-dayhint{font-size:12px;color:var(--ink-faint);margin-top:6px;}
 
 .ideasec-title{
-  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:11px;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
-  margin:16px 2px 8px;
+  font-weight:500;font-size:11.5px;letter-spacing:.01em;color:var(--ink-faint);
+  margin:18px 2px 9px;
 }
 .ideasec-title:first-child{margin-top:0;}
 .reslink{
   display:block;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
-  padding:11px 13px;margin-bottom:7px;text-decoration:none;color:inherit;
+  padding:12px 14px;margin-bottom:8px;text-decoration:none;color:inherit;
 }
-.reslink .resname{font-size:13.5px;font-weight:700;color:var(--info);}
-.reslink .resnote{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
+.reslink .resname{font-size:13.5px;font-weight:600;color:var(--ink);}
+.reslink .resnote{font-size:12px;color:var(--ink-faint);margin-top:3px;line-height:1.55;}
 
-.stayrow{border-top:1px solid var(--rule);padding-top:10px;margin-top:10px;}
+.stayrow{border-top:1px solid var(--rule-soft);padding-top:12px;margin-top:12px;}
 .stayrow:first-of-type{border-top:0;padding-top:0;margin-top:0;}
 .staywhen{
-  font-family:var(--mono);font-size:11px;color:var(--ink-soft);
-  letter-spacing:.02em;margin-bottom:3px;
+  font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);
+  letter-spacing:.01em;margin-bottom:4px;
 }
-.stayblock{border:1px solid var(--rule);border-radius:var(--r-md);padding:11px 12px;margin-bottom:10px;}
-.stayblock-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.stayblock{border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;margin-bottom:10px;}
+.stayblock-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;}
 .stayrange{display:flex;align-items:center;gap:8px;}
 .stayrange select{flex:1 1 auto;min-width:0;}
 .daystay{
-  font-size:12.5px;color:var(--ink-soft);margin-top:9px;
-  background:var(--surface-2);border-radius:var(--r-sm);padding:7px 10px;
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:12.5px;color:var(--ink-soft);margin-top:12px;
 }
-.daystay b{color:var(--ink);font-weight:700;}
+.daystay .i{width:14px;height:14px;color:var(--ink-faint);}
+.daystay b{color:var(--ink);font-weight:600;}
 
 /* ---------- home page section editing ---------- */
 .secedit{
   border:0;background:transparent;cursor:pointer;
-  font-size:13px;line-height:1;padding:2px 4px;margin-left:7px;
-  opacity:.45;vertical-align:middle;border-radius:6px;
+  line-height:1;padding:4px;margin-left:4px;
+  color:var(--ink-faint);opacity:.6;vertical-align:middle;border-radius:var(--r-sm);
 }
-.secedit:hover,.secedit:focus-visible{opacity:1;background:var(--surface-2);}
+.secedit .i{width:15px;height:15px;}
+.secedit:hover,.secedit:focus-visible{opacity:1;color:var(--ink);background:var(--surface-2);}
 .sectools{display:inline-flex;align-items:center;}
-.secdel{margin-left:2px;}
 .secdel:hover,.secdel:focus-visible{color:var(--danger);}
-.fieldhint{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin:0 0 6px;}
+.fieldhint{font-size:11.5px;line-height:1.65;color:var(--ink-faint);margin:0 0 8px;}
 
-/* drag handle reusing the same long-press gesture as itinerary stops, but
-   for reordering whole home-page blocks instead of one day's stops */
 .sechandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
-.sechandle:active{cursor:grabbing;background:var(--lc,var(--bookmark));color:#fff;opacity:1;}
+.sechandle:active{cursor:grabbing;color:var(--ink);opacity:1;}
 .hsblock{position:relative;}
-.hsblock.lifted{z-index:30;outline:2px solid var(--bookmark);outline-offset:6px;border-radius:10px;}
+.hsblock.lifted{z-index:30;outline:1px solid var(--ink-faint);outline-offset:8px;border-radius:10px;}
 .hsblock.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
-.usec{position:relative;}
-.usec.lifted{z-index:30;box-shadow:var(--shadow-2);border-color:var(--bookmark);}
-.usec.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
 /* ---------- AI analysis kept above the list ---------- */
-/* Deliberately a running log, not a panel: a new run appends, so nothing the
-   AI said last time disappears just because you asked again. */
 .ailog{
-  background:var(--surface);border:1px solid var(--rule);
-  border-radius:var(--r-md);padding:12px 13px;margin:0 0 14px;
+  background:transparent;border:0;border-top:1px solid var(--rule);
+  border-radius:0;padding:14px 0 0;margin:0 0 16px;
 }
 .ailog-head{
-  font-size:13px;font-weight:800;color:var(--ink);
-  display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin-bottom:9px;
+  font-size:13px;font-weight:600;color:var(--ink);
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-bottom:10px;
 }
-.ailog-sub{font-size:11px;font-weight:500;color:var(--ink-soft);}
-.ailog-entry{border-top:1px solid var(--rule);padding-top:9px;margin-top:9px;}
+.ailog-sub{font-size:11px;font-weight:400;color:var(--ink-faint);}
+.ailog-entry{border-top:1px solid var(--rule-soft);padding-top:10px;margin-top:10px;}
 .ailog-entry:first-of-type{border-top:0;padding-top:0;margin-top:0;}
-.ailog-entry.latest{
-  border-left:3px solid var(--bookmark);padding-left:9px;margin-left:-2px;
-}
-.ailog-when{font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);margin-bottom:4px;}
-.ailog-text{font-size:13px;line-height:1.72;color:var(--ink);white-space:pre-wrap;}
-.ailog-note{font-size:11.5px;line-height:1.6;color:var(--ink-soft);margin-top:6px;}
-.ailog-links{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.ailog-entry.latest{border-left:1px solid var(--ink-faint);padding-left:10px;margin-left:-2px;}
+.ailog-when{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);margin-bottom:5px;}
+.ailog-text{font-size:13px;line-height:1.8;color:var(--ink-soft);white-space:pre-wrap;}
+.ailog-note{font-size:11.5px;line-height:1.65;color:var(--ink-faint);margin-top:6px;}
+.ailog-links{display:flex;flex-direction:column;gap:6px;margin-top:9px;}
 .ailog-links a{
-  font-size:12px;font-weight:600;text-decoration:none;
-  color:var(--info);background:var(--info-bg);padding:7px 10px;border-radius:var(--r-sm);
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:400;text-decoration:none;
+  color:var(--ink-soft);background:transparent;padding:0;border-radius:0;
 }
-.ailog-links a small{display:block;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+.ailog-links a .i{width:13px;height:13px;color:var(--ink-faint);}
+.ailog-links a:hover{color:var(--ink);}
+.ailog-links a small{display:block;font-weight:400;color:var(--ink-faint);margin-top:2px;}
 .ailog-entry[data-logtoggle]{cursor:pointer;}
-.ailog-entry.collapsed{padding-top:8px;margin-top:8px;}
+.ailog-entry.collapsed{padding-top:9px;margin-top:9px;}
 .ailog-entry.collapsed .ailog-when{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;}
 .ailog-entry.collapsed .ailog-note{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ailog-caret{font-size:10px;color:var(--ink-soft);flex:0 0 auto;}
+.ailog-caret{color:var(--ink-faint);flex:0 0 auto;display:inline-flex;transform:rotate(90deg);}
+.ailog-caret.open{transform:rotate(-90deg);}
+.ailog-caret .i{width:12px;height:12px;}
 
-/* what THIS run just found, so it is obvious which entries are new */
 .ainew{
-  font-size:10.5px;font-weight:800;letter-spacing:.02em;
-  color:var(--bookmark);background:var(--bookmark-bg,rgba(124,140,161,.16));
-  border:1px solid var(--bookmark);border-radius:999px;padding:3px 8px;
+  font-family:var(--f-mono);font-size:10px;font-weight:500;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-faint);
+  border:1px solid var(--rule);border-radius:var(--r-sm);padding:2px 7px;
 }
-.stopcard.freshai{box-shadow:0 0 0 1.5px var(--bookmark) inset;}
-/* a bookmark that's really already a stop somewhere — computed live, not stored */
+.stopcard.freshai{border-color:var(--ink-faint);}
 .inday{
-  display:inline-flex;align-items:center;gap:4px;cursor:pointer;
-  font-size:11.5px;font-weight:700;line-height:1.45;
-  padding:4px 10px;border-radius:14px;max-width:100%;
-  border:1px solid var(--lc,var(--d3));background:transparent;color:var(--lc,var(--d3));
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  font-size:11.5px;font-weight:400;line-height:1.5;
+  padding:2px 8px;border-radius:var(--r-sm);max-width:100%;
+  border:1px solid var(--lc,var(--rule));background:transparent;color:var(--lc,var(--ink-soft));
 }
+.inday .i{width:12px;height:12px;}
 .inday:active{background:var(--surface-2);}
 
 .copyrow{
-  width:100%;margin-top:9px;display:flex;align-items:center;justify-content:center;
+  width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;
   gap:7px;flex-wrap:wrap;
 }
-.copyrow small{font-weight:500;color:var(--ink-soft);font-size:11px;}
-.sugg{color:var(--bookmark);font-size:11px;font-weight:700;}
+.copyrow small{font-weight:400;color:var(--ink-faint);font-size:11px;}
+.sugg{color:var(--ink-faint);font-size:11px;font-weight:500;}
 
 /* ---------- asked / answered log ---------- */
-.qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:7px;overflow:hidden;}
-.qa-head{
-  display:block;width:100%;text-align:left;cursor:pointer;
-  border:0;background:transparent;padding:11px 12px;
-}
-.qa-meta{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
-.qa-meta .when{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);}
-.qa-q{display:block;font-size:13.5px;font-weight:700;margin-top:5px;line-height:1.45;}
-.qa-head.open .qa-q{color:var(--info);}
+.qa{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);margin-bottom:8px;overflow:hidden;}
+.qa-head{display:block;width:100%;text-align:left;cursor:pointer;border:0;background:transparent;padding:12px 13px;}
+.qa-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.qa-meta .when{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);}
+.qa-q{display:block;font-size:13.5px;font-weight:500;margin-top:6px;line-height:1.5;}
+.qa-head.open .qa-q{color:var(--ink);}
 .qa-a{
-  padding:0 12px 12px;font-size:13px;line-height:1.75;white-space:pre-wrap;
-  color:var(--ink-soft);border-top:1px dashed var(--rule);padding-top:10px;
+  padding:0 13px 13px;font-size:13px;line-height:1.8;white-space:pre-wrap;
+  color:var(--ink-soft);border-top:1px solid var(--rule-soft);padding-top:11px;
 }
 
-.vlist{display:flex;flex-direction:column;gap:7px;}
-.vrow{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:11px 12px;}
-.vrow .who{font-size:13.5px;font-weight:700;}
-.vrow .when{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);}
-.vrow .sum{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:3px;}
-.vrow .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;}
-.vrow input[type=checkbox]{width:19px;height:19px;flex:0 0 auto;margin-top:3px;accent-color:var(--d3);}
-.badge.now{background:var(--ok-bg);color:var(--ok);border-color:transparent;font-weight:800;}
+.vlist{display:flex;flex-direction:column;gap:8px;}
+.vrow{display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);padding:12px 13px;}
+.vrow .who{font-size:13.5px;font-weight:600;}
+.vrow .when{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);}
+.vrow .sum{font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-top:4px;}
+.vrow .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;align-items:center;}
+.vrow .acts .hint{margin:0;}
+.vrow input[type=checkbox]{width:18px;height:18px;flex:0 0 auto;margin-top:3px;accent-color:var(--ink);}
+.badge.now{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent);}
 
-/* human-readable version comparison — one section per day/board, plain lines
-   instead of a raw JSON diff */
 .diffwrap{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
-  padding:12px;max-height:56vh;overflow:auto;margin-bottom:11px;
+  padding:13px;max-height:56vh;overflow:auto;margin-bottom:12px;
 }
-.diffwrap-title{font-size:13px;font-weight:800;margin:0 0 9px;}
-.diffday+.diffday{margin-top:14px;}
+.diffwrap-title{font-size:13px;font-weight:600;margin:0 0 10px;}
+.diffday+.diffday{margin-top:16px;}
 .diffday-title{
-  font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:12px;
-  letter-spacing:.04em;color:var(--ink);margin-bottom:5px;
+  font-weight:600;font-size:12px;letter-spacing:.01em;color:var(--ink);margin-bottom:6px;
 }
-.diffline{font-size:12.5px;line-height:1.7;padding-left:2px;}
+.diffline{font-size:12.5px;line-height:1.75;padding-left:2px;color:var(--ink-soft);}
 .diffline-add{color:var(--ok);}
 .diffline-remove{color:var(--danger);}
-.diffline-edit{color:var(--info);}
+.diffline-edit{color:var(--ink);}
 .diffline-reorder{color:var(--warn);}
 
 .daypick{display:flex;flex-direction:column;gap:6px;}
 .daypick button{
-  display:grid;grid-template-columns:20px 52px 1fr;align-items:center;gap:11px;
+  display:grid;grid-template-columns:18px 46px 1fr;align-items:center;gap:12px;
   padding:13px 14px;border-radius:var(--r-md);cursor:pointer;text-align:left;
-  border:1px solid var(--rule);background:var(--surface);font-size:14px;font-weight:600;
+  border:1px solid var(--rule);background:var(--surface);font-size:14px;font-weight:500;
 }
-.daypick button:disabled{opacity:.42;cursor:default;}
-.daypick .bullet{width:11px;height:11px;border-radius:50%;background:var(--lc);}
-.daypick .dcode{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--lc);}
-.daypick-compact{margin-bottom:10px;}
+.daypick button:hover{border-color:var(--ink-faint);}
+.daypick button:disabled{opacity:.4;cursor:default;}
+.daypick .bullet{width:9px;height:9px;border-radius:50%;background:var(--lc);}
+.daypick .dcode{font-family:var(--f-mono);font-weight:500;font-size:11.5px;letter-spacing:.02em;color:var(--lc);}
+.daypick .dcode .i{width:14px;height:14px;}
+.daypick-compact{margin-bottom:12px;}
 .daypick-check{
-  display:grid;grid-template-columns:18px 20px 52px 1fr;align-items:center;gap:11px;
-  padding:11px 14px;border-radius:var(--r-md);cursor:pointer;text-align:left;
-  border:1px solid var(--rule);background:var(--surface);font-size:13.5px;font-weight:600;margin-bottom:6px;
+  display:grid;grid-template-columns:18px 18px 46px 1fr;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:var(--r-md);cursor:pointer;text-align:left;
+  border:1px solid var(--rule);background:var(--surface);font-size:13.5px;font-weight:500;margin-bottom:6px;
 }
 .daypick-check input{width:16px;height:16px;accent-color:var(--lc);}
 
-footer{padding:34px 0 18px;font-size:11.5px;color:var(--ink-faint);line-height:1.85;}
-footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bottom:7px;}
+footer{padding:40px 0 20px;font-size:11.5px;color:var(--ink-faint);line-height:1.9;border-top:1px solid var(--rule);margin-top:36px;}
+footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-bottom:8px;}
 
-.loading{padding:40px 0;text-align:center;color:var(--ink-faint);font-size:13.5px;}
+.loading{padding:48px 0;text-align:center;color:var(--ink-faint);font-size:13.5px;}
+.empty{padding:20px 0;color:var(--ink-faint);font-size:13px;}
 .errbox{
-  background:var(--danger-bg);border:1px solid color-mix(in srgb,var(--danger) 25%,transparent);
-  border-radius:var(--r-md);padding:14px;font-size:13.5px;color:var(--danger);line-height:1.6;
+  background:var(--danger-bg);border:1px solid color-mix(in srgb,var(--danger) 22%,transparent);
+  border-radius:var(--r-md);padding:15px;font-size:13.5px;color:var(--danger);line-height:1.65;
 }
+.errbox .btn{margin-top:10px;}
 
 @media (min-width:560px){
-  :root{--rail-w:34px;}
-  .thumb{width:96px;height:96px;}
-  .mapbox{height:280px;}
-  .mapbox.tall{height:380px;}
+  :root{--gutter:78px;}
+  .thumb{width:80px;height:80px;}
+  .mapbox{height:300px;}
+  .mapbox.tall{height:400px;}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -985,10 +1032,11 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <span class="sys"></span>
         <span class="ko"></span>
       </div>
-      <div class="topbtns">
-        <a class="iconbtn" href="index.html" aria-label="返主頁" title="返主頁">🏠</a>
-        <button class="iconbtn" id="btn-theme" aria-label="切換深淺色">◐</button>
-      </div>
+      <nav class="topbtns" aria-label="行程工具">
+        <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
+        <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
+        <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
+      </nav>
     </div>
     <div class="lines" id="lines" role="tablist" aria-label="揀日子"></div>
   </div>
@@ -999,9 +1047,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 </main>
 
 <div class="dock">
-  <button class="dockbtn" id="btn-boards">📌 清單</button>
-  <button class="dockbtn" id="btn-history">🕓 歷史</button>
-  <button class="dockbtn accent" id="btn-ai">✨ AI 助手</button>
+  <button class="dockbtn" id="btn-boards"><span class="dockbtn-i"></span><span>清單</span></button>
+  <button class="dockbtn" id="btn-history"><span class="dockbtn-i"></span><span>改動紀錄</span></button>
+  <button class="dockbtn accent" id="btn-ai"><span class="dockbtn-i"></span><span>AI 助手</span></button>
 </div>
 <div class="savestate" id="savestate"></div>
 <div class="genbanner" id="genbanner"></div>
@@ -1070,6 +1118,55 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+
+  // ---------- icons ----------
+  // Emoji were doing the work of icons here, and they undercut the whole page:
+  // they render differently on every device, can't take the text colour, and
+  // sit at whatever weight the vendor drew them at. These are one consistent
+  // set — 1.5px strokes on a 24 grid, currentColor — so an icon inherits the
+  // colour and weight of whatever it sits in, the same way a letterform does.
+  const ICONS = {
+    home:      '<path d="M3 10.2 12 3.5l9 6.7"/><path d="M5.6 9v10.5h12.8V9"/>',
+    share:     '<path d="M12 3.5v11"/><path d="m8 7.2 4-3.7 4 3.7"/><path d="M5 13.5v6h14v-6"/>',
+    contrast:  '<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 0 1 0 16.4z" fill="currentColor" stroke="none"/>',
+    list:      '<path d="M8.5 6.5h11M8.5 12h11M8.5 17.5h11"/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
+    clock:     '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4V12l3 1.8"/>',
+    sparkle:   '<path d="M12 3.6 13.7 9 19 10.7 13.7 12.4 12 17.8 10.3 12.4 5 10.7 10.3 9z"/><path d="M18 16.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
+    pencil:    '<path d="M4.5 19.5h3.2L18.4 8.8a1.6 1.6 0 0 0 0-2.3l-.9-.9a1.6 1.6 0 0 0-2.3 0L4.5 16.3z"/>',
+    trash:     '<path d="M4.8 6.8h14.4"/><path d="M9.3 6.8V4.9h5.4v1.9"/><path d="M6.6 6.8 7.5 20h9l.9-13.2"/>',
+    plus:      '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
+    check:     '<path d="m5 12.6 4.6 4.4L19 6.8"/>',
+    close:     '<path d="M6 6l12 12M18 6 6 18"/>',
+    pin:       '<path d="M12 21s6.4-6.1 6.4-10.6a6.4 6.4 0 1 0-12.8 0C5.6 14.9 12 21 12 21z"/><circle cx="12" cy="10.3" r="2.4"/>',
+    map:       '<path d="M9 5.2 3.8 7.4v11.4L9 16.6l6 2.2 5.2-2.2V5.2L15 7.4z"/><path d="M9 5.2v11.4M15 7.4v11.4"/>',
+    star:      '<path d="m12 4.3 2.5 5.2 5.6.8-4 4 .9 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z"/>',
+    search:    '<circle cx="11" cy="11" r="6.4"/><path d="m15.8 15.8 4 4"/>',
+    refresh:   '<path d="M19.3 12a7.3 7.3 0 1 1-2.2-5.2"/><path d="M19.6 4.8v4.4h-4.4"/>',
+    camera:    '<path d="M4.2 8.4h3.1l1.4-2.2h6.6l1.4 2.2h3.1v10.2H4.2z"/><circle cx="12" cy="13.2" r="3.1"/>',
+    bed:       '<path d="M3.4 18.4V7.2"/><path d="M3.4 11.6h17.2v6.8"/><circle cx="8" cy="11.6" r="0"/><path d="M3.4 14.9h17.2"/>',
+    walk:      '<circle cx="13" cy="4.9" r="1.7"/><path d="m9.2 20.4 2.4-5.1-1.9-2.4.9-4.2 3.1 1.5 1 2.7 2.6 1"/><path d="m11.6 15.3 1.8 5.1"/><path d="m10.6 8.7-3 1.6-1 2.6"/>',
+    metro:     '<rect x="6" y="3.8" width="12" height="12.4" rx="2.6"/><path d="M6 11h12"/><path d="m8.4 20.2 2-4M15.6 20.2l-2-4"/><path d="M9.2 13.6h.01M14.8 13.6h.01"/>',
+    bus:       '<rect x="5" y="4" width="14" height="12.4" rx="2.4"/><path d="M5 11.4h14"/><path d="M7.6 20.2v-3.8M16.4 20.2v-3.8"/><path d="M8.4 14h.01M15.6 14h.01"/>',
+    car:       '<path d="M4.4 16.4v2.8h2.9v-2.8"/><path d="M16.7 16.4v2.8h2.9v-2.8"/><path d="M3.6 16.4v-4l2-5h12.8l2 5v4z"/><path d="M6.6 13.6h.01M17.4 13.6h.01"/>',
+    plane:     '<path d="M10.4 3.4a1.6 1.6 0 0 1 3.2 0V9l7 4.1v2.3l-7-2.1v3.9l2.3 1.7v1.5L12 19.6l-3.9.8v-1.5l2.3-1.7v-3.9l-7 2.1v-2.3l7-4.1z"/>',
+    warn:      '<path d="M12 4.4 21 19.6H3z"/><path d="M12 10v4.1M12 17h.01"/>',
+    note:      '<path d="M5.4 3.8h13.2v16.4H5.4z"/><path d="M8.6 8.4h6.8M8.6 12h6.8M8.6 15.6h4.2"/>',
+    grip:      '<path d="M9.6 6.4h.01M14.4 6.4h.01M9.6 12h.01M14.4 12h.01M9.6 17.6h.01M14.4 17.6h.01"/>',
+    link:      '<path d="M10.4 13.6a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.6 10.4a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/>',
+    sun:       '<circle cx="12" cy="12" r="4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>',
+    shirt:     '<path d="M8.8 3.8 12 6l3.2-2.2 4.4 2.4-1.8 4-2 -.6v11H8.2v-11l-2 .6-1.8-4z"/>',
+    leaf:      '<path d="M5.2 18.8C3.6 12.4 8 5.2 19.2 4.8c.8 8.8-4.4 14.4-11.6 13.2"/><path d="M8 16c2.4-3.6 5.6-6 9.2-7.6"/>',
+    bag:       '<path d="M4.6 8.2h14.8l-1 11.6H5.6z"/><path d="M9 8.2V6a3 3 0 0 1 6 0v2.2"/>',
+    chevron:   '<path d="m9 5.6 6.4 6.4L9 18.4"/>',
+    image:     '<rect x="3.8" y="5" width="16.4" height="14" rx="2"/><circle cx="8.8" cy="10" r="1.6"/><path d="m4.6 17 4.8-4.6 3.4 3.2 2.8-2.4 3.8 3.4"/>',
+  };
+  // size follows the text it sits next to unless told otherwise
+  function icon(name, cls){
+    const d = ICONS[name];
+    if (!d) return "";
+    return `<svg class="i${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${d}</svg>`;
+  }
+
   // When fetch can't reach the server at all it rejects with a TypeError whose
   // message is whatever the browser feels like ("Load failed" on Safari,
   // "Failed to fetch" on Chrome) — which tells the family nothing. The most
@@ -1128,6 +1225,22 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function getEditedBy(){ return state.editedBy || "家人"; }
 
   // ---------- theme ----------
+  // The chrome's icons live in markup that ships before the script runs, so
+  // fill them in once here rather than duplicating the SVG in the HTML.
+  function paintChromeIcons(){
+    const put = (sel, name) => { const el = $(sel); if (el) el.innerHTML = icon(name); };
+    put("#btn-home .topbtn-i", "home");
+    put("#btn-export .topbtn-i", "share");
+    put("#btn-theme .topbtn-i", "contrast");
+    put("#btn-boards .dockbtn-i", "pin");
+    put("#btn-history .dockbtn-i", "clock");
+    put("#btn-ai .dockbtn-i", "sparkle");
+  }
+  paintChromeIcons();
+  // Export lives in the top bar now, so it is wired once rather than on every
+  // render — it is reachable from any day, not just the overview.
+  $("#btn-export").addEventListener("click", () => openExportSheet());
+
   function applyTheme(t){
     if (t === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", t);
@@ -1684,6 +1797,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (snap && Array.isArray(snap.sections)) snap.sections.forEach(s => {
       if (s.aiRefresh == null) s.aiRefresh = s.source === "ai";
       if (s.topic == null) s.topic = s.title || "";
+      // 📌 was never chosen — it was this app's default for every new section,
+      // so every section wore the same pin. Clear that one, and only that one:
+      // an icon the family actually picked is theirs and stays.
+      if (s.icon === "📌") s.icon = "";
     });
     return snap;
   }
@@ -1694,8 +1811,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     { key:"taxi",  icon:"🚕", label:"的士" },
     { key:"air",   icon:"✈",  label:"航班" }
   ];
-  function segMode(html){
-    const s = String(html || "");
+  // Legacy segments carry their mode only as an emoji inside stored HTML, so
+  // that stays readable; new ones record `mode` outright and the icon is drawn
+  // at render time from the current icon set instead of being baked into data.
+  function segMode(seg){
+    if (seg && typeof seg === "object" && seg.mode) return seg.mode;
+    const s = String((seg && seg.html) != null ? seg.html : seg || "");
     if (s.includes("🚶")) return "walk";
     if (s.includes("🚇") || s.includes("🚉") || s.includes("🚊") || s.includes("🚆")) return "metro";
     if (s.includes("🚌")) return "bus";
@@ -1703,6 +1824,27 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (s.includes("✈")) return "air";
     return "other";
   }
+  const MODE_ICON = { walk:"walk", metro:"metro", bus:"bus", taxi:"car", air:"plane", other:"walk" };
+  // what to draw for a segment, old data or new
+  function segHtmlOf(seg){
+    const mode = segMode(seg);
+    const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
+    return `<span class="icon">${icon(MODE_ICON[mode] || "walk")}</span>${esc(text)}`;
+  }
+  // The time column only works if the digits line up, so pull the clock time
+  // out of whatever was typed ("約 14:00", "14:00 前後") and set it on its own.
+  // "約" becomes a leading ~ so it survives without costing a whole column of
+  // width; anything with no clock time in it falls back to the raw words.
+  function timeLabelHtml(t){
+    const raw = plain(t).trim();
+    if (!raw) return "";
+    const m = raw.match(/(\d{1,2})\s*[:：]\s*(\d{2})/);
+    if (!m) return `<span class="raw">${esc(raw)}</span>`;
+    const approx = /約|大概|前後|左右|ish/i.test(raw);
+    const hhmm = `${m[1].padStart(2, "0")}:${m[2]}`;
+    return `${approx ? `<span class="approx">~</span>` : ""}${esc(hhmm)}`;
+  }
+
   function segPlain(html){
     const tmp = document.createElement("div");
     tmp.innerHTML = String(html || "");
@@ -1710,7 +1852,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   }
   function buildSeg(mode, text, route){
     const m = MODES.find(x => x.key === mode) || MODES[0];
-    const seg = { kind:"connector", html:`<span class="icon">${m.icon}</span>${esc(text)}` };
+    // `html` is kept for older clients and for the export/diff paths that read
+    // it; `mode` + `text` are what this client actually renders from.
+    const seg = { kind:"connector", mode:m.key, text:String(text || ""),
+                  html:`<span class="icon">${m.icon}</span>${esc(text)}` };
     if (route) seg.route = route;   // e.g. 安國 ─3號線・4站─ 忠武路 ─4號線・2站─ 明洞
     return seg;
   }
@@ -1817,6 +1962,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // point (the 📌 button in the bottom dock) instead of competing for space
   // here; this strip stays just overview + days + notes, however many boards
   // you make.
+  // Most shortTags were written as "D3 聖水洞" back when the tab didn't print
+  // the day number itself, so the tab read "D3  D3 聖水洞". The number is the
+  // tab's own label now, so drop a leading copy of it from the tag.
+  function shortTagText(d){
+    const n = String(d.id).replace("day", "");
+    return String(d.shortTag || "").replace(new RegExp("^\\s*D" + n + "\\s*[.·・:：-]?\\s*", "i"), "").trim();
+  }
+
   function renderLines(){
     const el = $("#lines");
     const days = state.snapshot ? state.snapshot.days : [];
@@ -1828,7 +1981,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span>
           <span class="lbl">D${d.id.replace('day','')}</span>
-          <span>${esc(d.shortTag || '')}</span>
+          <span>${esc(shortTagText(d))}</span>
         </button>`).join("")}
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
@@ -1876,7 +2029,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // ==================================================================
   // A pencil next to a heading, wired generically to HOME_EDITORS[key]
   function secEditBtn(key){
-    return `<button class="secedit" data-editsec="${key}" title="改呢一段" aria-label="改呢一段">✏️</button>`;
+    return `<button class="secedit" data-editsec="${key}" title="改呢一段" aria-label="改呢一段">${icon("pencil")}</button>`;
   }
   // edit + hide, for the fixed home-page panels ("session" 用戶叫法) that
   // aren't custom sections but should still be removable. Hiding is soft —
@@ -1889,7 +2042,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // the editor key here instead of adding a second secEditBtn beside it.
   function secTools(key, editKey){
     const label = HIDDEN_SECTION_LABELS[key] || key;
-    return `<span class="sectools">${secEditBtn(editKey || key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">🗑</button></span>`;
+    return `<span class="sectools">${secEditBtn(editKey || key)}<button class="secedit secdel" data-delsec="${key}" data-seclabel="${esc(label)}" title="隱藏呢一段" aria-label="隱藏呢一段">${icon("trash")}</button></span>`;
   }
   function isSectionHidden(snap, key){ return Array.isArray(snap.hiddenSections) && snap.hiddenSections.includes(key); }
 
@@ -1910,7 +2063,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     render();
     await saveNow("調整咗主頁段落次序");
   }
-  const HOME_DRAG_HANDLE = `<button class="secedit sechandle" data-hsdrag title="拉上拉落改次序" aria-label="拉上拉落改次序">⠿</button>`;
+  const HOME_DRAG_HANDLE = `<button class="secedit sechandle" data-hsdrag title="拉上拉落改次序" aria-label="拉上拉落改次序">${icon("grip")}</button>`;
   // Used to say "10 月下旬天氣" no matter what trip was loaded — a leftover
   // Seoul-trip literal that silently mislabelled every other destination's
   // weather block. Derived from the trip's own dates instead.
@@ -1937,7 +2090,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">📍 喺地圖開啟</a></div>` : ""}
+            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}喺地圖開啟</a></div>` : ""}
           </div>`).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
       </div>`;
@@ -1950,13 +2103,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
         </table>
-        ${liveCheckButtonHtml("weather", "☁️ Check 依家嘅實時預報")}
+        ${liveCheckButtonHtml("weather", "Check 依家嘅實時預報")}
       </div>`;
     }
     if (key === "clothing"){
       return `<div class="hsblock" data-hskey="clothing">
         <h3>點著衫${secTools("clothing")}${HOME_DRAG_HANDLE}</h3>
-        <ul class="clist">${(d.clothing||[]).map(c=>`<li><span class="ico">${esc(c.icon)}</span><div>${c.html}</div></li>`).join("")}</ul>
+        <ul class="clist">${(d.clothing||[]).map(c=>`<li>${c.icon ? `<span class="ico">${esc(c.icon)}</span>` : ""}<div>${c.html}</div></li>`).join("")}</ul>
       </div>`;
     }
     // access
@@ -2063,7 +2216,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <h2 class="sec-title">隱藏咗嘅段落</h2>
         <p class="sec-sub">資料冇刪，撳「顯示返」就再出返喺主頁。</p>
         <div class="chiprow">${hidden.map(k =>
-          `<button class="btn" data-unhidesec="${k}">👁 顯示返「${esc(HIDDEN_SECTION_LABELS[k])}」</button>`).join("")}</div>
+          `<button class="btn" data-unhidesec="${k}">顯示返「${esc(HIDDEN_SECTION_LABELS[k])}」</button>`).join("")}</div>
       </section>`;
   }
 
@@ -2106,21 +2259,21 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         <p class="sec-sub">${d.days.length} 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
         <div class="mapbox tall" id="map-all"></div>
         <div class="chiprow" id="map-legend"></div>
-        <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。📌 係清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
+        <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
       </section>
 
       <hr class="rule">
 
       <section class="sec">
         <h2 class="sec-title">出發前必讀</h2>
-        <p class="sec-sub">出發前要記住嘅嘢。拉住 ⠿ 可以上下拉改次序。</p>
+        <p class="sec-sub">出發前要記住嘅嘢。長撳右邊嘅拖拉掣可以改次序。</p>
 
         <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
 
         ${isSectionHidden(d,"foliage") ? "" : `
         <h3>季節提示${secTools("foliage", "notes")}</h3>
         <p class="sec-sub">${d.foliageNote||""}</p>
-        ${liveCheckButtonHtml("foliage", "🌤 Check 依家嘅季節情況")}
+        ${liveCheckButtonHtml("foliage", "Check 依家嘅季節情況")}
         `}
 
         ${plain(d.scheduleSwapNote || "") ? `
@@ -2146,18 +2299,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
       ${hiddenSectionsHtml(d)}
 
-      <section class="sec">
-        <h2 class="sec-title">帶走份行程</h2>
-        <p class="sec-sub">複製去 WhatsApp、印出嚟、或者下載一份離線都睇到嘅版本。</p>
-        <button class="btn wide" id="btn-export">📤 匯出行程</button>
-      </section>
-
       <footer>
         <div class="fbrand">${esc(m.title || "我嘅行程")}</div>
         營業時間、評分同地圖連結僅供參考，出發前請再確認一次。<br>
         地圖為示意路線，實際導航請以地圖 app 為準。<br>
         地點相片由 Google Places 提供。行程可以一齊編輯，每次改動都會自動存低版本。<br>
-        祝旅途愉快 ✈️
+        祝旅途愉快
       </footer>
     `;
   }
@@ -2172,8 +2319,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           ${c.pick ? `<span class="badge note">建議</span>` : ""}
         </div>
         <div class="fare-price mono">${esc(c.price)}</div>
-        ${c.good ? `<div class="fare-line good">✓ ${esc(c.good)}</div>` : ""}
-        ${c.bad ? `<div class="fare-line bad">✕ ${esc(c.bad)}</div>` : ""}
+        ${c.good ? `<div class="fare-line good">${icon("check")}${esc(c.good)}</div>` : ""}
+        ${c.bad ? `<div class="fare-line bad">${icon("close")}${esc(c.bad)}</div>` : ""}
       </div>`).join("");
 
     const fares = (t.fares || []).map(f =>
@@ -2181,7 +2328,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
     const arrival = t.arrival ? `
       <div class="panel callout">
-        <div class="k">⚠️ ${esc(t.arrival.title)}</div>
+        <div class="k">${icon("warn")}${esc(t.arrival.title)}</div>
         <div class="d">${esc(t.arrival.body)}</div>
         ${(t.arrival.options || []).map(o => `
           <div class="opt">
@@ -2215,23 +2362,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     return `
       <section class="sec">
         <h2 class="sec-title">自己加嘅資料</h2>
-        <p class="sec-sub">想記低嘅嘢都可以開一個 section —— 手信買咩、換錢、上網卡、包咩行李。自己寫，或者講個題目俾 AI 幫你整。拉住 ⠿ 可以上下拉改次序。</p>
+        <p class="sec-sub">想記低嘅嘢都可以開一個 section —— 手信買咩、換錢、上網卡、包咩行李。自己寫，或者講個題目俾 AI 幫你整。長撳拖拉掣可以改次序。</p>
         <div id="usecorder">
         ${secs.length ? secs.map((s, i) => `
           <div class="usec" data-usec="${i}">
             <div class="usec-head">
-              <button class="iconbtn sechandle" data-usecdrag aria-label="拉上拉落改次序" title="拉上拉落改次序">⠿</button>
-              <div class="usec-title">${esc(s.icon || "📌")} ${esc(s.title || "未命名")}</div>
+              <button class="iconbtn sechandle" data-usecdrag aria-label="拉上拉落改次序" title="拉上拉落改次序">${icon("grip")}</button>
+              <div class="usec-title">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title || "未命名")}</div>
               <div class="usec-tools">
-                <button class="iconbtn" data-usecedit="${i}" aria-label="改">✏️</button>
-                <button class="iconbtn" data-usecdel="${i}" aria-label="刪走">🗑</button>
+                <button class="iconbtn" data-usecedit="${i}" aria-label="改" title="改">${icon("pencil")}</button>
+                <button class="iconbtn" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
               </div>
             </div>
             ${s.sub ? `<p class="usec-sub">${esc(s.sub)}</p>` : ""}
             ${(s.lines || []).length ? `<ul class="usec-list">${(s.lines||[]).map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
             ${(s.links || []).length ? `<div class="ailog-links">${(s.links||[]).map(l =>
-              `<a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
-            <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">🔄 問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
+              `<a href="${esc(l.url)}" target="_blank" rel="noopener">${icon("link")}${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
+            <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">${icon("refresh")}問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
             <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
             <div class="ai-out" id="secout-${i}"></div>
           </div>`).join("")
@@ -2241,7 +2388,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       </section>`;
   }
 
-  function blankSection(){ return { icon:"📌", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false }; }
+  function blankSection(){ return { icon:"", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false }; }
   async function reorderCustomSections(snap, from, to){
     if (!Array.isArray(snap.sections)) return;
     const [moved] = snap.sections.splice(from, 1);
@@ -2257,14 +2404,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     if (!s) return;
     openEditSheet(idx == null ? "加一個 section" : "改「" + (s.title || "未命名") + "」",
       "一行一個重點。連結一行一個，寫做「名 | https://…」。", [
-        { key:"icon",  label:"Emoji", type:"text", value:s.icon || "📌", placeholder:"🎁" },
+        { key:"icon",  label:"標題前面嘅符號（唔填就冇）", type:"text", value:s.icon || "", placeholder:"留空就得" },
         { key:"title", label:"標題",  type:"text", value:s.title || "", placeholder:"例如：手信買咩好" },
         { key:"sub",   label:"副標題（可以留空）", type:"text", value:s.sub || "" },
         { key:"lines", label:"內容（一行一個重點）", type:"lines", value:(s.lines||[]).join("\n"), rows:9 },
         { key:"links", label:"連結（一行一個，名 | 網址）", type:"lines",
           value:(s.links||[]).map(l => `${l.name || ""} | ${l.url || ""}`).join("\n"), rows:3 },
         { key:"topic", label:"AI 更新用嘅題目",
-          hint:"撳嗰粒「🔄 問 AI 攞最新資料」嗰陣，會攞呢個題目再問一次 AI。留空就用返標題。",
+          hint:"撳嗰粒「問 AI 攞最新資料」嗰陣，會攞呢個題目再問一次 AI。留空就用返標題。",
           type:"text", value:s.topic || "", placeholder:"例如：手信買咩好" },
       ], async out => {
         const links = (out.links || []).map(row => {
@@ -2274,7 +2421,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           return /^https?:\/\//.test(url) ? { name, url } : null;   // a broken link is worse than none
         }).filter(Boolean);
         const next = Object.assign({}, s, {
-          icon: out.icon || "📌", title: out.title || "未命名", sub: out.sub || "",
+          icon: out.icon || "", title: out.title || "未命名", sub: out.sub || "",
           lines: out.lines || [], links, topic: out.topic || "",
         });
         if (idx == null) d.sections.push(next); else d.sections[idx] = next;
@@ -2291,10 +2438,10 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <p class="sec-sub">例如：手信買咩好、換錢攻略、上網卡、行李清單、雨天備案。</p>
       <div class="askrow">
         <input class="input" id="usec-topic" placeholder="講個題目，例如：手信買咩好">
-        <button class="btn primary" id="usec-ai">✨ AI 整</button>
+        <button class="btn primary" id="usec-ai">${icon("sparkle")}AI 幫手寫</button>
       </div>
       <div id="usec-out"></div>
-      <button class="btn wide" id="usec-manual" style="margin-top:10px;">✍️ 我自己寫</button>
+      <button class="btn wide" id="usec-manual" style="margin-top:10px;">我自己寫</button>
     `, sheet => {
       const out = sheet.querySelector("#usec-out");
       const topic = sheet.querySelector("#usec-topic");
@@ -2318,7 +2465,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         closeLayer();
         render();
         await saveNow(`AI 加咗一個 section：${r.section.title || t}`);
-        flash("加咗喺主頁下面，撳 ✏️ 就改得");
+        flash("加咗喺主頁下面，可以再改");
       });
     });
   }
@@ -2370,7 +2517,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         // render() rebuilt the block, so the "just updated" note goes into the
         // FRESH element — otherwise it lands on a node already thrown away
         const after = document.getElementById("secout-" + i);
-        if (after) after.innerHTML = `<div class="ai-msg ok">✅ 更新咗，內容係上面嗰啲。</div>`;
+        if (after) after.innerHTML = `<div class="ai-msg ok">${icon("check")}更新咗，內容係上面嗰啲。</div>`;
         await saveNow(`AI 更新咗「${s.title}」嘅資料`);
         flash(`已經更新「${s.title}」`);
       } catch (e){
@@ -2405,8 +2552,6 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     wireLiveChecks();
     wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
       (from, to) => reorderHomeBlocks(state.snapshot, from, to));
-    const ex = $("#btn-export");
-    if (ex) ex.addEventListener("click", openExportSheet);
     initOverviewMap();
   }
 
@@ -2429,26 +2574,26 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <span class="kline"></span>
           <span class="date">${esc(day.date)}</span>
         </div>
-        <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">✏️</button></h2>
+        <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">${icon("pencil")}</button></h2>
         <p class="intro">${esc(day.desc)}</p>
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
           // which hotel this day belongs to, so a multi-hotel trip is obvious
           // on the day you actually need it rather than only on the home page
           const st = stayForDay(state.snapshot, day);
-          return st && st.name ? `<div class="daystay">🏨 呢晚住：<b>${esc(st.name)}</b></div>` : "";
+          return st && st.name ? `<div class="daystay">${icon("bed")}呢晚住：<b>${esc(st.name)}</b></div>` : "";
         })()}
         ${hasMappableDay(day) ? `
           <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
-            <span>🗺</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">▾</span>
+            <span class="mapi">${icon("map")}</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">${icon("chevron")}</span>
           </button>
           ${mapOpen ? `<div class="mapbox" id="map-${day.id}" data-points='${esc(JSON.stringify(buildDayMapPoints(day)))}'></div>
                        ${mapNoteHtml(day)}
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
         ${sel ? "" : `
-          <button class="btn wide dayai" id="dayai" style="margin-top:11px;">✨ AI 諗行程</button>
-          <button class="btn wide" id="swapday" style="margin-top:8px;">🔄 同另一日成日對調</button>
+          <button class="btn wide dayai" id="dayai" style="margin-top:11px;">${icon("sparkle")}AI 諗行程</button>
+          <button class="btn wide" id="swapday" style="margin-top:8px;">${icon("refresh")}同另一日成日對調</button>
         `}
       </section>
 
@@ -2459,7 +2604,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           (sel ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
-      ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面嘅 ✨ 叫 AI 由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
+      ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
 
       ${sel ? `
         <div class="selectbar">
@@ -2469,20 +2614,20 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
-        ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">☑️ 揀幾個一齊搬去第度</button>` : ""}
+        ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">揀幾個一齊搬去第度</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
-            ? `↻ 重算全日交通（有 ${staleCount(units)} 段待確認）`
-            : `↻ 重算全日交通`
+            ? `${icon("refresh")}重算全日交通（有 ${staleCount(units)} 段待確認）`
+            : `${icon("refresh")}重算全日交通`
         }</button>` : ""}
-        ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">★ 攞 Google 評分／營業時間（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+        ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">${icon("star")}攞 Google 評分／營業時間（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
       `}
 
       <footer>
         <div class="fbrand">Day ${day.id.replace('day','')} · ${esc(day.title)}</div>
-        撳一下卡片就可以改；改完會自動儲存，唔使撳掣。<br>
+        撳卡片右上角枝筆就可以改；改完自動儲存，唔使撳掣。<br>
         想喺兩個地方之間插個地點或者 note，撳條線上面嘅 ＋。<br>
-        想搬位就用卡片右上角嘅 ⠿ 拉上拉落，或者用「搬去第幾日」。
+        想搬位就長撳卡片右上角嘅拖拉掣，或者用「搬去第幾日」。
       </footer>
     `;
   }
@@ -2514,16 +2659,16 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       return `
         <div class="unit" data-i="${i}">
           <div class="stop">
-            <div class="stop-rail"><span class="node note"></span></div>
+            <div class="stop-rail"><span class="stoptime"></span><span class="node note"></span></div>
             <div class="notecard${open ? " open" : ""}">
               <div class="notemain">
-                <span class="noteicon">📝</span>
-                <div class="notetext${txt ? "" : " empty"}">${txt ? esc(txt) : "撳 ✏️ 寫低你想記住嘅嘢…"}</div>
+                <span class="noteicon">${icon("note")}</span>
+                <div class="notetext${txt ? "" : " empty"}">${txt ? esc(txt) : "寫低你想記住嘅嘢…"}</div>
               </div>
               ${selecting ? "" : `
               <div class="cardtools">
-                <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
-                <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+                <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}" aria-label="${open ? "完成編輯" : "編輯"}">${open ? icon("check") : icon("pencil")}</button>
+                <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">${icon("grip")}</div>
               </div>`}
               ${!selecting && open ? noteEditorHtml(u.note, i) : ""}
             </div>
@@ -2534,14 +2679,14 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const showSeg = u.seg && i !== firstStop;
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
-      u.seg.stale    ? `<span class="seg-note warn">⚠️ 次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
-      u.seg.html + (u.seg.route ? `<span class="seg-route">${esc(u.seg.route)}</span>` : "");
+      u.seg.stale    ? `<span class="seg-note warn">${icon("warn")}次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
+      segHtmlOf(u.seg) + (u.seg.route ? `<span class="seg-route">${esc(u.seg.route)}</span>` : "");
     // one segment, one button — refreshing all of a day's legs to update just
     // one used to burn a Google Directions call per leg every time
     const segRefresh = showSeg && !u.seg.checking
-      ? `<button class="segrefresh" data-segrefresh="${i}" title="淨係重新check呢一段交通" aria-label="重新check呢一段交通">↻</button>` : "";
+      ? `<button class="segrefresh" data-segrefresh="${i}" title="淨係重新check呢一段交通" aria-label="重新check呢一段交通">${icon("refresh")}</button>` : "";
     const segHtml = showSeg ? `
-      <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg.html)}">
+      <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
         <div class="seg-rail"></div>
         <div class="seg-text">${segBody}${segRefresh}</div>
       </div>` : "";
@@ -2552,16 +2697,18 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // no picture yet, but it is a real place (we have a map link or a Google id)
     // -> offer a one-tap fetch instead of leaving the row bare
     const fetchable = !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl);
+    // An empty 62px placeholder box used to sit on every photo-less stop,
+    // costing a third of the card's width on a phone to show nothing. Fetching
+    // a photo is now a link in the footer row, and the box only exists once
+    // there is a picture to put in it.
     const thumb = s.photoUrl
       ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
-      : fetchable
-        ? `<div class="thumb ghost" data-getphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
-        : "";
+      : "";
 
     const closedToday = stopClosedOnDay(s, day);
     const chips = []
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
-      .concat(closedToday ? [`<span class="meta-chip closed">⚠️ 呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`] : [])
+      .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`] : [])
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
@@ -2572,21 +2719,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // quick outbound links — only for stops that are a real, named place
     // (logistics rows like "酒店出發" have no mapUrl and get none of this)
     const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 地圖</a>`);
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>`);
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
-      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">🔍 Google 搜尋</a>`);
+      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
     }
+    if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `
       <div class="unit" data-i="${i}">
         ${segHtml}
         <div class="stop">
-          <div class="stop-rail"><span class="node${stopNums && stopNums.has(i) ? " numbered" : ""}" data-type="${esc(s.type||'normal')}">${stopNums && stopNums.has(i) ? stopNums.get(i) : ""}</span></div>
+          <div class="stop-rail">
+            <span class="stoptime">${timeLabelHtml(s.time)}</span>
+            <span class="node${stopNums && stopNums.has(i) ? " numbered" : ""}" data-type="${esc(s.type||'normal')}">${stopNums && stopNums.has(i) ? stopNums.get(i) : ""}</span>
+          </div>
           <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}">
             <div class="stopmain"${selecting ? ` data-select="${i}"` : ""}>
-              ${selecting ? `<span class="selbox">${checked ? "☑️" : "⬜"}</span>` : ""}
+              ${selecting ? `<span class="selbox">${checked ? icon("check") : ""}</span>` : ""}
               ${thumb}
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
@@ -2596,8 +2747,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
             </div>
             ${selecting ? "" : `
             <div class="cardtools">
-              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
-              <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">⠿</div>
+              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}" aria-label="${open ? "完成編輯" : "編輯"}">${open ? icon("check") : icon("pencil")}</button>
+              <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">${icon("grip")}</div>
             </div>`}
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
@@ -2654,8 +2805,8 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
 
         <div class="editor-tools">
           <button class="btn" data-act="move">搬去邊度</button>
-          <button class="btn" data-act="up" ${i===0?"disabled":""}>⬆ 上</button>
-          <button class="btn" data-act="down" ${i===total-1?"disabled":""}>⬇ 落</button>
+          <button class="btn" data-act="up" ${i===0?"disabled":""}>上移</button>
+          <button class="btn" data-act="down" ${i===total-1?"disabled":""}>下移</button>
           <button class="btn danger" data-act="remove">刪走</button>
           <button class="btn primary" data-act="close">完成</button>
         </div>
@@ -2734,7 +2885,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ev.stopPropagation();          // sits inside the card button; don't open the editor
       if (el.dataset.busy) return;
       el.dataset.busy = "1";
-      el.innerHTML = "⏳";
+      el.innerHTML = `<span class="spin"></span>`;
       const s = toUnits(day.items)[+el.dataset.getphoto].stop;
       const name = plain(s.kr) || plain(s.title);
       let got = false;
@@ -2831,9 +2982,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     openSheet(`
       <h3>加啲咩落呢度？</h3>
       <p class="sec-sub">${esc(where)}。</p>
-      <button class="btn wide primary" id="ins-place" style="margin-top:10px;">📍 加一個地點</button>
+      <button class="btn wide primary" id="ins-place" style="margin-top:10px;">${icon("pin")}加一個地點</button>
       <p class="sec-sub" style="margin:6px 0 0;">打名嗰陣會自動搵返 Google 地圖真實地點、評分同營業時間。</p>
-      <button class="btn wide" id="ins-note" style="margin-top:14px;">📝 加一段 note</button>
+      <button class="btn wide" id="ins-note" style="margin-top:14px;">${icon("note")}加一段 note</button>
       <p class="sec-sub" style="margin:6px 0 0;">寫低提自己嘅嘢（買定 T-money、記得訂位…），唔會當成一個景點，唔會上地圖。</p>
     `, sheet => {
       sheet.querySelector("#ins-place").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
@@ -2853,7 +3004,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       u.note.text = ta.value;
       const shown = box.closest(".notecard").querySelector(".notetext");
       if (shown){
-        shown.textContent = ta.value.trim() || "撳 ✏️ 寫低你想記住嘅嘢…";
+        shown.textContent = ta.value.trim() || "寫低你想記住嘅嘢…";
         shown.classList.toggle("empty", !ta.value.trim());
       }
       saveSoon("改咗一個 note");
@@ -3040,7 +3191,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <p class="picker-label">心水清單</p>
       <div class="daypick">
         ${boards.map(b => `<button data-toboard="${b.id}" style="--lc:var(--bookmark)">
-          <span class="bullet"></span><span class="dcode">📌</span><span>${esc(b.name)}</span>
+          <span class="bullet"></span><span class="dcode">${icon("pin")}</span><span>${esc(b.name)}</span>
         </button>`).join("")}
         <button data-newboard style="--lc:var(--bookmark)">
           <span class="bullet"></span><span class="dcode">＋</span><span>開個新清單</span>
@@ -3137,7 +3288,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         ${boards.map(b => {
           const here = source.kind === "board" && source.board.id === b.id;
           return `<button data-toboard="${b.id}" ${here?"disabled":""} style="--lc:var(--bookmark)">
-            <span class="bullet"></span><span class="dcode">📌</span>
+            <span class="bullet"></span><span class="dcode">${icon("pin")}</span>
             <span>${esc(b.name)}${here?"（而家喺度）":""}</span>
           </button>`;
         }).join("")}
@@ -3258,7 +3409,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           <button data-copyday="${d.id}" style="--lc:${dayColorVar(d.id)}">
             <span class="bullet"></span>
             <span class="dcode">Day ${d.id.replace('day','')}</span>
-            <span>${esc(d.title)}${d.id === suggested ? ` <b class="sugg">⭐ AI 話呢日順路</b>` : ""}</span>
+            <span>${esc(d.title)}${d.id === suggested ? ` <b class="sugg">AI 話呢日順路</b>` : ""}</span>
           </button>`).join("")}
       </div>
     `, sheet => {
@@ -3412,13 +3563,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       <h3>行程日期改咗</h3>
       <p class="sec-sub">${esc(plan.oldStart || "?")} → <b>${esc(plan.newStart)}</b>，
         ${plan.oldCount} 日 → <b>${plan.newCount} 日</b>。</p>
-      ${plan.added.length ? `<div class="ai-msg">➕ 會加 ${plan.added.length} 日空白行程（Day ${plan.oldCount + 1}${plan.added.length > 1 ? "-" + plan.newCount : ""}），可以之後叫 AI 幫手諗。</div>` : ""}
-      ${plan.dropped.length ? `<div class="ai-msg">➖ Day ${plan.newCount + 1}${plan.dropped.length > 1 ? "-" + plan.oldCount : ""} 會冇咗。${
+      ${plan.added.length ? `<div class="ai-msg">會加 ${plan.added.length} 日空白行程（Day ${plan.oldCount + 1}${plan.added.length > 1 ? "-" + plan.newCount : ""}），可以之後叫 AI 幫手諗。</div>` : ""}
+      ${plan.dropped.length ? `<div class="ai-msg">Day ${plan.newCount + 1}${plan.dropped.length > 1 ? "-" + plan.oldCount : ""} 會冇咗。${
         stopCount ? `入面有 <b>${stopCount} 個地點</b>：${esc(names.join("、"))}${stopCount > names.length ? " …" : ""}<br>
         撳「確認」會自動搬去一個新清單度收好，唔會消失（但時間、交通、營業時間呢啲會冇咗）。` : "入面冇地點，直接刪走。"}</div>` : ""}
-      ${flipsClosed.length ? `<div class="ai-msg">⚠️ 改完之後，呢啲地點會撞正公休：${esc(flipsClosed.map(f => f.title).join("、"))}</div>` : ""}
-      ${flipsOpen.length ? `<div class="ai-msg">✅ 原本撞公休、改完之後冇事：${esc(flipsOpen.map(f => f.title).join("、"))}</div>` : ""}
-      ${plan.seasonShift ? `<div class="ai-msg">🗓 日期搬咗好遠／換咗月份，每日嘅標題同季節相關嘅內容可能唔啱用，可以之後叫 AI 重新諗過。</div>` : ""}
+      ${flipsClosed.length ? `<div class="ai-msg">${icon("warn")}改完之後，呢啲地點會撞正公休：${esc(flipsClosed.map(f => f.title).join("、"))}</div>` : ""}
+      ${flipsOpen.length ? `<div class="ai-msg">${icon("check")}原本撞公休、改完之後冇事：${esc(flipsOpen.map(f => f.title).join("、"))}</div>` : ""}
+      ${plan.seasonShift ? `<div class="ai-msg">日期搬咗好遠／換咗月份，每日嘅標題同季節相關嘅內容可能唔啱用，可以之後叫 AI 重新諗過。</div>` : ""}
       <div class="editor-tools" style="margin-top:14px;flex-wrap:wrap;">
         <button class="btn" data-datecancel>取消（唔改日期）</button>
         <button class="btn primary" data-dateok>確認</button>
@@ -3439,9 +3590,9 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
           genBanner("AI 幫你諗緊新加嗰幾日…");
           try {
             await generateDaysFor(ids, msg => genBanner(msg));
-            genBanner("🎉 新加嘅日子諗好喇。", { done:true });
+            genBanner("新加嘅日子諗好喇。", { done:true });
           } catch (e){
-            genBanner("⚠️ 生成失敗：" + e.message, { done:true });
+            genBanner("生成失敗：" + e.message, { done:true });
           }
           setTimeout(() => genBanner(null), 6000);
         }
@@ -3540,7 +3691,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       const d = state.snapshot;
       openEditSheet("點著衫", "一行一項。", [
         { key:"rows", type:"lines", rows:8, label:"圖示 | 內容",
-          hint:"用「|」分開，例如：🧥 | 中層要有 **薄羽絨**。想加粗就用 **兩個星號** 包住。",
+          hint:"一行一條。想喺前面加個符號就用「|」分開，例如：外套 | 中層要有 **薄羽絨**；唔加符號就直接寫。**兩個星號**包住即係加粗。",
           value: (d.clothing || []).map(c => `${c.icon || ""} | ${htmlToPlainish(c.html)}`).join("\n") },
       ], async out => {
         d.clothing = out.rows.map(l => {
@@ -4126,7 +4277,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const stay = stayForDay(state.snapshot, day);
     if (stay && Number.isFinite(Number(stay.lat)) && Number.isFinite(Number(stay.lng)))
       anchors.unshift({ lat:Number(stay.lat), lng:Number(stay.lng),
-                        label:"", text:`🏨 ${plain(stay.name) || "住宿"}` });
+                        label:"", text:plain(stay.name) || "住宿" });
 
     const used = new Set();
     const claimLegacy = s => {
@@ -4205,7 +4356,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   // not at the bottom of the page past every stop card, where it went unseen.
   function mapNoteHtml(day){
     const busy = state.geoBusy && state.geoBusy.dayId === day.id ? state.geoBusy : null;
-    if (busy) return `<p class="mapnote">🗺 搵緊未有座標嘅地點…（${busy.done}／${busy.total}）</p>`;
+    if (busy) return `<p class="mapnote">搵緊未有座標嘅地點…（${busy.done}／${busy.total}）</p>`;
     const missing = unmappedStops(day);
     if (!missing.length) return "";
     return `<p class="mapnote warn">仲有 ${missing.length} 個地點未有座標，未顯示到喺地圖度。` +
@@ -4297,7 +4448,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
   function boardPinIcon(color){
     return L.divIcon({
       className:"", iconSize:[20,20], iconAnchor:[10,20],
-      html:`<div class="mapboardpin" style="background:${color}"><span>📌</span></div>`
+      html:`<div class="mapboardpin" style="background:${color}"></div>`
     });
   }
   function initDayMap(day){
@@ -4399,13 +4550,13 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
         ${renaming
           ? `<input class="input boardname-input" id="boardname-input" value="${esc(board.name)}" placeholder="幫個清單改名…" maxlength="120">`
-          : `<h2 class="boardname" id="boardname-display" title="撳一下改名">📌 ${esc(board.name || "未命名清單")}<span class="editpencil">✏️</span></h2>`}
+          : `<h2 class="boardname" id="boardname-display" title="撳一下改名">${esc(board.name || "未命名清單")}<span class="editpencil">${icon("pencil")}</span></h2>`}
         <p class="intro">呢度淨係放心水地點，未定實邊日去、邊個先去都得。撳景點卡入面嘅「搬去…」就可以擺入某一日，或者搬去另一個清單。</p>
         <p class="picker-label">呢個清單喺全程地圖上嘅顏色</p>
         <div class="colorpick" data-boardcolor>
           ${BOARD_PALETTE.map(c => `<button type="button" class="swatch${c === board.color ? " active" : ""}" data-setcolor="${c}" style="background:${c}" aria-label="改做${c}"></button>`).join("")}
         </div>
-        <button class="btn wide" id="boardai" style="margin-top:11px;">✨ 問 AI 幫我搵「${esc(board.name)}」</button>
+        <button class="btn wide" id="boardai" style="margin-top:11px;">${icon("sparkle")}問 AI 幫我搵「${esc(board.name)}」</button>
         <div id="boardai-out"></div>
       </section>
 
@@ -4417,12 +4568,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ${!board.items.length ? `<p class="hint">仲未有地點。撳下面「＋」自己加一個，或者去某一日嘅景點卡度撳「搬去邊度」搬過嚟，或者問AI攞主意。</p>` : ""}
 
       <button class="addstop" id="addboarditem">＋ 加一個地點落「${esc(board.name)}」</button>
-      ${ratableCount(board.items) ? `<button class="recalc" id="getboardratings" style="margin-top:8px;">★ 攞 Google 評分／營業時間（${ratableCount(board.items)} 個地點未有）</button>` : ""}
-      <button class="btn danger wide" id="delboard" style="margin-top:8px;">🗑 刪除呢個清單</button>
+      ${ratableCount(board.items) ? `<button class="recalc" id="getboardratings" style="margin-top:8px;">${icon("star")}攞 Google 評分／營業時間（${ratableCount(board.items)} 個地點未有）</button>` : ""}
+      <button class="btn danger wide" id="delboard" style="margin-top:8px;">${icon("trash")}刪除呢個清單</button>
 
       <footer>
-        <div class="fbrand">📌 ${esc(board.name)}</div>
-        撳一下標題可以改名；撳景點卡右上角 ✏️ 就可以改內容或者搬去第度。
+        <div class="fbrand">${esc(board.name)}</div>
+        撳一下標題可以改名；撳景點卡右上角嘅筆就可以改內容或者搬去第度。
       </footer>
     `;
   }
@@ -4439,23 +4590,23 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     // that expands on tap, independently from any other open/edit panel
     return `
       <section class="ailog">
-        <div class="ailog-head">🧠 AI 分析同建議<span class="ailog-sub">會一直記低，撳多次AI都唔會冇咗之前嘅</span></div>
+        <div class="ailog-head">AI 分析同建議<span class="ailog-sub">會一直記低，撳多次AI都唔會冇咗之前嘅</span></div>
         ${log.map((e, i) => {
           const key = board.id + ":" + i;
           const expanded = i === 0 || state.openLog.has(key);
           if (!expanded){
             return `
           <div class="ailog-entry collapsed" data-logtoggle="${key}">
-            <div class="ailog-when">${esc(e.when || "")}<span class="ailog-caret">▸</span></div>
+            <div class="ailog-when">${esc(e.when || "")}<span class="ailog-caret">${icon("chevron")}</span></div>
             <div class="ailog-note">${esc(e.note || "")}</div>
           </div>`;
           }
           return `
           <div class="ailog-entry${i === 0 ? " latest" : ""}"${i === 0 ? "" : ` data-logtoggle="${key}"`}>
-            <div class="ailog-when">${esc(e.when || "")}${i === 0 ? " ・ 最新一次" : `<span class="ailog-caret">▾</span>`}</div>
+            <div class="ailog-when">${esc(e.when || "")}${i === 0 ? " ・ 最新一次" : `<span class="ailog-caret open">${icon("chevron")}</span>`}</div>
             ${e.analysis ? `<div class="ailog-text">${esc(e.analysis)}</div>` : ""}
             ${(e.resources || []).length ? `<div class="ailog-links">${e.resources.map(r =>
-              `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 ${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</a>`).join("")}</div>` : ""}
+              `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${icon("link")}${esc(r.name)}${r.note ? `<small>${esc(r.note)}</small>` : ""}</a>`).join("")}</div>` : ""}
             ${e.note ? `<div class="ailog-note">${esc(e.note)}</div>` : ""}
           </div>`;
         }).join("")}
@@ -4495,26 +4646,25 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const fetchable = !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl);
     const thumb = s.photoUrl
       ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
-      : fetchable
-        ? `<div class="thumb ghost" data-getboardphoto="${i}" title="搵張相">📷<small>搵張相</small></div>`
-        : "";
+      : "";
     // only the newest AI batch is badged — otherwise every place the AI ever
     // found stays marked and the badge stops meaning "this is what just landed"
     const isFresh = s.aiRun && s.aiRun === board.aiRunLatest;
     // already scheduled beats a mere AI guess at where it might fit — if it's
     // really there, that's more useful than "AI 建議：Day X"
     const inItin = findInItinerary(state.snapshot, s);
-    const chips = (isFresh ? `<span class="ainew">✨ 今次 AI 搵</span>` : "")
-      + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${dayColorVar(inItin.id)}">📍 已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
+    const chips = (isFresh ? `<span class="ainew">今次 AI 搵</span>` : "")
+      + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${dayColorVar(inItin.id)}">${icon("pin")}已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
       + (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
       + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
     const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">📍 地圖</a>`);
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>`);
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">⭐ Google 評論</a>`);
-      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">🔍 Google 搜尋</a>`);
+      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
     }
+    if (fetchable) links.push(`<button class="maplink" data-getboardphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `
       <div class="unit" data-i="${i}">
@@ -4530,12 +4680,12 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
               </div>
             </div>
             <div class="cardtools">
-              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}">${open ? "✓" : "✏️"}</button>
+              <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}" aria-label="${open ? "完成編輯" : "編輯"}">${open ? icon("check") : icon("pencil")}</button>
             </div>
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
-            <button class="btn copyrow" data-copyitem="${i}">📋 複製去某一日…${inItin ? "" : suggestLabel(s)}</button>
+            <button class="btn copyrow" data-copyitem="${i}">複製去某一日…${inItin ? "" : suggestLabel(s)}</button>
             ${open ? boardItemEditorHtml(board, s, i) : ""}
           </div>
         </div>
@@ -4666,7 +4816,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       ev.stopPropagation();
       if (el.dataset.busy) return;
       el.dataset.busy = "1";
-      el.innerHTML = "⏳";
+      el.innerHTML = `<span class="spin"></span>`;
       const s = board.items[+el.dataset.getboardphoto];
       const name = plain(s.kr) || plain(s.title);
       let got = false;
@@ -4815,7 +4965,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
         </div>
         <div class="aibusy-bar"><i></i></div>
         ${steps.length > 1 ? `<div class="aibusy-steps">${steps.map((s, i) =>
-          `<span class="${i < p.i ? "done" : i === p.i ? "now" : ""}">${i < p.i ? "✓" : i + 1} ${esc(s)}</span>`).join("")}</div>` : ""}
+          `<span class="${i < p.i ? "done" : i === p.i ? "now" : ""}">${i < p.i ? icon("check") : i + 1} ${esc(s)}</span>`).join("")}</div>` : ""}
         <div class="aibusy-note">${esc(p.hint || "AI 要諗一陣，跟住仲要逐個問 Google，成個過程大約 20-40 秒。可以留喺呢版等，唔好熄咗個 app。")}</div>
       </div>`;
   }
@@ -4848,7 +4998,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     const out = $("#boardai-out");
     const btn = $("#boardai");
     if (!out) return;
-    const label = `✨ 問 AI 幫我搵「${board.name}」`;
+    const label = `${icon("sparkle")}問 AI 幫我搵「${board.name}」`;
     const restore = () => { const b2 = $("#boardai"); if (b2){ b2.disabled = false; b2.textContent = label; } };
     const startedAt = Date.now();
     const setStep = (i, extra, hint) => {
@@ -4958,7 +5108,7 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
     layer.innerHTML = `<div class="scrim" data-close></div>
       <div class="sheet" role="dialog" aria-modal="true"><div class="sheet-wide">
         <div class="grabber"></div>
-        <button class="iconbtn sheet-close" data-close aria-label="收埋">✕</button>
+        <button class="iconbtn sheet-close" data-close aria-label="收埋" title="收埋">${icon("close")}</button>
         ${inner}
       </div></div>`;
     layer.querySelectorAll("[data-close]").forEach(el => el.addEventListener("click", closeLayer));
@@ -5029,6 +5179,64 @@ footer .fbrand{font-weight:900;font-size:13.5px;color:var(--ink-soft);margin-bot
       L.push("");
     });
     L.push(`（匯出時間：${new Date().toLocaleString("zh-HK")}）`);
+    return L.join("\n");
+  }
+
+  // A brief for an AI model, not for a person: the itinerary stripped down to
+  // the few facts a diagram needs (which day, what time, where, how you get
+  // there), plus instructions for drawing it. Ratings, links, photos and notes
+  // are left out on purpose — they are what make the chart unreadable.
+  function exportAiPrompt(snap){
+    const m = snap.meta || {};
+    const title = plain(m.title) || "行程";
+    const days = snap.days || [];
+    const L = [];
+
+    L.push("你係一個資訊圖表設計師。下面係一個已經排好嘅旅行行程，請幫我畫一張清晰易睇嘅「行程圖」。");
+    L.push("");
+    L.push("【要求】");
+    L.push("1. 一日一欄（或者一行），由 Day 1 順住排到最後一日，唔好打亂次序。");
+    L.push("2. 每一日要睇得出：日期、星期、當日主題，同埋當日由早到晚順序嘅地點。");
+    L.push("3. 每個地點要有時間同名；有當地語言名就一併寫細字。");
+    L.push("4. 兩個地點之間要標返點樣過去（例如步行 10 分鐘、地鐵 20 分鐘）。");
+    L.push("5. 用色克制：一日一隻色就夠，唔好每格都唔同色。留白要夠，字要夠大，手機睇得清楚。");
+    L.push("6. 只可以用下面俾你嘅資料，唔好自己加地點、加時間、或者作任何我冇提供嘅嘢。地名要一字不改咁抄返。");
+    L.push("7. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案），我自己開嚟睇同印。");
+    L.push("");
+    L.push("【行程資料】");
+    L.push(`行程名：${title}`);
+    if (m.dateStart && m.dateEnd) L.push(`日期：${m.dateStart} 至 ${m.dateEnd}（共 ${days.length} 日）`);
+    if (plain(m.destinationLocal)) L.push(`目的地：${plain(m.destinationLocal)}`);
+    L.push("");
+
+    days.forEach(day => {
+      const n = String(day.id).replace("day", "");
+      L.push(`## Day ${n}｜${plain(day.date)}｜${plain(day.title) || "未定主題"}`);
+      if (plain(day.desc)) L.push(`（當日備註：${plain(day.desc)}）`);
+      const st = stayForDay(snap, day);
+      if (st && st.name) L.push(`住宿：${plain(st.name)}`);
+      const units = toUnits(day.items);
+      const stops = units.filter(u => u.stop);
+      if (!stops.length){
+        L.push("（呢日未排嘢）");
+        L.push("");
+        return;
+      }
+      units.forEach((u, i) => {
+        if (u.note) return;          // personal reminders don't belong on a chart
+        if (!u.stop) return;
+        if (i > 0 && u.seg){
+          const t = u.seg.text != null ? u.seg.text : segPlain(u.seg.html || "");
+          if (t) L.push(`   ↓ ${t}`);
+        }
+        const s = u.stop;
+        const time = plain(s.time) || "時間未定";
+        const kr = plain(s.kr);
+        L.push(`${time}｜${plain(s.title)}${kr ? `（${kr}）` : ""}`);
+        if (plain(s.desc)) L.push(`     ${plain(s.desc)}`);
+      });
+      L.push("");
+    });
     return L.join("\n");
   }
 
@@ -5135,29 +5343,49 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function openExportSheet(){
     const snap = state.snapshot;
     openSheet(`
-      <h3>📤 匯出行程</h3>
-      <p class="sec-sub">帶走成個行程 —— 貼上 WhatsApp、印出嚟、或者留份備份。匯出係即時嘅，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
-      <button class="btn wide" id="ex-copy">📋 複製成文字（可以直接貼落 WhatsApp）</button>
-      <button class="btn wide" id="ex-txt" style="margin-top:8px;">⬇️ 下載文字檔 .txt</button>
-      <button class="btn wide" id="ex-print" style="margin-top:8px;">🖨 開列印版（可以存做 PDF）</button>
-      <button class="btn wide" id="ex-html" style="margin-top:8px;">⬇️ 下載網頁檔 .html（冇網絡都睇到）</button>
-      <button class="btn wide" id="ex-json" style="margin-top:8px;">💾 下載 JSON 備份（畀我還原用）</button>
-      <p class="sec-sub" style="margin-top:10px;">JSON 係完整資料備份，睇落好亂但可以完整還原返成個行程；印刷／文字版就係俾人睇嘅。</p>
+      <h3>匯出行程</h3>
+      <p class="sec-sub">匯出係即時影一份，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
+
+      <div class="exgroup">
+        <div class="exgroup-label">畀 AI 畫行程圖</div>
+        <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}複製指令</button>
+        <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令入面已經寫明要分日、要有時間同交通、唔准自己作地點。</p>
+      </div>
+
+      <div class="exgroup">
+        <div class="exgroup-label">畀人睇</div>
+        <button class="btn wide" id="ex-copy">複製成文字（貼落 WhatsApp）</button>
+        <button class="btn wide" id="ex-print">開列印版（可以存做 PDF）</button>
+        <button class="btn wide" id="ex-html">下載網頁檔（冇網絡都睇到）</button>
+      </div>
+
+      <div class="exgroup">
+        <div class="exgroup-label">備份</div>
+        <button class="btn wide" id="ex-txt">下載文字檔 .txt</button>
+        <button class="btn wide" id="ex-json">下載 JSON 備份</button>
+        <p class="exhint">JSON 睇落好亂，但係完整資料，可以原封不動還原成個行程。</p>
+      </div>
     `, sheet => {
-      sheet.querySelector("#ex-copy").addEventListener("click", async () => {
-        const text = exportText(snap);
-        const btn = sheet.querySelector("#ex-copy");
+      // one copy helper: clipboard is blocked outside a secure context and on
+      // older iOS, so always leave a selectable box behind rather than failing
+      // silently on the one device someone happens to be holding
+      async function copyInto(btnId, text, doneLabel){
+        const btn = sheet.querySelector(btnId);
+        const label = btn.innerHTML;
         try {
           await navigator.clipboard.writeText(text);
-          btn.textContent = "✅ 已經複製";
+          btn.textContent = doneLabel;
+          setTimeout(() => { btn.innerHTML = label; }, 2500);
         } catch (_){
-          // clipboard is blocked outside a secure context / older iOS — fall
-          // back to a selectable box rather than silently doing nothing
           btn.insertAdjacentHTML("afterend",
             `<textarea class="textarea" rows="8" style="margin-top:8px;">${esc(text)}</textarea>`);
           btn.textContent = "揀晒下面啲字再自己複製";
         }
-      });
+      }
+      sheet.querySelector("#ex-prompt").addEventListener("click", () =>
+        copyInto("#ex-prompt", exportAiPrompt(snap), "複製咗，貼落 AI 度"));
+      sheet.querySelector("#ex-copy").addEventListener("click", () =>
+        copyInto("#ex-copy", exportText(snap), "複製咗"));
       sheet.querySelector("#ex-txt").addEventListener("click", () =>
         downloadFile(`${exportBase()}-${exportStamp()}.txt`, exportText(snap)));
       sheet.querySelector("#ex-html").addEventListener("click", () =>
@@ -5202,7 +5430,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       ab.textContent = "套用緊…"; ab.disabled = true;
       // inserts by time, then fills in photo and transit; "" means it worked
       const why = await applyAiChange(c);
-      if (why){ ab.textContent = "⚠️ " + why; ab.disabled = false; return false; }
+      if (why){ ab.textContent = why; ab.disabled = false; return false; }
       ab.textContent = "已套用";
       return true;
     }
@@ -5272,7 +5500,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const stops = day.items.filter(i => i.kind === "stop").length;
     const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
     openSheet(`
-      <h3>✨ AI 諗行程</h3>
+      <h3>AI 諗行程</h3>
       <p class="sec-sub">${stops
         ? `「${esc(day.title)}」而家有 ${stops} 個站，AI 會補唔夠嘅位，唔會推介重複嘅地方。`
         : `「${esc(day.title)}」仲係空白嘅，AI 會由早到晚幫你砌一日出嚟。`}
@@ -5350,16 +5578,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <h3>AI 助手</h3>
       <p class="sec-sub">問實時天氣同當地季節情況，或者叫佢執一執行程。問過嘅嘢會自動存底，去頂部「問過啲咩」睇返。</p>
       <div class="aibtns">
-        <button class="btn" data-ai="weather">☁️ 實時天氣</button>
-        <button class="btn" data-ai="foliage">🌤 季節情況</button>
-        <button class="btn" data-ai="suggest">💡 執一執行程</button>
+        <button class="btn" data-ai="weather">${icon("sun")}實時天氣</button>
+        <button class="btn" data-ai="foliage">${icon("leaf")}季節情況</button>
+        <button class="btn" data-ai="suggest">${icon("sparkle")}執一執行程</button>
       </div>
       <div class="askrow">
         <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
         <button class="btn primary" data-ai="ask">問</button>
       </div>
       <div class="ai-out" id="ai-out"></div>
-      <button class="btn wide" id="go-notes" style="margin-top:12px;">🗒 睇返問過啲咩</button>
+      <button class="btn wide" id="go-notes" style="margin-top:12px;">睇返問過啲咩</button>
     `, layer => {
       const out = layer.querySelector("#ai-out");
       const q = layer.querySelector("#ai-q");
@@ -5425,7 +5653,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // ==================================================================
   // ASKED / ANSWERED — its own page, so a long history stays readable
   // ==================================================================
-  const AI_KIND = { weather:"☁️ 天氣", foliage:"🌤 季節", ask:"💬 問嘢", suggest:"💡 執行程", board:"📌 清單主題" };
+  const AI_KIND = { weather:"天氣", foliage:"季節", ask:"問嘢", suggest:"執行程", board:"清單主題" };
 
   function notesPageHtml(){
     return `
@@ -5449,7 +5677,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     if (!rows.length){
       filter.innerHTML = "";
-      list.innerHTML = `<p class="hint">仲未問過嘢。撳右下角「✨ AI 助手」問一次，之後就會喺呢度見到。</p>`;
+      list.innerHTML = `<p class="hint">仲未問過嘢。撳右下角「AI 助手」問一次，之後就會喺呢度見到。</p>`;
       return;
     }
 
@@ -5551,7 +5779,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const r = await callAi({ action:"place-hours", placeId:s.placeId });
       if (r && r.ok !== false && r.summary){
         s.eatMeta = (s.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
-        s.eatMeta.push({ text:`🕒 ${r.summary}`, cls:"meta-chip hours" });
+        s.eatMeta.push({ text:r.summary, cls:"meta-chip hours" });
       }
       // raw per-weekday lines, kept separately from the summarized chip text
       // so stopClosedOnDay() can check a specific weekday later without
@@ -5596,22 +5824,22 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // Google has no API for reservation/queue info, so this is always the
   // model's own impression — never treat it with the same confidence as the
   // Google-verified rating chip.
-  const BOOKING_LABEL = { online:"🌐 可網上／App預約", phone:"📞 只可電話訂位", walkin:"🚶 冇預約，現場排隊" };
+  const BOOKING_LABEL = { online:"可網上／App 預約", phone:"只可電話訂位", walkin:"冇預約，現場排隊" };
   function bookingBoxHtml(s){
     if (!s.isFood) return "";
     const parts = [];
-    if (BOOKING_LABEL[s.booking]) parts.push(BOOKING_LABEL[s.booking]);
+    if (BOOKING_LABEL[s.booking]) parts.push(esc(BOOKING_LABEL[s.booking]));
     if (plain(s.bookingHow)) parts.push(esc(plain(s.bookingHow)));
-    if (plain(s.queueNote)) parts.push(`⏱ ${esc(plain(s.queueNote))}`);
+    if (plain(s.queueNote)) parts.push(esc(plain(s.queueNote)));
     if (!parts.length) return "";
-    return `<div class="bookbox"><b>訂位／排隊</b>${parts.join("<br>")}<span class="warnline">⚠️ AI 印象・未經核實，出發前建議自己再確認</span></div>`;
+    return `<div class="bookbox"><b>訂位／排隊</b>${parts.join("<br>")}<span class="warnline">${icon("warn")}AI 印象・未經核實，出發前建議自己再確認</span></div>`;
   }
 
-  // "⭐ 4.3・1,234 則評價" — Google's own numbers, not something we wrote
+  // Google's own numbers, not something we wrote
   function ratingChip(s){
     if (!Number.isFinite(s.rating)) return "";
-    const count = Number.isFinite(s.ratingCount) ? `・${s.ratingCount.toLocaleString("en-US")} 則評價` : "";
-    return `<span class="meta-chip rating">⭐ ${s.rating.toFixed(1)}${count}</span>`;
+    const count = Number.isFinite(s.ratingCount) ? `（${s.ratingCount.toLocaleString("en-US")}）` : "";
+    return `<span class="meta-chip rating">${icon("star")}<b>${s.rating.toFixed(1)}</b>${count}</span>`;
   }
   // fills in ratings for everything on screen that Google can identify
   async function fetchRatings(items, label){
@@ -5839,7 +6067,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       await generateDaysChunk(secondHalf, onProgress, { first: false, last: edges && edges.last });
       return;
     }
-    onProgress && onProgress(`⚠️「${label}」生成失敗：${msg || "未知錯誤"}（可以之後入返嗰日撳「✨ AI 諗行程」補返）`);
+    onProgress && onProgress(`「${label}」生成失敗：${msg || "未知錯誤"}（可以之後入返嗰日撳「AI 諗行程」補返）`);
   }
   // Sequential, not parallel: each chunk's itinerary payload must include
   // the previous chunk's already-generated stops, so day-plan's own
@@ -5894,13 +6122,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
       if (plain(o.desc) !== plain(s.desc)) changes.push("改咗描述");
       if ((o.photoUrl||"") !== (s.photoUrl||"")) changes.push(o.photoUrl ? "換咗相" : "加咗相");
       if ((o.mapUrl||"") !== (s.mapUrl||"") && o.mapUrl && s.mapUrl) changes.push("地圖連結有更新");
-      if (changes.length) lines.push({ type:"edit", text:`✎ 「${k}」：${changes.join("、")}` });
+      if (changes.length) lines.push({ type:"edit", text:`「${k}」：${changes.join("、")}` });
     });
     // did the common stops change relative order?
     const commonOld = oldStops.map(stopKey).filter(k => k && newByKey.has(k));
     const commonNew = newStops.map(stopKey).filter(k => k && oldByKey.has(k));
     if (commonOld.length > 1 && commonOld.join("|") !== commonNew.join("|")){
-      lines.push({ type:"reorder", text:"⇅ 次序調整咗" });
+      lines.push({ type:"reorder", text:"次序調整咗" });
     }
     return lines;
   }
@@ -5925,16 +6153,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const ob = oldBoardsById.get(nb.id);
       const asStops = items => items.map(i => ({ ...i, kind:"stop" }));
       if (!ob){
-        sections.push({ label:`📌 ${nb.name}`, lines:[{ type:"add", text:`＋ 開咗個新清單，入面 ${nb.items.length} 個地點` }] });
+        sections.push({ label:nb.name, lines:[{ type:"add", text:`＋ 開咗個新清單，入面 ${nb.items.length} 個地點` }] });
         return;
       }
       const lines = [];
       if (ob.name !== nb.name) lines.push({ type:"edit", text:`改咗名：「${ob.name}」→「${nb.name}」` });
       lines.push(...summarizeItemsDiff(asStops(ob.items), asStops(nb.items)));
-      if (lines.length) sections.push({ label:`📌 ${nb.name}`, lines });
+      if (lines.length) sections.push({ label:nb.name, lines });
     });
     oldBoards.forEach(ob => {
-      if (!newBoards.some(nb => nb.id === ob.id)) sections.push({ label:`📌 ${ob.name}`, lines:[{ type:"remove", text:"－ 成個清單被刪走咗" }] });
+      if (!newBoards.some(nb => nb.id === ob.id)) sections.push({ label:ob.name, lines:[{ type:"remove", text:"－ 成個清單被刪走咗" }] });
     });
 
     // The home page is editable too, so a version whose ONLY change is up there
@@ -5965,7 +6193,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       });
       a.forEach((_, k) => { if (!b.has(k)) homeLines.push({ type:"remove", text:`刪咗 section「${k}」` }); });
     }
-    if (homeLines.length) sections.push({ label:"🏠 首頁內容", lines: homeLines });
+    if (homeLines.length) sections.push({ label:"首頁內容", lines: homeLines });
 
     return sections;
   }
@@ -5987,12 +6215,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function openBoardsSheet(){
     const boards = state.snapshot.boards || [];
     openSheet(`
-      <h3>📌 心水清單</h3>
+      <h3>心水清單</h3>
       <p class="sec-sub">未定實邊日去嘅地點放呢度。撳一個入去，或者開個新嘅。</p>
       <div class="daypick">
         ${boards.map(b => `
           <button data-gotoboard="${b.id}" style="--lc:var(--bookmark)">
-            <span class="bullet"></span><span class="dcode">📌</span>
+            <span class="bullet"></span><span class="dcode">${icon("pin")}</span>
             <span>${esc(b.name)}（${b.items.length} 個地點）</span>
           </button>`).join("")}
         <button data-newboard-sheet style="--lc:var(--bookmark)">
@@ -6245,9 +6473,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
       await fillWeatherRows(msg => genBanner(msg));
       await recommendStandardSections(msg => genBanner(msg));
       await saveNow("AI 補齊咗住宿、天氣、著衫、交通同行李清單");
-      genBanner("🎉 行程生成完成！可以逐日睇同再微調。", { done:true });
+      genBanner("行程生成完成，可以逐日睇同再微調。", { done:true });
     } catch (e){
-      genBanner("⚠️ 生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「✨ AI 諗行程」補返）", { done:true });
+      genBanner("生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「AI 諗行程」補返）", { done:true });
     }
     history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
     setTimeout(() => genBanner(null), 6000);
