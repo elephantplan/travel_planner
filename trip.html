@@ -1237,6 +1237,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     put("#btn-ai .dockbtn-i", "sparkle");
   }
   paintChromeIcons();
+  // Safety net for every picture on the page, wherever it is rendered: a
+  // photo that won't load gets hidden rather than drawn as a torn-image box.
+  // The day view additionally forgets the dead url; this just guarantees the
+  // family never sees a broken placeholder while that happens.
+  document.addEventListener("error", e => {
+    const img = e.target;
+    if (img && img.tagName === "IMG"){
+      const holder = img.closest(".thumb");
+      if (holder) holder.style.display = "none";
+    }
+  }, true);
+
   // Export lives in the top bar now, so it is wired once rather than on every
   // render — it is reachable from any day, not just the overview.
   $("#btn-export").addEventListener("click", () => openExportSheet());
@@ -2621,6 +2633,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             : `${icon("refresh")}重算全日交通`
         }</button>` : ""}
         ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">${icon("star")}攞 Google 評分／營業時間（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
+        ${photolessCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getphotos">${icon("camera")}攞返地點相（${photolessCount(units.map(u => u.stop).filter(Boolean))} 個未有）</button>` : ""}
       `}
 
       <footer>
@@ -2639,6 +2652,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // real places still missing a Google rating (logistics rows never count)
   function ratableCount(stops){
     return stops.filter(s => !Number.isFinite(s.rating) && !s.noRating && (s.placeId || s.mapUrl) && plain(s.title)).length;
+  }
+  // real places that could have a picture but don't (yet)
+  function photolessCount(stops){
+    return stops.filter(s => !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl) && plain(s.title)).length;
   }
 
   // a ＋ sitting on the route line, so any gap between two places is somewhere
@@ -2702,7 +2719,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // a photo is now a link in the footer row, and the box only exists once
     // there is a picture to put in it.
     const thumb = s.photoUrl
-      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy" data-photoimg="${i}"></div>`
       : "";
 
     const closedToday = stopClosedOnDay(s, day);
@@ -2880,6 +2897,56 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
 
     // 📷 placeholder on a photo-less stop: fetch one picture, no picker
+    // Google's place/photo endpoint answers with a redirect to a temporary
+    // lh3.googleusercontent.com URL, and what got stored was that RESOLVED
+    // url — which expires after a few weeks. So pictures fetched in July are
+    // now dead links, and a dead link renders as the browser's broken-image
+    // box. Treat a failed image as "no picture yet": drop the dead url so the
+    // card offers to fetch a fresh one instead of showing a torn photo.
+    {
+      let dead = 0, settle = null;
+      document.querySelectorAll("img[data-photoimg]").forEach(img => {
+        img.addEventListener("error", () => {
+          const u = toUnits(day.items)[+img.dataset.photoimg];
+          if (!u || !u.stop || !u.stop.photoUrl) return;
+          delete u.stop.photoUrl;
+          dead++;
+          // one repaint for the lot, however many fail at once
+          clearTimeout(settle);
+          settle = setTimeout(() => {
+            render();
+            saveNow(`清走咗 ${dead} 張失效嘅地點相`, true);
+          }, 300);
+        }, { once:true });
+      });
+    }
+
+    const getphotos = $("#getphotos");
+    if (getphotos) getphotos.addEventListener("click", async () => {
+      getphotos.disabled = true;
+      const todo = toUnits(day.items).map(u => u.stop)
+        .filter(s => s && !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl) && plain(s.title));
+      let got = 0;
+      for (let i = 0; i < todo.length; i++){
+        const s = todo[i];
+        const btn = $("#getphotos");
+        if (btn) btn.innerHTML = `<span class="spin"></span>搵緊…（${i + 1}／${todo.length}）`;
+        const name = plain(s.kr) || plain(s.title);
+        try {
+          const r = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
+                                           : { action:"place-photo", query:name });
+          if (r && r.ok !== false && r.photos && r.photos.length){ s.photoUrl = r.photos[0]; got++; }
+          else s.noPhoto = true;
+        } catch (_){ /* one failure must not stop the rest */ }
+      }
+      render();
+      // Not background upkeep: someone pressed a button and waited through
+      // dozens of lookups. Persist it promptly instead of letting it ride
+      // along with the next edit, which might never come.
+      if (got) saveNow(`攞返 ${got} 張地點相`);
+      else flash("搵唔到相，可能 Google 嗰邊冇呢啲地點嘅圖。");
+    });
+
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", async ev => {
       ev.preventDefault();
       ev.stopPropagation();          // sits inside the card button; don't open the editor
