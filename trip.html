@@ -1064,6 +1064,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
+  // Pictures get their own endpoint because they need their own storage: it
+  // copies the bytes out of Google into our bucket and returns a permanent
+  // URL, instead of the temporary one Google hands out (see below).
+  const PHOTO_URL = SUPABASE_URL + "/functions/v1/place-photo-store";
   // Day accent colours. The first six are the original hand-picked hues, so
   // trips that already exist look pixel-identical; past that they're generated
   // on the golden angle, because a trip can be any length and a 15-day trip
@@ -1349,6 +1353,31 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return await res.json();
     } catch (e){
       throw new Error(`AI 服務答咗個空白／壞咗嘅回覆（HTTP ${res.status}）。多數係今次 call 做得太耐俾系統中斷咗，再試一次通常就得。`);
+    }
+  }
+
+  // One picture for one place, stored on our side so the link never lapses.
+  // Google's own photo URLs expire after a few weeks — the whole Seoul trip's
+  // pictures died that way — so the bytes are copied into a storage bucket the
+  // first time anyone asks, and every later request just gets the same URL.
+  async function fetchStoredPhoto(s, count){
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    const body = s.placeId ? { placeId: s.placeId }
+                           : { query: plain(s.kr) || plain(s.title) };
+    body.locationHint = m.destinationLocal || "";
+    body.count = count || 1;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 45000);
+    try {
+      const res = await fetch(PHOTO_URL, {
+        method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal,
+      });
+      return await res.json();
+    } catch (e){
+      return { ok:false, message: e && e.name === "AbortError"
+        ? "攞相攞咗太耐，等陣再試。" : "連唔到攞相嘅服務。" };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -2933,9 +2962,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (btn) btn.innerHTML = `<span class="spin"></span>搵緊…（${i + 1}／${todo.length}）`;
         const name = plain(s.kr) || plain(s.title);
         try {
-          const r = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                           : { action:"place-photo", query:name });
-          if (r && r.ok !== false && r.photos && r.photos.length){ s.photoUrl = r.photos[0]; got++; }
+          const r = await fetchStoredPhoto(s);
+          if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got++; }
           else s.noPhoto = true;
         } catch (_){ /* one failure must not stop the rest */ }
       }
@@ -2957,9 +2985,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const name = plain(s.kr) || plain(s.title);
       let got = false;
       try {
-        const r = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                         : { action:"place-photo", query:name });
-        if (r && r.ok !== false && r.photos && r.photos.length){ s.photoUrl = r.photos[0]; got = true; }
+        const r = await fetchStoredPhoto(s);
+        if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got = true; }
       } catch (_){}
       if (!got) s.noPhoto = true;    // don't keep offering a button that finds nothing
       render();
@@ -3196,18 +3223,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const holder = box.querySelector("[data-photos]");
         holder.innerHTML = `<p class="hint">搵緊相…</p>`;
         try {
-          const payload = s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                    : { action:"place-photo", query:(s.kr || s.title) };
-          const r = await callAi(payload);
+          const r = await fetchStoredPhoto(s, replacing ? 4 : 1);
           if (r.ok === false){ holder.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
-          if (!r.photos || !r.photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
+          const photos = r.urls || (r.url ? [r.url] : []);
+          if (!photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
           if (!replacing){
-            s.photoUrl = r.photos[0];
+            s.photoUrl = photos[0];
             await saveNow("加咗「" + (s.title||"一個地點") + "」嘅相");
             render();
             return;
           }
-          holder.innerHTML = `<div class="photogrid">${r.photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
+          holder.innerHTML = `<div class="photogrid">${photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
           holder.querySelectorAll("img").forEach(img => img.addEventListener("click", async () => {
             s.photoUrl = img.dataset.u;
             await saveNow("換咗「" + (s.title||"一個地點") + "」嘅相");
@@ -4888,9 +4914,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const name = plain(s.kr) || plain(s.title);
       let got = false;
       try {
-        const r = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                         : { action:"place-photo", query:name });
-        if (r && r.ok !== false && r.photos && r.photos.length){ s.photoUrl = r.photos[0]; got = true; }
+        const r = await fetchStoredPhoto(s);
+        if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got = true; }
       } catch (_){}
       if (!got) s.noPhoto = true;
       render();
@@ -4980,18 +5005,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const holder = box.querySelector("[data-bphotos]");
         holder.innerHTML = `<p class="hint">搵緊相…</p>`;
         try {
-          const payload = s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                    : { action:"place-photo", query:(s.kr || s.title) };
-          const r = await callAi(payload);
+          const r = await fetchStoredPhoto(s, replacing ? 4 : 1);
           if (r.ok === false){ holder.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
-          if (!r.photos || !r.photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
+          const photos = r.urls || (r.url ? [r.url] : []);
+          if (!photos.length){ holder.innerHTML = `<p class="hint">搵唔到呢度嘅相。</p>`; return; }
           if (!replacing){
-            s.photoUrl = r.photos[0];
+            s.photoUrl = photos[0];
             await saveNow("加咗「" + (plain(s.title)||"一個地點") + "」嘅相");
             render();
             return;
           }
-          holder.innerHTML = `<div class="photogrid">${r.photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
+          holder.innerHTML = `<div class="photogrid">${photos.map(u2=>`<img src="${esc(u2)}" data-u="${esc(u2)}" class="${u2===s.photoUrl?'on':''}" alt="">`).join("")}</div><p class="hint">撳一張就用嗰張。</p>`;
           holder.querySelectorAll("img").forEach(img => img.addEventListener("click", async () => {
             s.photoUrl = img.dataset.u;
             await saveNow("換咗「" + (plain(s.title)||"一個地點") + "」嘅相");
@@ -5882,9 +5906,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
   async function enrichPhoto(s, name){
     if (s.photoUrl) return;
     try {
-      const pr = await callAi(s.placeId ? { action:"place-photo", placeId:s.placeId }
-                                        : { action:"place-photo", query:name });
-      if (pr && pr.ok !== false && pr.photos && pr.photos.length) s.photoUrl = pr.photos[0];
+      const pr = await fetchStoredPhoto(s);
+      if (pr && pr.ok !== false && pr.url) s.photoUrl = pr.url;
     } catch (_){}
   }
 
