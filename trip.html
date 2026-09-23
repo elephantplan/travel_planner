@@ -482,6 +482,13 @@ img{max-width:100%;}
 .segrefresh .i{width:14px;height:14px;}
 .segrefresh:hover{color:var(--ink-soft);border-color:var(--rule);}
 .segrefresh:active{color:var(--lc);border-color:var(--lc);}
+/* the two map buttons for a leg sit on their own line under the duration */
+.seg-links{display:flex;gap:16px;flex-wrap:wrap;width:100%;margin-top:5px;}
+/* whole-day route, above the map toggle */
+.dayroutes{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:14px;}
+.dayroutes .maplink{font-size:12.5px;color:var(--ink-soft);}
+.dayroutes .maplink:hover{color:var(--ink);}
+.dayroutes .hint{margin:0;flex-basis:100%;}
 .seg-route{
   display:block;width:100%;margin-top:4px;
   font-size:11px;line-height:1.7;color:var(--ink-faint);
@@ -1901,6 +1908,70 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return seg;
   }
 
+  // ---------- opening a place, or a whole leg, in a real map app ----------
+  // Google Maps is everywhere, but in South Korea it has no driving directions
+  // and thin transit data — Naver is what people actually navigate with. So
+  // Naver only appears for Korean destinations instead of cluttering every
+  // trip with a button that would be useless in Tokyo or Taipei.
+  function destIsKorea(){
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    return /[가-힯]/.test(String(m.destinationLocal || ""));
+  }
+  function hasCoord(s){ return !!s && Number.isFinite(s.lat) && Number.isFinite(s.lng); }
+  // a leg's mode decides how the map app should plan it
+  function travelModeOf(mode){
+    return mode === "walk" ? "walking" : mode === "taxi" ? "driving" : "transit";
+  }
+  function naverModeOf(mode){
+    return mode === "walk" ? "walk" : mode === "taxi" ? "car" : "transit";
+  }
+  function gmapsDirUrl(from, to, mode){
+    const ref = s => hasCoord(s) ? `${s.lat},${s.lng}` : plain(s && s.kr) || plain(s && s.title);
+    const o = ref(from), d = ref(to);
+    if (!o || !d) return "";
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}` +
+           `&destination=${encodeURIComponent(d)}&travelmode=${travelModeOf(mode)}`;
+  }
+  // Naver's directions URLs are built from coordinates, so a stop without one
+  // simply doesn't get the button rather than opening a broken page.
+  function naverDirUrl(from, to, mode){
+    if (!hasCoord(from) || !hasCoord(to)) return "";
+    const leg = s => `${s.lng},${s.lat},${encodeURIComponent(plain(s.kr) || plain(s.title) || "")},,`;
+    return `https://map.naver.com/p/directions/${leg(from)}/${leg(to)}/-/${naverModeOf(mode)}`;
+  }
+  function naverPlaceUrl(s){
+    const q = plain(s && s.kr) || plain(s && s.title);
+    return q ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : "";
+  }
+
+  // The whole day as one route, handed to a map app in a single tap. Google's
+  // URL API takes an origin, a destination and waypoints in between; it caps
+  // the waypoints, so a very long day is trimmed and says so rather than
+  // silently dropping stops.
+  const MAX_WAYPOINTS = 8;
+  function dayRouteLinksHtml(day){
+    const stops = toUnits(day.items).map(u => u.stop).filter(s => s && hasCoord(s));
+    if (stops.length < 2) return "";
+    const ref = s => `${s.lat},${s.lng}`;
+    const origin = stops[0], dest = stops[stops.length - 1];
+    let mid = stops.slice(1, -1);
+    const trimmed = mid.length > MAX_WAYPOINTS;
+    if (trimmed) mid = mid.slice(0, MAX_WAYPOINTS);
+    const wp = mid.length ? `&waypoints=${mid.map(ref).map(encodeURIComponent).join("|")}` : "";
+    const g = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(ref(origin))}` +
+              `&destination=${encodeURIComponent(ref(dest))}${wp}&travelmode=transit`;
+    const parts = [`<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}成日路線（Google）</a>`];
+    // Naver plots one leg at a time, so the day-level button opens the first
+    // one rather than pretending it can draw the lot.
+    if (destIsKorea()){
+      const n = naverDirUrl(stops[0], stops[1], "transit");
+      if (n) parts.push(`<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}第一段（Naver）</a>`);
+    }
+    return `<div class="dayroutes">${parts.join("")}${
+      trimmed ? `<span class="hint">Google 一條連結最多帶 ${MAX_WAYPOINTS + 2} 個點，所以只去到第 ${MAX_WAYPOINTS + 2} 個站。</span>` : ""
+    }</div>`;
+  }
+
   // Quick outbound links for a stop. Local-language name searches better than
   // the Cantonese title, so prefer it; appending the trip's destination hint
   // narrows a bare name like "황생가칼국수" to the right city — read fresh off
@@ -2624,6 +2695,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           const st = stayForDay(state.snapshot, day);
           return st && st.name ? `<div class="daystay">${icon("bed")}呢晚住：<b>${esc(st.name)}</b></div>` : "";
         })()}
+        ${dayRouteLinksHtml(day)}
         ${hasMappableDay(day) ? `
           <button class="maptoggle" id="maptoggle" aria-expanded="${mapOpen}">
             <span class="mapi">${icon("map")}</span><span>${mapOpen ? "收埋地圖" : "睇呢日地圖"}</span><span class="chev">${icon("chevron")}</span>
@@ -2731,10 +2803,26 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // one used to burn a Google Directions call per leg every time
     const segRefresh = showSeg && !u.seg.checking
       ? `<button class="segrefresh" data-segrefresh="${i}" title="淨係重新check呢一段交通" aria-label="重新check呢一段交通">${icon("refresh")}</button>` : "";
+    // "18 分鐘" tells you how long; it doesn't tell you which exit, which
+    // platform, or where to stand. These hand the same two points straight to
+    // a map app so the family can just follow it.
+    let segLinks = "";
+    if (showSeg && s){
+      const us = toUnits(day.items);
+      let prev = null;
+      for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; break; }
+      const mode = segMode(u.seg);
+      const g = gmapsDirUrl(prev, s, mode);
+      const n = destIsKorea() ? naverDirUrl(prev, s, mode) : "";
+      const parts = [];
+      if (g) parts.push(`<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}Google 路線</a>`);
+      if (n) parts.push(`<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 路線</a>`);
+      if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
+    }
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
         <div class="seg-rail"></div>
-        <div class="seg-text">${segBody}${segRefresh}</div>
+        <div class="seg-text">${segBody}${segRefresh}${segLinks}</div>
       </div>` : "";
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
@@ -2765,7 +2853,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // quick outbound links — only for stops that are a real, named place
     // (logistics rows like "酒店出發" have no mapUrl and get none of this)
     const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>`);
+    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>`);
+    // In Korea, Google Maps can find a place but can't route you to it — so a
+    // Korean trip gets the map people there actually use, alongside it.
+    const nv = destIsKorea() ? naverPlaceUrl(s) : "";
+    if (nv) links.push(`<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>`);
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
