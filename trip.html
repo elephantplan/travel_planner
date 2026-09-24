@@ -3047,7 +3047,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       getphotos.disabled = true;
       const todo = toUnits(day.items).map(u => u.stop)
         .filter(s => s && !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl) && plain(s.title));
-      let got = 0;
+      let got = 0, problem = "";
       for (let i = 0; i < todo.length; i++){
         const s = todo[i];
         const btn = $("#getphotos");
@@ -3056,15 +3056,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         try {
           const r = await fetchStoredPhoto(s);
           if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got++; }
-          else s.noPhoto = true;
-        } catch (_){ /* one failure must not stop the rest */ }
+          else if (r && r.reason === "nophoto") s.noPhoto = true;
+          else if (r && r.message && !problem) problem = r.message;
+        } catch (e){ if (!problem) problem = e.message; }   // one failure must not stop the rest
       }
       render();
       // Not background upkeep: someone pressed a button and waited through
       // dozens of lookups. Persist it promptly instead of letting it ride
       // along with the next edit, which might never come.
       if (got) saveNow(`攞返 ${got} 張地點相`);
-      else flash("搵唔到相，可能 Google 嗰邊冇呢啲地點嘅圖。");
+      // say what actually went wrong rather than blaming the places
+      if (problem) flash(problem);
+      else if (!got) flash("Google 嗰邊冇呢啲地點嘅相。");
     });
 
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", async ev => {
@@ -3079,8 +3082,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       try {
         const r = await fetchStoredPhoto(s);
         if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got = true; }
-      } catch (_){}
-      if (!got) s.noPhoto = true;    // don't keep offering a button that finds nothing
+        // Only "this place genuinely has no pictures" should retire the
+        // button. Google refusing the request, a timeout or a bad key are
+        // OUR problems — hiding the button then would quietly make the
+        // failure permanent, and say nothing about why.
+        else if (r && r.reason === "nophoto") s.noPhoto = true;
+        else if (r && r.message) flash(r.message);
+      } catch (e){ flash("攞相失敗：" + e.message); }
       render();
       if (got) saveNow(`搵咗張相俾「${name}」`, true);   // background enrichment, not its own history entry
     }));

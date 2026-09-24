@@ -47,24 +47,36 @@ function publicUrl(base: string, name: string): string {
   return `${base}/storage/v1/object/public/${BUCKET}/${name}`;
 }
 
-async function findPlaceId(query: string, hint: string, key: string): Promise<string> {
+// Google reports failures in the BODY, not the HTTP status, so a refused key
+// and a place that genuinely has no pictures both arrive as 200 with an empty
+// list. Carrying the status back is what stops "your key is switched off"
+// from being reported to the family as "this place has no photos".
+async function findPlaceId(query: string, hint: string, key: string) {
   const input = hint ? `${query} ${hint}` : query;
   const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json` +
     `?input=${encodeURIComponent(input)}&inputtype=textquery&fields=place_id&key=${key}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   const data = await res.json();
-  return data?.candidates?.[0]?.place_id ?? "";
+  return {
+    id: data?.candidates?.[0]?.place_id ?? "",
+    status: String(data?.status ?? `HTTP ${res.status}`),
+    error: String(data?.error_message ?? ""),
+  };
 }
 
-async function photoReferences(placeId: string, key: string, want: number): Promise<string[]> {
+async function photoReferences(placeId: string, key: string, want: number) {
   const url = `https://maps.googleapis.com/maps/api/place/details/json` +
     `?place_id=${encodeURIComponent(placeId)}&fields=photos&key=${key}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
   const data = await res.json();
-  return (data?.result?.photos ?? [])
-    .slice(0, want)
-    .map((p: any) => p?.photo_reference)
-    .filter(Boolean);
+  return {
+    refs: (data?.result?.photos ?? [])
+      .slice(0, want)
+      .map((p: any) => p?.photo_reference)
+      .filter(Boolean) as string[],
+    status: String(data?.status ?? `HTTP ${res.status}`),
+    error: String(data?.error_message ?? ""),
+  };
 }
 
 // Pull one picture out of Google and put it in our bucket. Returns the
@@ -78,9 +90,15 @@ async function storeOne(ref: string, name: string, base: string, serviceKey: str
     `&photo_reference=${encodeURIComponent(ref)}&key=${placesKey}`,
     { redirect: "follow", signal: AbortSignal.timeout(20000) },
   );
-  if (!photoRes.ok) return "";
+  if (!photoRes.ok) {
+    console.error(`photo fetch failed ${photoRes.status} for ${name}`);
+    return "";
+  }
   const bytes = new Uint8Array(await photoRes.arrayBuffer());
-  if (!bytes.length) return "";
+  if (!bytes.length) {
+    console.error(`photo fetch returned 0 bytes for ${name}`);
+    return "";
+  }
 
   const up = await fetch(`${base}/storage/v1/object/${BUCKET}/${name}`, {
     method: "POST",
@@ -107,8 +125,8 @@ Deno.serve(async (req) => {
   const base = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY") ?? "";
-  if (!placesKey) return json({ ok: false, message: "📷 未設定 GOOGLE_PLACES_API_KEY。" });
-  if (!base || !serviceKey) return json({ ok: false, message: "🔧 呢個 function 攞唔到 Supabase 嘅內部設定。" });
+  if (!placesKey) return json({ ok: false, reason: "nokey", message: "📷 未設定 GOOGLE_PLACES_API_KEY。" });
+  if (!base || !serviceKey) return json({ ok: false, reason: "nokey", message: "🔧 呢個 function 攞唔到 Supabase 嘅內部設定。" });
 
   let body: any;
   try { body = await req.json(); } catch { return json({ ok: false, message: "Invalid JSON body" }, 400); }
@@ -133,25 +151,49 @@ Deno.serve(async (req) => {
     }
     if (known.length >= want) return json({ ok: true, url: known[0], urls: known, cached: true });
 
-    const id = placeId || await findPlaceId(query, hint, placesKey);
-    if (!id) return json({ ok: false, message: "Google 搵唔到呢個地點。" });
+    let id = placeId;
+    if (!id) {
+      const found = await findPlaceId(query, hint, placesKey);
+      id = found.id;
+      if (!id) {
+        console.error(`findplace "${query}" -> ${found.status} ${found.error}`);
+        return json({ ok: false, reason: "lookup", googleStatus: found.status,
+          message: `Google 搵唔到呢個地點（${found.status}）。${found.error}` });
+      }
+    }
 
-    const refs = await photoReferences(id, placesKey, want);
-    if (!refs.length) return json({ ok: false, message: "Google 冇呢個地點嘅相。" });
+    const got = await photoReferences(id, placesKey, want);
+    if (!got.refs.length) {
+      console.error(`details ${id} -> ${got.status} ${got.error}`);
+      // ZERO_RESULTS / OK with an empty list really does mean "no pictures";
+      // anything else is Google refusing us, which is not the place's fault
+      // and must not be recorded as "this stop has no photo".
+      const noneExist = got.status === "OK" || got.status === "ZERO_RESULTS";
+      return json({
+        ok: false,
+        reason: noneExist ? "nophoto" : "google",
+        googleStatus: got.status,
+        message: noneExist
+          ? "Google 冇呢個地點嘅相。"
+          : `Google 唔肯俾相（${got.status}）。${got.error}`,
+      });
+    }
 
     const urls: string[] = [];
-    for (let i = 0; i < refs.length; i++) {
-      const stored = await storeOne(refs[i], objectName(placeId, query, hint, i),
+    for (let i = 0; i < got.refs.length; i++) {
+      const stored = await storeOne(got.refs[i], objectName(placeId, query, hint, i),
                                     base, serviceKey, placesKey);
       if (stored) urls.push(stored);
     }
-    if (!urls.length) return json({ ok: false, message: "攞到相但係存唔到落嚟，等陣再試。" });
+    if (!urls.length) return json({ ok: false, reason: "store", message: "攞到相但係存唔到落嚟，等陣再試。" });
 
     return json({ ok: true, url: urls[0], urls, cached: false });
   } catch (e) {
     const timedOut = (e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError";
+    console.error(`place-photo-store threw: ${String(e).slice(0, 300)}`);
     return json({
       ok: false,
+      reason: "error",
       message: timedOut ? "攞相攞咗好耐都未覆，等陣再試。" : "攞相失敗：" + String(e).slice(0, 200),
     });
   }
