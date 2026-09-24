@@ -79,6 +79,19 @@ async function photoReferences(placeId: string, key: string, want: number) {
   };
 }
 
+// The bucket only accepts jpeg/png/webp, and Google's Content-Type is not
+// always one of them (it can arrive with parameters attached, or as a generic
+// octet-stream). The bytes themselves are the reliable witness, so read the
+// magic number and fall back to the header only if nothing matches.
+function imageType(bytes: Uint8Array, header: string | null): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  const declared = (header ?? "").split(";")[0].trim().toLowerCase();
+  return ["image/jpeg", "image/png", "image/webp"].includes(declared) ? declared : "image/jpeg";
+}
+
 // Pull one picture out of Google and put it in our bucket. Returns the
 // permanent URL, or "" if Google had nothing for it.
 async function storeOne(ref: string, name: string, base: string, serviceKey: string,
@@ -100,11 +113,17 @@ async function storeOne(ref: string, name: string, base: string, serviceKey: str
     return "";
   }
 
+  // The service key is no longer a JWT — this project issues the newer
+  // sb_secret_... format, which Storage refuses to parse out of an
+  // Authorization header ("Invalid Compact JWS"). It is the apikey header that
+  // actually authenticates it, which is why every upload was rejected while
+  // ai-assistant, which sends both, kept working.
   const up = await fetch(`${base}/storage/v1/object/${BUCKET}/${name}`, {
     method: "POST",
     headers: {
+      apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": photoRes.headers.get("content-type") || "image/jpeg",
+      "Content-Type": imageType(bytes, photoRes.headers.get("content-type")),
       "x-upsert": "true",
       "Cache-Control": "public, max-age=31536000, immutable",
     },
