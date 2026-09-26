@@ -1999,6 +1999,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const q = plain(s && s.kr) || plain(s && s.title);
     return q ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : "";
   }
+  // In Korea people navigate with Naver, so it leads and Google follows;
+  // everywhere else the order is the other way round. Both are still offered —
+  // dropping one would only take a working link away from whoever prefers it.
+  function mapLinksInOrder(naverHtml, googleHtml){
+    const both = destIsKorea() ? [naverHtml, googleHtml] : [googleHtml, naverHtml];
+    return both.filter(Boolean);
+  }
 
   // The whole day as one route, handed to a map app in a single tap. Google's
   // URL API takes an origin, a destination and waypoints in between; it caps
@@ -2016,13 +2023,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const wp = mid.length ? `&waypoints=${mid.map(ref).map(encodeURIComponent).join("|")}` : "";
     const g = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(ref(origin))}` +
               `&destination=${encodeURIComponent(ref(dest))}${wp}&travelmode=transit`;
-    const parts = [`<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}成日路線（Google）</a>`];
     // Naver plots one leg at a time, so the day-level button opens the first
     // one rather than pretending it can draw the lot.
-    if (destIsKorea()){
-      const n = naverDirUrl(stops[0], stops[1], "transit");
-      if (n) parts.push(`<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}第一段（Naver）</a>`);
-    }
+    const n = destIsKorea() ? naverDirUrl(stops[0], stops[1], "transit") : "";
+    const parts = mapLinksInOrder(
+      n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}第一段（Naver）</a>` : "",
+      `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}成日路線（Google）</a>`,
+    );
     return `<div class="dayroutes">${parts.join("")}${
       trimmed ? `<span class="hint">Google 一條連結最多帶 ${MAX_WAYPOINTS + 2} 個點，所以只去到第 ${MAX_WAYPOINTS + 2} 個站。</span>` : ""
     }</div>`;
@@ -2870,9 +2877,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const mode = segMode(u.seg);
       const g = gmapsDirUrl(prev, s, mode);
       const n = destIsKorea() ? naverDirUrl(prev, s, mode) : "";
-      const parts = [];
-      if (g) parts.push(`<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}Google 路線</a>`);
-      if (n) parts.push(`<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 路線</a>`);
+      const parts = mapLinksInOrder(
+        n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 路線</a>` : "",
+        g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}Google 路線</a>` : "",
+      );
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     const segHtml = showSeg ? `
@@ -2908,12 +2916,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     // quick outbound links — only for stops that are a real, named place
     // (logistics rows like "酒店出發" have no mapUrl and get none of this)
-    const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>`);
     // In Korea, Google Maps can find a place but can't route you to it — so a
-    // Korean trip gets the map people there actually use, alongside it.
+    // Korean trip leads with the map people there actually use.
     const nv = destIsKorea() ? naverPlaceUrl(s) : "";
-    if (nv) links.push(`<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>`);
+    const links = mapLinksInOrder(
+      nv ? `<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : "",
+      s.mapUrl ? `<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : "",
+    );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
@@ -4866,8 +4875,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       + (inItin ? `<button type="button" class="inday" data-inday="${inItin.id}" style="--lc:${dayColorVar(inItin.id)}">${icon("pin")}已喺 ${esc(inItin.title)}（Day ${inItin.id.replace('day','')}）行程</button>` : "")
       + (s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`).join("") + ratingChip(s)
       + (s.eatMeta||[]).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`).join("");
-    const links = [];
-    if (s.mapUrl) links.push(`<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>`);
+    // Same rule as the itinerary cards: a Korean trip leads with Naver.
+    const bnv = destIsKorea() ? naverPlaceUrl(s) : "";
+    const links = mapLinksInOrder(
+      bnv ? `<a class="maplink" href="${esc(bnv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : "",
+      s.mapUrl ? `<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : "",
+    );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
