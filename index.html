@@ -5,7 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
-<title>旅程規劃</title>
+<title>DumboFly</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DumboFly">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -72,6 +80,8 @@ body{
   -webkit-font-smoothing:antialiased;
   padding-bottom:calc(48px + env(safe-area-inset-bottom));
   overflow-wrap:break-word;
+  /* the page does its own pull-to-refresh, so the browser must not also do one */
+  overscroll-behavior-y:contain;
   overflow-x:hidden;
 }
 img{max-width:100%;}
@@ -234,17 +244,41 @@ section.triplist{margin-bottom:36px;}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms !important;transition-duration:.001ms !important;}
 }
+
+/* ---------- pull to refresh ----------
+   Same badge as trip.html: installed as an app there is no browser chrome
+   to pull on, so the gesture has to be ours. */
+.ptr{
+  position:fixed;left:50%;top:0;z-index:45;
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--rule);
+  box-shadow:0 6px 20px rgba(0,0,0,.16);
+  font-size:12.5px;color:var(--ink-soft);white-space:nowrap;
+  transform:translate(-50%,-150%);
+  pointer-events:none;opacity:0;
+}
+.ptr.settling{transition:transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s;}
+.ptr .i{width:15px;height:15px;transform:rotate(90deg);transition:transform .2s;}
+.ptr.ready .i{transform:rotate(-90deg);}
+.ptr.busy .i{transform:none;animation:ptrspin .8s linear infinite;}
+@keyframes ptrspin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){
+  .ptr.busy .i{animation:none;}
+  .ptr.settling{transition:none;}
+}
 </style>
 </head>
 <body>
 
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="brandmark"><span class="brand-i"></span>旅程規劃</div>
+    <div class="brandmark"><span class="brand-i"></span>DumboFly</div>
     <button class="iconbtn" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="theme-i"></span></button>
   </div>
 </header>
 
+<div class="ptr" id="ptr" aria-hidden="true"><span class="ptr-i"></span><span class="ptr-t"></span></div>
 <div id="layer"></div>
 
 <main class="wrap">
@@ -319,6 +353,9 @@ section.triplist{margin-bottom:36px;}
     contrast: '<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 0 1 0 16.4z" fill="currentColor" stroke="none"/>',
     pin: '<path d="M12 21s6.4-6.1 6.4-10.6a6.4 6.4 0 1 0-12.8 0C5.6 14.9 12 21 12 21z"/><circle cx="12" cy="10.3" r="2.4"/>',
     trash: '<path d="M4.8 6.8h14.4"/><path d="M9.3 6.8V4.9h5.4v1.9"/><path d="M6.6 6.8 7.5 20h9l.9-13.2"/>',
+    chevron: '<path d="m9 5.6 6.4 6.4L9 18.4"/>',
+    refresh: '<path d="M19.3 12a7.3 7.3 0 1 1-2.2-5.2"/><path d="M19.6 4.8v4.4h-4.4"/>',
+    check: '<path d="m5 12.6 4.6 4.4L19 6.8"/>',
   };
   function icon(name){
     const d = ICONS[name];
@@ -614,6 +651,82 @@ section.triplist{margin-bottom:36px;}
       openDeleteSheet(b.dataset.del, b.dataset.delname);
     }));
   }
+  // ==================================================================
+  // PULL TO REFRESH — the same gesture as trip.html.
+  // Installed to the home screen there is no browser chrome, so there is no
+  // reload button and nothing to pull on; the trip list has to offer its own.
+  // ==================================================================
+  const PTR_TRIGGER = 72, PTR_MAX = 112;
+  function wirePullToRefresh(){
+    const el = $("#ptr");
+    if (!el || !("ontouchstart" in window)) return;
+    const mark = el.querySelector(".ptr-i"), label = el.querySelector(".ptr-t");
+    let startY = 0, pulling = false, dist = 0, busy = false;
+
+    const place = (y) => {
+      el.style.transform = `translate(-50%, ${y}px)`;
+      el.style.opacity = y > 0 ? String(Math.min(1, y / 40)) : "0";
+    };
+    const reset = () => {
+      el.classList.add("settling");
+      el.classList.remove("ready", "busy");
+      el.style.transform = "translate(-50%,-150%)";
+      el.style.opacity = "0";
+      pulling = false; dist = 0;
+    };
+
+    document.addEventListener("touchstart", (e) => {
+      if (busy || e.touches.length !== 1 || window.scrollY > 0) return;
+      if ($("#layer").innerHTML !== "") return;
+      if (e.target.closest("input, textarea, select")) return;
+      startY = e.touches[0].clientY;
+      pulling = true; dist = 0;
+      el.classList.remove("settling");
+      mark.innerHTML = icon("chevron");
+    }, { passive: true });
+
+    document.addEventListener("touchmove", (e) => {
+      if (!pulling || busy) return;
+      const raw = e.touches[0].clientY - startY;
+      if (raw <= 0 || window.scrollY > 0){ if (dist) reset(); else pulling = false; return; }
+      dist = Math.min(PTR_MAX, raw * 0.5);
+      if (e.cancelable) e.preventDefault();
+      const ready = dist >= PTR_TRIGGER;
+      el.classList.toggle("ready", ready);
+      label.textContent = ready ? "放手更新" : "拉低更新";
+      place(dist + 10);
+    }, { passive: false });
+
+    document.addEventListener("touchend", async () => {
+      if (!pulling || busy) return;
+      if (dist < PTR_TRIGGER) return reset();
+      busy = true;
+      el.classList.add("settling", "busy");
+      el.classList.remove("ready");
+      mark.innerHTML = icon("refresh");
+      label.textContent = "更新緊…";
+      place(14);
+      try { await loadTrips(); label.textContent = "更新咗"; }
+      catch (err){ label.textContent = netMsg(err); }
+      el.classList.remove("busy");
+      mark.innerHTML = icon("check");
+      setTimeout(reset, 900);
+      busy = false;
+    }, { passive: true });
+  }
+
+  // Makes the app installable and lets it open with no signal. Fire and
+  // forget: a failure here must never stop the page working.
+  function registerServiceWorker(){
+    if (!("serviceWorker" in navigator)) return;
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+
+  registerServiceWorker();
+  wirePullToRefresh();
   loadTrips();
 })();
 </script>

@@ -1,0 +1,22 @@
+# Headers for the PWA. Netlify's defaults are nearly right; these pin the two
+# things that would bite later.
+
+# A stale service worker is a stuck app: the browser would keep serving the
+# old cached shell and never notice a deploy. It must always be revalidated.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# The icons are content-addressed by name and only change when the app is
+# rebranded, so they can be held for a year.
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

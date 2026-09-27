@@ -5,7 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
-<title>行程</title>
+<title>DumboFly</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/icons/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- "default" rather than "black-translucent": the top bar has no safe-area
+     inset of its own, so letting content run under the status bar would put
+     the notch through the trip's name. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DumboFly">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -137,8 +148,37 @@ body{
   -webkit-font-smoothing:antialiased;
   padding-bottom:calc(84px + env(safe-area-inset-bottom));
   overflow-wrap:break-word;
+  /* the page does its own pull-to-refresh, so the browser must not also do
+     one (Chrome Android) or rubber-band the whole document away under it */
+  overscroll-behavior-y:contain;
 }
 :focus-visible{outline:2px solid var(--lc,var(--ink));outline-offset:2px;border-radius:4px;}
+
+/* ---------- pull to refresh ----------
+   Installed as an app there is no browser chrome to pull on, so the gesture
+   has to be ours. The badge is pinned under the top bar and is dragged into
+   view by the finger, so the distance pulled is visible rather than guessed. */
+.ptr{
+  position:fixed;left:50%;top:0;z-index:45;
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--rule);
+  box-shadow:0 6px 20px rgba(0,0,0,.16);
+  font-size:12.5px;color:var(--ink-soft);white-space:nowrap;
+  transform:translate(-50%,-150%);
+  pointer-events:none;opacity:0;
+}
+.ptr.settling{transition:transform .28s cubic-bezier(.2,.8,.3,1), opacity .28s;}
+/* the chevron points right by default; 90° makes it the "pull down" arrow
+   and -90° the "let go now" one */
+.ptr .i{width:15px;height:15px;transform:rotate(90deg);transition:transform .2s;}
+.ptr.ready .i{transform:rotate(-90deg);}
+.ptr.busy .i{transform:none;animation:ptrspin .8s linear infinite;}
+@keyframes ptrspin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion: reduce){
+  .ptr.busy .i{animation:none;}
+  .ptr.settling{transition:none;}
+}
 button{font-family:inherit;color:inherit;}
 img{max-width:100%;}
 
@@ -1064,6 +1104,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   <button class="dockbtn" id="btn-history"><span class="dockbtn-i"></span><span>改動紀錄</span></button>
   <button class="dockbtn accent" id="btn-ai"><span class="dockbtn-i"></span><span>AI 助手</span></button>
 </div>
+<div class="ptr" id="ptr" aria-hidden="true"><span class="ptr-i"></span><span class="ptr-t"></span></div>
 <div class="savestate" id="savestate"></div>
 <div class="genbanner" id="genbanner"></div>
 <div id="layer"></div>
@@ -2185,7 +2226,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // The tab title is markup, so it can't come from the snapshot at parse
     // time — set it here or every trip shares whatever was typed in the file.
     const t = plain(m.title || "").trim();
-    document.title = t ? `${t}${m.eyebrow ? " ｜ " + plain(m.eyebrow) : ""}` : "行程";
+    document.title = t ? `${t} · DumboFly` : "DumboFly";
   }
   function render(){
     renderBrandmark();
@@ -6665,6 +6706,116 @@ ${stayBlock}${dayBlocks}${secBlocks}
     setTimeout(() => genBanner(null), 6000);
   }
 
+  // ==================================================================
+  // PULL TO REFRESH
+  //
+  // Installed to the home screen there is no browser chrome: no reload
+  // button and nothing to pull on. So the gesture has to be the app's own.
+  // It re-reads the itinerary from the server rather than reloading the
+  // page, which is far cheaper on roaming data and keeps you on the day you
+  // were reading.
+  // ==================================================================
+  const PTR_TRIGGER = 72;    // drag this far before letting go does anything
+  const PTR_MAX = 112;       // the badge stops following the finger past here
+
+  // Anything typed but not yet saved has to land before refetching, or the
+  // refresh would quietly throw somebody's edit away.
+  async function reloadFromServer(){
+    if (saverDirty()) await flushSaves("pull-to-refresh");
+    if (saverDirty()) return "有改動仲未存到，等陣再拉";
+
+    const row = await fetchLatestVersion();
+    if (!row) throw new Error("讀唔到最新版本");
+    const before = snapJson();
+    state.snapshot = normalizeSnapshot(row.snapshot);
+    const after = snapJson();
+    saver.lastPersistedJson = after;
+    // Card indices are positions, not identities, so a card left open could
+    // reopen over a different stop once the list has moved underneath it.
+    state.open.clear();
+    render();
+    return after === before ? "已經係最新" : "更新咗";
+  }
+
+  function wirePullToRefresh(){
+    const el = $("#ptr");
+    if (!el || !("ontouchstart" in window)) return;
+    const mark = el.querySelector(".ptr-i"), label = el.querySelector(".ptr-t");
+    let startY = 0, pulling = false, dist = 0, busy = false;
+
+    const setIcon = (name) => { mark.innerHTML = icon(name); };
+    const place = (y) => {
+      el.style.transform = `translate(-50%, ${y}px)`;
+      el.style.opacity = y > 0 ? String(Math.min(1, y / 40)) : "0";
+    };
+    const reset = () => {
+      el.classList.add("settling");
+      el.classList.remove("ready", "busy");
+      el.style.transform = "translate(-50%,-150%)";
+      el.style.opacity = "0";
+      pulling = false; dist = 0;
+    };
+
+    document.addEventListener("touchstart", (e) => {
+      if (busy || e.touches.length !== 1) return;
+      if (window.scrollY > 0) return;
+      if ($("#layer").innerHTML !== "") return;          // a sheet is open
+      if (e.target.closest("[data-drag]")) return;       // reordering a stop
+      if (e.target.closest("input, textarea, select")) return;
+      startY = e.touches[0].clientY;
+      pulling = true; dist = 0;
+      el.classList.remove("settling");
+      setIcon("chevron");
+    }, { passive: true });
+
+    document.addEventListener("touchmove", (e) => {
+      if (!pulling || busy) return;
+      const raw = e.touches[0].clientY - startY;
+      // Scrolling up, or the page scrolled away under us — hand the gesture back.
+      if (raw <= 0 || window.scrollY > 0){ if (dist) reset(); else pulling = false; return; }
+      // Resistance: the first pixels follow the finger, the rest get heavier.
+      dist = Math.min(PTR_MAX, raw * 0.5);
+      if (e.cancelable) e.preventDefault();
+      const ready = dist >= PTR_TRIGGER;
+      el.classList.toggle("ready", ready);
+      label.textContent = ready ? "放手更新" : "拉低更新";
+      place(dist + 10);
+    }, { passive: false });
+
+    document.addEventListener("touchend", async () => {
+      if (!pulling || busy) return;
+      const fire = dist >= PTR_TRIGGER;
+      if (!fire) return reset();
+
+      busy = true;
+      el.classList.add("settling", "busy");
+      el.classList.remove("ready");
+      setIcon("refresh");
+      label.textContent = "更新緊…";
+      place(14);
+      try {
+        label.textContent = await reloadFromServer();
+      } catch (err){
+        label.textContent = netMsg(err);
+      }
+      el.classList.remove("busy");
+      setIcon("check");
+      setTimeout(reset, 900);
+      busy = false;
+    }, { passive: true });
+  }
+
+  // The service worker is what makes this installable, and what lets the
+  // trip open on a phone with no signal. A failure here must never stop the
+  // page working, so it is fire-and-forget.
+  function registerServiceWorker(){
+    if (!("serviceWorker" in navigator)) return;
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+
   async function boot(){
     const params = new URLSearchParams(location.search);
     const tripId = params.get("trip");
@@ -6699,8 +6850,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
       $("#app").innerHTML = `<div class="sec"><div class="errbox">行程讀到咗，但畫唔出嚟：${esc(e.message)}<br>可以撳上面日子掣試下第二日。</div></div>`;
       return;
     }
+    wirePullToRefresh();
     if (params.get("new") === "1") runInitialGeneration();
   }
+  registerServiceWorker();
   boot();
 })();
 </script>
