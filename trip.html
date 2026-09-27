@@ -154,6 +154,38 @@ body{
 }
 :focus-visible{outline:2px solid var(--lc,var(--ink));outline-offset:2px;border-radius:4px;}
 
+/* ---------- backup picks ----------
+   The whole point is that three restaurants take up ONE row until you ask
+   for them, so collapsed state is a single hairline strip: how many, and
+   their names in small type. Nothing here may compete with the stop name. */
+.alts{border-top:1px dashed var(--rule);}
+.altstoggle{
+  display:flex;align-items:center;gap:7px;width:100%;
+  padding:8px 14px;background:none;border:0;cursor:pointer;
+  font-size:12.5px;color:var(--ink-faint);text-align:left;
+}
+.altstoggle .i{width:13px;height:13px;flex:0 0 auto;}
+.altstoggle .cnt{font-weight:600;color:var(--ink-soft);white-space:nowrap;}
+.altstoggle .altpeek{
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.altstoggle .caret{margin-left:auto;transition:transform .18s;}
+.alts.open .altstoggle .caret{transform:rotate(90deg);}
+.altstoggle:active{background:var(--surface-2);}
+
+.altlist{padding:0 14px 10px;display:flex;flex-direction:column;gap:8px;}
+.altrow{
+  border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:9px 11px;background:var(--surface-2);
+}
+.altn{font-weight:600;font-size:13.5px;}
+.altkr{font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);margin-left:6px;}
+.altrate{font-size:11.5px;color:var(--ink-faint);margin-left:6px;white-space:nowrap;}
+.altrate .i{width:11px;height:11px;vertical-align:-.1em;margin-right:3px;}
+.altlinks{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.altlinks .maplink{font-size:11.5px;padding:3px 8px;}
+.maplink.use{border-color:var(--lc,var(--ink));color:var(--lc,var(--ink));font-weight:600;}
+
 /* ---------- pull to refresh ----------
    Installed as an app there is no browser chrome to pull on, so the gesture
    has to be ours. The badge is pinned under the top bar and is dragged into
@@ -1275,7 +1307,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     renamingBoard: null,           // boardId currently showing its rename input
     boardIdeas: null,              // last AI answer shown inline on a board page
     selectMode: null,               // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
-    openLog: new Set()             // "boardId:logIndex" of ailog entries expanded beyond the latest
+    openLog: new Set(),            // "boardId:logIndex" of ailog entries expanded beyond the latest
+    altsOpen: new Set()            // "dayId:unitIndex" whose backup picks are unfolded
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
 
@@ -1643,6 +1676,40 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // ==================================================================
   function dayById(id){ return state.snapshot.days.find(d => d.id === id); }
 
+  // ---------- backup picks ----------
+  // Lunch is usually "this place, or one of these two if it's full". Until now
+  // the only way to record that was three separate stops, which made one meal
+  // occupy three rows of the board and buried the actual plan. A backup now
+  // hangs off the stop it belongs to: one row on the timeline, the rest folded
+  // underneath it.
+  //
+  // A backup is stored as a whole place — the same shape as a stop — so
+  // swapping one in on the day loses nothing: not the description, the photo,
+  // the rating, nor the opening hours. Only these keys belong to the slot
+  // rather than to the place, and they stay put when the two are exchanged.
+  const SLOT_KEYS = ["kind", "time", "type", "alts"];
+
+  function altsOf(s){ return (s && Array.isArray(s.alts)) ? s.alts : []; }
+  function altName(a){ return plain(a && a.title) || plain(a && a.kr) || "未改名嘅地點"; }
+
+  // Promote a backup to the real plan, demoting the current pick into its
+  // place. Swapping (rather than overwriting) is what makes this safe to tap
+  // by accident — the old choice is still there, one tap away.
+  function swapAlt(s, idx){
+    const alt = altsOf(s)[idx];
+    if (!alt) return "";
+    const was = plain(s.title);
+    const demoted = {};
+    Object.keys(s).forEach(k => {
+      if (SLOT_KEYS.includes(k)) return;
+      demoted[k] = s[k];
+      delete s[k];
+    });
+    Object.keys(alt).forEach(k => { if (!SLOT_KEYS.includes(k)) s[k] = alt[k]; });
+    s.alts[idx] = demoted;
+    return was;
+  }
+
   // A connector describes the trip INTO the stop that follows it, so the two
   // travel together as one unit whenever a stop is moved.
   function toUnits(items){
@@ -1947,6 +2014,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       // an icon the family actually picked is theirs and stays.
       if (s.icon === "📌") s.icon = "";
     });
+    // A backup list that isn't a list would throw on render; drop it rather
+    // than letting one bad row take the whole day down. Stops without any
+    // backups keep no `alts` key at all — every stop carrying an empty array
+    // would cost real bytes in every one of the ~100 stored snapshots.
+    if (snap && Array.isArray(snap.days)) snap.days.forEach(d => (d.items || []).forEach(it => {
+      if (it && it.kind === "stop" && it.alts != null && !Array.isArray(it.alts)) delete it.alts;
+    }));
     return snap;
   }
   const MODES = [
@@ -2043,6 +2117,40 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // In Korea people navigate with Naver, so it leads and Google follows;
   // everywhere else the order is the other way round. Both are still offered —
   // dropping one would only take a working link away from whoever prefers it.
+  // The folded strip of backup picks under a stop. Collapsed it is one line;
+  // opened, each backup gets its own map links and a one-tap swap, which is
+  // the whole point — standing outside a full restaurant is exactly when you
+  // need the runner-up and its directions, not a list you have to retype.
+  function altsHtmlFor(day, s, i){
+    const alts = altsOf(s);
+    if (!alts.length) return "";
+    const key = day.id + ":" + i;
+    const open = state.altsOpen.has(key);
+    const rows = alts.map((a, ai) => {
+      const nv = destIsKorea() ? naverPlaceUrl(a) : "";
+      const links = mapLinksInOrder(
+        nv ? `<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver</a>` : "",
+        a.mapUrl ? `<a class="maplink" href="${esc(a.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google</a>` : "",
+      );
+      links.push(`<button class="maplink use" data-altup="${i}:${ai}">${icon("check")}改用呢間</button>`);
+      links.push(`<button class="maplink" data-altdel="${i}:${ai}" aria-label="刪走呢個後備" title="刪走呢個後備">${icon("trash")}</button>`);
+      return `<div class="altrow">
+        <div><span class="altn">${esc(altName(a))}</span>${
+          a.kr ? `<span class="altkr">${esc(plain(a.kr))}</span>` : ""}${
+          Number.isFinite(a.rating) ? `<span class="altrate">${icon("star")}${a.rating.toFixed(1)}</span>` : ""}</div>
+        <div class="altlinks">${links.join("")}</div>
+      </div>`;
+    }).join("");
+    return `<div class="alts${open ? " open" : ""}">
+      <button class="altstoggle" data-alts="${i}" aria-expanded="${open}">
+        ${icon("list")}<span class="cnt">後備 ${alts.length} 間</span>
+        ${open ? "" : `<span class="altpeek">${esc(alts.map(altName).join("、"))}</span>`}
+        <span class="caret">${icon("chevron")}</span>
+      </button>
+      ${open ? `<div class="altlist">${rows}</div>` : ""}
+    </div>`;
+  }
+
   function mapLinksInOrder(naverHtml, googleHtml){
     const both = destIsKorea() ? [naverHtml, googleHtml] : [googleHtml, naverHtml];
     return both.filter(Boolean);
@@ -2998,6 +3106,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
+            ${selecting ? "" : altsHtmlFor(day, s, i)}
             ${!selecting && open ? editorHtml(day, u, i, total) : ""}
           </div>
         </div>
@@ -3045,6 +3154,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <div>
             <button class="btn wide" data-act="findphoto">${s.photoUrl ? "換張相" : "搵返呢度嘅相"}</button>
           </div>
+        </div>
+
+        <div class="field">
+          <label>後備選擇 — 同一個時段，第二三揀</label>
+          ${altsOf(s).length ? `<div class="altedit">${altsOf(s).map((a, ai) => `
+            <div class="altrow">
+              <div><span class="altn">${esc(altName(a))}</span>${
+                a.kr ? `<span class="altkr">${esc(plain(a.kr))}</span>` : ""}</div>
+              <div class="altlinks">
+                <button class="maplink use" data-act="altup" data-ai="${ai}">${icon("check")}升做首選</button>
+                <button class="maplink" data-act="altdel" data-ai="${ai}" aria-label="刪走">${icon("trash")}</button>
+              </div>
+            </div>`).join("")}</div>` : ""}
+          <input class="input" data-altq placeholder="打間鋪頭名，跟住喺下面揀返" autocomplete="off">
+          <div data-altsug></div>
+          <p class="hint">首選會排喺行程度；後備摺埋喺佢下面，撳「改用呢間」就即刻對調。</p>
         </div>
 
         <div class="editor-tools">
@@ -3180,6 +3305,44 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ev.preventDefault();
       ev.stopPropagation();          // sits inside the card button; don't open the editor
       openPhotoPicker(toUnits(day.items)[+el.dataset.getphoto].stop);
+    }));
+
+    // ---------- backup picks ----------
+    document.querySelectorAll("[data-alts]").forEach(el => el.addEventListener("click", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const key = day.id + ":" + el.dataset.alts;
+      if (state.altsOpen.has(key)) state.altsOpen.delete(key); else state.altsOpen.add(key);
+      render();
+    }));
+
+    document.querySelectorAll("[data-altup]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const [ui, ai] = el.dataset.altup.split(":").map(Number);
+      const units = toUnits(day.items);
+      const s = units[ui] && units[ui].stop;
+      if (!s) return;
+      const was = swapAlt(s, ai);
+      day.items = fromUnits(units);
+      syncMapPoints(day);
+      render();
+      await saveNow(`${plain(s.time) || "呢一站"}改用「${plain(s.title)}」${was ? `（本來係「${was}」）` : ""}`);
+      // the stop moved, so the legs either side of it are no longer right
+      refreshTransit(day, [ui, ui + 1]);
+    }));
+
+    document.querySelectorAll("[data-altdel]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const [ui, ai] = el.dataset.altdel.split(":").map(Number);
+      const units = toUnits(day.items);
+      const s = units[ui] && units[ui].stop;
+      const a = s && altsOf(s)[ai];
+      if (!a) return;
+      if (!confirm(`刪走後備「${altName(a)}」？`)) return;
+      s.alts.splice(ai, 1);
+      if (!s.alts.length) delete s.alts;
+      day.items = fromUnits(units);
+      render();
+      await saveNow(`刪走後備「${altName(a)}」`);
     }));
 
     document.querySelectorAll("[data-segrefresh]").forEach(btn => btn.addEventListener("click", async e => {
@@ -3374,11 +3537,76 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       }, 420);
     });
 
+    // ---------- adding a backup ----------
+    // Same Google lookup as the name field, so a backup arrives with its own
+    // place id, coordinates and rating — which is what lets it be swapped in
+    // later without losing its map links.
+    const altQ = box.querySelector("[data-altq]");
+    const altSug = box.querySelector("[data-altsug]");
+    if (altQ && altSug){
+      let altTimer = null;
+      altQ.addEventListener("input", () => {
+        clearTimeout(altTimer);
+        const q = altQ.value.trim();
+        if (q.length < 2){ altSug.innerHTML = ""; return; }
+        altTimer = setTimeout(async () => {
+          altSug.innerHTML = `<p class="hint">搵緊…</p>`;
+          try {
+            const r = await callAi({ action:"place-search", query:q });
+            if (r.ok === false){ altSug.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
+            if (!r.places || !r.places.length){ altSug.innerHTML = `<p class="hint">搵唔到呢個地方。</p>`; return; }
+            altSug.innerHTML = r.places.map((p, ix) => `
+              <button class="suggest-item" data-ap="${ix}">
+                <div class="n">${esc(p.name)}</div><div class="a">${esc(p.address)}</div>
+              </button>`).join("");
+            altSug.querySelectorAll("[data-ap]").forEach(b => b.addEventListener("click", async () => {
+              const p = r.places[+b.dataset.ap];
+              const alt = { kind:"stop", title: p.name, kr:"", desc:"",
+                mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`,
+                placeId: p.placeId, photoUrl:"" };
+              if (Number.isFinite(p.lat)) alt.lat = p.lat;
+              if (Number.isFinite(p.lng)) alt.lng = p.lng;
+              if (Number.isFinite(p.rating)) alt.rating = p.rating;
+              if (Number.isFinite(p.ratingCount)) alt.ratingCount = p.ratingCount;
+              delete alt.kind;                       // it is a place, not a row
+              if (!Array.isArray(s.alts)) s.alts = [];
+              s.alts.push(alt);
+              altQ.value = ""; altSug.innerHTML = "";
+              render();
+              await saveNow(`加咗後備「${p.name}」`);
+            }));
+          } catch (e){ altSug.innerHTML = `<p class="hint">搵唔到：${esc(e.message)}</p>`; }
+        }, 420);
+      });
+    }
+
     // actions
     box.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", async () => {
       const act = btn.dataset.act;
 
       if (act === "close"){ state.open.clear(); render(); return; }
+
+      if (act === "altup"){
+        const was = swapAlt(s, +btn.dataset.ai);
+        day.items = fromUnits(units);
+        syncMapPoints(day);
+        render();
+        await saveNow(`${plain(s.time) || "呢一站"}改用「${plain(s.title)}」${was ? `（本來係「${was}」）` : ""}`);
+        refreshTransit(day, [i, i + 1]);
+        return;
+      }
+
+      if (act === "altdel"){
+        const ai = +btn.dataset.ai;
+        const a = altsOf(s)[ai];
+        if (!a) return;
+        if (!confirm(`刪走後備「${altName(a)}」？`)) return;
+        s.alts.splice(ai, 1);
+        if (!s.alts.length) delete s.alts;
+        render();
+        await saveNow(`刪走後備「${altName(a)}」`);
+        return;
+      }
 
       if (act === "remove"){
         if (!confirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
@@ -5389,6 +5617,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (s.hoursChip) L.push(`    ${plain(s.hoursChip)}`);
         (s.accessBadges || []).forEach(b => b && b.text && L.push(`    ${plain(b.text)}`));
         if (s.mapUrl) L.push(`    ${s.mapUrl}`);
+        // Worth carrying on paper: standing outside a full restaurant is
+        // exactly when someone is reading the printout rather than the app.
+        altsOf(s).forEach(a => L.push(`    後備：${altName(a)}${a.kr ? `（${plain(a.kr)}）` : ""}${
+          Number.isFinite(a.rating) ? ` ⭐ ${a.rating}` : ""}`));
       });
       L.push("");
     });
@@ -5423,11 +5655,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("【要求】");
     L.push("1. 一日一欄（或者一行），由 Day 1 順住排到最後一日，唔好打亂次序。");
     L.push("2. 每一日要睇得出：日期、星期、當日主題，同埋當日由早到晚順序嘅地點。");
-    L.push("3. 每個地點要有時間同名；有當地語言名就一併寫細字。");
+    L.push("3. 每個地點格淨係寫三樣嘢：時間、地點名、當地語言名（細字）。唔好加介紹、描述、評分、營業時間、地址——呢啲我特登冇俾你，因為加落去張圖就會好花。");
     L.push("4. 兩個地點之間要標返點樣過去（例如步行 10 分鐘、地鐵 20 分鐘）。");
-    L.push("5. 用色克制：一日一隻色就夠，唔好每格都唔同色。留白要夠，字要夠大，手機睇得清楚。");
+    L.push("5. 張圖要一眼睇得曬。用色克制：一日一隻色就夠，唔好每格都唔同色，唔好加陰影同漸變。寧願疏啲、留白多啲，都好過逼到密密麻麻。字要夠大，手機睇得清楚。");
     L.push("6. 只可以用下面俾你嘅資料，唔好自己加地點、加時間、或者作任何我冇提供嘅嘢。地名要一字不改咁抄返。");
-    L.push("7. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案），我自己開嚟睇同印。");
+    L.push("7. 每個時段我只會俾你一個地點。如果我心目中有後備選擇，我已經抽起咗，所以唔好自己加「或者」、「二選一」呢類嘢。");
+    L.push("8. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案），我自己開嚟睇同印。");
     L.push("");
     L.push("【行程資料】");
     L.push(`行程名：${title}`);
@@ -5438,7 +5671,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     days.forEach(day => {
       const n = String(day.id).replace("day", "");
       L.push(`## Day ${n}｜${plain(day.date)}｜${plain(day.title) || "未定主題"}`);
-      if (plain(day.desc)) L.push(`（當日備註：${plain(day.desc)}）`);
       const st = stayForDay(snap, day);
       if (st && st.name) L.push(`住宿：${plain(st.name)}`);
       const units = toUnits(day.items);
@@ -5458,8 +5690,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const s = u.stop;
         const time = plain(s.time) || "時間未定";
         const kr = plain(s.kr);
+        // Time, name, local name — and nothing else. The descriptions are
+        // paragraphs, and feeding them to a diagram is what made the last one
+        // unreadable: the model dutifully printed every word. Backups are left
+        // out for the same reason; the chart is the plan, not the shortlist.
         L.push(`${time}｜${plain(s.title)}${kr ? `（${kr}）` : ""}`);
-        if (plain(s.desc)) L.push(`     ${plain(s.desc)}`);
       });
       L.push("");
     });
@@ -5491,6 +5726,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 plain(s.hoursChip || ""),
                 ...(s.accessBadges || []).map(b => plain((b && b.text) || "")),
               ].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}</div>
+              ${altsOf(s).length ? `<div class="alt">後備：${
+                altsOf(s).map(a => esc(altName(a) + (a.kr ? `（${plain(a.kr)}）` : ""))).join("、")
+              }</div>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -5530,6 +5768,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   .stop .kr{font-weight:400;color:#6B7280;font-size:12px}
   .stop .d{color:#4B5563;font-size:12.5px;margin-top:2px}
   .stop .c{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 8px;font-size:11.5px;color:#6B7280}
+  .stop .alt{margin-top:4px;font-size:11.5px;color:#6B7280}
   .seg{margin-left:76px;font-size:11.5px;color:#8A8F98;padding:2px 0}
   .note{margin-left:76px;font-size:12px;color:#4B5563;padding:5px 9px;white-space:pre-wrap;
         border-left:2px dashed #C9CDD4;background:#FAFAFA;page-break-inside:avoid}
