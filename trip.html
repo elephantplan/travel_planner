@@ -186,6 +186,20 @@ body{
 .altlinks .maplink{font-size:11.5px;padding:3px 8px;}
 .maplink.use{border-color:var(--lc,var(--ink));color:var(--lc,var(--ink));font-weight:600;}
 
+/* the "which row do I fold in" picker — a timetable, so the times line up */
+.foldlist{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.foldopt{
+  display:flex;align-items:baseline;gap:12px;width:100%;text-align:left;
+  padding:11px 13px;border:1px solid var(--rule);border-radius:var(--r-md);
+  background:var(--surface);cursor:pointer;font-size:14px;color:var(--ink);
+}
+.foldopt:active{background:var(--surface-2);}
+.foldopt .foldt{
+  font-family:var(--f-mono);font-size:12px;color:var(--ink-faint);
+  flex:0 0 58px;font-variant-numeric:tabular-nums;
+}
+.foldopt .foldn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
 /* ---------- pull to refresh ----------
    Installed as an app there is no browser chrome to pull on, so the gesture
    has to be ours. The badge is pinned under the top bar and is dragged into
@@ -1710,6 +1724,51 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return was;
   }
 
+  // Shipping "a stop can have backups" without this was half a feature: it
+  // only helped places typed in from scratch, while every itinerary already
+  // written had its alternatives sitting there as five separate 13:00 stops.
+  // Folding takes one of those rows and tucks it under another.
+  //
+  // The folded stop keeps everything about the PLACE and loses only what
+  // belonged to its old row — its own time and type — because a backup for
+  // lunch happens whenever lunch happens.
+  function foldIntoAlts(day, targetUi, sourceUi){
+    if (targetUi === sourceUi) return null;
+    const units = toUnits(day.items);
+    const target = units[targetUi] && units[targetUi].stop;
+    const source = units[sourceUi] && units[sourceUi].stop;
+    if (!target || !source) return null;
+
+    const place = {};
+    Object.keys(source).forEach(k => { if (!SLOT_KEYS.includes(k)) place[k] = source[k]; });
+    if (!Array.isArray(target.alts)) target.alts = [];
+    target.alts.push(place);
+    units.splice(sourceUi, 1);
+    day.items = fromUnits(units);
+    syncMapPoints(day);
+    // removing a row shifts everything after it
+    return { name: plain(source.title) || plain(source.kr) || "一個地點",
+             targetIdx: sourceUi < targetUi ? targetUi - 1 : targetUi };
+  }
+
+  // The way back out. Folding the wrong stop in must never be a one-way door,
+  // so a backup can be put back on the timeline as its own row.
+  function unfoldAlt(day, ui, ai){
+    const units = toUnits(day.items);
+    const s = units[ui] && units[ui].stop;
+    const alt = s && altsOf(s)[ai];
+    if (!alt) return null;
+    s.alts.splice(ai, 1);
+    if (!s.alts.length) delete s.alts;
+    // It inherits the slot it is coming out of; the leg into it is unknown
+    // until transit is rechecked, hence stale.
+    const stop = Object.assign({}, alt, { kind:"stop", time: plain(s.time), type: s.type || "normal" });
+    units.splice(ui + 1, 0, { seg:{ kind:"connector", html:"", stale:true }, stop });
+    day.items = fromUnits(units);
+    syncMapPoints(day);
+    return { name: altName(alt), at: ui + 1 };
+  }
+
   // A connector describes the trip INTO the stop that follows it, so the two
   // travel together as one unit whenever a stop is moved.
   function toUnits(items){
@@ -2121,6 +2180,37 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // opened, each backup gets its own map links and a one-tap swap, which is
   // the whole point — standing outside a full restaurant is exactly when you
   // need the runner-up and its directions, not a list you have to retype.
+  // Choose which existing row to tuck under this one. Listing the whole day
+  // (rather than just nearby times) on purpose: "the same meal" is a judgement
+  // about the family's plan, not something a clock can decide.
+  function openFoldPicker(day, ui){
+    const units = toUnits(day.items);
+    const me = units[ui] && units[ui].stop;
+    if (!me) return;
+    const options = units.map((u, j) => ({ u, j })).filter(x => x.u.stop && x.j !== ui);
+    if (!options.length){ flash("呢日冇第二個站可以摺埋。"); return; }
+    openSheet(`
+      <h3>摺埋邊個站？</h3>
+      <p class="sec-sub">揀一個，佢會由行程消失，變成「${esc(plain(me.title) || "呢個站")}」下面嘅後備。想反悔就喺後備度撳「抽返出嚟」。</p>
+      <div class="foldlist">${options.map(x => `
+        <button class="foldopt" data-fold="${x.j}">
+          <span class="foldt">${esc(plain(x.u.stop.time) || "—")}</span>
+          <span class="foldn">${esc(plain(x.u.stop.title) || "未改名嘅地點")}</span>
+        </button>`).join("")}</div>
+    `, sheet => {
+      sheet.querySelectorAll("[data-fold]").forEach(b => b.addEventListener("click", async () => {
+        const r = foldIntoAlts(day, ui, +b.dataset.fold);
+        closeLayer();
+        if (!r) return;
+        state.open.clear();
+        state.altsOpen.add(day.id + ":" + r.targetIdx);
+        render();
+        await saveNow(`將「${r.name}」摺咗做後備`);
+        refreshTransit(day, [r.targetIdx, r.targetIdx + 1]);
+      }));
+    });
+  }
+
   function altsHtmlFor(day, s, i){
     const alts = altsOf(s);
     if (!alts.length) return "";
@@ -2133,6 +2223,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         a.mapUrl ? `<a class="maplink" href="${esc(a.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google</a>` : "",
       );
       links.push(`<button class="maplink use" data-altup="${i}:${ai}">${icon("check")}改用呢間</button>`);
+      links.push(`<button class="maplink" data-altout="${i}:${ai}" title="抽返出嚟做獨立站">${icon("plus")}抽返出嚟</button>`);
       links.push(`<button class="maplink" data-altdel="${i}:${ai}" aria-label="刪走呢個後備" title="刪走呢個後備">${icon("trash")}</button>`);
       return `<div class="altrow">
         <div><span class="altn">${esc(altName(a))}</span>${
@@ -3164,12 +3255,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 a.kr ? `<span class="altkr">${esc(plain(a.kr))}</span>` : ""}</div>
               <div class="altlinks">
                 <button class="maplink use" data-act="altup" data-ai="${ai}">${icon("check")}升做首選</button>
+                <button class="maplink" data-act="altout" data-ai="${ai}">${icon("plus")}抽返出嚟做獨立站</button>
                 <button class="maplink" data-act="altdel" data-ai="${ai}" aria-label="刪走">${icon("trash")}</button>
               </div>
             </div>`).join("")}</div>` : ""}
           <input class="input" data-altq placeholder="打間鋪頭名，跟住喺下面揀返" autocomplete="off">
           <div data-altsug></div>
-          <p class="hint">首選會排喺行程度；後備摺埋喺佢下面，撳「改用呢間」就即刻對調。</p>
+          <button class="btn wide" data-act="foldpick">${icon("list")}摺埋行程入面另一個站</button>
+          <p class="hint">首選會排喺行程度；後備摺埋喺佢下面，撳「改用呢間」就即刻對調。同一餐有幾間想食，用上面嗰個掣摺埋一齊，就唔會佔住幾行。</p>
         </div>
 
         <div class="editor-tools">
@@ -3328,6 +3421,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       await saveNow(`${plain(s.time) || "呢一站"}改用「${plain(s.title)}」${was ? `（本來係「${was}」）` : ""}`);
       // the stop moved, so the legs either side of it are no longer right
       refreshTransit(day, [ui, ui + 1]);
+    }));
+
+    document.querySelectorAll("[data-altout]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const [ui, ai] = el.dataset.altout.split(":").map(Number);
+      const r = unfoldAlt(day, ui, ai);
+      if (!r) return;
+      render();
+      await saveNow(`將後備「${r.name}」抽返出嚟做獨立站`);
+      refreshTransit(day, [r.at, r.at + 1]);
     }));
 
     document.querySelectorAll("[data-altdel]").forEach(el => el.addEventListener("click", async ev => {
@@ -3607,6 +3710,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         await saveNow(`刪走後備「${altName(a)}」`);
         return;
       }
+
+      if (act === "altout"){
+        const r = unfoldAlt(day, i, +btn.dataset.ai);
+        if (!r) return;
+        state.open.clear();
+        render();
+        await saveNow(`將後備「${r.name}」抽返出嚟做獨立站`);
+        refreshTransit(day, [r.at, r.at + 1]);
+        return;
+      }
+
+      if (act === "foldpick"){ openFoldPicker(day, i); return; }
 
       if (act === "remove"){
         if (!confirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
