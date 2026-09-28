@@ -15,7 +15,8 @@
 // serving one of them a stale snapshot that then gets saved back over
 // somebody's newer edit would lose real work. Data is always network-only.
 
-const VERSION = "v1";
+// Bumped when the cached shell changes — v2 carried the redrawn app icon.
+const VERSION = "v2";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
 const PHOTOS = `dumbofly-photos-${VERSION}`;
@@ -26,10 +27,10 @@ const SHELL_FILES = [
   "/index.html",
   "/trip.html",
   "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/icon.svg",
-  "/icons/apple-touch-icon.png",
+  "/icons/icon-192-v2.png",
+  "/icons/icon-512-v2.png",
+  "/icons/icon-v2.svg",
+  "/icons/apple-touch-icon-v2.png",
 ];
 
 self.addEventListener("install", (e) => {
