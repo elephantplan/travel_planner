@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1211" media="(prefers-color-scheme: dark)">
 <title>DumboFly</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-v2.svg" type="image/svg+xml">
@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="DumboFly">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Noto+Sans+HK:wght@300..900&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    DEPARTURE BOARD — shared with trip.html.
@@ -26,47 +26,47 @@
    ============================================================ */
 :root{
   color-scheme: light dark;
-  --paper:#F7F7F5;
+  --paper:#F1F3EF;
   --surface:#FFFFFF;
-  --surface-2:#F0F0ED;
-  --ink:#15181A;
-  --ink-soft:#5B6166;
-  --ink-faint:#8B9197;
-  --rule:#E4E4DF;
-  --rule-soft:#EFEFEB;
+  --surface-2:#E8ECE6;
+  --ink:#13181A;
+  --ink-soft:#5A6560;
+  --ink-faint:#8A948F;
+  --rule:#D8DED7;
+  --rule-soft:#E6EAE4;
   --shadow-1:0 1px 2px rgba(20,23,26,.04);
   --shadow-2:0 8px 30px -12px rgba(20,23,26,.22), 0 2px 6px rgba(20,23,26,.05);
-  --ok:#3F7D58;
-  --warn:#8A5B17;
-  --danger:#A8382C; --danger-bg:#F8EDEB;
-  --accent:#2F6E9E;
-  --f-disp:'Instrument Sans','Noto Sans TC',system-ui,sans-serif;
-  --f-body:'Noto Sans TC','Hiragino Sans TC','Microsoft JhengHei',system-ui,sans-serif;
-  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
-  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:22px;
+  --ok:#2A7355;
+  --warn:#8A6100;
+  --danger:#BE3E28; --danger-bg:#F6E7E4;
+  --accent:#2665A0;
+  --f-disp:'Archivo','Noto Sans HK','Noto Sans TC',system-ui,sans-serif;
+  --f-body:'Archivo','Noto Sans HK','Noto Sans TC','Hiragino Sans HK',system-ui,sans-serif;
+  --f-mono:'Archivo','Noto Sans HK',system-ui,sans-serif;
+  --r-sm:7px; --r-md:12px; --r-lg:18px; --r-xl:26px;
   --tap:44px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#0E1011; --surface:#17191B; --surface-2:#1F2225;
-    --ink:#ECEDEB; --ink-soft:#9BA1A6; --ink-faint:#6A7076;
-    --rule:#262A2D; --rule-soft:#1E2124;
+    --paper:#0E1211; --surface:#161B1A; --surface-2:#1E2422;
+    --ink:#EAEEEB; --ink-soft:#98A39E; --ink-faint:#6C7773;
+    --rule:#252C2A; --rule-soft:#1B2120;
     --shadow-1:0 1px 2px rgba(0,0,0,.35);
     --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
-    --ok:#63B183; --warn:#D6A15C;
-    --danger:#E0796B; --danger-bg:#261715;
-    --accent:#6BA8D6;
+    --ok:#4FAE80; --warn:#E0A93C;
+    --danger:#E2705A; --danger-bg:#261815;
+    --accent:#5A9AD4;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0E1011; --surface:#17191B; --surface-2:#1F2225;
-  --ink:#ECEDEB; --ink-soft:#9BA1A6; --ink-faint:#6A7076;
-  --rule:#262A2D; --rule-soft:#1E2124;
+  --paper:#0E1211; --surface:#161B1A; --surface-2:#1E2422;
+  --ink:#EAEEEB; --ink-soft:#98A39E; --ink-faint:#6C7773;
+  --rule:#252C2A; --rule-soft:#1B2120;
   --shadow-1:0 1px 2px rgba(0,0,0,.35);
   --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
-  --ok:#63B183; --warn:#D6A15C;
-  --danger:#E0796B; --danger-bg:#261715;
-  --accent:#6BA8D6;
+  --ok:#4FAE80; --warn:#E0A93C;
+  --danger:#E2705A; --danger-bg:#261815;
+  --accent:#5A9AD4;
 }
 *{box-sizing:border-box;}
 html{-webkit-text-size-adjust:100%;}
@@ -332,7 +332,10 @@ section.triplist{margin-bottom:36px;}
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
   // the same signage-weight hues the trip page uses for its days, so a trip's
   // colour here is the colour it keeps once you open it
-  const CARD_PALETTE = ["#2F6E9E","#3F7D58","#B4682A","#7A5E96","#8A6B34","#6B7785"];
+  // The same six line colours trip.html gives its days — ginkgo, maple,
+  // pine, autumn sky, persimmon, plum — so a trip wears one identity from
+  // the list straight through to its itinerary.
+  const CARD_PALETTE = ["#C08A00","#BE3E28","#2A7355","#2665A0","#C4651A","#6F4682"];
 
   function sbHeaders(extra){
     return Object.assign({

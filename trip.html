@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#F7F7F5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1011" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1211" media="(prefers-color-scheme: dark)">
 <title>DumboFly</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-v2.svg" type="image/svg+xml">
@@ -19,121 +19,126 @@
 <meta name="apple-mobile-web-app-title" content="DumboFly">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Noto+Sans+HK:wght@300..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 /* ============================================================
-   DEPARTURE BOARD — design tokens
+   LINE MAP — design tokens
 
-   A day is a timetable: times aligned in one column on the left,
-   a hairline rail beside them, and what happens at each time to
-   the right. Density is fine — a real itinerary IS dense — as
-   long as everything hangs off one vertical axis.
+   The family will spend this trip on the Seoul metro, and the
+   itinerary already knows every leg between stops. So the honest
+   structure is not a page of sections: it is a line diagram.
+   A day is a LINE, a stop is a STATION, a connector is the ride
+   between them.
 
-   The page carries ONE accent at a time, and it is the day you
-   are reading: --lc is set per day, and the rail, the active tab,
-   focus rings and primary buttons all take it. On the overview
-   the accent is plain ink. That is what keeps a screen full of
-   information from turning into confetti.
+   That is why colour is a system here rather than an accent.
+   Each day owns one hue, drawn from what they are flying out to
+   see — ginkgo, maple, pine, autumn sky, persimmon, plum — and
+   that hue is the same in the tab, the rail, the station dot and
+   the route list. You should be able to tell which day you are
+   looking at with the screen at arm's length.
+
+   Everything that is not the itinerary stays grey. Colour means
+   "this is a day"; nothing else is allowed to borrow it.
    ============================================================ */
 :root{
   color-scheme: light dark;
 
-  --paper:#F7F7F5;
+  /* A cool, faintly green paper. Deliberately not the warm cream
+     that every generated travel page reaches for. */
+  --paper:#F1F3EF;
   --surface:#FFFFFF;
-  --surface-2:#F0F0ED;
-  --ink:#15181A;
-  --ink-soft:#5B6166;
-  --ink-faint:#8B9197;
-  --rule:#E4E4DF;
-  --rule-soft:#EFEFEB;
+  --surface-2:#E8ECE6;
+  --ink:#13181A;
+  --ink-soft:#5A6560;
+  --ink-faint:#8A948F;
+  --rule:#D8DED7;
+  --rule-soft:#E6EAE4;
 
-  /* barely-there elevation: hairlines do the work, not shadows */
-  --shadow-1:0 1px 2px rgba(20,23,26,.04);
-  --shadow-2:0 8px 30px -12px rgba(20,23,26,.22), 0 2px 6px rgba(20,23,26,.05);
+  /* hairlines and flat fills do the work; shadows stay almost invisible */
+  --shadow-1:0 1px 2px rgba(19,24,26,.04);
+  --shadow-2:0 10px 32px -14px rgba(19,24,26,.24), 0 2px 6px rgba(19,24,26,.05);
 
-  /* One hue per day, at signage saturation rather than fluorescent.
-     Days past the sixth are generated at runtime (see dayColorVar). */
-  --d1:#6B7785;
-  --d2:#3F7D58;
-  --d3:#2F6E9E;
-  --d4:#B4682A;
-  --d5:#7A5E96;
-  --d6:#8A6B34;
-  --day-l:38%;
+  /* the six lines. Days past the sixth are generated (see dayColorVar). */
+  --d1:#C08A00;   /* 銀杏 ginkgo   */
+  --d2:#BE3E28;   /* 楓   maple    */
+  --d3:#2A7355;   /* 松   pine     */
+  --d4:#2665A0;   /* 天   sky      */
+  --d5:#C4651A;   /* 柿   persimmon*/
+  --d6:#6F4682;   /* 紫   plum     */
+  --day-l:36%;
 
-  --ok:#3F7D58;
-  --ok-bg:#EDF3EF;
-  --warn:#8A5B17;
-  --warn-bg:#F7F1E6;
-  --danger:#A8382C;
-  --danger-bg:#F8EDEB;
+  --ok:#2A7355;      --ok-bg:#E4EDE8;
+  --warn:#8A6100;    --warn-bg:#F3EEDF;
+  --danger:#BE3E28;  --danger-bg:#F6E7E4;
   /* legacy aliases: these class names are baked into saved itinerary data,
      so they still resolve — they just stop shouting */
-  --niece:#8A4C72;
-  --niece-bg:#F7EDF3;
-  --info:#2F6E9E;
-  --info-bg:#EDF2F6;
-  --bookmark:#5B6166;
-  --bookmark-bg:#F0F0ED;
+  --niece:#6F4682;   --niece-bg:#EFE9F2;
+  --info:#2665A0;    --info-bg:#E4EBF2;
+  --bookmark:#5A6560;--bookmark-bg:#E8ECE6;
 
-  --f-disp:'Instrument Sans','Noto Sans TC',system-ui,sans-serif;
-  --f-body:'Noto Sans TC','Hiragino Sans TC','Microsoft JhengHei',system-ui,sans-serif;
-  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+  /* Archivo carries the numerals, and the numerals are the spine of a
+     timetable. Its width axis gives the display face without a second
+     family, so there is no separate mono: tabular figures do that job. */
+  --f-disp:'Archivo','Noto Sans HK','Noto Sans TC',system-ui,sans-serif;
+  --f-body:'Archivo','Noto Sans HK','Noto Sans TC','Hiragino Sans HK',system-ui,sans-serif;
+  --f-mono:'Archivo','Noto Sans HK',system-ui,sans-serif;
   --mono:var(--f-mono);
 
-  --r-sm:6px;
-  --r-md:10px;
-  --r-lg:14px;
-  --r-xl:22px;
+  --r-sm:7px;
+  --r-md:12px;
+  --r-lg:18px;
+  --r-xl:26px;
 
   /* the timetable gutter: time column + the rail it aligns to */
-  --gutter:66px;
+  --gutter:54px;
   --rail-w:var(--gutter);
   --tap:44px;
 }
 
+/* One definition, applied by either the system preference or the toggle,
+   so the two can never drift apart. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#0E1011;
-    --surface:#17191B;
-    --surface-2:#1F2225;
-    --ink:#ECEDEB;
-    --ink-soft:#9BA1A6;
-    --ink-faint:#6A7076;
-    --rule:#262A2D;
-    --rule-soft:#1E2124;
-    --shadow-1:0 1px 2px rgba(0,0,0,.35);
-    --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
-    --d1:#97A3B1; --d2:#63B183; --d3:#6BA8D6; --d4:#DD9457; --d5:#AE92C9; --d6:#C3A05F;
-    --day-l:66%;
-    --ok:#63B183;      --ok-bg:#16241C;
-    --warn:#D6A15C;    --warn-bg:#241E14;
-    --danger:#E0796B;  --danger-bg:#261715;
-    --niece:#D291B4;   --niece-bg:#241A20;
-    --info:#6BA8D6;    --info-bg:#141D24;
-    --bookmark:#9BA1A6;--bookmark-bg:#1F2225;
+    --paper:#0E1211;
+    --surface:#161B1A;
+    --surface-2:#1E2422;
+    --ink:#EAEEEB;
+    --ink-soft:#98A39E;
+    --ink-faint:#6C7773;
+    --rule:#252C2A;
+    --rule-soft:#1B2120;
+    --shadow-1:0 1px 2px rgba(0,0,0,.4);
+    --shadow-2:0 12px 36px -16px rgba(0,0,0,.85), 0 2px 8px rgba(0,0,0,.45);
+    --d1:#E0A93C; --d2:#E2705A; --d3:#4FAE80; --d4:#5A9AD4; --d5:#E08F4A; --d6:#A882C0;
+    --day-l:64%;
+    --ok:#4FAE80;      --ok-bg:#132520;
+    --warn:#E0A93C;    --warn-bg:#241E12;
+    --danger:#E2705A;  --danger-bg:#261815;
+    --niece:#A882C0;   --niece-bg:#1E1826;
+    --info:#5A9AD4;    --info-bg:#131E27;
+    --bookmark:#98A39E;--bookmark-bg:#1E2422;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0E1011;
-  --surface:#17191B;
-  --surface-2:#1F2225;
-  --ink:#ECEDEB;
-  --ink-soft:#9BA1A6;
-  --ink-faint:#6A7076;
-  --rule:#262A2D;
-  --rule-soft:#1E2124;
-  --shadow-1:0 1px 2px rgba(0,0,0,.35);
-  --shadow-2:0 10px 34px -14px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
-  --d1:#97A3B1; --d2:#63B183; --d3:#6BA8D6; --d4:#DD9457; --d5:#AE92C9; --d6:#C3A05F;
-  --day-l:66%;
-  --ok:#63B183;      --ok-bg:#16241C;
-  --warn:#D6A15C;    --warn-bg:#241E14;
-  --danger:#E0796B;  --danger-bg:#261715;
-  --niece:#D291B4;   --niece-bg:#241A20;
-  --info:#6BA8D6;    --info-bg:#141D24;
-  --bookmark:#9BA1A6;--bookmark-bg:#1F2225;
+  --paper:#0E1211;
+  --surface:#161B1A;
+  --surface-2:#1E2422;
+  --ink:#EAEEEB;
+  --ink-soft:#98A39E;
+  --ink-faint:#6C7773;
+  --rule:#252C2A;
+  --rule-soft:#1B2120;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);
+  --shadow-2:0 12px 36px -16px rgba(0,0,0,.85), 0 2px 8px rgba(0,0,0,.45);
+  --d1:#E0A93C; --d2:#E2705A; --d3:#4FAE80; --d4:#5A9AD4; --d5:#E08F4A; --d6:#A882C0;
+  --day-l:64%;
+  --ok:#4FAE80;      --ok-bg:#132520;
+  --warn:#E0A93C;    --warn-bg:#241E12;
+  --danger:#E2705A;  --danger-bg:#261815;
+  --niece:#A882C0;   --niece-bg:#1E1826;
+  --info:#5A9AD4;    --info-bg:#131E27;
+  --bookmark:#98A39E;--bookmark-bg:#1E2422;
 }
 
 *{box-sizing:border-box;}
@@ -301,63 +306,107 @@ img{max-width:100%;}
 .linebtn[aria-selected="true"] .lbl{color:var(--lc,var(--ink));font-weight:600;}
 
 /* ---------- hero / route board ---------- */
-.hero{padding:30px 0 4px;}
+.hero{padding:34px 0 6px;}
 .eyebrow{
-  font-family:var(--f-mono);font-size:11px;font-weight:500;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+  font-family:var(--f-disp);font-size:11px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);
+  font-stretch:112%;
 }
+/* No font-stretch here. The title is Chinese, and a CJK face has no width
+   axis — asking for one makes the browser synthesise it, which is what was
+   smearing the characters. The widened setting is kept for Latin runs
+   (the eyebrow, the day numerals) where the axis actually exists. */
 .hero h1{
-  font-family:var(--f-body);font-weight:700;
-  font-size:clamp(27px,7.4vw,38px);line-height:1.22;letter-spacing:-.025em;
-  margin:10px 0 12px;
+  font-family:var(--f-disp);font-weight:700;
+  font-size:clamp(30px,8.4vw,42px);line-height:1.14;letter-spacing:-.018em;
+  margin:12px 0 14px;text-wrap:balance;
 }
 .hero-meta{
-  display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;
-  font-size:12.5px;color:var(--ink-faint);
+  display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;
+  font-size:12.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums;
 }
-.hero-meta b{font-family:var(--f-mono);font-weight:500;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+.hero-meta b{font-weight:600;color:var(--ink-soft);}
 
-/* the route board: one row per day, the rail running through it */
-.board{margin:24px 0 4px;border-top:1px solid var(--rule);}
-.board-head{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:12px 2px 10px;
+/* ---------- the line map ----------
+   Six days, six lines. The rail is continuous from the first day to the
+   last, so the trip reads as one journey rather than six cards, and each
+   day's colour is the same one it wears everywhere else in the app. */
+/* Flex, not block: the template puts a newline between each button, and as
+   a block container those whitespace text nodes became line boxes, opening
+   a 22px gap between every pair of rows and cutting the line into stubs.
+   A flex container discards whitespace-only children outright. */
+.linemap{display:flex;flex-direction:column;margin:26px 0 8px;}
+/* The vertical padding lives on the body, never on the button, so the rail
+   column runs the full height of each row and touches the next one. With
+   the padding on the button, each segment stopped short of its neighbour
+   and the "line" arrived as a row of disconnected stubs. */
+.dayline{
+  position:relative;display:grid;grid-template-columns:38px 1fr;gap:14px;
+  width:100%;padding:0 4px;border:0;background:transparent;
+  text-align:left;cursor:pointer;color:inherit;
 }
-.board-head .t{
-  font-family:var(--f-mono);font-size:10.5px;font-weight:500;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+.dayline:active{background:var(--surface-2);border-radius:var(--r-md);}
+.dayline-rail{position:relative;display:flex;justify-content:center;align-items:flex-start;}
+.dayline-rail::before{
+  content:"";position:absolute;left:50%;top:0;bottom:0;width:3px;
+  transform:translateX(-50%);background:var(--lc);opacity:.32;
 }
-.board-row{
-  display:grid;grid-template-columns:42px 18px 1fr auto;align-items:center;gap:12px;
-  width:100%;padding:13px 2px;border:0;border-top:1px solid var(--rule-soft);
-  background:transparent;text-align:left;cursor:pointer;
+/* the journey starts and ends at a station, not in mid-air */
+.dayline:first-child .dayline-rail::before{top:30px;}
+.dayline:last-child .dayline-rail::before{bottom:calc(100% - 30px);}
+.dayline-dot{
+  position:relative;z-index:1;margin-top:14px;
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--lc);color:var(--paper);
+  font-family:var(--f-disp);font-weight:700;font-size:15px;
+  font-variant-numeric:tabular-nums;
+  box-shadow:0 0 0 4px var(--paper);
 }
-.board-row:first-of-type{border-top:1px solid var(--rule-soft);}
-.board-row:active{background:var(--surface-2);}
-.board-row .dcode{
-  font-family:var(--f-mono);font-weight:500;font-size:11.5px;
-  letter-spacing:.02em;color:var(--lc);text-transform:uppercase;
+.dayline-body{min-width:0;padding:14px 0 18px;}
+.dayline-top{display:flex;align-items:baseline;gap:10px;justify-content:space-between;}
+.dayline-title{
+  font-family:var(--f-disp);font-weight:650;font-size:17px;
+  letter-spacing:-.012em;color:var(--ink);line-height:1.3;min-width:0;
 }
-.board-row .dcode .i{width:14px;height:14px;}
-.board-row .track{position:relative;height:100%;min-height:32px;}
-.board-row .track::before{
-  content:"";position:absolute;left:50%;top:-14px;bottom:-14px;width:2px;
-  transform:translateX(-50%);background:var(--lc);opacity:.45;
+.dayline-when{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;}
+/* the stations on this line, middot-separated so they read as a route */
+.dayline-stops{
+  display:flex;flex-wrap:wrap;gap:2px 0;margin-top:6px;
+  font-size:12.5px;color:var(--ink-soft);line-height:1.5;
 }
-.board-row:first-of-type .track::before{top:50%;}
-.board-row:last-of-type .track::before{bottom:50%;}
-.board-row .track::after{
-  content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;
-  transform:translate(-50%,-50%);border-radius:50%;
-  background:var(--paper);border:2px solid var(--lc);
+.dayline-stops > span{display:inline-flex;align-items:center;}
+.dayline-stops > span + span::before{
+  content:"";width:3px;height:3px;border-radius:50%;
+  background:var(--ink-faint);opacity:.6;margin:0 8px;
 }
-.board-row .stack{min-width:0;}
-.board-row .name{display:block;font-size:14.5px;font-weight:500;color:var(--ink);line-height:1.4;}
-.board-row .sub{display:block;font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);margin-top:1px;}
-.board-row .count{
-  font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);
-  font-variant-numeric:tabular-nums;white-space:nowrap;
+.dayline-more{color:var(--ink-faint);}
+.dayline-count{
+  display:inline-block;margin-top:6px;
+  font-size:11px;font-weight:600;letter-spacing:.04em;
+  color:var(--lc);font-variant-numeric:tabular-nums;
 }
+
+/* ---------- folded groups ----------
+   Everything that is not the itinerary. Shut by default: the overview
+   used to open on nine walls of text with the trip buried among them. */
+.fold{border-top:1px solid var(--rule);}
+.fold:first-of-type{margin-top:22px;}
+.fold-head{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:16px 2px;border:0;background:transparent;
+  text-align:left;cursor:pointer;color:inherit;
+}
+.fold-t{font-family:var(--f-disp);font-weight:650;font-size:15px;letter-spacing:-.01em;}
+.fold-h{
+  flex:1;min-width:0;font-size:11.5px;color:var(--ink-faint);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.fold-c{margin-left:auto;display:flex;color:var(--ink-faint);}
+.fold-c .i{width:16px;height:16px;transform:rotate(90deg);transition:transform .2s;}
+.fold.open .fold-c .i{transform:rotate(-90deg);}
+.fold-head:active{background:var(--surface-2);}
+.fold-body{padding:2px 0 22px;}
 
 /* ---------- generic section ---------- */
 .sec{padding:30px 0 4px;}
@@ -655,12 +704,27 @@ img{max-width:100%;}
   color:var(--paper);font-size:9.5px;font-weight:600;font-family:var(--f-mono);
 }
 
+/* A stop is not a card. Boxing every one of them turned a day into a
+   stack of grey slabs, and the rail — the thing that actually says
+   "this is one journey" — was left fighting fifteen borders. The stop
+   sits on the page, separated by a hairline, and only takes a surface
+   when it is opened for editing or picked in select mode. */
 .stopcard{
-  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
-  margin:0 0 8px 14px;overflow:hidden;position:relative;
-  transition:border-color .15s;
+  background:transparent;border:1px solid transparent;border-radius:var(--r-lg);
+  margin:0 0 2px 2px;position:relative;
+  transition:background-color .15s, border-color .15s;
 }
-.stopmain{display:flex;gap:12px;padding:13px 42px 13px 14px;align-items:flex-start;text-align:left;width:100%;-webkit-user-select:text;user-select:text;}
+.stopcard::after{
+  content:"";position:absolute;left:12px;right:0;bottom:-2px;height:1px;
+  background:var(--rule-soft);
+}
+.unit:last-child .stopcard::after{display:none;}
+.stopcard.open,.stopcard.checked,.stopcard.freshai{
+  background:var(--surface);border-color:var(--rule);
+  margin-bottom:10px;overflow:hidden;
+}
+.stopcard.open::after,.stopcard.checked::after{display:none;}
+.stopmain{display:flex;gap:11px;padding:13px 36px 13px 12px;align-items:flex-start;text-align:left;width:100%;-webkit-user-select:text;user-select:text;}
 .thumb{
   flex:0 0 auto;width:62px;height:62px;border-radius:var(--r-md);overflow:hidden;
   background:var(--surface-2);position:relative;
@@ -679,9 +743,10 @@ img{max-width:100%;}
 .stopcard.open .tipbox,
 .stopcard.open .stopfoot{display:none;}
 .stopcard.open{border-color:var(--lc);}
+.stopcard.checked{border-color:var(--lc,var(--ink));}
 .stopbody{flex:1 1 auto;min-width:0;}
 .stopname{font-size:15px;font-weight:600;line-height:1.45;margin:0;letter-spacing:-.01em;}
-.stopname .kr{font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:7px;}
+.stopname .kr{font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:7px;white-space:nowrap;}
 .stopname.unnamed{color:var(--ink-faint);font-weight:400;}
 .stopdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.65;margin-top:5px;}
 .stopcard .chiprow{margin-top:8px;}
@@ -699,7 +764,14 @@ img{max-width:100%;}
 .bookbox .warnline .i{width:12px;height:12px;}
 
 /* outbound links: quiet text, not a row of coloured pills */
-.stopfoot{display:flex;gap:16px;flex-wrap:wrap;padding:0 14px 13px;}
+/* The utility row under a stop: five links, on every stop, all day. With
+   icons they wrapped onto two lines and doubled the visual weight of the
+   card. The icons carry no information the word does not — so they go,
+   and the row fits on one line. Icons stay where they mean something:
+   the rail, the connectors, the top bar. */
+.stopfoot{display:flex;gap:4px 13px;flex-wrap:wrap;padding:2px 12px 13px;}
+.stopfoot .maplink{font-size:11.5px;}
+.stopfoot .maplink .i{display:none;}
 .maplink{
   display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:400;
   color:var(--ink-faint);background:transparent;padding:0;border:0;border-radius:0;
@@ -752,20 +824,25 @@ img{max-width:100%;}
 .hint{font-size:11.5px;color:var(--ink-faint);margin:6px 2px 0;line-height:1.6;}
 
 .editor-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+/* A day carries five or six of these tool buttons above and below the
+   itinerary. Filled, they read as loudly as the trip itself; on the light
+   theme a stack of white slabs was the first thing the eye landed on.
+   They sit on the page instead, and only .primary is allowed to shout. */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;
   font-family:var(--f-body);font-size:13px;font-weight:500;padding:10px 16px;
   border-radius:999px;min-height:40px;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink);
-  transition:border-color .15s, background .15s;
+  border:1px solid var(--rule);background:transparent;color:var(--ink-soft);
+  transition:border-color .15s, background .15s, color .15s;
 }
+.btn:hover{color:var(--ink);}
 .btn .i{width:15px;height:15px;}
 .btn:hover{border-color:var(--ink-faint);}
 .btn:active{transform:scale(.98);}
 .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);}
 .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent);}
 .btn.wide{width:100%;}
-.btn.wide + .btn.wide{margin-top:8px;}
+.btn.wide + .btn.wide{margin-top:7px;}
 .addstop{
   width:100%;margin-top:14px;padding:14px;cursor:pointer;
   border:1px dashed var(--rule);border-radius:var(--r-lg);background:transparent;
@@ -1322,7 +1399,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     boardIdeas: null,              // last AI answer shown inline on a board page
     selectMode: null,               // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
     openLog: new Set(),            // "boardId:logIndex" of ailog entries expanded beyond the latest
-    altsOpen: new Set()            // "dayId:unitIndex" whose backup picks are unfolded
+    altsOpen: new Set(),           // "dayId:unitIndex" whose backup picks are unfolded
+    foldOpen: new Set()            // which overview groups the reader has opened
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
 
@@ -2626,32 +2704,94 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function hiddenSectionsHtml(d){
     const hidden = (Array.isArray(d.hiddenSections) ? d.hiddenSections : []).filter(k => HIDDEN_SECTION_LABELS[k]);
     if (!hidden.length) return "";
+    // Folded like everything else that is not the itinerary — this is a
+    // recovery drawer, not something anyone reads on the way in.
     return `
       <section class="sec">
-        <h2 class="sec-title">隱藏咗嘅段落</h2>
         <p class="sec-sub">資料冇刪，撳「顯示返」就再出返喺主頁。</p>
         <div class="chiprow">${hidden.map(k =>
           `<button class="btn" data-unhidesec="${k}">顯示返「${esc(HIDDEN_SECTION_LABELS[k])}」</button>`).join("")}</div>
       </section>`;
   }
 
+  // Up to four real places per day, as the stations on that day's line.
+  // Logistics rows ("酒店出發", "飛返香港") carry no place id, and listing
+  // them would fill the overview with words that tell you nothing.
+  function lineStations(day){
+    const stops = (day.items || []).filter(i => i && i.kind === "stop");
+    const real = stops.filter(s => (s.placeId || s.mapUrl) && plain(s.title));
+    const pick = (real.length ? real : stops).filter(s => plain(s.title));
+    const names = pick.slice(0, 4).map(s => plain(s.title));
+    return { names, more: Math.max(0, pick.length - names.length) };
+  }
+
+  // A collapsible group. Everything that is not the itinerary lives inside
+  // one of these, shut by default: the overview used to open on nine
+  // equally-weighted walls of text, so the trip itself — the only thing
+  // anybody opens this page for — was just one more block among them.
+  function foldHtml(key, title, hint, inner){
+    if (!inner || !String(inner).trim()) return "";
+    const open = state.foldOpen.has(key);
+    return `<section class="fold${open ? " open" : ""}">
+      <button class="fold-head" data-fold="${key}" aria-expanded="${open}">
+        <span class="fold-t">${esc(title)}</span>
+        ${hint ? `<span class="fold-h">${esc(hint)}</span>` : ""}
+        <span class="fold-c">${icon("chevron")}</span>
+      </button>
+      ${open ? `<div class="fold-body">${inner}</div>` : ""}
+    </section>`;
+  }
+
   function overviewHtml(){
     const d = state.snapshot;
     const m = d.meta || {};
 
-    const board = d.days.map(day => {
-      const stops = day.items.filter(i => i.kind === "stop").length;
+    // The line map. Each day is a line: its own colour, its number in a
+    // badge, and the stations you will actually stand in.
+    const lines = d.days.map(day => {
+      const n = String(day.id).replace("day", "");
+      const st = lineStations(day);
+      const count = (day.items || []).filter(i => i.kind === "stop").length;
       return `
-        <button class="board-row" data-go="${day.id}" style="--lc:${dayColorVar(day.id)}">
-          <span class="dcode">Day ${day.id.replace('day','')}</span>
-          <span class="track"></span>
-          <span class="stack">
-            <span class="name">${esc(day.title)}</span>
-            <span class="sub">${esc(day.date)}</span>
+        <button class="dayline" data-go="${day.id}" style="--lc:${dayColorVar(day.id)}">
+          <span class="dayline-rail"><span class="dayline-dot">${esc(n)}</span></span>
+          <span class="dayline-body">
+            <span class="dayline-top">
+              <span class="dayline-title">${esc(day.title)}</span>
+              <span class="dayline-when">${esc(day.date)}</span>
+            </span>
+            ${st.names.length ? `<span class="dayline-stops">${
+              st.names.map(x => `<span>${esc(x)}</span>`).join("")
+            }${st.more ? `<span class="dayline-more">＋${st.more}</span>` : ""}</span>` : ""}
+            <span class="dayline-count">${count} 站</span>
           </span>
-          <span class="count">${stops} 站</span>
         </button>`;
     }).join("");
+
+    const prep = [
+      `<div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>`,
+      isSectionHidden(d, "foliage") ? "" : `
+        <h3>季節提示${secTools("foliage", "notes")}</h3>
+        <p class="sec-sub">${d.foliageNote || ""}</p>
+        ${liveCheckButtonHtml("foliage", "Check 依家嘅季節情況")}`,
+      plain(d.scheduleSwapNote || "") ? `
+        <h3>日程調動${secEditBtn("notes")}</h3>
+        <p class="sec-sub">${d.scheduleSwapNote}</p>` : "",
+      transitInfoHtml(d.transitInfo),
+    ].filter(Boolean).join("");
+
+    const aiPanel = isSectionHidden(d, "ai") ? "" : `
+      <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。${secTools("ai")}</p>
+      <div class="panel">
+        <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || defaultTripBrief(d))}</div>
+        ${briefText(d) ? "" : `<div class="d" style="opacity:.7;margin-top:6px;">（而家用緊預設）</div>`}
+      </div>`;
+
+    const mapPanel = `
+      <p class="sec-sub">${d.days.length} 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
+      <div class="mapbox tall" id="map-all"></div>
+      <div class="chiprow" id="map-legend"></div>
+      <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>`;
 
     return `
       <section class="hero">
@@ -2664,55 +2804,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <div class="chiprow">${(m.hotelTags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}</div>
       </section>
 
-      <div class="board">
-        <div class="board-head"><span class="t">Route Board</span><span class="t">${d.days.length} lines</span></div>
-        ${board}
-      </div>
+      <nav class="linemap" aria-label="每一日">
+        ${lines}
+      </nav>
 
-      <section class="sec">
-        <h2 class="sec-title">全程地圖</h2>
-        <p class="sec-sub">${d.days.length} 日路線一次過睇晒，撳圖例可以單獨開關某一日。</p>
-        <div class="mapbox tall" id="map-all"></div>
-        <div class="chiprow" id="map-legend"></div>
-        <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>
-      </section>
-
-      <hr class="rule">
-
-      <section class="sec">
-        <h2 class="sec-title">出發前必讀</h2>
-        <p class="sec-sub">出發前要記住嘅嘢。長撳右邊嘅拖拉掣可以改次序。</p>
-
-        <div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>
-
-        ${isSectionHidden(d,"foliage") ? "" : `
-        <h3>季節提示${secTools("foliage", "notes")}</h3>
-        <p class="sec-sub">${d.foliageNote||""}</p>
-        ${liveCheckButtonHtml("foliage", "Check 依家嘅季節情況")}
-        `}
-
-        ${plain(d.scheduleSwapNote || "") ? `
-        <h3>日程調動${secEditBtn("notes")}</h3>
-        <p class="sec-sub">${d.scheduleSwapNote}</p>` : ""}
-      </section>
-
-      <hr class="rule">
-
-      ${transitInfoHtml(d.transitInfo)}
-
-      ${isSectionHidden(d,"ai") ? "" : `
-      <section class="sec">
-        <h2 class="sec-title">AI 設定${secTools("ai")}</h2>
-        <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。</p>
-        <div class="panel">
-          <div class="d" style="white-space:pre-wrap;">${esc(briefText(d) || defaultTripBrief(d))}</div>
-          ${briefText(d) ? "" : `<div class="d" style="opacity:.7;margin-top:6px;">（而家用緊預設）</div>`}
-        </div>
-      </section>`}
-
-      ${customSectionsHtml(d)}
-
-      ${hiddenSectionsHtml(d)}
+      ${foldHtml("prep", "行前準備", "住宿・天氣・衣著・無障礙", prep)}
+      ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
+      ${foldHtml("extra", "自己加嘅資料", "", customSectionsHtml(d))}
+      ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
+      ${foldHtml("hidden", "隱藏咗嘅段落", "", hiddenSectionsHtml(d))}
 
       <footer>
         <div class="fbrand">${esc(m.title || "我嘅行程")}</div>
@@ -2945,7 +3045,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
 
   function wireOverview(){
-    document.querySelectorAll(".board-row[data-go]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".dayline[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
       window.scrollTo({ top: 0, behavior: "auto" });
       render();
@@ -2962,6 +3062,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     document.querySelectorAll("[data-unhidesec]").forEach(b => b.addEventListener("click", () => {
       const key = b.dataset.unhidesec;
       unhideSection(key, HIDDEN_SECTION_LABELS[key] || key);
+    }));
+    document.querySelectorAll("[data-fold]").forEach(b => b.addEventListener("click", () => {
+      const k = b.dataset.fold;
+      if (state.foldOpen.has(k)) state.foldOpen.delete(k); else state.foldOpen.add(k);
+      render();
     }));
     wireCustomSections();
     wireLiveChecks();
