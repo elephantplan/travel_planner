@@ -2387,6 +2387,38 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const m = (state.snapshot && state.snapshot.meta) || {};
     return m.destinationLocal ? " " + m.destinationLocal : "";
   }
+  // "Google 地圖" used to just open whatever was stored in s.mapUrl — but
+  // mapUrl is a generic map link, not a Google one. Places the AI suggests
+  // onto a board get a NAVER url written into it, and the editor's own field
+  // invites you to paste one. So the button said Google and opened Naver.
+  //
+  // The label now decides the link instead of the other way round: a Google
+  // url that is already stored wins, otherwise one is built from the place id
+  // (exact) or the name.
+  function isHost(url, re){ return re.test(String(url || "")); }
+  const GOOGLE_HOST = /^https?:\/\/((www|maps)\.)?google\.[a-z.]+\//i;
+  const GOOGLE_SHORT = /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps)\//i;
+  const NAVER_HOST = /^https?:\/\/([a-z]+\.)?naver\.(com|me)\//i;
+
+  function googlePlaceUrl(s){
+    const m = String((s && s.mapUrl) || "");
+    if (isHost(m, GOOGLE_HOST) || isHost(m, GOOGLE_SHORT)) return m;
+    const q = searchTerm(s);
+    if (!q) return "";
+    const base = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + destHint())}`;
+    return s.placeId ? `${base}&query_place_id=${encodeURIComponent(s.placeId)}` : base;
+  }
+
+  // A stored link that is neither Google nor Naver is something the family
+  // pasted themselves. It used to render under the Google label; now it keeps
+  // its own, so nothing they saved quietly disappears.
+  function customMapUrl(s){
+    const m = String((s && s.mapUrl) || "");
+    if (!m) return "";
+    if (isHost(m, GOOGLE_HOST) || isHost(m, GOOGLE_SHORT) || isHost(m, NAVER_HOST)) return "";
+    return m;
+  }
+
   function googleSearchUrl(s){
     const q = searchTerm(s);
     return q ? `https://www.google.com/search?q=${encodeURIComponent(q + destHint())}` : null;
@@ -3319,12 +3351,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const nv = destIsKorea() ? naverPlaceUrl(s) : "";
     const links = mapLinksInOrder(
       nv ? `<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : "",
-      s.mapUrl ? `<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : "",
+      (() => { const g = googlePlaceUrl(s); return g
+        ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
     );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
       if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
+      const cm = customMapUrl(s);
+      if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
     if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
 
@@ -5421,12 +5456,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const bnv = destIsKorea() ? naverPlaceUrl(s) : "";
     const links = mapLinksInOrder(
       bnv ? `<a class="maplink" href="${esc(bnv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : "",
-      s.mapUrl ? `<a class="maplink" href="${esc(s.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : "",
+      (() => { const g = googlePlaceUrl(s); return g
+        ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
     );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
       if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
       if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
+      const cm = customMapUrl(s);
+      if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
     if (fetchable) links.push(`<button class="maplink" data-getboardphoto="${i}">${icon("camera")}搵張相</button>`);
 
