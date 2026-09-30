@@ -69,7 +69,11 @@
   --accent:#5A9AD4;
 }
 *{box-sizing:border-box;}
-html{-webkit-text-size-adjust:100%;}
+html{
+  -webkit-text-size-adjust:100%;
+  /* the UA takes overscroll-behavior from <html>, not <body> */
+  overscroll-behavior-y:contain;
+}
 body{
   margin:0;
   background:var(--paper);
@@ -665,6 +669,9 @@ section.triplist{margin-bottom:36px;}
   function wirePullToRefresh(){
     const el = $("#ptr");
     if (!el || !("ontouchstart" in window)) return;
+    // a browser tab already has this gesture; ours would be the second spinner
+    if (!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+          || window.navigator.standalone === true)) return;
     const mark = el.querySelector(".ptr-i"), label = el.querySelector(".ptr-t");
     let startY = 0, pulling = false, dist = 0, busy = false;
 

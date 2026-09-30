@@ -142,7 +142,13 @@
 }
 
 *{box-sizing:border-box;}
-html{-webkit-text-size-adjust:100%;}
+html{
+  -webkit-text-size-adjust:100%;
+  /* This has to sit on the root element: the UA propagates overscroll-behavior
+     to the viewport from <html>, not from <body>, so the copy on body below
+     was doing nothing and the browser kept its own pull-to-refresh. */
+  overscroll-behavior-y:contain;
+}
 body{
   margin:0;
   background:var(--paper);
@@ -225,6 +231,7 @@ body{
 .ptr .i{width:15px;height:15px;transform:rotate(90deg);transition:transform .2s;}
 .ptr.ready .i{transform:rotate(-90deg);}
 .ptr.busy .i{transform:none;animation:ptrspin .8s linear infinite;}
+.topbtn.spinning .i{animation:ptrspin .8s linear infinite;}
 @keyframes ptrspin{to{transform:rotate(360deg);}}
 @media (prefers-reduced-motion: reduce){
   .ptr.busy .i{animation:none;}
@@ -1232,6 +1239,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="topbtns" aria-label="行程工具">
         <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
         <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
+        <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
         <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
       </nav>
     </div>
@@ -1436,6 +1444,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const put = (sel, name) => { const el = $(sel); if (el) el.innerHTML = icon(name); };
     put("#btn-home .topbtn-i", "home");
     put("#btn-export .topbtn-i", "share");
+    put("#btn-reload .topbtn-i", "refresh");
     put("#btn-theme .topbtn-i", "contrast");
     put("#btn-boards .dockbtn-i", "pin");
     put("#btn-history .dockbtn-i", "clock");
@@ -6229,6 +6238,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <p class="sec-sub">匯出係即時影一份，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
 
       <div class="exgroup">
+        <div class="exgroup-label">分享</div>
+        <button class="btn wide" id="ex-share">${icon("link")}分享／複製呢個行程嘅連結</button>
+        <p class="exhint">同一條連結，全家人都改得。裝咗落主畫面就冇咗網址列，呢度攞返。</p>
+      </div>
+
+      <div class="exgroup">
         <div class="exgroup-label">畀 AI 畫圖</div>
         <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令入面已經寫明要分日、要有時間同交通、唔准自己作地點。</p>
@@ -6266,6 +6281,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
           btn.textContent = "揀晒下面啲字再自己複製";
         }
       }
+      // Use the system share sheet where there is one — that is how a link
+      // gets into WhatsApp — and fall back to the clipboard, which itself
+      // falls back to a selectable box when the clipboard is blocked.
+      sheet.querySelector("#ex-share").addEventListener("click", async () => {
+        const url = location.href;
+        const title = plain((snap.meta || {}).title) || "我嘅行程";
+        if (navigator.share){
+          try { await navigator.share({ title, url }); return; }
+          catch (e){ if (e && e.name === "AbortError") return; }
+        }
+        copyInto("#ex-share", url, "複製咗連結");
+      });
       sheet.querySelector("#ex-prompt").addEventListener("click", () =>
         copyInto("#ex-prompt", exportAiPrompt(snap), "複製咗，貼落 AI 度"));
       sheet.querySelector("#ex-prep").addEventListener("click", () =>
@@ -7366,6 +7393,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
     setTimeout(() => genBanner(null), 6000);
   }
 
+  // Installed to the home screen there is no address bar: no reload button,
+  // nothing to pull on, and no way to copy the link. Several things below
+  // only make sense there, and one of them — our own pull-to-refresh — is
+  // actively wrong in a browser tab, where it fired alongside Safari's and
+  // the family saw two spinners at once.
+  function isStandalone(){
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || window.navigator.standalone === true;
+  }
+
   // ==================================================================
   // PULL TO REFRESH
   //
@@ -7400,6 +7437,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function wirePullToRefresh(){
     const el = $("#ptr");
     if (!el || !("ontouchstart" in window)) return;
+    // in a tab the browser already has this gesture; two is worse than one
+    if (!isStandalone()) return;
     const mark = el.querySelector(".ptr-i"), label = el.querySelector(".ptr-t");
     let startY = 0, pulling = false, dist = 0, busy = false;
 
@@ -7465,6 +7504,25 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }, { passive: true });
   }
 
+  // A gesture is a nice extra, not a guarantee. Installed to the home screen
+  // there is no browser reload, so there is also a button that cannot be
+  // missed or fumbled — it does exactly what the pull does.
+  function wireReloadButton(){
+    const b = $("#btn-reload");
+    if (!b || !isStandalone()) return;
+    b.hidden = false;
+    let busy = false;
+    b.addEventListener("click", async () => {
+      if (busy) return;
+      busy = true;
+      b.classList.add("spinning");
+      try { flash(await reloadFromServer()); }
+      catch (e){ flash(netMsg(e)); }
+      b.classList.remove("spinning");
+      busy = false;
+    });
+  }
+
   // The service worker is what makes this installable, and what lets the
   // trip open on a phone with no signal. A failure here must never stop the
   // page working, so it is fire-and-forget.
@@ -7511,6 +7569,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     wirePullToRefresh();
+    wireReloadButton();
     if (params.get("new") === "1") runInitialGeneration();
   }
   registerServiceWorker();
