@@ -546,13 +546,15 @@ img{max-width:100%;}
 .maptoggle .chev{display:inline-flex;transition:transform .2s;color:var(--ink-faint);transform:rotate(90deg);}
 .maptoggle[aria-expanded="true"] .chev{transform:rotate(-90deg);}
 .mapbox{
-  height:240px;margin-top:12px;border-radius:var(--r-lg);overflow:hidden;
+  /* 240px of map sat between the day's header and its first stop, on a
+     screen about 700px tall. Enough to orient, not enough to be the page. */
+  height:180px;margin-top:12px;border-radius:var(--r-lg);overflow:hidden;
   border:1px solid var(--rule);background:var(--surface-2);
   /* Leaflet gives its panes z-index up to 1000. Without a stacking context of
      its own the map floats over the sticky nav and the AI sheet. */
   position:relative;z-index:0;isolation:isolate;
 }
-.mapbox.tall{height:310px;}
+.mapbox.tall{height:280px;}
 .mapcap{font-size:11.5px;color:var(--ink-faint);margin:8px 2px 0;line-height:1.6;}
 .mapnote{font-size:12px;margin:9px 2px 0;line-height:1.65;color:var(--ink-soft);}
 .mapnote.warn{color:var(--warn);}
@@ -669,7 +671,11 @@ img{max-width:100%;}
 .notecard.open .notetext{display:none;}
 
 /* a stop */
-.stop{display:grid;grid-template-columns:var(--gutter) 1fr;align-items:start;}
+/* min-width:0 on the stop column: a 1fr grid track keeps min-width:auto,
+   so it will not shrink below its content's min-content width. One
+   white-space:nowrap run inside — the backup strip, a long Korean name —
+   was widening the track to 767px and taking the whole page with it. */
+.stop{display:grid;grid-template-columns:var(--gutter) minmax(0,1fr);align-items:start;}
 .stop-rail{position:relative;align-self:stretch;}
 .stop-rail::before{
   content:"";position:absolute;right:10px;top:0;bottom:0;
@@ -711,7 +717,7 @@ img{max-width:100%;}
    when it is opened for editing or picked in select mode. */
 .stopcard{
   background:transparent;border:1px solid transparent;border-radius:var(--r-lg);
-  margin:0 0 2px 2px;position:relative;
+  margin:0 0 2px 2px;position:relative;min-width:0;
   transition:background-color .15s, border-color .15s;
 }
 .stopcard::after{
@@ -746,9 +752,24 @@ img{max-width:100%;}
 .stopcard.checked{border-color:var(--lc,var(--ink));}
 .stopbody{flex:1 1 auto;min-width:0;}
 .stopname{font-size:15px;font-weight:600;line-height:1.45;margin:0;letter-spacing:-.01em;}
-.stopname .kr{font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:7px;white-space:nowrap;}
+.stopname .kr{font-size:11px;color:var(--ink-faint);font-weight:400;margin-left:7px;}
 .stopname.unnamed{color:var(--ink-faint);font-weight:400;}
-.stopdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.65;margin-top:5px;}
+/* These descriptions are AI-written paragraphs — a hundred-odd characters
+   each — and with fifteen stops in a day they turned one day into a very
+   long scroll. Three lines is enough to know whether you care; the rest is
+   one tap away. The "更多" button is only revealed for descriptions that
+   are actually being cut (measured after render), so short ones stay clean. */
+.stopdesc{
+  font-size:12.5px;color:var(--ink-soft);line-height:1.65;margin-top:5px;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
+}
+.stopdesc.open{display:block;-webkit-line-clamp:unset;}
+.descmore{
+  display:none;margin-top:3px;padding:2px 0;border:0;background:none;cursor:pointer;
+  font-family:inherit;font-size:11.5px;font-weight:500;color:var(--ink-faint);
+}
+.descmore.show{display:inline-block;}
+.descmore:hover{color:var(--ink);}
 .stopcard .chiprow{margin-top:8px;}
 
 /* notes attached to a stop: an indent and a rule, not a coloured slab */
@@ -1400,7 +1421,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     selectMode: null,               // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
     openLog: new Set(),            // "boardId:logIndex" of ailog entries expanded beyond the latest
     altsOpen: new Set(),           // "dayId:unitIndex" whose backup picks are unfolded
-    foldOpen: new Set()            // which overview groups the reader has opened
+    foldOpen: new Set(),           // which overview groups the reader has opened
+    descOpen: new Set()            // stops whose description the reader expanded
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
 
@@ -2505,6 +2527,36 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = plain(m.title || "").trim();
     document.title = t ? `${t} · DumboFly` : "DumboFly";
   }
+  // A description, cut to three lines until asked otherwise.
+  function descHtml(s, key){
+    if (!s.desc) return "";
+    const open = state.descOpen.has(key);
+    return `<div class="stopdesc${open ? " open" : ""}" data-desckey="${esc(key)}">${esc(s.desc)}</div>
+      <button class="descmore${open ? " show" : ""}" data-descmore="${esc(key)}">${open ? "收埋" : "更多"}</button>`;
+  }
+
+  // Whether a paragraph is actually being cut depends on the column width and
+  // the reader's text size, so it is measured rather than guessed from a
+  // character count.
+  function markClampedDescs(){
+    document.querySelectorAll(".stopdesc").forEach(el => {
+      const btn = el.nextElementSibling;
+      if (!btn || !btn.classList.contains("descmore")) return;
+      if (el.classList.contains("open")) return;          // already showing all
+      btn.classList.toggle("show", el.scrollHeight > el.clientHeight + 2);
+    });
+    document.querySelectorAll("[data-descmore]").forEach(b => {
+      if (b.dataset.wired) return;
+      b.dataset.wired = "1";
+      b.addEventListener("click", e => {
+        e.preventDefault(); e.stopPropagation();
+        const k = b.dataset.descmore;
+        if (state.descOpen.has(k)) state.descOpen.delete(k); else state.descOpen.add(k);
+        render();
+      });
+    });
+  }
+
   function render(){
     renderBrandmark();
     renderLines();
@@ -2512,9 +2564,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
     const board = boardById(state.view);
-    if (board){ app.innerHTML = boardHtml(board); wireBoard(board); return; }
+    if (board){ app.innerHTML = boardHtml(board); wireBoard(board); markClampedDescs(); return; }
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
+    markClampedDescs();
   }
 
   // ==================================================================
@@ -3289,7 +3342,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               ${thumb}
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
-                ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
+                ${descHtml(s, day.id + ":" + i)}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
             </div>
@@ -5386,7 +5439,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               ${thumb}
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
-                ${s.desc ? `<div class="stopdesc">${esc(s.desc)}</div>` : ""}
+                ${descHtml(s, board.id + ":" + i)}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
             </div>
