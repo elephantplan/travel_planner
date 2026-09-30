@@ -5974,6 +5974,112 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return L.join("\n");
   }
 
+  // The second diagram: everything on the overview that is NOT the route —
+  // weather, what to wear, where you sleep, how you pay for transport, what
+  // the access marks mean. It is the half of the trip nobody remembers until
+  // they are standing at the airport, and it wants a reference card rather
+  // than a timeline, so it gets its own brief.
+  //
+  // Same discipline as the itinerary prompt: hand over the facts, forbid
+  // invention, and say plainly what would make the picture cluttered.
+  function exportPrepPrompt(snap){
+    const m = snap.meta || {};
+    const L = [];
+    const line = (x) => { const t = plain(x); if (t) L.push(t); };
+
+    L.push("你係一個資訊圖表設計師。下面係我一個旅行行程嘅「出發前必讀」資料，請幫我整一張清楚易睇嘅資料卡。");
+    L.push("");
+    L.push("【要求】");
+    L.push("1. 唔係行程表，唔好畫逐日去邊度。呢張係出發前要記住嘅嘢。");
+    L.push("2. 分開幾個清楚區塊，每區一個標題：天氣、點著衫、住宿、交通、無障礙，同埋我下面有俾你嘅其他項目。冇資料嘅區塊就唔好畫。");
+    L.push("3. 天氣要做一行一日：日期、日間最高、早晚最低、概況。溫差係重點，要一眼睇得出。");
+    L.push("4. 點著衫同其他列點，一點一行，唔好寫成一大段。");
+    L.push("5. 無障礙標記要用返綠、黃、紅三隻色，順序同我下面寫嘅一樣。");
+    L.push("6. 只可以用下面俾你嘅資料。唔好自己加建議、加數字、加地點，亦都唔好自己作天氣。");
+    L.push("7. 用色克制，留白要夠，字要大，手機睇得清楚。寧願疏啲都唔好逼到密密麻麻。");
+    L.push("8. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案）。");
+    L.push("");
+    L.push("【資料】");
+    L.push(`行程名：${plain(m.title) || "我嘅行程"}`);
+    if (m.dateStart && m.dateEnd) L.push(`日期：${m.dateStart} 至 ${m.dateEnd}`);
+    if (plain(m.destinationLocal)) L.push(`目的地：${plain(m.destinationLocal)}`);
+    L.push("");
+
+    const rows = snap.weatherRows || [];
+    if (rows.length && !isSectionHidden(snap, "weather")){
+      L.push(`## ${plain(weatherHeadingLabel(m)) || "天氣"}`);
+      L.push("（歷年同期平均）");
+      rows.forEach(r => L.push(`${plain(r.date)}｜日高 ${plain(r.hi)}｜晨低 ${plain(r.lo)}｜${plain(r.note)}`));
+      L.push("");
+    }
+
+    const wear = snap.clothing || [];
+    if (wear.length && !isSectionHidden(snap, "clothing")){
+      L.push("## 點著衫");
+      wear.forEach(c => line("・" + plain(c.html)));
+      L.push("");
+    }
+
+    const stays = snap.stays || [];
+    if (stays.length && !isSectionHidden(snap, "acc")){
+      L.push("## 住宿");
+      stays.forEach(st => {
+        L.push(`${plain(stayRangeLabel(snap, st))}｜${plain(st.name) || "未填"}`);
+        line("  " + plain(st.desc));
+        line("  " + plain(st.hoursChip));
+        line("  " + plain(st.warning));
+      });
+      L.push("");
+    }
+
+    const t = snap.transitInfo;
+    if (t){
+      L.push("## 交通");
+      (t.cards || []).forEach(c => L.push(
+        `${plain(c.name)}${c.kr ? `（${plain(c.kr)}）` : ""}｜${plain(c.price)}${c.pick ? "｜建議" : ""}` +
+        (plain(c.good) ? `｜好處：${plain(c.good)}` : "") +
+        (plain(c.bad) ? `｜要注意：${plain(c.bad)}` : "")));
+      (t.fares || []).forEach(f => L.push(`${plain(f.what)}｜${plain(f.cost)}${plain(f.note) ? `｜${plain(f.note)}` : ""}`));
+      if (t.arrival){
+        line(`抵埗：${plain(t.arrival.title)}`);
+        line(`  ${plain(t.arrival.body)}`);
+      }
+      L.push("");
+    }
+
+    const legend = snap.accessLegend || [];
+    if (legend.length && !isSectionHidden(snap, "access")){
+      L.push("## 無障礙標記");
+      L.push(`綠：${plain(legend[0])}`);
+      L.push(`黃：${plain(legend[1])}`);
+      L.push(`紅：${plain(legend[2])}`);
+      line(plain(snap.elevatorTip));
+      L.push("");
+    }
+
+    if (plain(snap.foliageNote) && !isSectionHidden(snap, "foliage")){
+      L.push("## 季節提示");
+      L.push(plain(snap.foliageNote));
+      L.push("");
+    }
+    if (plain(snap.scheduleSwapNote)){
+      L.push("## 日程調動");
+      L.push(plain(snap.scheduleSwapNote));
+      L.push("");
+    }
+
+    (snap.sections || []).forEach(sec => {
+      const title = plain(sec.title);
+      if (!title) return;
+      L.push(`## ${title}`);
+      (sec.lines || []).forEach(x => line("・" + plain(x)));
+      (sec.links || []).forEach(x => line(`・${plain(x.name)}：${x.url}`));
+      L.push("");
+    });
+
+    return L.join("\n");
+  }
+
   // a standalone page that prints properly — the app itself only ever shows
   // one day at a time, so printing the app would print one day
   function exportHtmlDoc(snap){
@@ -6085,9 +6191,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <p class="sec-sub">匯出係即時影一份，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
 
       <div class="exgroup">
-        <div class="exgroup-label">畀 AI 畫行程圖</div>
-        <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}複製指令</button>
+        <div class="exgroup-label">畀 AI 畫圖</div>
+        <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令入面已經寫明要分日、要有時間同交通、唔准自己作地點。</p>
+        <button class="btn wide" id="ex-prep">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
+        <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同樣唔准 AI 自己作。</p>
       </div>
 
       <div class="exgroup">
@@ -6122,6 +6230,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       }
       sheet.querySelector("#ex-prompt").addEventListener("click", () =>
         copyInto("#ex-prompt", exportAiPrompt(snap), "複製咗，貼落 AI 度"));
+      sheet.querySelector("#ex-prep").addEventListener("click", () =>
+        copyInto("#ex-prep", exportPrepPrompt(snap), "複製咗，貼落 AI 度"));
       sheet.querySelector("#ex-copy").addEventListener("click", () =>
         copyInto("#ex-copy", exportText(snap), "複製咗"));
       sheet.querySelector("#ex-txt").addEventListener("click", () =>
