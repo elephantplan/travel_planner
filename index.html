@@ -68,7 +68,21 @@
   --danger:#E2705A; --danger-bg:#261815;
   --accent:#5A9AD4;
 }
+:root[data-theme="navy"]{
+  --paper:#0C1420; --surface:#141E2E; --surface-2:#1B273A;
+  --ink:#E8EEF7; --ink-soft:#94A6C0; --ink-faint:#6B7F9B;
+  --rule:#233047; --rule-soft:#192334;
+  --shadow-1:0 1px 2px rgba(0,0,0,.45);
+  --shadow-2:0 12px 36px -16px rgba(0,0,0,.9), 0 2px 8px rgba(0,0,0,.5);
+  --ok:#4FBE8C; --warn:#E8B44A;
+  --danger:#E87760; --danger-bg:#2B1A17;
+  --accent:#6FB4EE;
+}
 *{box-sizing:border-box;}
+/* An author rule like .topbtn{display:inline-flex} outranks the UA's
+   [hidden]{display:none}, so anything hidden by attribute stayed on screen.
+   The reload button, meant for installed mode only, was showing everywhere. */
+[hidden]{display:none !important;}
 html{
   -webkit-text-size-adjust:100%;
   /* the UA takes overscroll-behavior from <html>, not <body> */
@@ -384,9 +398,24 @@ section.triplist{margin-bottom:36px;}
   const $ = sel => document.querySelector(sel);
 
   // ---------- theme (shares the same toggle/localStorage key as trip.html) ----------
+  // Shares the stored preference with trip.html, so the cycle and the names
+  // have to match it exactly or the two pages disagree about what you picked.
+  const THEMES = ["auto", "light", "dark", "navy"];
+  const THEME_BAR = { light:"#F1F3EF", dark:"#0E1211", navy:"#0C1420" };
+  function setThemeBar(t){
+    let m = document.getElementById("theme-bar");
+    if (t === "auto" || !THEME_BAR[t]){ if (m) m.remove(); return; }
+    if (!m){
+      m = document.createElement("meta");
+      m.id = "theme-bar"; m.name = "theme-color";
+      document.head.insertBefore(m, document.head.firstChild);
+    }
+    m.content = THEME_BAR[t];
+  }
   function applyTheme(t){
     if (t === "auto") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", t);
+    setThemeBar(t);
     localStorage.setItem("seoul_theme", t);
   }
   // the chrome's icons ship as empty spans so the SVG lives in one place
@@ -400,7 +429,7 @@ section.triplist{margin-bottom:36px;}
   applyTheme(localStorage.getItem("seoul_theme") || "auto");
   $("#btn-theme").addEventListener("click", () => {
     const cur = localStorage.getItem("seoul_theme") || "auto";
-    applyTheme(cur === "auto" ? "light" : cur === "light" ? "dark" : "auto");
+    applyTheme(THEMES[(THEMES.indexOf(cur) + 1 + THEMES.length) % THEMES.length]);
   });
 
   // ---------- AI edge function ----------
