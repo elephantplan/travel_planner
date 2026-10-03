@@ -1114,6 +1114,8 @@ img{max-width:100%;}
 .secedit .i{width:15px;height:15px;}
 .secedit:hover,.secedit:focus-visible{opacity:1;color:var(--ink);background:var(--surface-2);}
 .sectools{display:inline-flex;align-items:center;}
+/* a block whose fold head already carries its name keeps only the tools */
+.foldtools{display:flex;justify-content:flex-end;margin:-6px -4px 2px;}
 .secdel:hover,.secdel:focus-visible{color:var(--danger);}
 .fieldhint{font-size:11.5px;line-height:1.65;color:var(--ink-faint);margin:0 0 8px;}
 
@@ -1460,7 +1462,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     selectMode: null,               // { dayId, selected:Set<unitIndex> } while multi-selecting stops to move
     openLog: new Set(),            // "boardId:logIndex" of ailog entries expanded beyond the latest
     altsOpen: new Set(),           // "dayId:unitIndex" whose backup picks are unfolded
-    foldOpen: new Set(),           // which overview groups the reader has opened
+    // 住宿 starts open: it is the one line on this page somebody reads every
+    // evening, so it should not cost a tap. The rest start shut.
+    foldOpen: new Set(["stay"]),   // which overview groups are open
     descOpen: new Set()            // stops whose description the reader expanded
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
@@ -2307,9 +2311,28 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // and thin transit data — Naver is what people actually navigate with. So
   // Naver only appears for Korean destinations instead of cluttering every
   // trip with a button that would be useless in Tokyo or Taipei.
+  //
+  // Which alphabet the destination got typed in is not a fact about the trip.
+  // This used to demand Hangul in `destinationLocal`, so the day that field
+  // read 「首爾」 instead of 「서울」, every Naver button on every page vanished
+  // at once — the map people there actually navigate with, swapped for the one
+  // that can't route them, over spelling. The itinerary is the better witness:
+  // Korean stops carry their Korean names, and no Tokyo trip has a dozen.
+  const KOREA_WORDS = /韓國|韩国|南韓|首爾|首尔|漢城|釜山|濟州|济州|仁川|大邱|光州|慶州|庆州|江原|束草|全州|安東|安东|korea|seoul|busan|jeju|incheon|daegu|gwangju|gyeongju|pusan/i;
+  function hasHangul(t){ return /[가-힣]/.test(String(t || "")); }
   function destIsKorea(){
-    const m = (state.snapshot && state.snapshot.meta) || {};
-    return /[가-힯]/.test(String(m.destinationLocal || ""));
+    const snap = state.snapshot;
+    if (!snap) return false;
+    const m = snap.meta || {};
+    const said = [m.destinationLocal, m.title, m.eyebrow].map(x => String(x || "")).join(" ");
+    if (hasHangul(said) || KOREA_WORDS.test(said)) return true;
+    // Three is the line between "this trip is in Korea" and "this trip has one
+    // Korean restaurant in it", which is a real thing a Tokyo itinerary has.
+    let n = 0;
+    for (const d of (snap.days || []))
+      for (const it of (d.items || []))
+        if (hasHangul(it && it.kr) && ++n >= 3) return true;
+    return false;
   }
   function hasCoord(s){ return !!s && Number.isFinite(s.lat) && Number.isFinite(s.lng); }
   // a leg's mode decides how the map app should plan it
@@ -2336,6 +2359,30 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function naverPlaceUrl(s){
     const q = plain(s && s.kr) || plain(s && s.title);
     return q ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : "";
+  }
+
+  // 「酒店出發」 is the hotel written down as a schedule line: no place id, no
+  // Korean name, nothing a map can look up except the label itself — which is
+  // exactly what the buttons were handing over, so tapping one searched for the
+  // words 「酒店出發」 and landed wherever Google felt like putting them.
+  //
+  // A row like that stands for the day's accommodation, and the trip already
+  // knows that hotel's name and coordinates. Point the buttons there. Rows that
+  // are neither a place nor the hotel (「自由漫遊／拍照時光」) get no buttons at
+  // all, which is what they should have had from the start.
+  //
+  // refreshTransit() has used the same substitution for its Directions calls
+  // since the day a deleted mid-day stop sent a leg off from the wrong origin;
+  // `isFirst` keeps the two reading the same row the same way.
+  const HOTEL_ROW = /酒店|住宿|旅館|旅馆|民宿|hotel/i;
+  function mapSubject(day, s, isFirst){
+    if (!s) return null;
+    if (isRealPlace(s)) return s;
+    if (!(HOTEL_ROW.test(plain(s.title) || "") || isFirst)) return null;
+    const st = day && stayForDay(state.snapshot, day);
+    if (!st || !plain(st.name)) return null;
+    return { title: st.name, mapUrl: st.mapUrl || "",
+             lat: Number(st.lat), lng: Number(st.lng) };
   }
   // In Korea people navigate with Naver, so it leads and Google follows;
   // everywhere else the order is the other way round. Both are still offered —
@@ -2417,7 +2464,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // silently dropping stops.
   const MAX_WAYPOINTS = 8;
   function dayRouteLinksHtml(day){
-    const stops = toUnits(day.items).map(u => u.stop).filter(s => s && hasCoord(s));
+    const units = toUnits(day.items);
+    const first = firstStopUnit(units);
+    const stops = units
+      .map((u, j) => mapSubject(day, u.stop, j === first))
+      .filter(s => s && hasCoord(s));
     if (stops.length < 2) return "";
     const ref = s => `${s.lat},${s.lng}`;
     const origin = stops[0], dest = stops[stops.length - 1];
@@ -2691,7 +2742,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // 「出發前必讀」入面嗰4嚿——住宿/天氣/點著衫/無障礙——用戶可以拉住 ⠿ 自己
   // 排先後，順序存喺 snap.homeOrder。新裝／舊快照冇呢個欄嘅話，用返而家嘅
   // 預設次序；如果之後加多種類，未存過嘅key會自動補喺尾，唔會冇咗。
-  const HOME_ORDER_KEYS = ["acc", "weather", "clothing", "access"];
+  // 住宿 used to be one of these. It is now a section of its own — see
+  // stayFoldHtml — so a saved order that still lists it simply drops the key.
+  const HOME_ORDER_KEYS = ["weather", "clothing", "access"];
   function homeOrder(snap){
     const saved = Array.isArray(snap.homeOrder) ? snap.homeOrder.filter(k => HOME_ORDER_KEYS.includes(k)) : [];
     const rest = HOME_ORDER_KEYS.filter(k => !saved.includes(k));
@@ -2720,23 +2773,48 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
     return `${sm} 月 — ${+de[1]} 月天氣`;
   }
-  function homeBlockHtml(d, key){
-    if (isSectionHidden(d, key)) return "";
-    if (key === "acc"){
-      return `<div class="hsblock" data-hskey="acc">
-        <div class="k">住宿${secTools("acc")}${HOME_DRAG_HANDLE}</div>
-        ${(d.stays || []).length ? (d.stays || []).map(st => `
+  // 住宿 used to sit inside 行前準備, between the weather table and the packing
+  // list — the one wrong place for it. A hotel is not something you read once
+  // before leaving; it is the address you want at the end of every day and the
+  // one you hand to a taxi driver. So it is its own section now, open by
+  // default, with the name in the summary line so it reads without a tap.
+  //
+  // The map links go through the same builders the stops use, which means a
+  // Korean trip gets its Naver button here too — the place you most need to
+  // navigate back to was the one place still offering only a stored link.
+  function stayFoldHtml(d){
+    if (isSectionHidden(d, "acc")) return "";
+    const stays = d.stays || [];
+    // the fold's own head already says 住宿, so the block keeps only its tools
+    const body = `<div class="hsblock" data-hskey="acc">
+        <div class="foldtools">${secTools("acc")}</div>
+        ${stays.length ? stays.map(st => {
+          const subj = { title: st.name || "", mapUrl: st.mapUrl || "" };
+          const links = mapLinksInOrder(
+            (() => { const n = destIsKorea() ? naverPlaceUrl(subj) : ""; return n
+              ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : ""; })(),
+            (() => { const g = googlePlaceUrl(subj); return g
+              ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
+          );
+          return `
           <div class="stayrow">
             <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
             <div class="v">${esc(st.name || "未填")}</div>
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${st.mapUrl ? `<div class="chiprow"><a class="maplink" href="${esc(st.mapUrl)}" target="_blank" rel="noopener">${icon("pin")}喺地圖開啟</a></div>` : ""}
-          </div>`).join("")
+            ${links.length ? `<div class="chiprow">${links.join("")}</div>` : ""}
+          </div>`; }).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
       </div>`;
-    }
+    const names = stays.map(st => plain(st.name)).filter(Boolean);
+    const hint = names.length > 1 ? `${names[0]} 等 ${names.length} 間`
+               : names.length === 1 ? names[0] : "仲未填";
+    return foldHtml("stay", "住宿", hint, body);
+  }
+
+  function homeBlockHtml(d, key){
+    if (isSectionHidden(d, key)) return "";
     if (key === "weather"){
       return `<div class="hsblock" data-hskey="weather">
         <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}${HOME_DRAG_HANDLE}</h3>
@@ -2957,7 +3035,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${lines}
       </nav>
 
-      ${foldHtml("prep", "行前準備", "住宿・天氣・衣著・無障礙", prep)}
+      ${stayFoldHtml(d)}
+      ${foldHtml("prep", "行前準備", "天氣・衣著・交通・無障礙", prep)}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
       ${foldHtml("extra", "自己加嘅資料", "", customSectionsHtml(d))}
       ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
@@ -3366,11 +3445,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     let segLinks = "";
     if (showSeg && s){
       const us = toUnits(day.items);
-      let prev = null;
-      for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; break; }
+      let prev = null, prevIdx = -1;
+      for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; prevIdx = j; break; }
+      // the leg's origin is usually the day's 「酒店出發」 row, so it needs the
+      // same substitution as the stop card or the route starts from a search
+      const from = mapSubject(day, prev, prevIdx === firstStop);
+      const to = mapSubject(day, s, i === firstStop);
       const mode = segMode(u.seg);
-      const g = gmapsDirUrl(prev, s, mode);
-      const n = destIsKorea() ? naverDirUrl(prev, s, mode) : "";
+      const g = (from && to) ? gmapsDirUrl(from, to, mode) : "";
+      const n = (from && to && destIsKorea()) ? naverDirUrl(from, to, mode) : "";
       const parts = mapLinksInOrder(
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 路線</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}Google 路線</a>` : "",
@@ -3408,14 +3491,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
       .join("");
 
-    // quick outbound links — only for stops that are a real, named place
-    // (logistics rows like "酒店出發" have no mapUrl and get none of this)
+    // quick outbound links — for the place this row actually stands for, which
+    // for a logistics line like 「酒店出發」 is the day's hotel, not its label.
     // In Korea, Google Maps can find a place but can't route you to it — so a
     // Korean trip leads with the map people there actually use.
-    const nv = destIsKorea() ? naverPlaceUrl(s) : "";
+    const subj = mapSubject(day, s, i === firstStop);
+    const nv = (subj && destIsKorea()) ? naverPlaceUrl(subj) : "";
     const links = mapLinksInOrder(
       nv ? `<a class="maplink" href="${esc(nv)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : "",
-      (() => { const g = googlePlaceUrl(s); return g
+      (() => { const g = subj ? googlePlaceUrl(subj) : ""; return g
         ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
     );
     if (s.mapUrl){
