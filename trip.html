@@ -2356,9 +2356,25 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const leg = s => `${s.lng},${s.lat},${encodeURIComponent(plain(s.kr) || plain(s.title) || "")},,`;
     return `https://map.naver.com/p/directions/${leg(from)}/${leg(to)}/-/${naverModeOf(mode)}`;
   }
+  // Naver's search index is Korean text. Hand it a romanised address —
+  // "562-34 Yeonnam-dong, Mapo-gu" — and it returns a flat "No results found",
+  // which is exactly what the hotel's Naver button did: a stay had nowhere to
+  // put a Korean name, so the only thing left to search with was the English
+  // address somebody had pasted into the name field.
+  //
+  // Hangul always works. Anything with non-ASCII in it (the Chinese titles the
+  // rest of this trip is written in) has been finding places well enough to
+  // leave alone. Pure ASCII is the case with evidence against it, so rather
+  // than offer a button that is guaranteed to fail, offer no button — Google,
+  // which reads romanisation fine, is right beside it.
+  function naverSearchable(q){
+    const t = String(q || "").trim();
+    if (!t) return false;
+    return !/^[\x20-\x7E]+$/.test(t);
+  }
   function naverPlaceUrl(s){
     const q = plain(s && s.kr) || plain(s && s.title);
-    return q ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : "";
+    return naverSearchable(q) ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : "";
   }
 
   // 「酒店出發」 is the hotel written down as a schedule line: no place id, no
@@ -2381,7 +2397,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!(HOTEL_ROW.test(plain(s.title) || "") || isFirst)) return null;
     const st = day && stayForDay(state.snapshot, day);
     if (!st || !plain(st.name)) return null;
-    return { title: st.name, mapUrl: st.mapUrl || "",
+    return { title: st.name, kr: st.kr || "", mapUrl: st.mapUrl || "",
              lat: Number(st.lat), lng: Number(st.lng) };
   }
   // In Korea people navigate with Naver, so it leads and Google follows;
@@ -2789,13 +2805,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const body = `<div class="hsblock" data-hskey="acc">
         <div class="foldtools">${secTools("acc")}</div>
         ${stays.length ? stays.map(st => {
-          const subj = { title: st.name || "", mapUrl: st.mapUrl || "" };
+          const subj = { title: st.name || "", kr: st.kr || "", mapUrl: st.mapUrl || "" };
           const links = mapLinksInOrder(
             (() => { const n = destIsKorea() ? naverPlaceUrl(subj) : ""; return n
               ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 地圖</a>` : ""; })(),
             (() => { const g = googlePlaceUrl(subj); return g
               ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
           );
+          // A suppressed Naver button needs to say why, or it just looks like
+          // the feature is broken — which is how the romanised address read.
+          const wantNaver = destIsKorea() && !naverSearchable(plain(st.kr) || plain(st.name));
           return `
           <div class="stayrow">
             <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
@@ -2804,6 +2823,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
             ${links.length ? `<div class="chiprow">${links.join("")}</div>` : ""}
+            ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
           </div>`; }).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
       </div>`;
@@ -4815,6 +4835,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         <div class="field"><label>住邊度</label>
           <input class="input" data-sf="name" value="${esc(s.name||"")}" placeholder="酒店／Airbnb 名或地址"></div>
+        <div class="field"><label>韓文名／韓文地址</label>
+          <input class="input" data-sf="kr" value="${esc(s.kr||"")}" placeholder="例：서울 마포구 연남동 562-34">
+          <p class="fieldhint">Naver 淨係搵到韓文。英文拼音地址（Yeonnam-dong…）喺 Naver 係搵唔到嘅，所以冇填呢格就只會出 Google 掣。喺 Airbnb／酒店確認信度複製韓文地址貼落嚟就得。</p></div>
         <div class="field"><label>由邊日住到邊日</label>
           <div class="stayrange">
             <select class="input" data-sf="from">${dayOptions(s.from)}</select>
