@@ -963,6 +963,7 @@ img{max-width:100%;}
 }
 .updatebar-t{font-weight:600;}
 .updatebar-a{opacity:.72;}
+.addgroup{margin-top:18px;border-style:dashed;}
 .buildstamp{margin-top:10px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);}
 
 .dock{
@@ -1335,7 +1336,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-05-01";
+  const BUILD = "2026-10-05-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3132,10 +3133,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
       ${stayFoldHtml(d)}
       ${foldHtml("prep", "行前準備", "天氣・衣著・交通・無障礙", prep)}
+      ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
       ${foldHtml("extra", "自己加嘅資料", "", customSectionsHtml(d))}
       ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
       ${foldHtml("hidden", "隱藏咗嘅段落", "", hiddenSectionsHtml(d))}
+
+      <button class="btn wide addgroup" id="addgroup">＋ 加一個大段落</button>
 
       <footer>
         <div class="fbrand">${esc(m.title || "我嘅行程")}</div>
@@ -3202,13 +3206,34 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // belongs beside them rather than a fold further down. So a section now says
   // where it lives. Anything written before this defaults to where it already
   // was, so nothing moves on its own.
-  function sectionWhere(s){ return (s && s.where === "prep") ? "prep" : "extra"; }
+  // 行前準備 and 自己加嘅資料 were the only two places a section could go, and
+  // that was an arbitrary limit: 「交通點畀錢」 is itself a block of this kind,
+  // it just happened to be one the app shipped with. A trip can now carry its
+  // own top-level sections — named, foldable, and holding as many sections as
+  // the family wants to put in them.
+  function userGroups(d){ return Array.isArray(d && d.groups) ? d.groups : []; }
+  function groupById(d, id){ return userGroups(d).find(g => g.id === id) || null; }
+  // A section remembers a group by id. If that group is later deleted the id
+  // means nothing, and the section must fall back somewhere visible rather
+  // than disappear into a fold that no longer exists.
+  function sectionWhere(d, s){
+    const w = String((s && s.where) || "extra");
+    if (w === "prep" || w === "extra") return w;
+    return groupById(d, w) ? w : "extra";
+  }
+  function whereOptions(d){
+    return [
+      { value:"prep", label:"行前準備（同天氣、著衫擺埋一齊）" },
+      ...userGroups(d).map(g => ({ value:g.id, label:(g.title || "未命名") + "（自己開嘅）" })),
+      { value:"extra", label:"自己加嘅資料（主頁下面）" },
+    ];
+  }
   // `data-usec` is the index into d.sections, NOT the position in this list —
   // the edit and delete buttons address the real array, and a filtered list
   // would otherwise point them at the wrong section.
   function customSectionRows(d, where){
     const all = Array.isArray(d.sections) ? d.sections : [];
-    const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(x.s) === where);
+    const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
     return `
       <div class="usecorder" data-usecorder="${where}">
       ${rows.length ? rows.map(({ s, i }) => `
@@ -3248,12 +3273,82 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </section>`;
   }
 
-  function blankSection(where){ return { icon:"", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false, where: where === "prep" ? "prep" : "extra" }; }
+  function whereLabel(d, where){
+    if (where === "prep") return "行前準備";
+    const g = groupById(d, where);
+    return g ? (g.title || "未命名") : "自己加嘅資料";
+  }
+  // A top-level section the family made themselves. Its body is the same list
+  // of sections every other group holds — the only thing that makes it "big"
+  // is that it gets its own fold on the overview, with its own name.
+  function groupFoldHtml(d, g){
+    const body = `
+      <div class="foldtools">
+        <button class="secedit" data-groupedit="${esc(g.id)}" title="改名" aria-label="改名">${icon("pencil")}</button>
+        <button class="secedit secdel" data-groupdel="${esc(g.id)}" title="刪走呢個大段落" aria-label="刪走呢個大段落">${icon("trash")}</button>
+      </div>
+      ${customSectionRows(d, g.id)}`;
+    return foldHtml("g:" + g.id, g.title || "未命名", g.hint || "", body);
+  }
+  function openGroupEditor(id){
+    const d = state.snapshot;
+    if (!Array.isArray(d.groups)) d.groups = [];
+    const g = id ? groupById(d, id) : null;
+    if (id && !g) return;
+    openEditSheet(g ? "改「" + (g.title || "未命名") + "」" : "加一個大段落",
+      "大段落係主頁上面自己一個摺疊區，入面可以放幾多個 section 都得 —— 就好似「行前準備」咁。", [
+        { key:"title", label:"名", type:"text", value: g ? (g.title || "") : "",
+          placeholder:"例如：出發前搞掂佢、交通、手信" },
+        { key:"hint", label:"摺埋嗰陣旁邊嗰句（可以留空）", type:"text", value: g ? (g.hint || "") : "",
+          placeholder:"例如：入境卡・換錢・上網卡" },
+      ], async out => {
+        const title = out.title || "未命名";
+        if (g){
+          g.title = title; g.hint = out.hint || "";
+          render();
+          await saveNow(`改咗大段落：${title}`);
+        } else {
+          const ng = { id: "g" + Date.now().toString(36), title, hint: out.hint || "" };
+          d.groups.push(ng);
+          state.foldOpen.add("g:" + ng.id);      // you just made it; it opens
+          render();
+          await saveNow(`加咗一個大段落：${title}`);
+          flash("加好喇，可以喺入面加 section");
+        }
+      });
+  }
+  // Deleting the box must not delete what was in it. Its sections go back to
+  // 自己加嘅資料, where they are still on the page and still editable.
+  async function deleteGroup(id){
+    const d = state.snapshot;
+    const g = groupById(d, id);
+    if (!g) return;
+    const kept = (d.sections || []).filter(s => String(s.where || "") === id);
+    const msg = kept.length
+      ? `刪走「${g.title || "呢個大段落"}」？入面 ${kept.length} 個 section 會搬返落「自己加嘅資料」，唔會冇咗。`
+      : `刪走「${g.title || "呢個大段落"}」？`;
+    if (!confirm(msg)) return;
+    kept.forEach(s => { s.where = "extra"; });
+    d.groups = userGroups(d).filter(x => x.id !== id);
+    state.foldOpen.delete("g:" + id);
+    render();
+    await saveNow(`刪咗大段落：${g.title || "未命名"}`);
+  }
+  function wireGroups(){
+    document.querySelectorAll("[data-groupedit]").forEach(b =>
+      b.addEventListener("click", e => { e.stopPropagation(); openGroupEditor(b.dataset.groupedit); }));
+    document.querySelectorAll("[data-groupdel]").forEach(b =>
+      b.addEventListener("click", e => { e.stopPropagation(); deleteGroup(b.dataset.groupdel); }));
+    const add = $("#addgroup");
+    if (add) add.addEventListener("click", () => openGroupEditor(null));
+  }
+
+  function blankSection(where){ return { icon:"", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false, where: where || "extra" }; }
   // `from`/`to` are positions within ONE group, so they are mapped back onto
   // that group's own slots in d.sections — the other group never moves.
   async function reorderCustomSections(snap, where, from, to){
     const all = Array.isArray(snap.sections) ? snap.sections : [];
-    const slots = all.map((s, i) => i).filter(i => sectionWhere(all[i]) === where);
+    const slots = all.map((s, i) => i).filter(i => sectionWhere(snap, all[i]) === where);
     if (from < 0 || from >= slots.length || to < 0 || to >= slots.length) return;
     const order = slots.slice();
     const [moved] = order.splice(from, 1);
@@ -3264,10 +3359,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     await saveNow("調整咗自己加嘅 section 次序");
   }
 
-  const WHERE_OPTIONS = [
-    { value:"prep",  label:"行前準備（同天氣、著衫擺埋一齊）" },
-    { value:"extra", label:"自己加嘅資料（主頁下面）" },
-  ];
   function openSectionEditor(idx, where){
     const d = state.snapshot;
     if (!Array.isArray(d.sections)) d.sections = [];
@@ -3284,7 +3375,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         { key:"topic", label:"AI 更新用嘅題目",
           hint:"撳嗰粒「問 AI 攞最新資料」嗰陣，會攞呢個題目再問一次 AI。留空就用返標題。",
           type:"text", value:s.topic || "", placeholder:"例如：手信買咩好" },
-        { key:"where", label:"擺喺邊", type:"select", options: WHERE_OPTIONS, value: sectionWhere(s) },
+        { key:"where", label:"擺喺邊", type:"select", options: whereOptions(d), value: sectionWhere(d, s) },
       ], async out => {
         const links = (out.links || []).map(row => {
           const parts = String(row).split("|");
@@ -3295,7 +3386,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const next = Object.assign({}, s, {
           icon: out.icon || "", title: out.title || "未命名", sub: out.sub || "",
           lines: out.lines || [], links, topic: out.topic || "",
-          where: out.where === "prep" ? "prep" : "extra",
+          where: out.where || "extra",
         });
         if (idx == null) d.sections.push(next); else d.sections[idx] = next;
         render();
@@ -3335,11 +3426,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const d = state.snapshot;
         if (!Array.isArray(d.sections)) d.sections = [];
         d.sections.push(Object.assign(blankSection(where), r.section,
-          { source:"ai", topic:t, aiRefresh:true, where: where === "prep" ? "prep" : "extra" }));
+          { source:"ai", topic:t, aiRefresh:true, where: where || "extra" }));
         closeLayer();
         render();
         await saveNow(`AI 加咗一個 section：${r.section.title || t}`);
-        flash(where === "prep" ? "加咗落行前準備，可以再改" : "加咗喺主頁下面，可以再改");
+        flash("加咗落「" + whereLabel(state.snapshot, where) + "」，可以再改");
       });
     });
   }
@@ -3429,6 +3520,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       render();
     }));
     wireCustomSections();
+    wireGroups();
     wireLiveChecks();
     wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
       (from, to) => reorderHomeBlocks(state.snapshot, from, to));
