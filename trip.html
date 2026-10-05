@@ -950,6 +950,21 @@ img{max-width:100%;}
 .photogrid img:active{opacity:.75;}
 
 /* ---------- bottom dock ---------- */
+/* An installed app that cannot tell you a new version exists is an app that
+   never updates — the only remedy left was deleting it off the home screen. */
+.updatebar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(76px + env(safe-area-inset-bottom));z-index:70;
+  display:flex;align-items:center;gap:10px;
+  max-width:calc(100% - 32px);
+  padding:10px 16px;border:0;cursor:pointer;
+  border-radius:999px;background:var(--ink);color:var(--paper);
+  box-shadow:var(--shadow-2);font:inherit;font-size:13px;
+}
+.updatebar-t{font-weight:600;}
+.updatebar-a{opacity:.72;}
+.buildstamp{margin-top:10px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);}
+
 .dock{
   position:fixed;left:0;right:0;bottom:0;z-index:60;
   display:flex;gap:8px;align-items:center;justify-content:center;
@@ -1293,6 +1308,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   <p class="loading">載入緊行程…</p>
 </main>
 
+<button class="updatebar" id="updatebar" hidden>
+  <span class="updatebar-t">有新版本</span>
+  <span class="updatebar-a">撳嚟更新</span>
+</button>
+
 <div class="dock">
   <button class="dockbtn" id="btn-boards"><span class="dockbtn-i"></span><span>清單</span></button>
   <button class="dockbtn" id="btn-history"><span class="dockbtn-i"></span><span>改動紀錄</span></button>
@@ -1309,6 +1329,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   "use strict";
 
   // ---------- config ----------
+  // Bumped every time this file changes. It is how an already-installed app
+  // finds out that a newer one exists: the running copy compares its own
+  // stamp against the one in the file the server is serving right now.
+  // There is no build step here, so this is the one thing that has to be
+  // changed by hand — and forgetting it means the family stops getting
+  // updates, silently, which is exactly the failure this is here to end.
+  const BUILD = "2026-10-05-01";
+
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
   const FUNCTIONS_URL = SUPABASE_URL + "/functions/v1/ai-assistant";
@@ -3115,6 +3143,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         地圖為示意路線，實際導航請以地圖 app 為準。<br>
         地點相片由 Google Places 提供。行程可以一齊編輯，每次改動都會自動存低版本。<br>
         祝旅途愉快
+        <div class="buildstamp">版本 ${esc(BUILD)}</div>
       </footer>
     `;
   }
@@ -7671,6 +7700,49 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
   // Anything typed but not yet saved has to land before refetching, or the
   // refresh would quietly throw somebody's edit away.
+  // The refresh button and the pull gesture only ever re-read the ITINERARY.
+  // They left the page — the actual app code — exactly as it was, so an
+  // installed app kept running whatever version it was installed with and the
+  // only way to pick up a change was to delete it off the home screen and add
+  // it back. Nobody should have to do that to get a bug fix.
+  //
+  // `cache: "reload"` is the part that matters: it goes past the browser's
+  // HTTP cache to the server, and it refills that cache on the way back — so
+  // the location.reload() that follows is guaranteed to get the new file
+  // rather than the one already sitting on the phone.
+  let updateReady = false;
+  function showUpdateBar(){
+    const bar = $("#updatebar");
+    if (bar) bar.hidden = false;
+  }
+  async function checkAppUpdate(){
+    // Already knew — but still re-show the bar, because something may have
+    // dismissed or re-rendered over it since.
+    if (updateReady){ showUpdateBar(); return true; }
+    try {
+      const res = await fetch(location.pathname, { cache: "reload" });
+      if (!res || !res.ok) return false;
+      const m = (await res.text()).match(/const BUILD = "([^"]+)"/);
+      if (!m || m[1] === BUILD) return false;
+      updateReady = true;
+      showUpdateBar();
+      return true;
+    } catch (_){ return false; }
+  }
+  function wireUpdateBar(){
+    const bar = $("#updatebar");
+    if (!bar) return;
+    bar.addEventListener("click", async () => {
+      bar.querySelector(".updatebar-a").textContent = "更新緊…";
+      try { if (saverDirty()) await flushSaves("update"); } catch (_){}
+      try {
+        const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      } catch (_){}
+      location.reload();
+    });
+  }
+
   async function reloadFromServer(){
     if (saverDirty()) await flushSaves("pull-to-refresh");
     if (saverDirty()) return "有改動仲未存到，等陣再拉";
@@ -7685,6 +7757,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     // reopen over a different stop once the list has moved underneath it.
     state.open.clear();
     render();
+    // every refresh is also a chance to notice the app itself moved on
+    const newer = await checkAppUpdate();
+    if (newer) return "有新版本，撳下面更新";
     return after === before ? "已經係最新" : "更新咗";
   }
 
@@ -7824,6 +7899,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     wirePullToRefresh();
     wireReloadButton();
+    wireUpdateBar();
+    // Checked on every launch, not only when somebody pulls: the whole point
+    // is that an update finds you rather than the other way round.
+    checkAppUpdate();
     if (params.get("new") === "1") runInitialGeneration();
   }
   registerServiceWorker();

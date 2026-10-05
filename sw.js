@@ -16,7 +16,9 @@
 // somebody's newer edit would lose real work. Data is always network-only.
 
 // Bumped when the cached shell changes — v2 carried the redrawn app icon.
-const VERSION = "v2";
+// v3: navigations revalidate instead of trusting the HTTP cache, so a deploy
+// reaches an installed app without it being reinstalled.
+const VERSION = "v3";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
 const PHOTOS = `dumbofly-photos-${VERSION}`;
@@ -95,7 +97,10 @@ async function staleWhileRevalidate(req, cacheName) {
 // and fall back to the cached shell only when the network cannot answer.
 async function navigate(req) {
   try {
-    const res = await fetch(req);
+    // "no-cache" means: always ask the server whether this changed. Without it
+    // the browser could answer from its own HTTP cache and an installed app
+    // would keep running an old page no matter how many times it was reloaded.
+    const res = await fetch(new Request(req.url, { cache: "no-cache", credentials: "same-origin" }));
     if (res && res.ok) {
       const cache = await caches.open(SHELL);
       const url = new URL(req.url);
