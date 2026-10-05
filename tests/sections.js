@@ -138,6 +138,61 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.close();
   }
 
+  console.log('\nF. 粒加掣要講明係加落邊度');
+  {
+    const { p, errs } = await boot([sec('手信買咩好', 'extra')]);
+    await openFold(p, 'prep');
+    const label = await p.locator('[data-addusec="prep"]').innerText();
+    ok('粒掣寫住係加落「行前準備」', /行前準備/.test(label), label);
+    await openFold(p, 'extra');
+    ok('另一組嗰粒寫住自己嗰個名',
+       /自己加嘅資料/.test(await p.locator('[data-addusec="extra"]').innerText()));
+    await p.locator('[data-addusec="prep"]').click();
+    await p.waitForTimeout(400);
+    ok('揭開個版都再講一次', /喺「行前準備」加一個 section/.test(await p.locator('.sheet, .layer').innerText()));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  // Reported: you type a topic, choose 我自己寫, and the editor opens blank.
+  console.log('\nG. 打咗個題目再揀「我自己寫」，個題目要跟住入去');
+  {
+    const { p, errs } = await boot([]);
+    await openFold(p, 'prep');
+    await p.locator('[data-addusec="prep"]').click();
+    await p.waitForTimeout(400);
+    await p.locator('#usec-topic').fill('換錢攻略');
+    await p.locator('#usec-manual').click();
+    await p.waitForTimeout(400);
+    ok('標題格預先填咗', (await p.locator('input.input').nth(1).inputValue()) === '換錢攻略',
+       await p.locator('input.input').nth(1).inputValue());
+    ok('AI 更新用嘅題目都一齊帶咗入去',
+       (await p.locator('input.input').nth(3).inputValue()) === '換錢攻略',
+       await p.locator('input.input').nth(3).inputValue());
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nH. 上下移位，撳掣就得，唔使同隻手指搏鬥');
+  {
+    const { p, errs, saved } = await boot([sec('A', 'prep'), sec('B', 'extra'), sec('C', 'prep')]);
+    await openFold(p, 'prep');
+    const box = p.locator('[data-usecorder="prep"]');
+    const titles = async () => box.locator('.usec-title').evaluateAll(e => e.map(x => x.textContent.trim()));
+    ok('本來係 A、C', JSON.stringify(await titles()) === JSON.stringify(['A', 'C']), await titles());
+    ok('第一個唔俾再向上', await box.locator('.usec').first().locator('[data-usecmove$=":-1"]').isDisabled());
+    ok('最後一個唔俾再向落', await box.locator('.usec').last().locator('[data-usecmove$=":1"]').isDisabled());
+
+    await box.locator('.usec').last().locator('[data-usecmove$=":-1"]').click();
+    await p.waitForTimeout(900);
+    ok('C 升咗上去', JSON.stringify(await titles()) === JSON.stringify(['C', 'A']), await titles());
+    const after = ((lastSnap(saved) || {}).sections || []).map(x => [x.title, x.where]);
+    ok('存低咗新次序', JSON.stringify(after) === JSON.stringify([['C','prep'],['B','extra'],['A','prep']]), after);
+    ok('第二組冇俾人郁過', after[1][0] === 'B' && after[1][1] === 'extra', after);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

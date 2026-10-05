@@ -1054,6 +1054,10 @@ img{max-width:100%;}
 .usec-head{display:flex;align-items:flex-start;gap:8px;}
 .usec-title{flex:1;font-size:15px;font-weight:600;line-height:1.45;letter-spacing:-.01em;}
 .usec-tools{display:flex;gap:2px;flex:none;}
+.usec-tools .iconbtn[disabled]{opacity:.25;pointer-events:none;}
+.secedit.wordy{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 9px;opacity:.8;}
+.secedit.wordy .i{width:14px;height:14px;}
+.foldtools{gap:4px;}
 .usec-sub{margin-top:5px;font-size:12px;color:var(--ink-faint);line-height:1.65;}
 .usec-list{margin:11px 0 0;padding-left:16px;}
 .usec-list li{font-size:13.5px;line-height:1.8;margin-bottom:4px;color:var(--ink-soft);}
@@ -1336,7 +1340,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-05-02";
+  const BUILD = "2026-10-05-03";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -1439,6 +1443,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     leaf:      '<path d="M5.2 18.8C3.6 12.4 8 5.2 19.2 4.8c.8 8.8-4.4 14.4-11.6 13.2"/><path d="M8 16c2.4-3.6 5.6-6 9.2-7.6"/>',
     bag:       '<path d="M4.6 8.2h14.8l-1 11.6H5.6z"/><path d="M9 8.2V6a3 3 0 0 1 6 0v2.2"/>',
     chevron:   '<path d="m9 5.6 6.4 6.4L9 18.4"/>',
+    up:        '<path d="M12 19V5.6"/><path d="m5.8 11.4 6.2-6 6.2 6"/>',
+    down:      '<path d="M12 5v13.4"/><path d="m5.8 12.6 6.2 6 6.2-6"/>',
     image:     '<rect x="3.8" y="5" width="16.4" height="14" rx="2"/><circle cx="8.8" cy="10" r="1.6"/><path d="m4.6 17 4.8-4.6 3.4 3.2 2.8-2.4 3.8 3.4"/>',
   };
   // size follows the text it sits next to unless told otherwise
@@ -3236,12 +3242,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
     return `
       <div class="usecorder" data-usecorder="${where}">
-      ${rows.length ? rows.map(({ s, i }) => `
+      ${rows.length ? rows.map(({ s, i }, k) => `
         <div class="usec" data-usec="${i}">
           <div class="usec-head">
             <button class="iconbtn sechandle" data-usecdrag aria-label="拉上拉落改次序" title="拉上拉落改次序">${icon("grip")}</button>
             <div class="usec-title">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title || "未命名")}</div>
             <div class="usec-tools">
+              <button class="iconbtn" data-usecmove="${where}:${k}:-1"${k === 0 ? " disabled" : ""} aria-label="移上" title="移上">${icon("up")}</button>
+              <button class="iconbtn" data-usecmove="${where}:${k}:1"${k === rows.length - 1 ? " disabled" : ""} aria-label="移落" title="移落">${icon("down")}</button>
               <button class="iconbtn" data-usecedit="${i}" aria-label="改" title="改">${icon("pencil")}</button>
               <button class="iconbtn" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
             </div>
@@ -3256,7 +3264,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>`).join("")
         : `<p class="hint">仲未有。撳下面加一個。</p>`}
       </div>
-      <button class="btn wide" data-addusec="${where}" style="margin-top:10px;">＋ 加一個 section</button>`;
+      <button class="btn wide" data-addusec="${where}" style="margin-top:10px;">＋ 喺「${esc(whereLabel(d, where))}」加一個 section</button>`;
   }
   // the ones that chose to sit with the weather and the packing list
   function prepSectionsHtml(d){
@@ -3284,8 +3292,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function groupFoldHtml(d, g){
     const body = `
       <div class="foldtools">
-        <button class="secedit" data-groupedit="${esc(g.id)}" title="改名" aria-label="改名">${icon("pencil")}</button>
-        <button class="secedit secdel" data-groupdel="${esc(g.id)}" title="刪走呢個大段落" aria-label="刪走呢個大段落">${icon("trash")}</button>
+        <button class="secedit wordy" data-groupedit="${esc(g.id)}">${icon("pencil")}改名</button>
+        <button class="secedit secdel wordy" data-groupdel="${esc(g.id)}">${icon("trash")}刪走呢個大段落</button>
       </div>
       ${customSectionRows(d, g.id)}`;
     return foldHtml("g:" + g.id, g.title || "未命名", g.hint || "", body);
@@ -3359,11 +3367,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     await saveNow("調整咗自己加嘅 section 次序");
   }
 
-  function openSectionEditor(idx, where){
+  function openSectionEditor(idx, where, title){
     const d = state.snapshot;
     if (!Array.isArray(d.sections)) d.sections = [];
     const s = idx == null ? blankSection(where) : d.sections[idx];
     if (!s) return;
+    // You typed a topic, then chose to write it yourself — and the editor
+    // opened blank, throwing the title away. Carry it in.
+    if (idx == null && title){ s.title = title; s.topic = title; }
     openEditSheet(idx == null ? "加一個 section" : "改「" + (s.title || "未命名") + "」",
       "一行一個重點。連結一行一個，寫做「名 | https://…」。", [
         { key:"icon",  label:"標題前面嘅符號（唔填就冇）", type:"text", value:s.icon || "", placeholder:"留空就得" },
@@ -3398,7 +3409,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // shape as a hand-written one, so nothing is locked to the AI's version
   function openNewSectionSheet(where){
     openSheet(`
-      <h3>加一個 section</h3>
+      <h3>喺「${esc(whereLabel(state.snapshot, where))}」加一個 section</h3>
       <p class="sec-sub">例如：手信買咩好、換錢攻略、上網卡、行李清單、雨天備案。</p>
       <div class="askrow">
         <input class="input" id="usec-topic" placeholder="講個題目，例如：手信買咩好">
@@ -3409,7 +3420,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     `, sheet => {
       const out = sheet.querySelector("#usec-out");
       const topic = sheet.querySelector("#usec-topic");
-      sheet.querySelector("#usec-manual").addEventListener("click", () => { closeLayer(); openSectionEditor(null, where); });
+      sheet.querySelector("#usec-manual").addEventListener("click", () => {
+        const typed = (sheet.querySelector("#usec-topic").value || "").trim();
+        closeLayer();
+        openSectionEditor(null, where, typed);
+      });
       sheet.querySelector("#usec-ai").addEventListener("click", async () => {
         const t = topic.value.trim();
         if (!t){ topic.focus(); return; }
@@ -3438,6 +3453,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function wireCustomSections(){
     document.querySelectorAll("[data-addusec]").forEach(b =>
       b.addEventListener("click", () => openNewSectionSheet(b.dataset.addusec)));
+    document.querySelectorAll("[data-usecmove]").forEach(b =>
+      b.addEventListener("click", () => {
+        const [where, from, step] = b.dataset.usecmove.split(":");
+        reorderCustomSections(state.snapshot, where, +from, +from + (+step));
+      }));
     document.querySelectorAll("[data-usecedit]").forEach(b =>
       b.addEventListener("click", () => openSectionEditor(+b.dataset.usecedit)));
     document.querySelectorAll("[data-usecdel]").forEach(b => b.addEventListener("click", async () => {
