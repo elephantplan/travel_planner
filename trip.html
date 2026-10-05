@@ -1045,6 +1045,15 @@ img{max-width:100%;}
 .usec-by{margin-top:10px;font-size:11px;color:var(--ink-faint);}
 .lastupd{margin-top:8px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);letter-spacing:.01em;}
 .lastupd:empty{display:none;}
+/* what the live answer would write into the section, shown before the button
+   that writes it — the table is numbers, so it needs to be seen as numbers */
+.applyprev{
+  font-family:var(--f-mono);font-size:12px;line-height:2;
+  color:var(--ink-soft);background:var(--surface-2);
+  border-radius:var(--r-sm);padding:10px 12px;overflow-x:auto;
+}
+.applybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}
+.applybar .hint{margin:0;flex:1 1 180px;min-width:0;}
 .usec.lifted{z-index:30;box-shadow:var(--shadow-2);border-color:var(--ink-faint);}
 .usec.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
@@ -2904,6 +2913,41 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const hm = t.toLocaleTimeString("zh-HK", { hour:"2-digit", minute:"2-digit", hour12:false });
     return sameDay ? "今日 " + hm : `${t.getMonth() + 1}月${t.getDate()}日 ${hm}`;
   }
+  // These buttons used to be read-only: they fetched the real answer, printed
+  // it, and left you to retype it into the section yourself. Nobody does that,
+  // so the section stayed stale while the button underneath it said 「啱啱
+  // check 咗」 — the worst of both, wrong data wearing a fresh timestamp.
+  //
+  // The answer now comes with a button that writes it in. Never on its own,
+  // and never above the answer: what it replaces is something a person wrote
+  // by hand, so you read the new version first and then decide. Every save is
+  // a version, so a change of mind is one tap in 改動紀錄.
+  function offerApply(out, kind, payload){
+    const has = kind === "weather" ? (payload && payload.length) : !!String(payload || "").trim();
+    if (!has) return;
+    const preview = kind === "weather"
+      ? `<div class="applyprev">${payload.map(x =>
+          `${esc(x.date)}　${esc(x.hi)} / ${esc(x.lo)}　${esc(x.note)}`).join("<br>")}</div>`
+      : "";
+    const label = kind === "weather" ? `套用呢 ${payload.length} 日落張天氣表` : "套用做季節提示";
+    out.insertAdjacentHTML("beforeend", preview + `
+      <div class="applybar">
+        <button class="btn primary" data-apply>${esc(label)}</button>
+        <span class="hint">會換走而家嗰份，改動紀錄度還原得返。</span>
+      </div>`);
+    const btn = out.querySelector("[data-apply]");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const d = state.snapshot;
+      if (kind === "weather"){ d.weatherRows = payload; }
+      else { d.foliageNote = String(payload); }
+      render();
+      await saveNow(kind === "weather" ? "用實時預報更新咗天氣表" : "用實時資料更新咗季節提示");
+      flash(kind === "weather" ? "天氣表更新咗" : "季節提示更新咗");
+    });
+  }
+
   function markLiveChecked(kind){
     const d = state.snapshot;
     d.lastLiveCheck = d.lastLiveCheck || {};
@@ -2937,10 +2981,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                           (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
           saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
           if (r.summary || r.aiSummary) markLiveChecked(kind);
+          offerApply(out, kind, weatherRowsFromDaily(r.raw && r.raw.daily));
         } else {
           const a = r.aiSummary || r.message || "冇回覆";
           out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
           if (r.aiSummary){ saveAiNote("foliage", "季節情況", a); markLiveChecked(kind); }
+          offerApply(out, kind, r.aiSummary ? a : "");
         }
       } catch (e){
         stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
@@ -7486,15 +7532,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // (or, worse, asking the model to invent temperatures — the whole app's rule
   // is that numbers come from a real source). Open-Meteo only forecasts ~16
   // days out, so anything past that is left for the user to check later.
-  async function fillWeatherRows(onProgress){
-    const snap = state.snapshot;
-    if ((snap.weatherRows || []).length) return;
-    onProgress && onProgress("攞緊真實天氣預報…");
-    let r;
-    try { r = await callAi({ action:"weather" }); } catch (e){ return; }
-    const daily = r && r.raw && r.raw.daily;
-    if (!daily || !Array.isArray(daily.time) || !daily.time.length) return;
-    snap.weatherRows = daily.time.map((iso, i) => {
+  // Open-Meteo's daily block, as the 天氣 table wants it. Shared by the first
+  // fill and by the live re-check, so the two can never drift apart.
+  function weatherRowsFromDaily(daily){
+    if (!daily || !Array.isArray(daily.time) || !daily.time.length) return [];
+    return daily.time.map((iso, i) => {
       const hi = daily.temperature_2m_max?.[i], lo = daily.temperature_2m_min?.[i];
       const rain = daily.precipitation_probability_max?.[i];
       const d = isoToUtc(iso);
@@ -7505,6 +7547,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
         note: rain == null ? "" : `降雨機率 ${rain}%`,
       };
     });
+  }
+  async function fillWeatherRows(onProgress){
+    const snap = state.snapshot;
+    if ((snap.weatherRows || []).length) return;
+    onProgress && onProgress("攞緊真實天氣預報…");
+    let r;
+    try { r = await callAi({ action:"weather" }); } catch (e){ return; }
+    const rows = weatherRowsFromDaily(r && r.raw && r.raw.daily);
+    if (!rows.length) return;
+    snap.weatherRows = rows;
     render();
   }
   // The standard notes every trip wants, whatever the destination. Each is an
