@@ -193,6 +193,60 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.close();
   }
 
+  // "點解要分係唔係自己 / 我 expect 全部都係我要留意嘅嘢先會放係到" — 行前準備
+  // used to split into the app's own blocks and a 「自己加嘅準備事項」 annexe.
+  // There is no such thing any more: every 大段落 is the same kind of thing.
+  console.log('\nI. 行前準備同其他大段落一視同仁');
+  {
+    const { p, errs, saved } = await boot([sec('電子入境卡', 'prep')]);
+    await openFold(p, 'prep');
+    const box = p.locator('[data-fold="prep"]').locator('xpath=..');
+    ok('冇咗「自己加嘅準備事項」呢個分界', !/自己加嘅準備事項/.test(await box.innerText()));
+    ok('自己加嘅 section 同天氣排埋一齊',
+       /電子入境卡/.test(await box.innerText()) && /點著衫/.test(await box.innerText()));
+
+    // the button belongs at the top, under the title — where it was circled
+    const order = await box.evaluate(el => {
+      const add = el.querySelector('[data-addusec="prep"]');
+      const first = el.querySelector('#hsorder');
+      return add && first ? (add.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING) > 0 : null;
+    });
+    ok('粒「加一個 section」喺最頂，唔係碌到底先見到', order === true, order);
+
+    ok('行前準備自己都有改名', await box.locator('[data-groupedit="prep"]').count() === 1);
+    ok('行前準備自己都有得收埋', await box.locator('[data-delsec="prep"]').count() === 1);
+
+    await box.locator('[data-groupedit="prep"]').click();
+    await p.waitForTimeout(400);
+    await p.locator('input.input').first().fill('出發前搞掂佢');
+    await p.locator('[data-esave]').click();
+    await p.waitForTimeout(900);
+    ok('改到名', /出發前搞掂佢/.test(await p.locator('#app').innerText()));
+    ok('舊名冇咗', !/行前準備/.test(await p.locator('#app').innerText()));
+    ok('存低咗', ((lastSnap(saved) || {}).groupTitles || {}).prep === '出發前搞掂佢',
+       (lastSnap(saved) || {}).groupTitles);
+    ok('粒加掣跟住改埋', /喺「出發前搞掂佢」加一個 section/.test(
+       await p.locator('[data-addusec="prep"]').innerText()));
+    ok('入面啲嘢一個都冇少', /電子入境卡/.test(await p.locator('#app').innerText()));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nJ. 收埋成個行前準備，仲搵得返');
+  {
+    const { p, errs } = await boot([sec('電子入境卡', 'prep')]);
+    await openFold(p, 'prep');
+    p.once('dialog', d => d.accept());
+    await p.locator('[data-delsec="prep"]').click();
+    await p.waitForTimeout(1000);
+    ok('整段冇咗', await p.locator('[data-fold="prep"]').count() === 0);
+    await openFold(p, 'hidden');
+    ok('喺「隱藏咗嘅段落」搵得返',
+       /行前準備/.test(await p.locator('[data-fold="hidden"]').locator('xpath=..').innerText()));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

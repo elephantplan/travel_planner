@@ -964,6 +964,7 @@ img{max-width:100%;}
 .updatebar-t{font-weight:600;}
 .updatebar-a{opacity:.72;}
 .addgroup{margin-top:18px;border-style:dashed;}
+.addusec{margin:2px 0 14px;border-style:dashed;}
 .buildstamp{margin-top:10px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);}
 
 .dock{
@@ -1340,7 +1341,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-05-03";
+  const BUILD = "2026-10-06-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2789,7 +2790,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示" };
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", prep:"行前準備", extra:"自己加嘅資料" };
   // editKey lets a block whose editor lives under a different name (季節提示 is
   // edited by the shared "notes" sheet) still get exactly ONE pencil — passing
   // the editor key here instead of adding a second secEditBtn beside it.
@@ -3097,6 +3098,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }).join("");
 
     const prep = [
+      groupToolsHtml(d, "prep"),
+      addSectionBtn(d, "prep"),
       `<div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>`,
       isSectionHidden(d, "foliage") ? "" : `
         <h3>季節提示${secTools("foliage", "notes")}</h3>
@@ -3138,10 +3141,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </nav>
 
       ${stayFoldHtml(d)}
-      ${foldHtml("prep", "行前準備", "天氣・衣著・交通・無障礙", prep)}
+      ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), "天氣・衣著・交通・無障礙", prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
-      ${foldHtml("extra", "自己加嘅資料", "", customSectionsHtml(d))}
+      ${isSectionHidden(d, "extra") ? "" : foldHtml("extra", groupTitle(d, "extra"), "", customSectionsHtml(d))}
       ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
       ${foldHtml("hidden", "隱藏咗嘅段落", "", hiddenSectionsHtml(d))}
 
@@ -3237,6 +3240,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // `data-usec` is the index into d.sections, NOT the position in this list —
   // the edit and delete buttons address the real array, and a filtered list
   // would otherwise point them at the wrong section.
+  function addSectionBtn(d, where){
+    return `<button class="btn wide addusec" data-addusec="${where}">＋ 喺「${esc(whereLabel(d, where))}」加一個 section</button>`;
+  }
   function customSectionRows(d, where){
     const all = Array.isArray(d.sections) ? d.sections : [];
     const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
@@ -3262,45 +3268,54 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
           <div class="ai-out" id="secout-${i}"></div>
         </div>`).join("")
-        : `<p class="hint">仲未有。撳下面加一個。</p>`}
-      </div>
-      <button class="btn wide" data-addusec="${where}" style="margin-top:10px;">＋ 喺「${esc(whereLabel(d, where))}」加一個 section</button>`;
+        : ""}
+      </div>`;
   }
   // the ones that chose to sit with the weather and the packing list
-  function prepSectionsHtml(d){
-    return `<h3>自己加嘅準備事項</h3>
-      <p class="sec-sub">出發前要搞掂嘅嘢 —— 電子入境卡、換錢、上網卡、行李。自己寫，或者講個題目俾 AI 幫你整。</p>
-      ${customSectionRows(d, "prep")}`;
-  }
+  function prepSectionsHtml(d){ return customSectionRows(d, "prep"); }
   function customSectionsHtml(d){
-    return `
-      <section class="sec">
-        <h2 class="sec-title">自己加嘅資料</h2>
-        <p class="sec-sub">想記低嘅嘢都可以開一個 section —— 手信買咩、換錢、上網卡、包咩行李。自己寫，或者講個題目俾 AI 幫你整。長撳拖拉掣可以改次序，改嗰陣可以揀擺喺「行前準備」定係呢度。</p>
-        ${customSectionRows(d, "extra")}
-      </section>`;
+    return `${groupToolsHtml(d, "extra")}${addSectionBtn(d, "extra")}${customSectionRows(d, "extra")}`;
   }
 
+  // 行前準備 and 自己加嘅資料 are just two groups that happened to ship with
+  // the app. They get renamed, hidden and added to exactly like one you make
+  // yourself — there is no reason the family should meet a second-class
+  // section whose name they cannot change.
+  const BUILTIN_GROUPS = { prep:"行前準備", extra:"自己加嘅資料" };
   function whereLabel(d, where){
-    if (where === "prep") return "行前準備";
+    if (BUILTIN_GROUPS[where]) return groupTitle(d, where);
     const g = groupById(d, where);
-    return g ? (g.title || "未命名") : "自己加嘅資料";
+    return g ? (g.title || "未命名") : groupTitle(d, "extra");
+  }
+  function groupTitle(d, id){
+    const over = (d && d.groupTitles) || {};
+    if (BUILTIN_GROUPS[id]) return plain(over[id]) || BUILTIN_GROUPS[id];
+    const g = groupById(d, id);
+    return g ? (g.title || "未命名") : BUILTIN_GROUPS.extra;
+  }
+  // The row of controls every group carries, built-in or not. A built-in one
+  // cannot be deleted — the weather table and the transit cards live in it —
+  // but it can be hidden, which 隱藏咗嘅段落 brings back.
+  function groupToolsHtml(d, id){
+    const builtin = !!BUILTIN_GROUPS[id];
+    return `<div class="foldtools">
+      <button class="secedit wordy" data-groupedit="${esc(id)}">${icon("pencil")}改名</button>
+      ${builtin
+        ? `<button class="secedit secdel wordy" data-delsec="${esc(id)}" data-seclabel="${esc(groupTitle(d, id))}">${icon("trash")}收埋成段</button>`
+        : `<button class="secedit secdel wordy" data-groupdel="${esc(id)}">${icon("trash")}刪走呢個大段落</button>`}
+    </div>`;
   }
   // A top-level section the family made themselves. Its body is the same list
   // of sections every other group holds — the only thing that makes it "big"
   // is that it gets its own fold on the overview, with its own name.
   function groupFoldHtml(d, g){
-    const body = `
-      <div class="foldtools">
-        <button class="secedit wordy" data-groupedit="${esc(g.id)}">${icon("pencil")}改名</button>
-        <button class="secedit secdel wordy" data-groupdel="${esc(g.id)}">${icon("trash")}刪走呢個大段落</button>
-      </div>
-      ${customSectionRows(d, g.id)}`;
+    const body = `${groupToolsHtml(d, g.id)}${addSectionBtn(d, g.id)}${customSectionRows(d, g.id)}`;
     return foldHtml("g:" + g.id, g.title || "未命名", g.hint || "", body);
   }
   function openGroupEditor(id){
     const d = state.snapshot;
     if (!Array.isArray(d.groups)) d.groups = [];
+    if (BUILTIN_GROUPS[id]) return openBuiltinGroupRename(d, id);
     const g = id ? groupById(d, id) : null;
     if (id && !g) return;
     openEditSheet(g ? "改「" + (g.title || "未命名") + "」" : "加一個大段落",
@@ -3324,6 +3339,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           flash("加好喇，可以喺入面加 section");
         }
       });
+  }
+  function openBuiltinGroupRename(d, id){
+    openEditSheet("改「" + groupTitle(d, id) + "」個名", "淨係改個名，入面啲嘢唔會郁。", [
+      { key:"title", label:"名", type:"text", value: groupTitle(d, id) },
+    ], async out => {
+      d.groupTitles = d.groupTitles || {};
+      const t = plain(out.title);
+      if (!t || t === BUILTIN_GROUPS[id]) delete d.groupTitles[id];
+      else d.groupTitles[id] = t;
+      render();
+      await saveNow(`改咗「${groupTitle(d, id)}」個名`);
+    });
   }
   // Deleting the box must not delete what was in it. Its sections go back to
   // 自己加嘅資料, where they are still on the page and still editable.
