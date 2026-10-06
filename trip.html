@@ -1051,7 +1051,14 @@ img{max-width:100%;}
 .askedecho{font-size:12px;color:var(--ink-faint);margin:0 0 3px;}
 
 /* free-form sections the family adds themselves */
-.usec{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);padding:14px 15px;margin-bottom:10px;position:relative;}
+/* A section the family wrote used to be a bordered card with four round
+   buttons, sitting between a weather table and a packing list that were
+   plain headings with small inline icons — two visual languages in one list,
+   announcing which parts of the page the app owned. They read the same now. */
+.usec{position:relative;}
+.usec > h3:first-child{margin-top:26px;}
+.usec:first-child > h3:first-child{margin-top:4px;}
+.secedit[disabled]{opacity:.22;pointer-events:none;}
 .usec-head{display:flex;align-items:flex-start;gap:8px;}
 .usec-title{flex:1;font-size:15px;font-weight:600;line-height:1.45;letter-spacing:-.01em;}
 .usec-tools{display:flex;gap:2px;flex:none;}
@@ -1341,7 +1348,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-06-01";
+  const BUILD = "2026-10-06-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2790,7 +2797,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", prep:"行前準備", extra:"自己加嘅資料" };
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", transit:"交通點畀錢", prep:"行前準備", extra:"自己加嘅資料" };
   // editKey lets a block whose editor lives under a different name (季節提示 is
   // edited by the shared "notes" sheet) still get exactly ONE pencil — passing
   // the editor key here instead of adding a second secEditBtn beside it.
@@ -3108,7 +3115,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       plain(d.scheduleSwapNote || "") ? `
         <h3>日程調動${secEditBtn("notes")}</h3>
         <p class="sec-sub">${d.scheduleSwapNote}</p>` : "",
-      transitInfoHtml(d.transitInfo),
+      transitInfoHtml(d.transitInfo, d),
       prepSectionsHtml(d),
     ].filter(Boolean).join("");
 
@@ -3162,8 +3169,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
 
   // ---------- how to pay for transport ----------
-  function transitInfoHtml(t){
-    if (!t) return "";
+  function transitInfoHtml(t, d){
+    if (!t || isSectionHidden(d, "transit")) return "";
     const cards = (t.cards || []).map(c => `
       <div class="fare-card${c.pick ? " pick" : ""}">
         <div class="fare-top">
@@ -3190,8 +3197,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>` : "";
 
     return `
-      <section class="sec">
-        <h2 class="sec-title">交通點畀錢</h2>
+      <div class="hsblock" data-hskey="transit">
+        <h3>${esc(t.title || "交通點畀錢")}${secTools("transit")}</h3>
         <p class="sec-sub">${esc(t.intro || "")}</p>
         ${t.verdict ? `<div class="panel verdict"><div class="k">結論</div><div class="d">${esc(t.verdict)}</div></div>` : ""}
         ${cards ? `<div class="fare-grid">${cards}</div>` : ""}
@@ -3201,7 +3208,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${(t.tips || []).length ? `<h3>實用貼士</h3><ul class="clist">${
           t.tips.map(x => `<li><span class="ico">·</span><div>${esc(x)}</div></li>`).join("")}</ul>` : ""}
         ${t.asOf ? `<p class="mapcap">${esc(t.asOf)}</p>` : ""}
-      </section>`;
+      </div>`;
   }
 
   // ---------- 自訂 section（天氣、手信、換錢…） ----------
@@ -3243,6 +3250,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function addSectionBtn(d, where){
     return `<button class="btn wide addusec" data-addusec="${where}">＋ 喺「${esc(whereLabel(d, where))}」加一個 section</button>`;
   }
+  function moveBtns(where, k, total){
+    return `<button class="secedit" data-usecmove="${where}:${k}:-1"${k === 0 ? " disabled" : ""} aria-label="移上" title="移上">${icon("up")}</button>` +
+           `<button class="secedit" data-usecmove="${where}:${k}:1"${k === total - 1 ? " disabled" : ""} aria-label="移落" title="移落">${icon("down")}</button>`;
+  }
   function customSectionRows(d, where){
     const all = Array.isArray(d.sections) ? d.sections : [];
     const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
@@ -3250,17 +3261,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <div class="usecorder" data-usecorder="${where}">
       ${rows.length ? rows.map(({ s, i }, k) => `
         <div class="usec" data-usec="${i}">
-          <div class="usec-head">
-            <button class="iconbtn sechandle" data-usecdrag aria-label="拉上拉落改次序" title="拉上拉落改次序">${icon("grip")}</button>
-            <div class="usec-title">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title || "未命名")}</div>
-            <div class="usec-tools">
-              <button class="iconbtn" data-usecmove="${where}:${k}:-1"${k === 0 ? " disabled" : ""} aria-label="移上" title="移上">${icon("up")}</button>
-              <button class="iconbtn" data-usecmove="${where}:${k}:1"${k === rows.length - 1 ? " disabled" : ""} aria-label="移落" title="移落">${icon("down")}</button>
-              <button class="iconbtn" data-usecedit="${i}" aria-label="改" title="改">${icon("pencil")}</button>
-              <button class="iconbtn" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
-            </div>
-          </div>
-          ${s.sub ? `<p class="usec-sub">${esc(s.sub)}</p>` : ""}
+          <h3>${s.icon ? esc(s.icon) + " " : ""}${esc(s.title || "未命名")}<span class="sectools">
+            ${moveBtns(where, k, rows.length)}
+            <button class="secedit" data-usecedit="${i}" aria-label="改" title="改">${icon("pencil")}</button>
+            <button class="secedit secdel" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
+          </span></h3>
+          ${s.sub ? `<p class="sec-sub">${esc(s.sub)}</p>` : ""}
           ${(s.lines || []).length ? `<ul class="usec-list">${(s.lines||[]).map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
           ${(s.links || []).length ? `<div class="ailog-links">${(s.links||[]).map(l =>
             `<a href="${esc(l.url)}" target="_blank" rel="noopener">${icon("link")}${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
@@ -4931,6 +4937,38 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         d.elevatorTip = out.elevatorTip;
         render();
         await saveNow("改咗無障礙標記");
+      });
+    },
+
+    transit: () => {
+      const d = state.snapshot;
+      const t = d.transitInfo = d.transitInfo || {};
+      openEditSheet(t.title || "交通點畀錢", "每格一行。用「|」分開。", [
+        { key:"title",   label:"標題", type:"text", value: t.title || "交通點畀錢" },
+        { key:"intro",   label:"開場白", type:"text", value: t.intro || "" },
+        { key:"verdict", label:"結論", type:"textarea", rows:3, value: t.verdict || "" },
+        { key:"cards",   label:"幾種卡（名 | 韓文 | 價錢 | 好處 | 唔好 | 建議）", type:"lines", rows:6,
+          hint:"最後一格寫「建議」就會標做建議嗰張，唔想標就留空。",
+          value: (t.cards || []).map(c => [c.name, c.kr, c.price, c.good, c.bad, c.pick ? "建議" : ""].join(" | ")).join("\n") },
+        { key:"fares",   label:"大約幾多錢（項目 | 車費 | 備註）", type:"lines", rows:5,
+          value: (t.fares || []).map(f => [f.what, f.cost, f.note].join(" | ")).join("\n") },
+        { key:"tips",    label:"實用貼士（一行一個）", type:"lines", rows:7,
+          value: (t.tips || []).join("\n") },
+        { key:"asOf",    label:"資料日期備註", type:"text", value: t.asOf || "" },
+      ], async out => {
+        t.title = out.title || "交通點畀錢";
+        t.intro = out.intro; t.verdict = out.verdict; t.asOf = out.asOf;
+        t.cards = (out.cards || []).map(l => {
+          const [name, kr, price, good, bad, pick] = pipeParts(l, 6);
+          return { name, kr, price, good, bad, pick: /建議/.test(pick || "") };
+        });
+        t.fares = (out.fares || []).map(l => {
+          const [what, cost, note] = pipeParts(l, 3);
+          return { what, cost, note };
+        });
+        t.tips = out.tips || [];
+        render();
+        await saveNow("改咗交通資料");
       });
     },
 

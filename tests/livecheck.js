@@ -67,7 +67,7 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
   console.log('\nA. 天氣：撳 check 之後有得一撳套用');
   {
     const { p, errs, saved } = await boot();
-    const before = await p.locator('.wtable').innerText();
+    const before = await p.locator('[data-hskey="weather"] .wtable').innerText();
     ok('原本張表係 fixture 嗰啲數', /10-23/.test(before) && /19°/.test(before), before.slice(0, 40));
 
     await p.locator('[data-livecheck="weather"]').click();
@@ -80,11 +80,11 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     ok('有粒套用掣', await out.locator('[data-apply]').count() === 1);
 
     // nothing may change until it is actually pressed
-    ok('未撳之前張表一個字都冇郁', (await p.locator('.wtable').innerText()) === before);
+    ok('未撳之前張表一個字都冇郁', (await p.locator('[data-hskey="weather"] .wtable').innerText()) === before);
 
     await out.locator('[data-apply]').click();
     await p.waitForTimeout(900);
-    const after = await p.locator('.wtable').innerText();
+    const after = await p.locator('[data-hskey="weather"] .wtable').innerText();
     ok('撳完張表變咗', after !== before);
     ok('入面係實時預報嘅數字', /16°/.test(after) && /降雨機率 40%/.test(after), after.slice(0, 80));
     ok('舊數字冇殘留', !/19°/.test(after), after.slice(0, 80));
@@ -138,12 +138,12 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     await p.waitForTimeout(1100);
     await p.locator('[data-fold="prep"]').click();
     await p.waitForTimeout(400);
-    const before = await p.locator('.wtable').innerText();
+    const before = await p.locator('[data-hskey="weather"] .wtable').innerText();
 
     await p.locator('[data-livecheck="weather"]').click();
     await p.waitForTimeout(900);
     ok('冇預報就唔會出套用掣', await p.locator('#livecheck-weather [data-apply]').count() === 0);
-    ok('張表更加唔會俾人清空', (await p.locator('.wtable').innerText()) === before);
+    ok('張表更加唔會俾人清空', (await p.locator('[data-hskey="weather"] .wtable').innerText()) === before);
     ok('但照樣話返你知發生咩事', /攞唔到實時預報/.test(await p.locator('#livecheck-weather').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();

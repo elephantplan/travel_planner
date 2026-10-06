@@ -178,7 +178,8 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     const { p, errs, saved } = await boot([sec('A', 'prep'), sec('B', 'extra'), sec('C', 'prep')]);
     await openFold(p, 'prep');
     const box = p.locator('[data-usecorder="prep"]');
-    const titles = async () => box.locator('.usec-title').evaluateAll(e => e.map(x => x.textContent.trim()));
+    const titles = async () => box.locator('.usec > h3').evaluateAll(e =>
+      e.map(x => x.firstChild ? x.firstChild.textContent.trim() : ''));
     ok('本來係 A、C', JSON.stringify(await titles()) === JSON.stringify(['A', 'C']), await titles());
     ok('第一個唔俾再向上', await box.locator('.usec').first().locator('[data-usecmove$=":-1"]').isDisabled());
     ok('最後一個唔俾再向落', await box.locator('.usec').last().locator('[data-usecmove$=":1"]').isDisabled());
@@ -243,6 +244,59 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await openFold(p, 'hidden');
     ok('喺「隱藏咗嘅段落」搵得返',
        /行前準備/.test(await p.locator('[data-fold="hidden"]').locator('xpath=..').innerText()));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  // "仲唔係個個 section 可以 edit delete / 新加既 section UI 又唔同" — 交通點畀錢
+  // had no controls at all, and a section you wrote was a bordered card with
+  // four round buttons sitting next to plain headings. Both are the same
+  // thing now, and this is the test that says so.
+  console.log('\nK. 行前準備入面每一段都長得一樣、做得到一樣嘅嘢');
+  {
+    const { p, errs } = await boot([sec('準備', 'prep')]);
+    await openFold(p, 'prep');
+    const box = p.locator('[data-fold="prep"]').locator('xpath=..');
+
+    const blocks = await box.locator('.hsblock, .usec').evaluateAll(els => els.map(e => {
+      const h = e.querySelector('h3');
+      return {
+        name: h && h.firstChild ? h.firstChild.textContent.trim() : '(冇標題)',
+        edit: !!e.querySelector('[data-sf-edit], .secedit:not(.secdel):not([data-usecmove])'),
+        del:  !!e.querySelector('.secdel'),
+        card: getComputedStyle(e).borderTopWidth !== '0px',
+      };
+    }));
+    ok('至少四段嘢喺度', blocks.length >= 4, blocks.map(x => x.name));
+    ok('交通點畀錢都喺呢個列表入面', blocks.some(x => /交通/.test(x.name)), blocks.map(x => x.name));
+    ok('自己寫嗰個都喺同一個列表', blocks.some(x => /準備/.test(x.name)), blocks.map(x => x.name));
+    ok('每一段都有得改', blocks.every(x => x.edit), blocks.filter(x => !x.edit).map(x => x.name));
+    ok('每一段都有得刪／收埋', blocks.every(x => x.del), blocks.filter(x => !x.del).map(x => x.name));
+    ok('冇一段係特登畫到唔同樣', blocks.every(x => !x.card), blocks.filter(x => x.card).map(x => x.name));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nL. 交通點畀錢枝筆唔係裝飾');
+  {
+    const { p, errs, saved } = await boot([]);
+    await openFold(p, 'prep');
+    await p.locator('[data-hskey="transit"] .secedit').first().click();
+    await p.waitForTimeout(400);
+    ok('開到編輯版', (await p.locator('input.input').first().inputValue()) === '交通點畀錢');
+    await p.locator('input.input').first().fill('車錢點計');
+    await p.locator('[data-esave]').click();
+    await p.waitForTimeout(900);
+    ok('改到名', /車錢點計/.test(await p.locator('#app').innerText()));
+    ok('入面啲卡冇蝕', /T-money/.test(await p.locator('#app').innerText()));
+    ok('存低咗', ((lastSnap(saved) || {}).transitInfo || {}).title === '車錢點計');
+
+    p.once('dialog', d => d.accept());
+    await p.locator('[data-hskey="transit"] .secdel').first().click();
+    await p.waitForTimeout(1000);
+    ok('收埋到成段', await p.locator('[data-hskey="transit"]').count() === 0);
+    await openFold(p, 'hidden');
+    ok('搵得返', /交通點畀錢/.test(await p.locator('[data-fold="hidden"]').locator('xpath=..').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }

@@ -28,6 +28,17 @@ const snap = {
   ],
   clothing: [{ icon: "", html: "早晚溫差大，帶多件外套。" }],
   foliageNote: "10 月下旬銀杏開始轉黃。",
+  transitInfo: {
+    intro: "7 個人喺首爾點畀車錢，一次過講清楚。",
+    verdict: "每人買一張 T-money 就夠。",
+    cards: [
+      { name:"T-money 卡", kr:"티머니", price:"卡 ₩3,000–5,000／人", good:"地鐵、巴士、的士都用得。", bad:"冇折扣優惠。", pick:true },
+      { name:"氣候同行卡", kr:"기후동행카드", price:"1 日 ₩5,000", good:"市內任搭。", bad:"出咗首爾用唔到。" },
+    ],
+    fares: [{ what:"地鐵基本", cost:"₩1,550", note:"" }],
+    tips: ["T-money 喺便利店買得到。"],
+    asOf: "車費為 2026 年資料。",
+  },
   days: [
     {
       id: "day1", date: "10月23日（五）", title: "抵達・明洞落腳",
