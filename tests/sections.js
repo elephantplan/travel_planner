@@ -355,6 +355,50 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.close();
   }
 
+  // "呢啲字可以點改？" — the line beside 行前準備 was a hardcoded
+  // 「天氣・衣著・交通・無障礙」 that could not be edited and went stale the
+  // moment anything was hidden, added or reordered.
+  console.log('\nM. 行前準備旁邊嗰句副題');
+  {
+    const { p, errs, saved } = await boot([sec('準備', 'prep')], c => { c.hiddenSections = ['transit']; });
+    const head = () => p.locator('[data-fold="prep"]').innerText();
+    let h = await head();
+    ok('預設係跟返入面有咩', /天氣・衣著・無障礙・季節・準備/.test(h), h);
+    ok('收埋咗嘅交通唔會再寫出嚟', !/交通/.test(h), h);
+
+    await p.locator('[data-fold="prep"]').click();
+    await p.waitForTimeout(400);
+    ok('粒掣講明改得副題', /改名同副題/.test(await p.locator('[data-groupedit="prep"]').innerText()));
+    await p.locator('[data-groupedit="prep"]').click();
+    await p.waitForTimeout(400);
+    await p.locator('input.input').nth(1).fill('入境卡・換錢・天氣');
+    await p.locator('[data-esave]').click();
+    await p.waitForTimeout(900);
+    h = await head();
+    ok('改到', /入境卡・換錢・天氣/.test(h), h);
+    ok('存低咗', ((lastSnap(saved) || {}).groupHints || {}).prep === '入境卡・換錢・天氣');
+
+    // clearing it hands it back to the automatic list rather than leaving it blank
+    await p.locator('[data-groupedit="prep"]').click();
+    await p.waitForTimeout(400);
+    await p.locator('input.input').nth(1).fill('');
+    await p.locator('[data-esave]').click();
+    await p.waitForTimeout(900);
+    h = await head();
+    ok('清空就變返自動', /天氣・衣著/.test(h), h);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nN. 調位之後副題跟住次序');
+  {
+    const { p, errs } = await boot([], c => { c.homeOrder = ['transit', 'weather', 'clothing', 'access', 'foliage', 'schedule']; });
+    const h = await p.locator('[data-fold="prep"]').innerText();
+    ok('交通排第一，副題都寫交通先', /交通・天氣・衣著/.test(h), h);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -1348,7 +1348,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-07-01";
+  const BUILD = "2026-10-07-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2852,6 +2852,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // Movers only count blocks that are actually on screen, so ↑ on the first
   // visible block is disabled even if a hidden one sits above it in the order.
   function prepShown(d){ return prepOrder(d).filter(k => prepBlockHtml(d, k)); }
+  // The line beside 行前準備 was a fixed 「天氣・衣著・交通・無障礙」: it could
+  // not be edited, it still said 交通 after 交通 was hidden, and it never
+  // mentioned anything the family added. Unless somebody writes their own,
+  // it now lists what is really in the group, in the order it is in.
+  const PREP_SHORT = { weather:"天氣", clothing:"衣著", access:"無障礙", foliage:"季節", schedule:"日程", transit:"交通" };
+  function prepAutoHint(d){
+    const names = prepShown(d).map(k => k.startsWith("s:")
+      ? plain(((d.sections || []).find(s => s && "s:" + s.id === k) || {}).title || "")
+      : PREP_SHORT[k]).filter(Boolean);
+    return names.length > 5 ? names.slice(0, 5).join("・") + "…" : names.join("・");
+  }
+  function groupHint(d, id){
+    const own = plain(((d && d.groupHints) || {})[id] || "");
+    if (own) return own;
+    return id === "prep" ? prepAutoHint(d) : "";
+  }
   function prepBlocksHtml(d){
     const shown = prepShown(d);
     return shown.map((k, n) => withMove(prepBlockHtml(d, k),
@@ -3184,10 +3200,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </nav>
 
       ${stayFoldHtml(d)}
-      ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), "天氣・衣著・交通・無障礙", prep)}
+      ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), groupHint(d, "prep"), prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
-      ${isSectionHidden(d, "extra") ? "" : foldHtml("extra", groupTitle(d, "extra"), "", customSectionsHtml(d))}
+      ${isSectionHidden(d, "extra") ? "" : foldHtml("extra", groupTitle(d, "extra"), groupHint(d, "extra"), customSectionsHtml(d))}
       ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
       ${foldHtml("hidden", "隱藏咗嘅段落", "", hiddenSectionsHtml(d))}
 
@@ -3342,7 +3358,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function groupToolsHtml(d, id){
     const builtin = !!BUILTIN_GROUPS[id];
     return `<div class="foldtools">
-      <button class="secedit wordy" data-groupedit="${esc(id)}">${icon("pencil")}改名</button>
+      <button class="secedit wordy" data-groupedit="${esc(id)}">${icon("pencil")}改名同副題</button>
       ${builtin
         ? `<button class="secedit secdel wordy" data-delsec="${esc(id)}" data-seclabel="${esc(groupTitle(d, id))}">${icon("trash")}收埋成段</button>`
         : `<button class="secedit secdel wordy" data-groupdel="${esc(id)}">${icon("trash")}刪走呢個大段落</button>`}
@@ -3365,7 +3381,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       "大段落係主頁上面自己一個摺疊區，入面可以放幾多個 section 都得 —— 就好似「行前準備」咁。", [
         { key:"title", label:"名", type:"text", value: g ? (g.title || "") : "",
           placeholder:"例如：出發前搞掂佢、交通、手信" },
-        { key:"hint", label:"摺埋嗰陣旁邊嗰句（可以留空）", type:"text", value: g ? (g.hint || "") : "",
+        { key:"hint", label:"副題（摺埋嗰陣喺名旁邊嗰句，可以留空）", type:"text", value: g ? (g.hint || "") : "",
           placeholder:"例如：入境卡・換錢・上網卡" },
       ], async out => {
         const title = out.title || "未命名";
@@ -3384,15 +3400,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       });
   }
   function openBuiltinGroupRename(d, id){
-    openEditSheet("改「" + groupTitle(d, id) + "」個名", "淨係改個名，入面啲嘢唔會郁。", [
+    const own = plain(((d.groupHints || {})[id]) || "");
+    openEditSheet("改「" + groupTitle(d, id) + "」", "淨係改名同副題，入面啲嘢唔會郁。", [
       { key:"title", label:"名", type:"text", value: groupTitle(d, id) },
+      { key:"hint", label:"副題（摺埋嗰陣喺名旁邊嗰句）", type:"text", value: own,
+        hint: id === "prep" ? "留空就自動列返入面有咩，跟住你排嘅次序。" : "可以留空。",
+        placeholder: id === "prep" ? prepAutoHint(d) : "" },
     ], async out => {
       d.groupTitles = d.groupTitles || {};
+      d.groupHints = d.groupHints || {};
       const t = plain(out.title);
       if (!t || t === BUILTIN_GROUPS[id]) delete d.groupTitles[id];
       else d.groupTitles[id] = t;
+      const h = plain(out.hint);
+      if (h) d.groupHints[id] = h; else delete d.groupHints[id];
       render();
-      await saveNow(`改咗「${groupTitle(d, id)}」個名`);
+      await saveNow(`改咗「${groupTitle(d, id)}」`);
     });
   }
   // Deleting the box must not delete what was in it. Its sections go back to
