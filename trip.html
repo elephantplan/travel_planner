@@ -1348,7 +1348,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-06-02";
+  const BUILD = "2026-10-07-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2797,7 +2797,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", transit:"交通點畀錢", prep:"行前準備", extra:"自己加嘅資料" };
+  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", transit:"交通點畀錢", schedule:"日程調動", prep:"行前準備", extra:"自己加嘅資料" };
   // editKey lets a block whose editor lives under a different name (季節提示 is
   // edited by the shared "notes" sheet) still get exactly ONE pencil — passing
   // the editor key here instead of adding a second secEditBtn beside it.
@@ -2807,26 +2807,71 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   function isSectionHidden(snap, key){ return Array.isArray(snap.hiddenSections) && snap.hiddenSections.includes(key); }
 
-  // 「出發前必讀」入面嗰4嚿——住宿/天氣/點著衫/無障礙——用戶可以拉住 ⠿ 自己
-  // 排先後，順序存喺 snap.homeOrder。新裝／舊快照冇呢個欄嘅話，用返而家嘅
-  // 預設次序；如果之後加多種類，未存過嘅key會自動補喺尾，唔會冇咗。
-  // 住宿 used to be one of these. It is now a section of its own — see
-  // stayFoldHtml — so a saved order that still lists it simply drops the key.
-  const HOME_ORDER_KEYS = ["weather", "clothing", "access"];
-  function homeOrder(snap){
-    const saved = Array.isArray(snap.homeOrder) ? snap.homeOrder.filter(k => HOME_ORDER_KEYS.includes(k)) : [];
-    const rest = HOME_ORDER_KEYS.filter(k => !saved.includes(k));
-    return [...saved, ...rest];
+  // 行前準備 is ONE list. It used to be three: weather/clothing/access moved by
+  // dragging a grip, the sections the family wrote moved by ↑↓ among
+  // themselves only, and 季節提示 and 交通 did not move at all. So a section
+  // you wrote could never rise above 交通, and 交通 could go nowhere — the
+  // same app-versus-yours split again, this time in the ordering. Every block
+  // is now a token in one saved order (snap.homeOrder), and every block has
+  // the same ↑↓. A saved order from before simply lacks the newer tokens,
+  // which land at the end in the old default order, so nothing jumps around.
+  const PREP_BUILTINS = ["weather", "clothing", "access", "foliage", "schedule", "transit"];
+  // Sections are addressed by array index elsewhere, which an order cannot
+  // survive; an order needs a name that does not change when the array does.
+  function ensureSectionIds(d){
+    (d.sections || []).forEach(s => { if (s && !s.id) s.id = newSectionId(); });
   }
-  async function reorderHomeBlocks(snap, from, to){
-    const order = homeOrder(snap);
-    const [moved] = order.splice(from, 1);
-    order.splice(to, 0, moved);
-    snap.homeOrder = order;
+  function newSectionId(){ return "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function prepOrder(d){
+    ensureSectionIds(d);
+    const own = (d.sections || []).filter(s => sectionWhere(d, s) === "prep").map(s => "s:" + s.id);
+    const valid = [...PREP_BUILTINS, ...own];
+    const saved = (Array.isArray(d.homeOrder) ? d.homeOrder : [])
+      .filter((k, i, a) => valid.includes(k) && a.indexOf(k) === i);
+    return [...saved, ...valid.filter(k => !saved.includes(k))];
+  }
+  function prepBlockHtml(d, k){
+    if (k.startsWith("s:")){
+      const i = (d.sections || []).findIndex(s => s && "s:" + s.id === k);
+      return i < 0 ? "" : sectionBlockHtml(d, d.sections[i], i, "");
+    }
+    if (k === "foliage") return isSectionHidden(d, "foliage") ? "" : `
+      <div class="hsblock" data-hskey="foliage">
+        <h3>季節提示${secTools("foliage", "notes")}</h3>
+        <p class="sec-sub">${d.foliageNote || ""}</p>
+        ${liveCheckButtonHtml("foliage", "Check 依家嘅季節情況")}
+      </div>`;
+    if (k === "schedule") return (isSectionHidden(d, "schedule") || !plain(d.scheduleSwapNote || "")) ? "" : `
+      <div class="hsblock" data-hskey="schedule">
+        <h3>日程調動${secTools("schedule", "notes")}</h3>
+        <p class="sec-sub">${d.scheduleSwapNote}</p>
+      </div>`;
+    if (k === "transit") return transitInfoHtml(d.transitInfo, d);
+    return homeBlockHtml(d, k);
+  }
+  // Movers only count blocks that are actually on screen, so ↑ on the first
+  // visible block is disabled even if a hidden one sits above it in the order.
+  function prepShown(d){ return prepOrder(d).filter(k => prepBlockHtml(d, k)); }
+  function prepBlocksHtml(d){
+    const shown = prepShown(d);
+    return shown.map((k, n) => withMove(prepBlockHtml(d, k),
+      `<button class="secedit" data-prepmove="${esc(k)}|-1"${n === 0 ? " disabled" : ""} aria-label="移上" title="移上">${icon("up")}</button>` +
+      `<button class="secedit" data-prepmove="${esc(k)}|1"${n === shown.length - 1 ? " disabled" : ""} aria-label="移落" title="移落">${icon("down")}</button>`
+    )).join("");
+  }
+  // Every block keeps its tools in its heading's .sectools; the movers go first.
+  function withMove(html, move){ return html.replace('<span class="sectools">', '<span class="sectools">' + move); }
+  async function movePrepBlock(d, k, step){
+    const order = prepOrder(d);
+    const shown = order.filter(t => prepBlockHtml(d, t));
+    const n = shown.indexOf(k), m = n + step;
+    if (n < 0 || m < 0 || m >= shown.length) return;
+    const a = order.indexOf(k), b = order.indexOf(shown[m]);
+    [order[a], order[b]] = [order[b], order[a]];
+    d.homeOrder = order;
     render();
-    await saveNow("調整咗主頁段落次序");
+    await saveNow("調整咗行前準備次序");
   }
-  const HOME_DRAG_HANDLE = `<button class="secedit sechandle" data-hsdrag title="拉上拉落改次序" aria-label="拉上拉落改次序">${icon("grip")}</button>`;
   // Used to say "10 月下旬天氣" no matter what trip was loaded — a leftover
   // Seoul-trip literal that silently mislabelled every other destination's
   // weather block. Derived from the trip's own dates instead.
@@ -2889,7 +2934,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (isSectionHidden(d, key)) return "";
     if (key === "weather"){
       return `<div class="hsblock" data-hskey="weather">
-        <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}${HOME_DRAG_HANDLE}</h3>
+        <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}</h3>
         <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
@@ -2900,13 +2945,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
     if (key === "clothing"){
       return `<div class="hsblock" data-hskey="clothing">
-        <h3>點著衫${secTools("clothing")}${HOME_DRAG_HANDLE}</h3>
+        <h3>點著衫${secTools("clothing")}</h3>
         <ul class="clist">${(d.clothing||[]).map(c=>`<li>${c.icon ? `<span class="ico">${esc(c.icon)}</span>` : ""}<div>${c.html}</div></li>`).join("")}</ul>
       </div>`;
     }
     // access
     return `<div class="hsblock" data-hskey="access">
-      <h3>無障礙標記${secTools("access")}${HOME_DRAG_HANDLE}</h3>
+      <h3>無障礙標記${secTools("access")}</h3>
       <p class="sec-sub">每個地點都會標返路況。</p>
       <div class="legend">
         <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>${esc((d.accessLegend||[])[0]||"")}</div>
@@ -3107,17 +3152,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const prep = [
       groupToolsHtml(d, "prep"),
       addSectionBtn(d, "prep"),
-      `<div id="hsorder">${homeOrder(d).map(k => homeBlockHtml(d, k)).join("")}</div>`,
-      isSectionHidden(d, "foliage") ? "" : `
-        <h3>季節提示${secTools("foliage", "notes")}</h3>
-        <p class="sec-sub">${d.foliageNote || ""}</p>
-        ${liveCheckButtonHtml("foliage", "Check 依家嘅季節情況")}`,
-      plain(d.scheduleSwapNote || "") ? `
-        <h3>日程調動${secEditBtn("notes")}</h3>
-        <p class="sec-sub">${d.scheduleSwapNote}</p>` : "",
-      transitInfoHtml(d.transitInfo, d),
-      prepSectionsHtml(d),
-    ].filter(Boolean).join("");
+      `<div class="prepblocks" data-prepblocks>${prepBlocksHtml(d)}</div>`,
+    ].join("");
 
     const aiPanel = isSectionHidden(d, "ai") ? "" : `
       <p class="sec-sub">AI 每次答嘢之前都會先睇呢段背景，改咗佢，全部 AI 功能都會跟住轉。${secTools("ai")}</p>
@@ -3254,15 +3290,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return `<button class="secedit" data-usecmove="${where}:${k}:-1"${k === 0 ? " disabled" : ""} aria-label="移上" title="移上">${icon("up")}</button>` +
            `<button class="secedit" data-usecmove="${where}:${k}:1"${k === total - 1 ? " disabled" : ""} aria-label="移落" title="移落">${icon("down")}</button>`;
   }
-  function customSectionRows(d, where){
-    const all = Array.isArray(d.sections) ? d.sections : [];
-    const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
+  function sectionBlockHtml(d, s, i, move){
     return `
-      <div class="usecorder" data-usecorder="${where}">
-      ${rows.length ? rows.map(({ s, i }, k) => `
         <div class="usec" data-usec="${i}">
           <h3>${s.icon ? esc(s.icon) + " " : ""}${esc(s.title || "未命名")}<span class="sectools">
-            ${moveBtns(where, k, rows.length)}
+            ${move}
             <button class="secedit" data-usecedit="${i}" aria-label="改" title="改">${icon("pencil")}</button>
             <button class="secedit secdel" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
           </span></h3>
@@ -3273,12 +3305,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">${icon("refresh")}問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
           <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
           <div class="ai-out" id="secout-${i}"></div>
-        </div>`).join("")
-        : ""}
+        </div>`;
+  }
+  function customSectionRows(d, where){
+    const all = Array.isArray(d.sections) ? d.sections : [];
+    const rows = all.map((s, i) => ({ s, i })).filter(x => sectionWhere(d, x.s) === where);
+    return `
+      <div class="usecorder" data-usecorder="${where}">
+      ${rows.map(({ s, i }, k) => sectionBlockHtml(d, s, i, moveBtns(where, k, rows.length))).join("")}
       </div>`;
   }
   // the ones that chose to sit with the weather and the packing list
-  function prepSectionsHtml(d){ return customSectionRows(d, "prep"); }
   function customSectionsHtml(d){
     return `${groupToolsHtml(d, "extra")}${addSectionBtn(d, "extra")}${customSectionRows(d, "extra")}`;
   }
@@ -3384,7 +3421,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (add) add.addEventListener("click", () => openGroupEditor(null));
   }
 
-  function blankSection(where){ return { icon:"", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false, where: where || "extra" }; }
+  function blankSection(where){ return { id: newSectionId(), icon:"", title:"", sub:"", lines:[], links:[], source:"manual", topic:"", aiRefresh:false, where: where || "extra" }; }
   // `from`/`to` are positions within ONE group, so they are mapped back onto
   // that group's own slots in d.sections — the other group never moves.
   async function reorderCustomSections(snap, where, from, to){
@@ -3575,8 +3612,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     wireCustomSections();
     wireGroups();
     wireLiveChecks();
-    wireSimpleDrag($("#hsorder"), ".hsblock", "[data-hsdrag]",
-      (from, to) => reorderHomeBlocks(state.snapshot, from, to));
+    document.querySelectorAll("[data-prepmove]").forEach(b => b.addEventListener("click", () => {
+      const [k, step] = b.dataset.prepmove.split("|");
+      movePrepBlock(state.snapshot, k, +step);
+    }));
     initOverviewMap();
   }
 

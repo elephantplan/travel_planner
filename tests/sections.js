@@ -15,12 +15,13 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 
-  async function boot(sections){
+  async function boot(sections, patch){
     const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 }, colorScheme: 'dark' });
     const p = await ctx.newPage();
     const errs = []; p.on('pageerror', e => errs.push(e.message));
     const cur = JSON.parse(JSON.stringify(snap));
     if (sections) cur.sections = sections;
+    if (patch) patch(cur);
     const saved = [];
     await p.route('**/rest/v1/itinerary_versions**', r => {
       if (r.request().method() === 'POST'){
@@ -173,30 +174,81 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.close();
   }
 
-  console.log('\nH. 上下移位，撳掣就得，唔使同隻手指搏鬥');
+  // "點解準備上下改位唔得？交通又冇得上下郁？" — 行前準備 had three separate
+  // orderings: a grip on weather/clothing/access, ↑↓ among written sections
+  // only (so a lone section had both arrows disabled), and nothing at all on
+  // 季節提示 and 交通. It is one list now, and every block moves through it.
+  console.log('\nH. 行前準備係一條次序：每一段都郁得，郁得過任何一段');
   {
-    const { p, errs, saved } = await boot([sec('A', 'prep'), sec('B', 'extra'), sec('C', 'prep')]);
+    const { p, errs, saved } = await boot([sec('準備', 'prep'), sec('B', 'extra')]);
     await openFold(p, 'prep');
-    const box = p.locator('[data-usecorder="prep"]');
-    const titles = async () => box.locator('.usec > h3').evaluateAll(e =>
+    const box = p.locator('[data-prepblocks]');
+    const names = async () => box.locator(':scope > .hsblock > h3, :scope > .usec > h3').evaluateAll(e =>
       e.map(x => x.firstChild ? x.firstChild.textContent.trim() : ''));
-    ok('本來係 A、C', JSON.stringify(await titles()) === JSON.stringify(['A', 'C']), await titles());
-    ok('第一個唔俾再向上', await box.locator('.usec').first().locator('[data-usecmove$=":-1"]').isDisabled());
-    ok('最後一個唔俾再向落', await box.locator('.usec').last().locator('[data-usecmove$=":1"]').isDisabled());
+    const start = await names();
+    ok('交通同自己寫嗰段喺同一條列表', start.some(x => /交通/.test(x)) && start.includes('準備'), start);
+    ok('自己寫嗰段喺最尾', start[start.length - 1] === '準備', start);
 
-    await box.locator('.usec').last().locator('[data-usecmove$=":-1"]').click();
-    await p.waitForTimeout(900);
-    ok('C 升咗上去', JSON.stringify(await titles()) === JSON.stringify(['C', 'A']), await titles());
-    const after = ((lastSnap(saved) || {}).sections || []).map(x => [x.title, x.where]);
-    ok('存低咗新次序', JSON.stringify(after) === JSON.stringify([['C','prep'],['B','extra'],['A','prep']]), after);
-    ok('第二組冇俾人郁過', after[1][0] === 'B' && after[1][1] === 'extra', after);
+    // every visible block has both movers, disabled only at the two ends
+    const movers = await box.locator(':scope > .hsblock, :scope > .usec').evaluateAll(els => els.map(e => ({
+      up: e.querySelector('[data-prepmove$="|-1"]'), down: e.querySelector('[data-prepmove$="|1"]'),
+    })).map(m => ({ up: !!m.up && !m.up.disabled, down: !!m.down && !m.down.disabled, has: !!m.up && !!m.down })));
+    ok('每一段都有 ↑↓', movers.every(m => m.has), movers);
+    ok('得第一段唔俾向上', movers.filter(m => !m.up).length === 1 && !movers[0].up, movers);
+    ok('得最後一段唔俾向落', movers.filter(m => !m.down).length === 1 && !movers[movers.length - 1].down, movers);
+
+    // the reported case: lift 準備 above 交通
+    const ti = start.findIndex(x => /交通/.test(x));
+    for (let n = start.length - 1; n > ti; n--){
+      await box.locator(':scope > .usec').first().locator('[data-prepmove$="|-1"]').click();
+      await p.waitForTimeout(500);
+    }
+    const lifted = await names();
+    ok('準備郁得過交通', lifted.indexOf('準備') < lifted.findIndex(x => /交通/.test(x)), lifted);
+
+    // and 交通 itself moves
+    await box.locator('[data-hskey="transit"] [data-prepmove$="|-1"]').click();
+    await p.waitForTimeout(600);
+    const moved = await names();
+    ok('交通都郁得', moved.findIndex(x => /交通/.test(x)) === lifted.findIndex(x => /交通/.test(x)) - 1, moved);
+
+    const snap = lastSnap(saved) || {};
+    const id = ((snap.sections || []).find(x => x.title === '準備') || {}).id;
+    ok('次序存低咗', Array.isArray(snap.homeOrder) && snap.homeOrder.includes('s:' + id)
+       && snap.homeOrder.indexOf('s:' + id) < snap.homeOrder.indexOf('transit'), snap.homeOrder);
+    ok('第二組冇俾人郁過', ((snap.sections || []).find(x => x.title === 'B') || {}).where === 'extra');
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }
 
-  // "點解要分係唔係自己 / 我 expect 全部都係我要留意嘅嘢先會放係到" — 行前準備
-  // used to split into the app's own blocks and a 「自己加嘅準備事項」 annexe.
-  // There is no such thing any more: every 大段落 is the same kind of thing.
+  console.log('\nH2. 重開 app，次序仲喺度');
+  {
+    const { p, errs } = await boot([], c => {
+      c.sections = [{ ...sec('準備', 'prep'), id: 'sKEEP' }];
+      c.homeOrder = ['s:sKEEP', 'transit', 'weather', 'clothing', 'access', 'foliage', 'schedule'];
+    });
+    await openFold(p, 'prep');
+    const names = await p.locator('[data-prepblocks]').locator(':scope > .hsblock > h3, :scope > .usec > h3')
+      .evaluateAll(e => e.map(x => x.firstChild ? x.firstChild.textContent.trim() : ''));
+    ok('自己寫嗰段排第一', names[0] === '準備', names);
+    ok('交通排第二', /交通/.test(names[1] || ''), names);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nH3. 舊嘅次序（得天氣、著衫、無障礙）唔會令其他嘢唔見');
+  {
+    const { p, errs } = await boot([sec('準備', 'prep')], c => { c.homeOrder = ['access', 'weather', 'clothing', 'acc']; });
+    await openFold(p, 'prep');
+    const names = await p.locator('[data-prepblocks]').locator(':scope > .hsblock > h3, :scope > .usec > h3')
+      .evaluateAll(e => e.map(x => x.firstChild ? x.firstChild.textContent.trim() : ''));
+    ok('舊次序照跟', /無障礙/.test(names[0]) && /天氣/.test(names[1]), names);
+    ok('季節提示、交通、自己寫嘅都仲喺度',
+       names.some(x => /季節/.test(x)) && names.some(x => /交通/.test(x)) && names.includes('準備'), names);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
   console.log('\nI. 行前準備同其他大段落一視同仁');
   {
     const { p, errs, saved } = await boot([sec('電子入境卡', 'prep')]);
@@ -209,7 +261,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     // the button belongs at the top, under the title — where it was circled
     const order = await box.evaluate(el => {
       const add = el.querySelector('[data-addusec="prep"]');
-      const first = el.querySelector('#hsorder');
+      const first = el.querySelector('[data-prepblocks]');
       return add && first ? (add.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING) > 0 : null;
     });
     ok('粒「加一個 section」喺最頂，唔係碌到底先見到', order === true, order);
@@ -262,7 +314,8 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
       const h = e.querySelector('h3');
       return {
         name: h && h.firstChild ? h.firstChild.textContent.trim() : '(冇標題)',
-        edit: !!e.querySelector('[data-sf-edit], .secedit:not(.secdel):not([data-usecmove])'),
+        edit: !!e.querySelector('[data-editsec], [data-usecedit]'),
+        move: !!e.querySelector('[data-prepmove]'),
         del:  !!e.querySelector('.secdel'),
         card: getComputedStyle(e).borderTopWidth !== '0px',
       };
@@ -271,6 +324,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     ok('交通點畀錢都喺呢個列表入面', blocks.some(x => /交通/.test(x.name)), blocks.map(x => x.name));
     ok('自己寫嗰個都喺同一個列表', blocks.some(x => /準備/.test(x.name)), blocks.map(x => x.name));
     ok('每一段都有得改', blocks.every(x => x.edit), blocks.filter(x => !x.edit).map(x => x.name));
+    ok('每一段都有得上下郁', blocks.every(x => x.move), blocks.filter(x => !x.move).map(x => x.name));
     ok('每一段都有得刪／收埋', blocks.every(x => x.del), blocks.filter(x => !x.del).map(x => x.name));
     ok('冇一段係特登畫到唔同樣', blocks.every(x => !x.card), blocks.filter(x => x.card).map(x => x.name));
     ok('冇 JS 錯誤', errs.length === 0, errs);
@@ -281,7 +335,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
   {
     const { p, errs, saved } = await boot([]);
     await openFold(p, 'prep');
-    await p.locator('[data-hskey="transit"] .secedit').first().click();
+    await p.locator('[data-hskey="transit"] [data-editsec]').click();
     await p.waitForTimeout(400);
     ok('開到編輯版', (await p.locator('input.input').first().inputValue()) === '交通點畀錢');
     await p.locator('input.input').first().fill('車錢點計');
