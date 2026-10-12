@@ -1041,6 +1041,12 @@ img{max-width:100%;}
 .askrow{display:flex;gap:8px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
+.liveres{border:1px solid var(--accent);border-radius:var(--r-lg);padding:12px 14px;background:var(--surface);}
+.liveres-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;}
+.liveres-head .i{width:14px;height:14px;}
+.liveres-part + .liveres-part{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft);}
+.liveres-k{font-size:11px;color:var(--ink-faint);margin-bottom:3px;}
+.liveres-v{font-size:13.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;}
 .ai-msg{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
   padding:13px 14px;font-size:13.5px;line-height:1.75;white-space:pre-wrap;
@@ -1348,7 +1354,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-07-02";
+  const BUILD = "2026-10-12-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3052,6 +3058,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     });
   }
 
+  // The answer used to arrive as two bare boxes that looked just like the
+  // section's own text, so nobody could tell which part was the AI's fresh
+  // result. It is now one labelled panel with the time it was fetched, and
+  // each part says what it is.
+  function liveResultHtml(what, parts){
+    const now = new Date().toLocaleString("zh-HK", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit", hour12:false });
+    return `<div class="liveres">
+      <div class="liveres-head">${icon("sparkle")}AI 最新${esc(what)}結果 · ${esc(now)}</div>
+      ${parts.filter(x => plain(x[1] || "")).map(([k, v]) =>
+        `<div class="liveres-part"><div class="liveres-k">${esc(k)}</div><div class="liveres-v">${esc(v)}</div></div>`).join("")}
+    </div>`;
+  }
+
   function markLiveChecked(kind){
     const d = state.snapshot;
     d.lastLiveCheck = d.lastLiveCheck || {};
@@ -3080,15 +3099,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const r = await callAi({ action: kind });
         stop();
         if (kind === "weather"){
-          out.innerHTML = `<div class="ai-msg">${esc(r.summary||"")}</div>` +
-                          (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
-                          (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
+          const hasForecast = !!(r.raw && r.raw.daily && (r.raw.daily.time || []).length);
+          out.innerHTML = liveResultHtml("天氣", [
+            [hasForecast ? "實時預報" : "預報狀態", r.summary],
+            ["AI 建議", r.aiSummary || r.aiNotice],
+          ]);
           saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
           if (r.summary || r.aiSummary) markLiveChecked(kind);
           offerApply(out, kind, weatherRowsFromDaily(r.raw && r.raw.daily));
         } else {
           const a = r.aiSummary || r.message || "冇回覆";
-          out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+          out.innerHTML = liveResultHtml("季節情況", [["AI 搜尋結果", a]]);
           if (r.aiSummary){ saveAiNote("foliage", "季節情況", a); markLiveChecked(kind); }
           offerApply(out, kind, r.aiSummary ? a : "");
         }
