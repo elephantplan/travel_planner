@@ -1041,7 +1041,8 @@ img{max-width:100%;}
 .askrow{display:flex;gap:8px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
-.liveres{border:1px solid var(--accent);border-radius:var(--r-lg);padding:12px 14px;background:var(--surface);}
+.liveres{border:1.5px solid var(--accent);border-left-width:4px;border-radius:var(--r-lg);padding:12px 14px;
+  background:color-mix(in srgb, var(--accent) 10%, var(--surface));}
 .liveres-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;}
 .liveres-head .i{width:14px;height:14px;}
 .liveres-part + .liveres-part{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft);}
@@ -1354,7 +1355,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-12-01";
+  const BUILD = "2026-10-12-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -1648,6 +1649,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       dateStart: m.dateStart || "",
       dateEnd: m.dateEnd || "",
     }, payload);
+    // Open-Meteo answers today + 15 days. Ask for even one day past that and it
+    // rejects the WHOLE request, so a 10/23–10/28 trip checked on 10/12 came
+    // back "no forecast yet" though six of its days were covered. Clamp here
+    // so it works against the function as deployed, and say which days are
+    // still beyond reach.
+    if (body.action === "weather" && body.dateEnd){
+      const last = new Date(); last.setDate(last.getDate() + 15);
+      const lastIso = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+      if (body.dateEnd > lastIso && body.dateStart <= lastIso){ body.tripEnd = body.dateEnd; body.dateEnd = lastIso; }
+    }
     // Everything that can go wrong INSIDE the edge function comes back as
     // {ok:false, message} with CORS headers on it. So if fetch itself rejects,
     // or the reply has no readable JSON, the request died before the function
@@ -3063,7 +3074,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // result. It is now one labelled panel with the time it was fetched, and
   // each part says what it is.
   function liveResultHtml(what, parts){
-    const now = new Date().toLocaleString("zh-HK", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit", hour12:false });
+    const t = new Date();
+    const now = `${t.getMonth() + 1}月${t.getDate()}日 ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
     return `<div class="liveres">
       <div class="liveres-head">${icon("sparkle")}AI 最新${esc(what)}結果 · ${esc(now)}</div>
       ${parts.filter(x => plain(x[1] || "")).map(([k, v]) =>
@@ -3100,8 +3112,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         stop();
         if (kind === "weather"){
           const hasForecast = !!(r.raw && r.raw.daily && (r.raw.daily.time || []).length);
+          const m0 = state.snapshot.meta || {};
+          const lastDay = r.raw && r.raw.daily && (r.raw.daily.time || []).slice(-1)[0];
+          const tail = hasForecast && lastDay && m0.dateEnd && lastDay < m0.dateEnd
+            ? `\n（${lastDay} 之後嘅日子預報仲未出，過幾日再 check。）` : "";
           out.innerHTML = liveResultHtml("天氣", [
-            [hasForecast ? "實時預報" : "預報狀態", r.summary],
+            [hasForecast ? "實時預報" : "預報狀態", (r.summary || "") + tail],
             ["AI 建議", r.aiSummary || r.aiNotice],
           ]);
           saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));

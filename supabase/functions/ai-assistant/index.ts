@@ -26,15 +26,27 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Open-Meteo forecasts today + 15 days. Ask for a single day past that and it
+// rejects the WHOLE request with a 400 — so a trip of 10/23–10/28 checked on
+// 10/12 got "no forecast yet" even though six of its days were covered. The
+// end date is clamped to what the API can answer; the days beyond it are
+// reported as not yet available instead of sinking the rest.
 async function fetchWeather(lat: number, lng: number, dateStart: string, dateEnd: string) {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const last = new Date(); last.setUTCDate(last.getUTCDate() + 15);
+  const lastIso = iso(last);
+  const end = dateEnd > lastIso ? lastIso : dateEnd;
+  const today = iso(new Date());
+  const start = dateStart < today ? today : dateStart;
+  if (start > end) return { inForecastRange: false, daily: null, coveredTo: null, tripEnd: dateEnd };
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
-    `&timezone=auto&start_date=${dateStart}&end_date=${dateEnd}`;
+    `&timezone=auto&start_date=${start}&end_date=${end}`;
   const res = await fetch(url);
-  if (!res.ok) return { inForecastRange: false, daily: null };
+  if (!res.ok) return { inForecastRange: false, daily: null, coveredTo: null, tripEnd: dateEnd };
   const data = await res.json();
   const inForecastRange = Array.isArray(data?.daily?.time) && data.daily.time.length > 0;
-  return { inForecastRange, daily: data?.daily ?? null };
+  return { inForecastRange, daily: data?.daily ?? null, coveredTo: end, tripEnd: dateEnd };
 }
 
 // Free-tier quota is per-key, so extra Gemini keys let a run keep going once
@@ -632,6 +644,9 @@ Deno.serve(async (req) => {
           `${d}: ${weather.daily.temperature_2m_min[i]}–${weather.daily.temperature_2m_max[i]}°C，降雨機率${weather.daily.precipitation_probability_max[i]}%`
         );
         summary = "目的地未來預報（真實數據）：\n" + lines.join("\n");
+        if (weather.coveredTo && weather.coveredTo < weather.tripEnd) {
+          summary += `\n（${weather.coveredTo} 之後嘅日子預報仲未出，過幾日再 check。）`;
+        }
       } else {
         summary = "而家距離出發日仲遠，Open-Meteo暫時未有呢幾日嘅短期預報（一般得16日內），下面沿用歷史同期平均值作參考，出發前一週請再check。";
       }
