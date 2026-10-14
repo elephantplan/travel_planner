@@ -1048,6 +1048,7 @@ img{max-width:100%;}
 .liveres-part + .liveres-part{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft);}
 .liveres-k{font-size:11px;color:var(--ink-faint);margin-bottom:3px;}
 .liveres-v{font-size:13.5px;line-height:1.7;color:var(--ink);white-space:pre-wrap;}
+.meta-chip.hours.today{border-color:var(--accent);color:var(--ink);}
 .ai-msg{
   background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-md);
   padding:13px 14px;font-size:13.5px;line-height:1.75;white-space:pre-wrap;
@@ -1355,7 +1356,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-12-02";
+  const BUILD = "2026-10-13-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2800,6 +2801,35 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
     markClampedDescs();
+    if (state.view !== "overview") backfillHoursFor(dayById(state.view));
+  }
+
+  // Hours used to be fetched only when the AI added a place, so every stop the
+  // family put in by hand — and every stop from before the feature — never
+  // had any. Opening a day now looks up whichever of its real places are
+  // missing hours, one at a time, and saves once at the end. Places that
+  // already have them are skipped, so this costs nothing after the first visit.
+  const hoursTried = new Set();
+  let hoursRunning = false;
+  async function backfillHoursFor(day){
+    if (hoursRunning || !day) return;
+    const todo = (day.items || []).filter(s => s && s.kind === "stop" && s.placeId
+      && !(s.eatMeta || []).some(c => c.cls === "meta-chip hours") && !hoursTried.has(s.placeId));
+    if (!todo.length) return;
+    hoursRunning = true;
+    let got = 0;
+    try {
+      for (const s of todo){
+        hoursTried.add(s.placeId);           // one attempt per place per session
+        const before = (s.eatMeta || []).length;
+        await enrichHours(s);
+        if ((s.eatMeta || []).length > before) got++;
+      }
+    } finally { hoursRunning = false; }
+    if (got){
+      if (state.view === day.id) render();
+      await saveNow(`補返 ${got} 個地點嘅營業時間`, true);
+    }
   }
 
   // ==================================================================
@@ -3863,6 +3893,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
+      .concat(dayHoursChip(s, day))
       .concat((s.eatMeta||[]).filter(c => !(Number.isFinite(s.rating) && /^⭐/.test(c.text||""))).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
       .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
       .join("");
@@ -7267,6 +7298,17 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // mismatch that caused the Deoksugung Monday-closure conflict earlier in
   // this trip's planning, so it's worth flagging automatically on every stop
   // rather than relying on someone remembering to check by hand.
+  // The weekly summary answers "which days", but standing there you want
+  // "what about today" — so the card also shows the line for this day's
+  // weekday. A closed day is already flagged by stopClosedOnDay.
+  function dayHoursChip(s, day){
+    if (!Array.isArray(s.weekdayText) || !day || stopClosedOnDay(s, day)) return [];
+    const wd = weekdayCharOfDate(day.date);
+    const line = wd && s.weekdayText.find(l => l.startsWith(`星期${wd}`));
+    if (!line) return [];
+    const hours = line.slice(line.indexOf(":") + 1).trim();
+    return [`<span class="meta-chip hours today">呢日（星期${esc(wd)}）：${esc(hours)}</span>`];
+  }
   function stopClosedOnDay(s, day){
     if (!Array.isArray(s.weekdayText) || !s.weekdayText.length) return false;
     const wd = weekdayCharOfDate(day.date);
