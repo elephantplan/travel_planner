@@ -1356,7 +1356,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-13-01";
+  const BUILD = "2026-10-14-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -1460,6 +1460,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     bag:       '<path d="M4.6 8.2h14.8l-1 11.6H5.6z"/><path d="M9 8.2V6a3 3 0 0 1 6 0v2.2"/>',
     chevron:   '<path d="m9 5.6 6.4 6.4L9 18.4"/>',
     up:        '<path d="M12 19V5.6"/><path d="m5.8 11.4 6.2-6 6.2 6"/>',
+    copy:      '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
     down:      '<path d="M12 5v13.4"/><path d="m5.8 12.6 6.2 6 6.2-6"/>',
     image:     '<rect x="3.8" y="5" width="16.4" height="14" rx="2"/><circle cx="8.8" cy="10" r="1.6"/><path d="m4.6 17 4.8-4.6 3.4 3.2 2.8-2.4 3.8 3.4"/>',
   };
@@ -2437,6 +2438,41 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // leave alone. Pure ASCII is the case with evidence against it, so rather
   // than offer a button that is guaranteed to fail, offer no button — Google,
   // which reads romanisation fine, is right beside it.
+  // A taxi driver, a shop assistant, the search box of Naver or Kakao — all
+  // want the place in its own script, which is the one thing a Cantonese
+  // itinerary card does not show big. One tap copies the local-language name.
+  function scriptLabel(t){
+    t = String(t || "");
+    if (/[\uAC00-\uD7A3]/.test(t)) return "韓文";
+    if (/[\u3040-\u30FF]/.test(t)) return "日文";
+    // plenty of Japanese names are kanji only (「一蘭 渋谷店」), which no
+    // script test can tell from Chinese — the trip's destination can
+    if (/[\u4E00-\u9FFF]/.test(t) && destIsJapan()) return "日文";
+    return "當地";
+  }
+  const JAPAN_WORDS = /日本|東京|东京|大阪|京都|福岡|北海道|札幌|沖繩|沖縄|名古屋|奈良|神戶|神戸|japan|tokyo|osaka|kyoto|fukuoka|sapporo|okinawa|nagoya/i;
+  function destIsJapan(){
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    const said = [m.destinationLocal, m.title, m.eyebrow].map(x => String(x || "")).join(" ");
+    return /[\u3040-\u30FF]/.test(said) || JAPAN_WORDS.test(said);
+  }
+  function copyBtnHtml(s){
+    const q = plain(s && s.kr);
+    if (!q) return "";
+    return `<button class="maplink" data-copyname="${esc(q)}">${icon("copy")}複製${scriptLabel(q)}名</button>`;
+  }
+  document.addEventListener("click", async e => {
+    const b = e.target.closest && e.target.closest("[data-copyname]");
+    if (!b) return;
+    const t = b.dataset.copyname;
+    try { await navigator.clipboard.writeText(t); }
+    catch (_){
+      const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta);
+      ta.select(); try { document.execCommand("copy"); } catch (__){} ta.remove();
+    }
+    flash("已複製：" + t);
+  });
+
   function naverSearchable(q){
     const t = String(q || "").trim();
     if (!t) return false;
@@ -2982,7 +3018,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${links.length ? `<div class="chiprow">${links.join("")}</div>` : ""}
+            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}</div>` : ""}
             ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
           </div>`; }).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
@@ -3916,6 +3952,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
+    { const c = copyBtnHtml(subj || s); if (c) links.push(c); }
     if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `
@@ -6059,6 +6096,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
+    { const c = copyBtnHtml(s); if (c) links.push(c); }
     if (fetchable) links.push(`<button class="maplink" data-getboardphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `
