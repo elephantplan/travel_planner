@@ -829,6 +829,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // A place found through the app's own search only ever got Google's
+    // English name ("Hongik University Station"), so it had no local name for
+    // Naver, the copy button, or a taxi driver. Ask Place Details for the name
+    // in the destination's own language.
+    if (action === "place-local-name") {
+      const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });
+      const placeId = (body?.placeId ?? "").toString().trim();
+      const lang = langOfHint(locationHint);
+      if (!placeId || !lang || lang === "zh-TW") return json({ ok: true, name: null });
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
+        `&fields=name&language=${lang}&key=${placesKey}`;
+      const data = await (await fetch(url)).json();
+      return json({ ok: data?.status === "OK", name: data?.result?.name ?? null });
+    }
+
     if (action === "place-hours") {
       const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
       if (!placesKey) return json({ ok: false, message: PHOTO_NOT_CONFIGURED_MSG });

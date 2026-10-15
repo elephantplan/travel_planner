@@ -1356,7 +1356,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-14-01";
+  const BUILD = "2026-10-15-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2850,7 +2850,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   async function backfillHoursFor(day){
     if (hoursRunning || !day) return;
     const todo = (day.items || []).filter(s => s && s.kind === "stop" && s.placeId
-      && !(s.eatMeta || []).some(c => c.cls === "meta-chip hours") && !hoursTried.has(s.placeId));
+      && (!(s.eatMeta || []).some(c => c.cls === "meta-chip hours") || !plain(s.kr)) && !hoursTried.has(s.placeId));
     if (!todo.length) return;
     hoursRunning = true;
     let got = 0;
@@ -2860,6 +2860,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const before = (s.eatMeta || []).length;
         await enrichHours(s);
         if ((s.eatMeta || []).length > before) got++;
+        if (await enrichLocalName(s)) got++;
       }
     } finally { hoursRunning = false; }
     if (got){
@@ -7307,6 +7308,20 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // place with no hours forever, with no way to retry, while its siblings
   // fetched fine. Re-deriving from the chip means a later retry (the
   // ratings button, or another AI run touching the place) just tries again.
+  // Places found through the app's own search came back with Google's English
+  // name only, so they had no local name — no Naver search in it, no copy
+  // button. Fill it from Google in the destination's language. Only a name
+  // actually written in that script is kept, so a failed lookup or an English
+  // echo never lands in the field.
+  async function enrichLocalName(s){
+    if (!s.placeId || plain(s.kr)) return false;
+    try {
+      const r = await callAi({ action:"place-local-name", placeId:s.placeId });
+      const n = r && r.ok !== false && plain(r.name || "");
+      if (n && /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(n)){ s.kr = n; return true; }
+    } catch (_){}
+    return false;
+  }
   async function enrichHours(s){
     if (!s.placeId) return;
     if ((s.eatMeta || []).some(c => c.cls === "meta-chip hours")) return;
