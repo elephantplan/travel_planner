@@ -343,6 +343,20 @@ section.triplist{margin-bottom:36px;}
 (function(){
   "use strict";
 
+  // An installed app relaunched by iOS lands here, at its start URL, even if
+  // the family was halfway through a day a minute ago. Send it back there —
+  // but only in the installed app, only if it was recent, and never after the
+  // 主頁 button was pressed (that clears the note), so this page is still
+  // reachable on purpose.
+  try {
+    const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    const r = JSON.parse(localStorage.getItem("dumbofly_resume") || "null");
+    if (standalone && r && r.trip && Date.now() - r.t < 12 * 3600 * 1000 && !/[?&]home=1/.test(location.search)) {
+      location.replace("trip.html?trip=" + encodeURIComponent(r.trip));
+      return;
+    }
+  } catch (_){}
+
   // ---------- config (same project as trip.html; no shared JS module in
   // this app, each page is self-contained by convention) ----------
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";

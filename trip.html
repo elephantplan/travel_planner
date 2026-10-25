@@ -1356,7 +1356,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-15-02";
+  const BUILD = "2026-10-25-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2826,6 +2826,37 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     });
   }
 
+  // iOS kills an installed app in the background to save battery, and the
+  // relaunch opens at its start URL — the trip list. So switching to Naver
+  // for a minute and coming back dropped you on the home page instead of the
+  // day you were reading. Where you are is remembered and put back.
+  const RESUME_KEY = "dumbofly_resume";
+  const RESUME_FOR_MS = 12 * 3600 * 1000;
+  let goingHome = false;     // set by 主頁; leaving must not re-write the note
+  function rememberPlace(){
+    try {
+      if (!state.tripId || goingHome) return;
+      localStorage.setItem(RESUME_KEY, JSON.stringify({
+        trip: state.tripId, view: state.view, y: Math.round(window.scrollY), t: Date.now() }));
+    } catch (_){}
+  }
+  function readPlace(){
+    try {
+      const r = JSON.parse(localStorage.getItem(RESUME_KEY) || "null");
+      return r && Date.now() - r.t < RESUME_FOR_MS ? r : null;
+    } catch (_){ return null; }
+  }
+  let placeTimer = null;
+  window.addEventListener("scroll", () => {
+    clearTimeout(placeTimer); placeTimer = setTimeout(rememberPlace, 400);
+  }, { passive: true });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") rememberPlace(); });
+  window.addEventListener("pagehide", rememberPlace);
+
+  document.addEventListener("click", e => {
+    if (e.target.closest && e.target.closest("#btn-home")) { goingHome = true; try { localStorage.removeItem(RESUME_KEY); } catch (_){} }
+  }, true);
+
   function render(){
     renderBrandmark();
     renderLines();
@@ -2838,6 +2869,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
     markClampedDescs();
     if (state.view !== "overview") backfillHoursFor(dayById(state.view));
+    rememberPlace();
   }
 
   // Hours used to be fetched only when the AI added a place, so every stop the
@@ -8272,8 +8304,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     state.snapshot = normalizeSnapshot(row.snapshot);
     saver.lastPersistedJson = snapJson();
+    const back = readPlace();
+    const resumeY = (back && back.trip === tripId) ? back.y : 0;
+    if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes"
+        || dayById(back.view) || boardById(back.view))) state.view = back.view;
     try {
       render();
+      if (resumeY) requestAnimationFrame(() => window.scrollTo(0, resumeY));
       // snapshots saved before stays carried their own coordinate still have
       // no 🏨 pin; fill it in once, in the background
       geocodeStays(state.snapshot);
