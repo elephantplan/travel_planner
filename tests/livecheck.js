@@ -25,7 +25,7 @@ const WEATHER = {
 const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區十月下旬黃綠參半。' };
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
   async function boot(){
     const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 }, colorScheme: 'dark' });

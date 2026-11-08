@@ -16,7 +16,7 @@ const SRC = fs.readFileSync(__dirname + '/../trip.html', 'utf8');
 const BUILD = (SRC.match(/const BUILD = "([^"]+)"/) || [])[1];
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
   // `serveBuild` is what the SERVER hands back for trip.html on a re-fetch —
   // null means "serve the real file", i.e. no new version exists.

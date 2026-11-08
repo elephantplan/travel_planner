@@ -9,7 +9,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
 const WEEK = ['星期一: 11:00 – 22:00','星期二: 11:00 – 22:00','星期三: 11:00 – 22:00','星期四: 11:00 – 22:00',
               '星期五: 11:00 – 23:00','星期六: 10:00 – 23:00','星期日: 10:00 – 21:00'];
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));

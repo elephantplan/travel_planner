@@ -4,7 +4,7 @@ const { snap } = require('./fixture.js');
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? '  → ' + JSON.stringify(x) : '')); } };
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await b.newContext({ serviceWorkers: 'block', permissions: ['clipboard-read','clipboard-write'] });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const cur = JSON.parse(JSON.stringify(snap));
@@ -27,7 +27,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); } else { f
   await p.evaluate(() => 0);
   ok('冇 JS 錯誤', errs.length === 0, errs);
   {
-    const p2 = await ctx.newPage();
+    // own context: the first page is still open and keeps writing its resume
+    // point into the shared localStorage, which would land this one on a day
+    const p2 = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
     const jp = JSON.parse(JSON.stringify(cur)); jp.meta.destinationLocal = '東京'; jp.meta.title = '東京行';
     jp.days.forEach(d => d.items.forEach(i => { if (/[가-힣]/.test(i.kr || '')) i.kr = ''; }));
     await p2.route('**/rest/v1/itinerary_versions**', r => r.request().method()==='POST'

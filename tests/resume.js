@@ -5,7 +5,7 @@ const { snap } = require('./fixture.js');
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? '  → ' + JSON.stringify(x) : '')); } };
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 700 } });
   await ctx.addInitScript(() => Object.defineProperty(navigator, 'standalone', { get: () => true }));
   const cur = JSON.parse(JSON.stringify(snap));

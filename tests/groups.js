@@ -15,7 +15,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
   links: [], source: 'manual', topic: title, aiRefresh: false, where });
 
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
   async function boot(patch){
     const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 }, colorScheme: 'dark' });

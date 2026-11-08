@@ -828,7 +828,10 @@ img{max-width:100%;}
    card. The icons carry no information the word does not — so they go,
    and the row fits on one line. Icons stay where they mean something:
    the rail, the connectors, the top bar. */
-.stopfoot{display:flex;gap:4px 13px;flex-wrap:wrap;padding:2px 12px 13px;}
+.stopfoot{display:flex;gap:4px 14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+  padding:2px 12px 13px;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);}
+.stopfoot::-webkit-scrollbar{display:none;}
+.stopfoot > *{flex:0 0 auto;white-space:nowrap;}
 .stopfoot .maplink{font-size:11.5px;}
 .stopfoot .maplink .i{display:none;}
 .maplink{
@@ -919,6 +922,52 @@ img{max-width:100%;}
 .recalc:hover{border-color:var(--ink-faint);color:var(--ink);}
 .recalc[data-stale="1"]{border-color:color-mix(in srgb,var(--warn) 40%,transparent);color:var(--warn);}
 .recalc:disabled{opacity:.5;}
+
+
+
+/* ---------- signature: the line badge ----------
+   Seoul's subway lines are a coloured disc with a number in it; this trip's
+   days already wear one colour each, so each day gets its disc too. The
+   numerals and dates go condensed, set like a platform board, which is the
+   only place the page raises its voice. */
+.dayhead .dno{display:inline-flex;align-items:center;gap:8px;}
+.dayhead .dno-n{
+  width:30px;height:30px;border-radius:50%;display:inline-grid;place-items:center;
+  background:var(--lc);color:var(--paper);
+  font-family:'Archivo',var(--f-disp);font-stretch:75%;font-weight:800;font-size:17px;
+  letter-spacing:0;font-variant-numeric:tabular-nums;
+}
+.dayhead .date,.dayline-when,.hero .eyebrow{
+  font-family:'Archivo',var(--f-mono);font-stretch:82%;font-weight:600;
+  font-variant-numeric:tabular-nums;letter-spacing:.06em;
+}
+.dayline-dot{font-family:'Archivo',var(--f-disp);font-stretch:75%;font-weight:800;font-size:17px;}
+.dayhead h2,.hero h1{font-weight:800;}
+
+/* ---------- day tools ----------
+   Six full-width pills stacked under the map read as six equally urgent
+   calls to action. They are one list of occasional chores, so they look
+   like one: a single panel, rows divided by hairlines, label left. */
+.toollist{margin-top:14px;background:var(--surface);border:1px solid var(--rule-soft);
+  border-radius:var(--r-lg);overflow:hidden;}
+.toollist:empty{display:none;}
+.toollist > .btn,.toollist > .recalc{
+  width:100%;margin:0 !important;justify-content:flex-start;gap:11px;
+  min-height:48px;padding:12px 16px;border:0;border-radius:0;background:transparent;
+  font-size:13.5px;font-weight:500;color:var(--ink);text-align:left;
+}
+.toollist > * + *{border-top:1px solid var(--rule-soft) !important;}
+.toollist > .btn .i,.toollist > .recalc .i{color:var(--ink-faint);width:16px;height:16px;}
+.toollist > .dayai .i{color:var(--lc,var(--ink));}
+.toollist > .recalc[data-stale="1"]{color:var(--warn);}
+.toollist > .recalc[data-stale="1"] .i{color:var(--warn);}
+.toollist > *:hover{background:var(--surface-2);}
+.toollist > *:active{transform:none;}
+.toollist > *:focus-visible{outline:2px solid var(--lc,var(--ink));outline-offset:-2px;}
+
+/* section movers/edit/delete: present, but quiet until you reach for them */
+.sectools .secedit{opacity:.38;}
+.sectools:hover .secedit,.sectools:focus-within .secedit{opacity:.75;}
 
 /* ---------- 選幾個地點一齊搬 ---------- */
 .stopcard.selecting .stopmain{padding-right:14px;cursor:pointer;-webkit-user-select:none;user-select:none;}
@@ -1356,7 +1405,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-10-25-01";
+  const BUILD = "2026-11-07-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -1416,8 +1465,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       "Content-Type": "application/json"
     }, extra || {});
   }
+  // Emoji arrive in the data — hours chips, access badges, clothing tips, AI
+  // prose — and every one of them made the page look like a group chat. They
+  // are stripped at the one place all text passes through on its way to the
+  // screen; what is stored is left alone.
+  const EMOJI_RE = /(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{231A}-\u{23FF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{1F3FB}-\u{1F3FF}]?\u{200D}?)+[ \u3000]?/gu;
+  function noEmoji(s){ return String(s).replace(EMOJI_RE, "").replace(/\u{FE0F}/gu, ""); }
   function esc(s){
-    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    return noEmoji(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
   // ---------- icons ----------
@@ -3793,7 +3848,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return `
       <section class="dayhead" style="--lc:${lc}">
         <div class="kicker">
-          <span class="dno">Day ${day.id.replace('day','')}</span>
+          <span class="dno">Day<span class="dno-n">${day.id.replace('day','')}</span></span>
           <span class="kline"></span>
           <span class="date">${esc(day.date)}</span>
         </div>
@@ -3816,8 +3871,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
         ${sel ? "" : `
-          <button class="btn wide dayai" id="dayai" style="margin-top:11px;">${icon("sparkle")}AI 諗行程</button>
-          <button class="btn wide" id="swapday" style="margin-top:8px;">${icon("refresh")}同另一日成日對調</button>
+          <div class="toollist">
+            <button class="btn wide dayai" id="dayai">${icon("sparkle")}AI 諗行程</button>
+            <button class="btn wide" id="swapday">${icon("refresh")}同另一日成日對調</button>
+          </div>
         `}
       </section>
 
@@ -3838,7 +3895,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
-        ${units.length ? `<button class="btn wide" id="selstart" style="margin-top:8px;">揀幾個一齊搬去第度</button>` : ""}
+        <div class="toollist">
+        ${units.length ? `<button class="btn wide" id="selstart">${icon("down")}揀幾個一齊搬去第度</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
             ? `${icon("refresh")}重算全日交通（有 ${staleCount(units)} 段待確認）`
@@ -3846,6 +3904,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }</button>` : ""}
         ${ratableCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getratings">${icon("star")}攞 Google 評分／營業時間（${ratableCount(units.map(u => u.stop).filter(Boolean))} 個地點未有）</button>` : ""}
         ${photolessCount(units.map(u => u.stop).filter(Boolean)) ? `<button class="recalc" id="getphotos">${icon("camera")}攞返地點相（${photolessCount(units.map(u => u.stop).filter(Boolean))} 個未有）</button>` : ""}
+        </div>
       `}
 
       <footer>
@@ -6525,7 +6584,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       : `問咗 AI 關於「${board.name}」，記低咗分析`);
 
     const saved = [r.analysis, (r.resources||[]).map(x => `${x.name}：${x.url}`).join("\n"),
-      newItems.length ? newItems.map(i => `${plain(i.title)}：⭐${i.rating}・${i.ratingCount} 則評價`).join("\n") : ""
+      newItems.length ? newItems.map(i => `${plain(i.title)}：評分 ${i.rating}・${i.ratingCount} 則評價`).join("\n") : ""
     ].filter(Boolean).join("\n\n");
     if (saved) saveAiNote("board", `${board.name}：AI 分析＋推介`, saved);
   }
@@ -6580,7 +6639,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       L.push(`━━ Day ${String(day.id).replace("day","")} · ${day.date} · ${day.title} ━━`);
       if (day.desc) L.push(plain(day.desc));
       const st = stayForDay(snap, day);
-      if (st && st.name) L.push(`🏨 呢晚住：${st.name}`);
+      if (st && st.name) L.push(`呢晚住：${st.name}`);
       toUnits(day.items).forEach((u, i) => {
         if (i > 0 && u.seg){
           const t = segPlain(u.seg.html || "");
@@ -6588,34 +6647,34 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }
         if (u.note){
           const t = plain(u.note.text);
-          if (t) L.push(`　　📝 ${t.replace(/\n/g, "\n　　   ")}`);
+          if (t) L.push(`　　備註：${t.replace(/\n/g, "\n　　   ")}`);
           return;
         }
         const s = u.stop;
         if (!s) return;
         L.push(`${plain(s.time) || "　"}　${plain(s.title)}${s.kr ? `（${plain(s.kr)}）` : ""}`);
         if (s.desc) L.push(`    ${plain(s.desc)}`);
-        if (Number.isFinite(s.rating)) L.push(`    ⭐ ${s.rating}${s.ratingCount ? `（${s.ratingCount} 則評價）` : ""}`);
+        if (Number.isFinite(s.rating)) L.push(`    評分 ${s.rating}${s.ratingCount ? `（${s.ratingCount} 則評價）` : ""}`);
         if (s.hoursChip) L.push(`    ${plain(s.hoursChip)}`);
         (s.accessBadges || []).forEach(b => b && b.text && L.push(`    ${plain(b.text)}`));
         if (s.mapUrl) L.push(`    ${s.mapUrl}`);
         // Worth carrying on paper: standing outside a full restaurant is
         // exactly when someone is reading the printout rather than the app.
         altsOf(s).forEach(a => L.push(`    後備：${altName(a)}${a.kr ? `（${plain(a.kr)}）` : ""}${
-          Number.isFinite(a.rating) ? ` ⭐ ${a.rating}` : ""}`));
+          Number.isFinite(a.rating) ? ` 評分 ${a.rating}` : ""}`));
       });
       L.push("");
     });
     (snap.sections || []).forEach(s => {
-      L.push(`【${s.icon || "📌"} ${s.title || ""}】`);
+      L.push(`【${s.title || ""}】`);
       (s.lines || []).forEach(l => L.push(`・${plain(l)}`));
       (s.links || []).forEach(l => L.push(`  ${l.name}：${l.url}`));
       L.push("");
     });
     (snap.boards || []).forEach(b => {
       if (!(b.items || []).length) return;
-      L.push(`【📌 ${b.name}（心水清單，未排入行程）】`);
-      b.items.forEach(it => L.push(`・${plain(it.title)}${Number.isFinite(it.rating) ? ` ⭐${it.rating}` : ""}${it.tip ? `　${plain(it.tip)}` : ""}`));
+      L.push(`【${b.name}（心水清單，未排入行程）】`);
+      b.items.forEach(it => L.push(`・${plain(it.title)}${Number.isFinite(it.rating) ? ` 評分 ${it.rating}` : ""}${it.tip ? `　${plain(it.tip)}` : ""}`));
       L.push("");
     });
     L.push(`（匯出時間：${new Date().toLocaleString("zh-HK")}）`);
@@ -6798,7 +6857,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const rows = toUnits(day.items).map((u, i) => {
         if (u.note){
           const t = plain(u.note.text);
-          return t ? `<div class="note">📝 ${esc(t)}</div>` : "";
+          return t ? `<div class="note">${esc(t)}</div>` : "";
         }
         const s = u.stop;
         if (!s) return "";
@@ -6810,7 +6869,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <div class="n">${esc(plain(s.title))}${s.kr ? ` <span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
               ${s.desc ? `<div class="d">${esc(plain(s.desc))}</div>` : ""}
               <div class="c">${[
-                Number.isFinite(s.rating) ? `⭐ ${s.rating}${s.ratingCount ? `（${s.ratingCount}）` : ""}` : "",
+                Number.isFinite(s.rating) ? `評分 ${s.rating}${s.ratingCount ? `（${s.ratingCount}）` : ""}` : "",
                 plain(s.hoursChip || ""),
                 ...(s.accessBadges || []).map(b => plain((b && b.text) || "")),
               ].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}</div>
@@ -6823,18 +6882,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return `<section class="day">
           <h2>Day ${String(day.id).replace("day","")} · ${esc(day.date)} · ${esc(day.title)}</h2>
           ${day.desc ? `<p class="intro">${esc(plain(day.desc))}</p>` : ""}
-          ${st && st.name ? `<p class="stay">🏨 呢晚住：${esc(st.name)}</p>` : ""}
+          ${st && st.name ? `<p class="stay">呢晚住：${esc(st.name)}</p>` : ""}
           ${rows}
         </section>`;
     }).join("");
     const secBlocks = (snap.sections || []).map(s => `
-      <section class="day"><h2>${esc(s.icon || "📌")} ${esc(s.title || "")}</h2>
+      <section class="day"><h2>${esc(s.title || "")}</h2>
         ${s.sub ? `<p class="intro">${esc(s.sub)}</p>` : ""}
         <ul>${(s.lines || []).map(l => `<li>${esc(plain(l))}</li>`).join("")}</ul>
         ${(s.links || []).map(l => `<div class="link">${esc(l.name)}：${esc(l.url)}</div>`).join("")}
       </section>`).join("");
     const stayBlock = (snap.stays || []).length ? `
-      <section class="day"><h2>🏨 住宿</h2>
+      <section class="day"><h2>住宿</h2>
         ${(snap.stays || []).map(s => `<div class="stop"><div class="t">${esc(stayRangeLabel(snap, s))}</div>
           <div class="b"><div class="n">${esc(s.name || "未填")}</div>${s.desc ? `<div class="d">${esc(plain(s.desc))}</div>` : ""}</div></div>`).join("")}
       </section>` : "";
