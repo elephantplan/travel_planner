@@ -1594,7 +1594,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-05";
+  const BUILD = "2026-11-09-06";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -8470,6 +8470,40 @@ ${stayBlock}${dayBlocks}${secBlocks}
     setTimeout(() => genBanner(null), 6000);
   }
 
+  // An imported trip arrives as names and times only. Find each place on
+  // Google (coordinates, photo, hours, local name), then work out every leg's
+  // transit — the same steps a stop typed in by hand goes through. Nothing is
+  // added or reordered; days the source left empty stay empty.
+  async function runImportFinish(){
+    genBanner("搵緊每個地點嘅地圖、相同交通，可以留喺呢版等，或者切去第日睇。");
+    try {
+      const days = state.snapshot.days || [];
+      for (let k = 0; k < days.length; k++){
+        const day = days[k];
+        const stops = (day.items || []).filter(i => i.kind === "stop" && plain(i.title) && !i.placeId);
+        if (!stops.length) continue;
+        genBanner(`配緊第 ${k + 1} 日嘅地點（${stops.length} 個）…`);
+        await runBounded(stops, 4, async st => { await enrichStop(st); await enrichLocalName(st).catch(() => {}); });
+        render();
+        const units = toUnits(day.items);
+        const idxs = units.map((u, i) => i).filter(i => units[i].stop);
+        if (idxs.length > 1){
+          genBanner(`計緊第 ${k + 1} 日嘅交通…`);
+          await refreshTransit(day, idxs);
+        }
+      }
+      await recommendAccommodation(msg => genBanner(msg));
+      await fillWeatherRows(msg => genBanner(msg));
+      await recommendStandardSections(msg => genBanner(msg));
+      await saveNow("導入完成：配好地點、相、交通同天氣");
+      genBanner("導入完成。每個地點都配好地圖同相，可以逐日睇同再微調。", { done:true });
+    } catch (e){
+      genBanner("配地點中途出咗問題：" + e.message + "（已經做好嘅已經存低，入返個別日子撳「重算全日交通」補返）", { done:true });
+    }
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
+    setTimeout(() => genBanner(null), 6000);
+  }
+
   // Installed to the home screen there is no address bar: no reload button,
   // nothing to pull on, and no way to copy the link. Several things below
   // only make sense there, and one of them — our own pull-to-refresh — is
@@ -8703,6 +8737,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     // is that an update finds you rather than the other way round.
     checkAppUpdate();
     if (params.get("new") === "1") runInitialGeneration();
+    else if (params.get("import") === "1") runImportFinish();
   }
   registerServiceWorker();
   boot();

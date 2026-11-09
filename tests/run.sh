@@ -1,7 +1,7 @@
 #!/bin/sh
 # Serves the repo and runs the browser tests against it.
 #   sh tests/run.sh
-# Needs playwright (npm i playwright) and a chromium at PW_CHROMIUM, or the
+# Needs playwright and xlsx (npm i playwright xlsx@0.18.5) and a chromium at PW_CHROMIUM, or the
 # one these containers ship with.
 set -e
 cd "$(dirname "$0")/.."

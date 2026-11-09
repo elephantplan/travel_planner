@@ -391,6 +391,58 @@ section.triplist{margin-bottom:36px;}
 .formcard .datecell.empty .dateph{display:flex;}
 .formcard .datecell.empty input[type="date"].input{color:transparent;}
 .formcard .datecell.empty input[type="date"].input::-webkit-calendar-picker-indicator{opacity:0;}
+
+/* ---------- import ---------- */
+.importcta{display:flex;align-items:center;gap:14px;width:100%;margin:-24px 0 40px;padding:16px 18px;cursor:pointer;
+  text-align:left;color:var(--ink);background:transparent;border:1.5px dashed var(--rule);border-radius:20px;font-family:inherit;}
+.importcta:hover{border-color:var(--gold);}
+.importcta-i{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto;
+  background:color-mix(in srgb,var(--gold) 14%,transparent);color:var(--gold);}
+.importcta-i .i{width:20px;height:20px;}
+.importcta-t{display:flex;flex-direction:column;min-width:0;flex:1;}
+.importcta-t b{font-size:15px;font-weight:700;}
+.importcta-t small{font-size:12.5px;color:var(--ink-soft);line-height:1.5;margin-top:2px;}
+.importcta-go{color:var(--ink-faint);}
+.importcta-go .i{width:16px;height:16px;}
+.importsheet{max-height:88vh;overflow-y:auto;}
+.sheet-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:0;background:var(--surface-2);
+  display:grid;place-items:center;cursor:pointer;color:var(--ink-soft);}
+.sheet-x .i{width:16px;height:16px;}
+.dropzone{display:flex;flex-direction:column;align-items:center;gap:4px;padding:26px 16px;border:1.5px dashed var(--rule);
+  border-radius:18px;cursor:pointer;text-align:center;background:var(--stock);}
+.dropzone:hover,.dropzone:focus-within{border-color:var(--gold);}
+.dropzone input{position:absolute;width:1px;height:1px;opacity:0;}
+.dz-i{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;margin-bottom:4px;
+  background:color-mix(in srgb,var(--gold) 14%,transparent);color:var(--gold);}
+.dz-i .i{width:22px;height:22px;}
+.dropzone b{font-size:15px;}
+.dropzone small{font-size:12px;color:var(--ink-faint);}
+.impfiles{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;}
+.impfile{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 10px;border-radius:999px;
+  background:var(--surface-2);font-size:12.5px;}
+.impfile > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;}
+.impfile .i{width:14px;height:14px;color:var(--ink-faint);}
+.impfile button{border:0;background:transparent;cursor:pointer;color:var(--ink-faint);display:grid;place-items:center;padding:2px;}
+.imppaste{margin-top:12px;font-size:13px;color:var(--ink-soft);}
+.imppaste summary{cursor:pointer;padding:6px 0;}
+.imppaste textarea{margin-top:6px;}
+#imp-err:not(:empty),#imp-err2:not(:empty){margin-top:12px;}
+.impform{margin:4px 0 14px;box-shadow:none;}
+.impend{font-family:'Archivo',var(--f-body);font-stretch:85%;font-size:17px;font-weight:700;padding:4px 0;min-height:36px;color:var(--ink-soft);}
+.impnote{font-size:12.5px;line-height:1.6;color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent);
+  border-radius:12px;padding:10px 12px;margin-bottom:12px;}
+.impdays{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:8px;}
+.impdays li{background:var(--stock);border:1px solid var(--rule-soft);border-radius:14px;padding:12px 14px;}
+.impday-h{display:flex;align-items:center;gap:10px;}
+.impday-n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:var(--gold);color:#14110A;
+  font-family:'Archivo',sans-serif;font-stretch:75%;font-weight:800;font-size:13px;}
+.impday-h b{font-size:14.5px;flex:1;min-width:0;}
+.impday-h small{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;}
+.impday-s{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;padding-left:34px;font-size:12.5px;color:var(--ink-soft);}
+.impday-s em{font-style:normal;font-family:'Archivo',sans-serif;font-stretch:82%;font-weight:700;color:var(--ink-faint);margin-right:5px;}
+.impday-s .isnote{color:var(--ink-faint);}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;display:inline-block;
+  animation:ptrspin .7s linear infinite;margin-right:6px;vertical-align:-2px;}
 </style>
 </head>
 <body>
@@ -433,6 +485,12 @@ section.triplist{margin-bottom:36px;}
     <div id="form-err"></div>
     <button class="btn primary wide" id="f-go">開始規劃</button>
   </div>
+
+  <button class="importcta" id="btn-import" type="button">
+    <span class="importcta-i"></span>
+    <span class="importcta-t"><b>已經有行程？</b><small>導入 Excel、CSV 或者截圖，AI 幫你排返入每一日</small></span>
+    <span class="importcta-go"></span>
+  </button>
 
   <section class="triplist">
     <div class="triplist-head"><h2>未去嘅行程</h2><span class="count" id="upcount"></span></div>
@@ -493,6 +551,10 @@ section.triplist{margin-bottom:36px;}
   const ICONS = {
     plane: '<path d="M10.4 3.4a1.6 1.6 0 0 1 3.2 0V9l7 4.1v2.3l-7-2.1v3.9l2.3 1.7v1.5L12 19.6l-3.9.8v-1.5l2.3-1.7v-3.9l-7 2.1v-2.3l7-4.1z"/>',
     contrast: '<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 0 1 0 16.4z" fill="currentColor" stroke="none"/>',
+    upload: '<path d="M12 15.5V4.5"/><path d="m7.5 9 4.5-4.5L16.5 9"/><path d="M4.5 15v3.2a1.8 1.8 0 0 0 1.8 1.8h11.4a1.8 1.8 0 0 0 1.8-1.8V15"/>',
+    sheet: '<rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M4 9h16M4 14.5h16M10 3.5v17"/>',
+    image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="m4 18 5.2-5.2 3.3 3.3 2.5-2.5L20 18.6"/>',
+    x: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
     pin: '<path d="M12 21s6.4-6.1 6.4-10.6a6.4 6.4 0 1 0-12.8 0C5.6 14.9 12 21 12 21z"/><circle cx="12" cy="10.3" r="2.4"/>',
     trash: '<path d="M4.8 6.8h14.4"/><path d="M9.3 6.8V4.9h5.4v1.9"/><path d="M6.6 6.8 7.5 20h9l.9-13.2"/>',
     // the app's own mark: an elephant in profile, one stroke, matching the icon
@@ -731,6 +793,218 @@ section.triplist{margin-bottom:36px;}
       goBtn.textContent = "開始規劃";
     }
   });
+
+  // ==================================================================
+  // IMPORT — an itinerary the family already has (Excel / CSV / screenshots)
+  // The spreadsheet is turned into text here in the browser; pictures are
+  // shrunk to a sensible size. The trip-import function only transcribes —
+  // it never invents places — and trip.html then finds every place on
+  // Google, fetches photos and works out the transit, as for a typed stop.
+  // ==================================================================
+  const IMPORT_URL = SUPABASE_URL + "/functions/v1/trip-import";
+  let importFiles = [];
+  function loadScript(src){
+    return new Promise((ok, bad) => {
+      const el = document.createElement("script");
+      el.src = src; el.onload = ok; el.onerror = () => bad(new Error("載入唔到讀 Excel 嘅工具，檢查吓網絡。"));
+      document.head.appendChild(el);
+    });
+  }
+  async function sheetToText(file){
+    if (/\.(csv|txt|tsv)$/i.test(file.name)) return await file.text();
+    if (!window.XLSX) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    return wb.SheetNames.map(n => {
+      const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false, dateNF: "yyyy-mm-dd" });
+      return csv.trim() ? `# 工作表：${n}\n${csv}` : "";
+    }).filter(Boolean).join("\n\n");
+  }
+  async function imageToPart(file){
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error(`開唔到「${file.name}」呢張圖。`)); i.src = url; });
+      const MAX = 1800, k = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return { mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const isImage = f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name);
+  const isSheet = f => /\.(xlsx|xlsm|xls|csv|tsv|txt|numbers)$/i.test(f.name);
+
+  function openImportSheet(){
+    importFiles = [];
+    const layer = $("#layer");
+    layer.innerHTML = `
+      <div class="scrim" data-close></div>
+      <div class="sheet importsheet" role="dialog" aria-label="導入行程">
+        <button class="sheet-x" data-close aria-label="關閉">${icon("x")}</button>
+        <h3>導入現有行程</h3>
+        <p class="sheet-sub">揀 Excel／CSV，或者行程嘅截圖、相（最多 8 張）。AI 會照抄入每一日，唔會自己加地點；之後每個地點會自動配返 Google 地圖、相同交通。</p>
+        <label class="dropzone" id="imp-drop">
+          <input type="file" id="imp-file" multiple accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,image/*">
+          <span class="dz-i">${icon("upload")}</span>
+          <b>揀檔案或者相</b>
+          <small>Excel · CSV · 截圖 · 相</small>
+        </label>
+        <div class="impfiles" id="imp-files"></div>
+        <details class="imppaste"><summary>或者直接貼文字</summary>
+          <textarea class="input" id="imp-text" placeholder="例如喺 Excel 揀晒啲格複製，再貼喺度"></textarea>
+        </details>
+        <div id="imp-err"></div>
+        <div id="imp-body"></div>
+        <div class="sheet-btns">
+          <button class="btn" data-close>取消</button>
+          <button class="btn primary" id="imp-read" disabled>讀取行程</button>
+        </div>
+      </div>`;
+    const close = () => { layer.innerHTML = ""; };
+    layer.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", close));
+    const fileIn = layer.querySelector("#imp-file"), textIn = layer.querySelector("#imp-text");
+    const readBtn = layer.querySelector("#imp-read"), errBox2 = layer.querySelector("#imp-err");
+    const refresh = () => {
+      layer.querySelector("#imp-files").innerHTML = importFiles.map((f, i) =>
+        `<span class="impfile">${icon(isImage(f) ? "image" : "sheet")}<span>${esc(f.name)}</span><button type="button" data-rm="${i}" aria-label="拎走">${icon("x")}</button></span>`).join("");
+      layer.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", e => {
+        e.preventDefault(); importFiles.splice(+b.dataset.rm, 1); refresh(); }));
+      readBtn.disabled = !importFiles.length && !textIn.value.trim();
+    };
+    fileIn.addEventListener("change", () => {
+      const add = [...fileIn.files].filter(f => isImage(f) || isSheet(f));
+      importFiles = importFiles.concat(add).slice(0, 10);
+      fileIn.value = ""; errBox2.innerHTML = "";
+      if (add.length < (fileIn.files || []).length) errBox2.innerHTML = `<div class="errbox">有啲檔案唔係 Excel／CSV／圖，略過咗。</div>`;
+      refresh();
+    });
+    textIn.addEventListener("input", refresh);
+    readBtn.addEventListener("click", async () => {
+      readBtn.disabled = true; errBox2.innerHTML = "";
+      readBtn.innerHTML = `<span class="spin"></span>讀緊…`;
+      try {
+        const texts = [], images = [];
+        if (textIn.value.trim()) texts.push(textIn.value.trim());
+        for (const f of importFiles){
+          if (isImage(f)){ if (images.length < 8) images.push(await imageToPart(f)); }
+          else texts.push(`# 檔案：${f.name}\n` + await sheetToText(f));
+        }
+        readBtn.innerHTML = `<span class="spin"></span>AI 整理緊（大約半分鐘）…`;
+        const res = await fetch(IMPORT_URL, { method: "POST", headers: sbHeaders(),
+          body: JSON.stringify({ text: texts.join("\n\n").slice(0, 60000), images, today: todayIso() }) });
+        const r = await res.json().catch(() => ({ ok: false, message: "伺服器回覆唔到 " + res.status }));
+        if (!r || r.ok === false || !r.trip) throw new Error((r && r.message) || "讀唔到");
+        if (!r.trip.days.some(d => d.items.length)) throw new Error("AI 喺入面搵唔到任何行程。試吓揀清楚啲嘅截圖，或者直接貼文字。");
+        showImportPreview(layer, r.trip, close);
+      } catch (e){
+        errBox2.innerHTML = `<div class="errbox">${esc(e.message || "出咗問題")}</div>`;
+        readBtn.disabled = false; readBtn.textContent = "再試一次";
+      }
+    });
+  }
+
+  function addDaysIso(isoStr, n){
+    const d = new Date(isoStr + "T00:00:00"); d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  function showImportPreview(layer, t, close){
+    const nDays = t.days.length;
+    const sheet = layer.querySelector(".importsheet");
+    sheet.innerHTML = `
+      <button class="sheet-x" data-close aria-label="關閉">${icon("x")}</button>
+      <h3>讀到 ${nDays} 日行程</h3>
+      <p class="sheet-sub">睇吓啱唔啱。日子同目的地可以喺度改，其他開咗行程之後都改得。</p>
+      <div class="formcard impform">
+        <div class="field"><label for="imp-dest">目的地</label><input class="input" id="imp-dest" value="${esc(t.destination)}"></div>
+        <div class="field"><label for="imp-title">行程名</label><input class="input" id="imp-title" value="${esc(t.title || (t.destination ? t.destination + " 行程" : ""))}"></div>
+        <div class="field"><div class="daterow">
+          <div><label for="imp-start">出發</label><input class="input mono" type="date" id="imp-start" value="${esc(t.dateStart || "")}"></div>
+          <div><label>回程</label><div class="impend" id="imp-end"></div></div>
+        </div></div>
+      </div>
+      ${t.notes ? `<div class="impnote">${icon("warn") || ""}${esc(t.notes)}</div>` : ""}
+      <ol class="impdays">${t.days.map((d, i) => `
+        <li><div class="impday-h"><span class="impday-n">${i + 1}</span><b>${esc(d.title || "第 " + (i + 1) + " 日")}</b><small>${d.items.filter(x => x.kind === "stop").length} 個地點</small></div>
+          <div class="impday-s">${d.items.map(x => `<span class="${x.kind === "note" ? "isnote" : ""}">${x.time ? `<em>${esc(x.time.replace(/^約\s*/, ""))}</em>` : ""}${esc(x.title)}</span>`).join("")}</div></li>`).join("")}
+      </ol>
+      ${t.stays.length ? `<p class="sheet-sub"><b>住宿：</b>${t.stays.map(s => esc(s.name)).join("、")}</p>` : `<p class="sheet-sub">冇讀到住宿，開咗之後 AI 會建議住邊區。</p>`}
+      <div id="imp-err2"></div>
+      <div class="sheet-btns">
+        <button class="btn" data-close>取消</button>
+        <button class="btn primary" id="imp-go">開呢個行程</button>
+      </div>`;
+    sheet.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", close));
+    const startIn = sheet.querySelector("#imp-start"), endOut = sheet.querySelector("#imp-end");
+    const go = sheet.querySelector("#imp-go");
+    const sync = () => {
+      endOut.textContent = startIn.value ? addDaysIso(startIn.value, nDays - 1) : "先揀出發日";
+      go.disabled = !startIn.value || !sheet.querySelector("#imp-dest").value.trim();
+    };
+    startIn.addEventListener("input", sync); sheet.querySelector("#imp-dest").addEventListener("input", sync); sync();
+    go.addEventListener("click", async () => {
+      go.disabled = true; go.innerHTML = `<span class="spin"></span>開緊…`;
+      try {
+        const id = await createImportedTrip(t, sheet.querySelector("#imp-dest").value.trim(),
+          sheet.querySelector("#imp-title").value.trim(), startIn.value);
+        location.href = "trip.html?" + new URLSearchParams({ trip: id, import: "1" }).toString();
+      } catch (e){
+        sheet.querySelector("#imp-err2").innerHTML = `<div class="errbox">${esc(e.message || "開唔到")}</div>`;
+        go.disabled = false; go.textContent = "再試一次";
+      }
+    });
+  }
+
+  async function createImportedTrip(t, destination, title, dateStart){
+    const dateEnd = addDaysIso(dateStart, t.days.length - 1);
+    // the destination's own coordinates, so the maps open on the right city
+    let lat = null, lng = null;
+    try {
+      const r = await callAi({ action: "place-search", query: destination });
+      const p = r && r.places && r.places[0];
+      if (p && Number.isFinite(p.lat)){ lat = p.lat; lng = p.lng; }
+    } catch (_){}
+    const days = buildDaySkeleton(dateStart, dateEnd);
+    t.days.forEach((src, i) => {
+      const d = days[i]; if (!d) return;
+      if (src.title) d.title = src.title;
+      d.items = src.items.map(x => x.kind === "note"
+        ? { kind: "note", text: x.title + (x.desc ? "：" + x.desc : "") }
+        : { kind: "stop", type: x.type === "eat" ? "eat" : "normal", marker: "", time: x.time, title: x.title, kr: x.kr,
+            niecepick: [], desc: x.desc, eatboxHtml: "", eatMeta: [], mapUrl: "", accessBadges: [], tip: x.tip,
+            photoUrl: "", placeId: "", lat: null, lng: null });
+    });
+    const stays = t.stays.map(s => ({
+      name: s.name, kr: s.kr || "", desc: "", hoursChip: "", warning: "",
+      mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.kr || s.name)}`,
+      from: (days[Math.min(s.fromDay, days.length) - 1] || days[0]).id,
+      to: (days[Math.min(s.toDay, days.length) - 1] || days[days.length - 1]).id,
+    }));
+    const name = title || destination + " 行程";
+    const tripRes = await fetch(`${SUPABASE_URL}/rest/v1/trips`, {
+      method: "POST", headers: sbHeaders({ "Prefer": "return=representation" }),
+      body: JSON.stringify({ name, destination_local: destination, lat, lng, date_start: dateStart, date_end: dateEnd, cover_emoji: "" }),
+    });
+    if (!tripRes.ok) throw new Error("開唔到新行程 " + tripRes.status);
+    const trip = (await tripRes.json())[0];
+    const snapshot = {
+      meta: { destinationLocal: destination, lat, lng, dateStart, dateEnd, title: name,
+        eyebrow: formatEyebrow(dateStart, dateEnd), facts: [days.length + " 日行程"], hotelTags: [] },
+      tripBrief: `你係一個廣東話（香港口語）旅遊助理，幫緊去 ${destination}（${dateStart} 至 ${dateEnd}）嘅一次旅行。行程係由佢哋自己嘅資料導入，盡量保留原本嘅安排。`,
+      days, stays,
+      hiddenSections: ["foliage", "access"],
+    };
+    const verRes = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
+      method: "POST", headers: sbHeaders(),
+      body: JSON.stringify({ trip_id: trip.id, edited_by: "家人", source: "seed", summary: "導入咗行程", snapshot }),
+    });
+    if (!verRes.ok) throw new Error("儲存唔到導入嘅行程 " + verRes.status);
+    return trip.id;
+  }
+  $("#btn-import").addEventListener("click", openImportSheet);
+  (function(){
+    const b = $("#btn-import");
+    b.querySelector(".importcta-i").innerHTML = icon("upload");
+    b.querySelector(".importcta-go").innerHTML = icon("chevron");
+  })();
 
   // ==================================================================
   // Trip list — upcoming vs past
