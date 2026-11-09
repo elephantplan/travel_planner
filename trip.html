@@ -1658,7 +1658,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-08";
+  const BUILD = "2026-11-09-09";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -9120,6 +9120,35 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (params.get("new") === "1") runInitialGeneration();
     else if (params.get("import") === "1") runImportFinish();
   }
+  // The little plane on every boarding pass flies its dashed arc, HKG to the
+  // destination, then lands and goes again. One animation loop drives every
+  // plane on the page; the arc is the top half of an ellipse (the border of
+  // .tp-arc / .pass-arc), so the plane is placed on that curve and turned to
+  // its tangent. Off when the system asks for reduced motion.
+  (function flyPlanes(){
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const DUR = 5200, REST = 1400;
+    const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    function frame(now){
+      document.querySelectorAll(".tp-flight, .pass-flight").forEach((box, k) => {
+        const arc = box.querySelector(".tp-arc, .pass-arc"), pl = box.querySelector(".i");
+        if (!arc || !pl) return;
+        const W = arc.offsetWidth, H = arc.offsetHeight;
+        if (!W || !H) return;
+        // each pass starts at its own moment so a list doesn't move in lockstep
+        const cyc = (now + k * 900) % (DUR + REST);
+        const p = ease(Math.min(1, cyc / DUR));
+        const phi = Math.PI * p;                       // 0 = origin, π = destination
+        const cx = arc.offsetLeft + W / 2, cy = arc.offsetTop + H;
+        const x = cx - (W / 2) * Math.cos(phi), y = cy - H * Math.sin(phi);
+        const ang = Math.atan2(-H * Math.cos(phi), (W / 2) * Math.sin(phi)) * 180 / Math.PI;
+        pl.style.left = x + "px"; pl.style.top = y + "px";
+        pl.style.transform = `translate(-50%, -50%) rotate(${90 + ang}deg)`;
+      });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
   registerServiceWorker();
   boot();
 })();

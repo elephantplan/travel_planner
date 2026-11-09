@@ -1232,6 +1232,35 @@ section.triplist{margin-bottom:36px;}
   }
 
   registerServiceWorker();
+  // The little plane on every boarding pass flies its dashed arc, HKG to the
+  // destination, then lands and goes again. One animation loop drives every
+  // plane on the page; the arc is the top half of an ellipse (the border of
+  // .tp-arc / .pass-arc), so the plane is placed on that curve and turned to
+  // its tangent. Off when the system asks for reduced motion.
+  (function flyPlanes(){
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const DUR = 5200, REST = 1400;
+    const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    function frame(now){
+      document.querySelectorAll(".tp-flight, .pass-flight").forEach((box, k) => {
+        const arc = box.querySelector(".tp-arc, .pass-arc"), pl = box.querySelector(".i");
+        if (!arc || !pl) return;
+        const W = arc.offsetWidth, H = arc.offsetHeight;
+        if (!W || !H) return;
+        // each pass starts at its own moment so a list doesn't move in lockstep
+        const cyc = (now + k * 900) % (DUR + REST);
+        const p = ease(Math.min(1, cyc / DUR));
+        const phi = Math.PI * p;                       // 0 = origin, π = destination
+        const cx = arc.offsetLeft + W / 2, cy = arc.offsetTop + H;
+        const x = cx - (W / 2) * Math.cos(phi), y = cy - H * Math.sin(phi);
+        const ang = Math.atan2(-H * Math.cos(phi), (W / 2) * Math.sin(phi)) * 180 / Math.PI;
+        pl.style.left = x + "px"; pl.style.top = y + "px";
+        pl.style.transform = `translate(-50%, -50%) rotate(${90 + ang}deg)`;
+      });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
   wirePullToRefresh();
   loadTrips();
 })();
