@@ -1089,11 +1089,11 @@ img{max-width:100%;}
 /* ---------- 住宿: a booking confirmation ----------
    Photo across the top, the hotel name large, then a check-in / check-out
    stub in the same condensed numerals as the trip's pass. */
-.fold-body .hsblock[data-hskey="acc"]{padding:0;overflow:hidden;}
-.fold-body .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;right:10px;z-index:2;float:none;margin:0;}
-.fold-body .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1;color:#fff;
+.fold-body .hsblock[data-hskey="acc"],.stayspage .hsblock[data-hskey="acc"]{padding:0;overflow:hidden;}
+.fold-body .hsblock[data-hskey="acc"] > .foldtools,.stayspage .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;right:10px;z-index:2;float:none;margin:0;}
+.fold-body .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit,.stayspage .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1;color:#fff;
   background:rgba(10,12,16,.4);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
-.fold-body .hsblock[data-hskey="acc"] > .hint{padding:16px;}
+.fold-body .hsblock[data-hskey="acc"] > .hint,.stayspage .hsblock[data-hskey="acc"] > .hint{padding:16px;}
 .stayrow{border-top:1px dashed var(--rule);padding:18px 18px 16px;margin:0;}
 .stayrow:first-of-type{border-top:0;padding-top:18px;}
 .stayrow.hasphoto{padding-top:0;}
@@ -1301,7 +1301,7 @@ body.readonly [data-moneyitem]{pointer-events:none;}
 .staydel{position:absolute;top:12px;right:12px;z-index:2;opacity:1 !important;}
 .stayrow.hasphoto .staydel{color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
 .stayrow:not(.hasphoto) .v{padding-right:44px;}
-.fold-body .hsblock[data-hskey="acc"] > .foldtools{left:12px;right:auto;}
+.fold-body .hsblock[data-hskey="acc"] > .foldtools,.stayspage .hsblock[data-hskey="acc"] > .foldtools{left:12px;right:auto;}
 .sechide{display:flex;justify-content:flex-end;margin-top:10px;}
 .sechide .secedit{opacity:.7;font-size:12px;}
 body.readonly .sechide{display:none;}
@@ -1372,6 +1372,26 @@ body.readonly .sechide{display:none;}
 .sgmine{font-size:11px;font-weight:800;color:var(--ink);background:var(--surface);border:1px solid var(--rule);padding:1px 8px;border-radius:999px;}
 .sgmore-row{display:flex;flex-wrap:wrap;gap:8px;}
 
+
+.staysum{display:flex;flex-direction:column;gap:8px;}
+.staysum-row{display:flex;align-items:center;gap:12px;width:100%;padding:8px;border:0;border-radius:14px;background:var(--surface-2);
+  color:var(--ink);font-family:inherit;text-align:left;cursor:pointer;}
+.staysum-row img,.staysum-ph{width:56px;height:56px;border-radius:10px;object-fit:cover;flex:0 0 auto;}
+.staysum-ph{display:grid;place-items:center;background:var(--stock);color:var(--ink-faint);}
+.staysum-t{display:flex;flex-direction:column;min-width:0;flex:1;}
+.staysum-t b{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.staysum-t small{font-size:12px;color:var(--ink-soft);}
+.staysum-go{color:var(--ink-faint);}
+.staysum-go .i{width:16px;height:16px;}
+.pagehead{padding:26px 2px 14px;}
+.pagehead h1{font-size:clamp(26px,7vw,34px);font-weight:800;margin:6px 0 8px;letter-spacing:-.02em;}
+.pagehead .eyebrow{color:var(--gold);}
+.stayspage .hsblock[data-hskey="acc"]{background:var(--stock);border:1px solid var(--rule-soft);border-radius:18px;padding:0;overflow:hidden;position:relative;box-shadow:var(--shadow-1);}
+.stayspage .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;left:12px;z-index:2;margin:0;}
+.stayspage .sgblock{background:var(--stock);border:1px solid var(--rule-soft);border-radius:18px;padding:16px;margin-top:14px;box-shadow:var(--shadow-1);}
+
+.hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1 !important;color:#fff;background:rgba(10,12,16,.45);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;width:32px;height:32px;display:inline-grid;place-items:center;}
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1833,7 +1853,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-19";
+  const BUILD = "2026-11-09-20";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3498,6 +3518,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <button class="linebtn" role="tab" data-go="overview" aria-selected="${state.view==='overview'}" style="--lc:var(--ink-faint)">
         <span class="bullet"></span><span class="lbl">全程</span>
       </button>
+      <button class="linebtn" role="tab" data-go="stays" aria-selected="${state.view==='stays'}" style="--lc:var(--gold)">
+        <span class="bullet"></span><span>住宿</span>
+      </button>
       ${days.map(d => `
         <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span>
@@ -3602,6 +3625,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const app = $("#app");
     if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
+    if (state.view === "stays"){ app.innerHTML = staysPageHtml(state.snapshot); wireStaysPage(); rememberPlace(); return; }
     const board = boardById(state.view);
     if (board){ app.innerHTML = boardHtml(board); wireBoard(board); markClampedDescs(); return; }
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
@@ -3780,10 +3804,40 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // The map links go through the same builders the stops use, which means a
   // Korean trip gets its Naver button here too — the place you most need to
   // navigate back to was the one place still offering only a stored link.
+  // 住宿 grew into a page of its own (cards, recommendations, map, sorting),
+  // so the overview keeps only what you need at a glance: which hotel on
+  // which nights, and how far it is from the station.
   function stayFoldHtml(d){
     if (isSectionHidden(d, "acc")) return "";
+    const stays = d.stays || [], days = d.days || [];
+    const nights = st => {
+      const a = dayIndexById(d, st.from), b = dayIndexById(d, st.to);
+      return a < 0 ? "" : `Day ${a + 1}${b > a ? "–" + (b + 1) : ""}`;
+    };
+    const nSug = ((d.staySuggest || {}).hotels || []).length;
+    const body = `<div class="hsblock staysum">
+      ${stays.length ? stays.map(st => `<button type="button" class="staysum-row" data-go-stays>
+          ${st.photoUrl ? `<img src="${esc(st.photoUrl)}" alt="" loading="lazy">` : `<span class="staysum-ph">${icon("pin")}</span>`}
+          <span class="staysum-t"><span class="sgd">${esc(nights(st))}</span><b>${esc(st.name || "未填")}</b>
+            ${st.station ? `<small>最近 ${esc(st.station)}${st.walk ? " · " + esc(st.walk) : ""}</small>` : ""}</span>
+          <span class="staysum-go">${icon("chevron")}</span>
+        </button>`).join("")
+        : `<p class="hint">仲未揀酒店${days.length ? `（${days.length} 日行程）` : ""}。</p>`}
+      <button class="btn${stays.length ? "" : " primary"} wide" data-go-stays>${stays.length ? "去住宿頁：改、比較、推薦" : "去揀酒店"}${nSug ? `（${nSug} 間推薦）` : ""}</button>
+    </div>`;
+    const names = stays.map(st => plain(st.name)).filter(Boolean);
+    return foldHtml("stay", "住宿", names.length > 1 ? `${names[0]} 等 ${names.length} 間` : names[0] || "仲未揀", body);
+  }
+  function staysPageHtml(d){
+    return `<section class="pagehead">
+        <p class="eyebrow">住宿</p>
+        <h1>住邊度</h1>
+        <p class="sec-sub">揀咗嘅酒店喺最頂；下面可以叫 AI 推薦、自己加嚟比較，揀好會自動顯示喺主頁同每一日。</p>
+      </section>
+      <div class="stayspage">${stayBodyHtml(d)}</div>`;
+  }
+  function stayBodyHtml(d){
     const stays = d.stays || [];
-    // the fold's own head already says 住宿, so the block keeps only its tools
     const body = `<div class="hsblock" data-hskey="acc">
         ${stays.length ? `<div class="foldtools"><span class="sectools">${secEditBtn("acc")}</span></div>` : ""}
         ${stays.length ? stays.map((st, si) => {
@@ -3814,11 +3868,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <button class="btn" data-editsec="acc">${icon("plus")}自己加酒店</button></div>`}
       </div>
       ${staySuggestHtml(d)}
-      <div class="sechide"><button class="secedit wordy secdel" data-delsec="acc" data-seclabel="住宿">${icon("trash")}收埋成段「住宿」</button></div>`;
-    const names = stays.map(st => plain(st.name)).filter(Boolean);
-    const hint = names.length > 1 ? `${names[0]} 等 ${names.length} 間`
-               : names.length === 1 ? names[0] : "仲未填";
-    return foldHtml("stay", "住宿", hint, body);
+      <div class="sechide"><button class="secedit wordy secdel" data-delsec="acc" data-seclabel="住宿">${icon("trash")}喺主頁收埋「住宿」</button></div>`;
+    return body;
   }
 
   function homeBlockHtml(d, key){
@@ -6508,7 +6559,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       } catch (_){}
     }
     if (got){
-      if (state.view === "overview") render();
+      if (state.view === "overview" || state.view === "stays") render();
       await saveNow(`補返 ${got} 張住宿相`, true);
     }
   }
@@ -6918,6 +6969,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     syncAccommodation(snap);
     render();
     await saveNow(`刪走咗住宿「${st.name || ""}」`);
+  });
+  function wireStaysPage(){
+    document.querySelectorAll("#app [data-editsec]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation(); const open = HOME_EDITORS[b.dataset.editsec]; if (open) open();
+    }));
+    document.querySelectorAll("#app [data-delsec]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation(); hideSection(b.dataset.delsec, b.dataset.seclabel);
+    }));
+    initStayMap();
+    backfillStayPhotos(state.snapshot);
+  }
+  document.addEventListener("click", e => {
+    const g = e.target.closest && e.target.closest("[data-go-stays]");
+    if (!g) return;
+    e.preventDefault(); state.view = "stays"; window.scrollTo({ top: 0 }); render();
+    const t = document.querySelector('#lines [data-go="stays"]'); if (t) t.scrollIntoView({ block: "nearest", inline: "center" });
   });
   function stayRangeLabel(snap, s){
     const days = snap.days || [];
@@ -10075,7 +10142,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     saver.lastPersistedJson = snapJson();
     const back = readPlace();
     const resumeY = (back && back.trip === tripId) ? back.y : 0;
-    if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes"
+    if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes" || back.view === "stays"
         || dayById(back.view) || boardById(back.view))) state.view = back.view;
     else if (todayDay()) state.view = todayDay().id;
     try {

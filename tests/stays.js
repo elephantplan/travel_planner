@@ -47,7 +47,9 @@ const SUGGEST = { ok: true, stays: {
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
 
-  const acc = p.locator('[data-fold="stay"]').locator('xpath=..');
+  await p.evaluate(() => document.querySelector('[data-go="stays"]').click());   // 住宿 lives on its own page
+  await p.waitForTimeout(400);
+  const acc = p.locator('#app');
   ok('有掣叫 AI 建議其他酒店', await acc.locator('[data-stayprefs]').count() === 1);
   await acc.locator('[data-stayprefs]').click();
   await p.waitForTimeout(300);
@@ -106,16 +108,16 @@ const SUGGEST = { ok: true, stays: {
   await p.waitForTimeout(900);
   const after = [...saved].reverse().find(x => x.snapshot);
   ok('刪酒店只係刪嗰間', after && after.snapshot.stays.length === 0, after && after.snapshot.stays.length);
-  ok('住宿呢段仲喺度', await p.locator('[data-fold="stay"]').count() === 1 && !((after.snapshot.hiddenSections || []).includes('acc')));
-  ok('收埋成段係另一粒寫明嘅掣', /收埋成段「住宿」/.test(await p.locator('[data-fold="stay"]').locator('xpath=..').innerText()));
+  ok('住宿呢段仲喺度', await p.locator('[data-hskey="acc"]').count() === 1 && !((after.snapshot.hiddenSections || []).includes('acc')));
+  ok('收埋成段係另一粒寫明嘅掣', /喺主頁收埋「住宿」/.test(await p.locator('#app').innerText()));
   // the quick box sends extra wishes straight away
-  const accQ = p.locator('[data-fold="stay"]').locator('xpath=..');
+  const accQ = p.locator('#app');
   await accQ.locator('#sg-extra').fill('要有停車場');
   await accQ.locator('[data-sgask]').click();
   await p.waitForTimeout(2500);
   ok('「仲有冇要啲咩」直接傳畀 AI', /今次額外要求/.test(sentText[sentText.length - 1] || '') && /停車場/.test(sentText[sentText.length - 1] || ''));
   // searching again keeps what was found and asks for different ones
-  const accB = p.locator('[data-fold="stay"]').locator('xpath=..');
+  const accB = p.locator('#app');
   await accB.locator('[data-stayprefs]').last().click();
   await p.waitForTimeout(300);
   await p.locator('[data-esave]').click();
@@ -128,7 +130,7 @@ const SUGGEST = { ok: true, stays: {
   const s2 = [...saved].reverse().find(x => x.snapshot);
   ok('刪咗嘅建議都存咗', s2 && s2.snapshot.staySuggest.hotels.length === 1);
   // adding one by hand puts it in the same list, on top, marked as theirs
-  const accM = p.locator('[data-fold="stay"]').locator('xpath=..');
+  const accM = p.locator('#app');
   ok('標題係「住宿推薦」', /住宿推薦/.test(await accM.innerText()) && !/AI 住宿建議/.test(await accM.innerText()));
   await accM.locator('[data-staymanual]').first().click();
   await p.waitForTimeout(300);

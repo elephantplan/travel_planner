@@ -226,7 +226,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     const romanised = JSON.parse(JSON.stringify(korea));
     romanised.stays[0].name = '562-34 Yeonnam-dong, Mapo-gu, Seoul';
     romanised.stays[0].desc = '';
-    const { p, errs } = await boot(romanised, null);   // stay on the overview
+    const { p, errs } = await boot(romanised, null);
+    await p.evaluate(() => document.querySelector('[data-go="stays"]').click());   // 住宿 has its own page
+    await p.waitForTimeout(400);
     const stay = p.locator('[data-hskey="acc"]');
     const links = await stay.locator('a.maplink').evaluateAll(els =>
       els.map(a => a.textContent.trim() + '|' + a.getAttribute('href')));
@@ -241,6 +243,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     withKr.stays[0].name = '562-34 Yeonnam-dong, Mapo-gu, Seoul';
     withKr.stays[0].kr = '서울 마포구 연남동 562-34';
     const { p, errs } = await boot(withKr, null);
+    await p.evaluate(() => document.querySelector('[data-go="stays"]').click());
+    await p.waitForTimeout(400);
     const stay = p.locator('[data-hskey="acc"]');
     const links = await stay.locator('a.maplink').evaluateAll(els =>
       els.map(a => a.textContent.trim() + '|' + a.getAttribute('href')));
@@ -256,8 +260,12 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   {
     const { p, errs } = await boot(korea, null);
     ok('住宿係主頁上自己一段', await p.locator('[data-fold="stay"]').count() === 1);
-    ok('唔使撳就見到間酒店', /L7/.test(await p.locator('[data-hskey="acc"]').innerText()));
+    ok('唔使撳就見到間酒店（主頁摘要）', /L7/.test(await p.locator('.staysum').innerText()));
+    ok('摘要講埋邊幾晚', /Day 1–3/.test(await p.locator('.staysum').innerText()));
     ok('「行前準備」嗰度冇咗住宿', !/住宿/.test(await p.locator('[data-fold="prep"]').innerText()));
+    await p.locator('.staysum [data-go-stays]').first().click();
+    await p.waitForTimeout(400);
+    ok('撳就去住宿頁', /住邊度/.test(await p.locator('#app').innerText()) && await p.locator('[data-hskey="acc"]').count() === 1);
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }

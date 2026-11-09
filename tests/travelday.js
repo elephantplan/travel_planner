@@ -86,7 +86,8 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
   console.log('\nC. 畀司機睇');
   {
     const { p, errs } = await boot(c => { c.stays[0].kr = '서울 중구 명동 L7 호텔'; });
-    await p.locator('[data-fold="stay"]').scrollIntoViewIfNeeded();
+    await p.evaluate(() => document.querySelector('[data-go="stays"]').click());
+    await p.waitForTimeout(400);
     const btn = p.locator('[data-hskey="acc"] [data-taxi]');
     ok('酒店有「畀司機睇」', await btn.count() >= 1);
     await btn.first().click();
