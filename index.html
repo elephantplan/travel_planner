@@ -382,6 +382,15 @@ section.triplist{margin-bottom:36px;}
   .pass-stub{gap:6px 16px;}
 }
 @media (prefers-reduced-motion:reduce){ .pass,.pass:hover{transform:none;transition:none;} }
+
+.formcard .datecell{position:relative;}
+.formcard .dateph{display:none;position:absolute;left:18px;right:18px;bottom:14px;pointer-events:none;
+  align-items:center;justify-content:space-between;font-size:17px;font-weight:600;color:var(--ink-faint);}
+.formcard .dateph::after{content:"";width:18px;height:18px;border:1.5px solid currentColor;border-radius:4px;
+  box-shadow:inset 0 4px 0 -1.5px currentColor;opacity:.7;}
+.formcard .datecell.empty .dateph{display:flex;}
+.formcard .datecell.empty input[type="date"].input{color:transparent;}
+.formcard .datecell.empty input[type="date"].input::-webkit-calendar-picker-indicator{opacity:0;}
 </style>
 </head>
 <body>
@@ -412,8 +421,8 @@ section.triplist{margin-bottom:36px;}
     </div>
     <div class="field">
       <div class="daterow">
-        <div><label for="f-start">出發</label><input class="input mono" type="date" id="f-start"></div>
-        <div><label for="f-end">回程</label><input class="input mono" type="date" id="f-end"></div>
+        <div class="datecell empty"><label for="f-start">出發</label><input class="input mono" type="date" id="f-start"><span class="dateph" aria-hidden="true">揀日子</span></div>
+        <div class="datecell empty"><label for="f-end">回程</label><input class="input mono" type="date" id="f-end"><span class="dateph" aria-hidden="true">揀日子</span></div>
       </div>
     </div>
     <div class="field">
@@ -613,6 +622,13 @@ section.triplist{margin-bottom:36px;}
   startInput.addEventListener("change", () => { endInput.min = startInput.value || todayIso(); updateGoState(); });
   endInput.addEventListener("change", updateGoState);
 
+  // An empty date input on iOS draws nothing at all, so with the borders gone
+  // the two cells looked blank. A placeholder sits in the cell until a date is picked.
+  function syncDatePh(){
+    [startInput, endInput].forEach(el => el.parentElement.classList.toggle("empty", !el.value));
+  }
+  [startInput, endInput].forEach(el => { el.addEventListener("input", syncDatePh); el.addEventListener("change", syncDatePh); });
+  setTimeout(syncDatePh, 0);
   function updateGoState(){
     const ok = !!picked && !!startInput.value && !!endInput.value && endInput.value >= startInput.value;
     goBtn.disabled = !ok;
@@ -693,7 +709,9 @@ section.triplist{margin-bottom:36px;}
         // trips: the seasonal note, and the accessibility legend (which came
         // from one family's specific needs). A new trip starts with both
         // hidden — nothing is deleted, and 主頁最底 has a 「顯示返」 for each.
-        hiddenSections: ["foliage", "access"],
+        // …unless the requirements themselves ask for it
+        hiddenSections: /輪椅|長者|老人|行動不便|拐杖|BB ?車|嬰兒車|手推車|無障礙|唔好行樓梯|膝頭/i.test(requirements)
+          ? ["foliage"] : ["foliage", "access"],
       };
       const verRes = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {
         method: "POST",
