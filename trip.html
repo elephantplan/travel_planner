@@ -1197,6 +1197,15 @@ img{max-width:100%;}
 .fl-lookmsg{font-size:12px;color:var(--ink-faint);margin:-4px 0 8px;line-height:1.55;}
 .fl-lookmsg.warn{color:var(--warn);}
 
+
+/* 加去行程 on an AI-suggested place */
+.usec-list li{display:flex;flex-direction:column;}
+.usec-add,.usec-inday{align-self:flex-start;margin-top:8px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:999px;border:0;}
+.usec-add{color:#14110A;background:var(--gold);}
+.usec-add .i{width:13px;height:13px;}
+.usec-inday{color:var(--lc);background:color-mix(in srgb,var(--lc) 14%,transparent);}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1658,7 +1667,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-09";
+  const BUILD = "2026-11-09-10";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3827,7 +3836,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <button class="secedit secdel" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
           </span></h3>
           ${s.sub ? `<p class="sec-sub">${esc(s.sub)}</p>` : ""}
-          ${sectionLinesHtml(s.lines || [])}
+          ${sectionLinesHtml(s.lines || [], s, i)}
           ${sectionLinksHtml(s)}
           <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">${icon("refresh")}問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
           <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
@@ -3837,17 +3846,103 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // A wall of ten full sentences is hard to scan on a phone. Each line leads
   // with its point in bold (the words before the first ：or ，), and past the
   // first five the rest fold away.
-  function sectionLineHtml(l){
+  function splitLine(l){
     const t = plain(l).trim();
     const m = t.match(/^(.{2,16}?)[：:]\s*(.+)$/) || t.match(/^(.{3,14}?)，(.+)$/);
-    return m ? `<li><b>${esc(m[1])}</b><span>${esc(m[2])}</span></li>` : `<li><span>${esc(t)}</span></li>`;
+    return m ? { head: m[1].trim(), body: m[2].trim(), text: t } : { head: "", body: t, text: t };
   }
-  function sectionLinesHtml(lines){
+  // An AI note that names a place ("永觀堂（京都）— 紅葉之王…") is a
+  // suggestion you act on, so it gets a button to drop it into a day. Lines
+  // that are advice rather than places — transport, clothing, money — don't.
+  const NOT_A_PLACE = /交通|安排|貼士|注意|天氣|氣溫|穿搭|著衫|衣著|預算|貨幣|找換|上網|行李|提示|建議|記得|時間|時段|門票|預約|排隊|保暖|洋蔥|外套|落雨|雨具|鞋|錢|卡$|簽證|入境|保險|退稅|攻略|總結|重點|心得/;
+  function lineIsPlace(sec, head){
+    if (!sec || sec.source !== "ai" || !head) return false;
+    if (/天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "")) return false;
+    return !NOT_A_PLACE.test(head);
+  }
+  function placeFromHead(head){
+    const region = (head.match(/[（(]([^）)]+)[）)]/) || [])[1] || "";
+    return { name: head.replace(/[（(][^）)]*[）)]/g, "").trim(), region };
+  }
+  function sectionLineHtml(l, sec, si, li){
+    const { head, body, text } = splitLine(l);
+    let tool = "";
+    if (lineIsPlace(sec, head)){
+      const { name } = placeFromHead(head);
+      const inDay = findInItinerary(state.snapshot, { title: name });
+      tool = inDay
+        ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
+        : `<button type="button" class="usec-add" data-addplace="${si}|${li}">${icon("plus")}加去行程</button>`;
+    }
+    return head ? `<li><b>${esc(head)}</b><span>${esc(body)}</span>${tool}</li>` : `<li><span>${esc(text)}</span></li>`;
+  }
+  function sectionLinesHtml(lines, sec, si){
     if (!lines.length) return "";
     const head = lines.slice(0, 5), rest = lines.slice(5);
-    return `<ul class="usec-list">${head.map(sectionLineHtml).join("")}</ul>` +
-      (rest.length ? `<details class="usec-more"><summary>睇多 ${rest.length} 項</summary><ul class="usec-list">${rest.map(sectionLineHtml).join("")}</ul></details>` : "");
+    const row = (l, k) => sectionLineHtml(l, sec, si, k);
+    return `<ul class="usec-list">${head.map((l, k) => row(l, k)).join("")}</ul>` +
+      (rest.length ? `<details class="usec-more"><summary>睇多 ${rest.length} 項</summary><ul class="usec-list">${rest.map((l, k) => row(l, k + 5)).join("")}</ul></details>` : "");
   }
+  // Pick a day (or a 心水清單) for a place the AI suggested. It lands at the
+  // end of that day and goes through the same steps as a typed-in stop:
+  // matched on Google, photo, hours, then the leg into it is worked out.
+  function openAddPlaceSheet(si, li){
+    const snap = state.snapshot;
+    const sec = (snap.sections || [])[si];
+    const line = sec && (sec.lines || [])[li];
+    if (!line) return;
+    const { head, body } = splitLine(line);
+    const { name, region } = placeFromHead(head);
+    const boards = snap.boards || [];
+    openSheet(`
+      <h3>將「${esc(name)}」加去邊度？</h3>
+      <p class="sec-sub">${esc(body)}</p>
+      <p class="picker-label">行程日子</p>
+      <div class="daypick">
+        ${(snap.days || []).map(d => `<button data-addto="${d.id}" style="--lc:${dayColorVar(d.id)}">
+          <span class="bullet"></span><span class="dcode">Day ${d.id.replace("day", "")}</span>
+          <span>${esc(d.title)}${tabWeekday(d) ? ` · ${esc(tabWeekday(d))}` : ""}</span></button>`).join("")}
+      </div>
+      ${boards.length ? `<p class="picker-label">心水清單（未決定邊日）</p>
+      <div class="daypick">${boards.map(b => `<button data-addboard="${b.id}" style="--lc:var(--bookmark)">
+          <span class="bullet"></span><span class="dcode">${icon("pin")}</span><span>${esc(b.name)}</span></button>`).join("")}</div>` : ""}
+    `, sheet => {
+      const make = () => Object.assign(blankStop(), { title: name, desc: body,
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, region].filter(Boolean).join(" "))}` });
+      sheet.querySelectorAll("[data-addto]").forEach(b => b.addEventListener("click", async () => {
+        const day = dayById(b.dataset.addto);
+        const st = make();
+        const units = toUnits(day.items);
+        units.push({ seg: null, stop: st });
+        day.items = fromUnits(units);
+        const at = units.length - 1;
+        closeLayer();
+        flash(`加咗「${name}」去 Day ${day.id.replace("day", "")}，搵緊地圖同相…`);
+        render();
+        await enrichStop(st);
+        syncMapPoints(day);
+        render();
+        await saveNow(`加咗 AI 推介「${name}」去 ${day.title}`);
+        if (at > 0) refreshTransit(day, [at]);
+      }));
+      sheet.querySelectorAll("[data-addboard]").forEach(b => b.addEventListener("click", async () => {
+        const board = boardById(b.dataset.addboard);
+        const st = make();
+        board.items.push(st);
+        closeLayer();
+        flash(`加咗「${name}」去清單「${board.name}」`);
+        await enrichStop(st);
+        render();
+        await saveNow(`加咗 AI 推介「${name}」去清單「${board.name}」`);
+      }));
+    });
+  }
+  document.addEventListener("click", e => {
+    const add = e.target.closest && e.target.closest("[data-addplace]");
+    if (add){ e.preventDefault(); const [si, li] = add.dataset.addplace.split("|").map(Number); openAddPlaceSheet(si, li); return; }
+    const go = e.target.closest && e.target.closest("[data-inday-go]");
+    if (go){ e.preventDefault(); state.view = go.dataset.indayGo; window.scrollTo({ top: 0 }); render(); }
+  });
   // Official sites worth having one tap away, by country and by what the
   // section is about. Only real, long-lived addresses; the AI's own links are
   // kept and these are added when they are not already there.
