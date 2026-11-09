@@ -101,7 +101,7 @@ const SUGGEST = { ok: true, stays: {
   const stays = last ? last.snapshot.stays : [];
   ok('揀咗就取代嗰幾晚原本嘅酒店', stays.length === 1 && stays[0].name === '明洞九樹酒店', stays.map(s => s.name));
   ok('連埋 Google 地點同車站', stays[0] && stays[0].placeId && stays[0].station === '명동역');
-  ok('酒店卡標明係 AI 建議', /AI 建議/.test(await p.locator('[data-hskey="acc"]').innerText()));
+  ok('揀咗嘅酒店卡唔再標「AI 建議」', !/AI 建議/.test(await p.locator('[data-hskey="acc"]').innerText()));
   // the trash on a hotel removes that hotel, not the whole 住宿 section
   p.once('dialog', d => d.accept());
   await p.locator('[data-staydelete="0"]').click();

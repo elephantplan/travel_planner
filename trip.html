@@ -1266,7 +1266,7 @@ a.btn{text-decoration:none;}
   background:var(--surface);border:1px solid var(--rule);box-shadow:var(--shadow-2);font-size:12.5px;color:var(--ink-soft);text-align:center;}
 body.readonly .secedit,body.readonly .editbtn,body.readonly .draghandle,body.readonly .addstop,body.readonly .addusec,
 body.readonly .addgroup,body.readonly .insertrow,body.readonly .ins,body.readonly .toollist,body.readonly .usec-add,
-body.readonly [data-moneyadd],body.readonly [data-moneypeople],body.readonly [data-flightedit],body.readonly [data-secrefresh],
+body.readonly [data-moneyadd],body.readonly .mn-addrow,body.readonly [data-mp-del],body.readonly [data-flightedit],body.readonly [data-secrefresh],
 body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-staymanual],body.readonly .sgask,body.readonly [data-stayskip],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
 body.readonly [data-moneyitem]{pointer-events:none;}
 
@@ -1860,7 +1860,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-21";
+  const BUILD = "2026-11-09-22";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3421,9 +3421,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     items.forEach(it => { const a = +it.amount; if (Number.isFinite(a)) totals[it.cur] = (totals[it.cur] || 0) + a; });
     const st = settle({ people: money.people || [], items });
     const body = `<div class="hsblock moneyblock" data-hskey="money">
-      ${(money.people || []).length ? "" : `<p class="fl-empty">先加埋一齊去嘅人，之後每次有人比錢就記低，最後自動計邊個要比返邊個幾多。</p>`}
-      <div class="mn-people">${(money.people || []).map(p => `<span class="mn-p">${esc(p)}</span>`).join("")}
-        <button class="btn mn-edit" data-moneypeople>${icon("pencil")}${(money.people || []).length ? "改人" : "加人"}</button></div>
+      <p class="tp-lbl">一齊去嘅人</p>
+      <div class="mn-people">${(money.people || []).map((p, i) => `<span class="mn-p">${esc(p)}<button type="button" data-mp-del="${i}" aria-label="拎走${esc(p)}">×</button></span>`).join("")
+        || `<span class="hint">打名加人，之後記數就揀邊個比、分俾邊個。</span>`}</div>
+      <div class="mn-addrow"><input class="input" id="mp-inline" placeholder="加人，例如 阿爸" autocomplete="off" enterkeyhint="done">
+        <button type="button" class="btn" data-mp-inline>加</button></div>
       <button class="btn primary wide" data-moneyadd>${icon("plus")}記一筆</button>
       ${items.length ? `<ul class="mn-list">${items.slice().reverse().map(it => `<li data-moneyitem="${esc(it.id)}">
           <span class="mn-what">${esc(it.what || "未寫")}</span><span class="mn-amt">${esc(fmtMoney(+it.amount || 0, it.cur))}</span>
@@ -3434,52 +3436,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     </div>`;
     const hint = items.length ? `${items.length} 筆` : "記低邊個比咗錢";
     return foldHtml("money", "夾錢", hint, body);
-  }
-  // Who's going, one name at a time. A textarea with "爸爸 / 媽媽 / 我" as
-  // placeholder looked already filled in; saving it saved nobody, and the
-  // button seemed dead. Names are now chips you add and remove, and saving
-  // goes straight on to the first expense.
-  function openMoneyPeopleSheet(){
-    const money = moneyOf(state.snapshot);
-    let people = money.people.slice();
-    openSheet(`
-      <h3>一齊去嘅人</h3>
-      <p class="sec-sub">逐個打名，撳「加」。之後記數就揀邊個比、分俾邊個。</p>
-      <div class="mn-addrow"><input class="input" data-mp-in placeholder="打個名，例如 阿爸" autocomplete="off" enterkeyhint="done"><button type="button" class="btn primary" data-mp-add>加</button></div>
-      <div class="mn-people mn-chips" data-mp-list></div>
-      <p class="hint warn" data-mp-msg></p>
-      <div class="editor-tools">
-        <button class="btn" data-ecancel>取消</button>
-        <button class="btn primary" data-esave>儲存${money.items.length ? "" : "，記第一筆"}</button>
-      </div>`, sheet => {
-      const inp = sheet.querySelector("[data-mp-in]"), list = sheet.querySelector("[data-mp-list]"), msg = sheet.querySelector("[data-mp-msg]");
-      const draw = () => {
-        list.innerHTML = people.length
-          ? people.map((n, i) => `<span class="mn-p">${esc(n)}<button type="button" data-mp-rm="${i}" aria-label="拎走${esc(n)}">×</button></span>`).join("")
-          : `<span class="hint">仲未有人</span>`;
-        list.querySelectorAll("[data-mp-rm]").forEach(b => b.addEventListener("click", () => { people.splice(+b.dataset.mpRm, 1); draw(); }));
-      };
-      const add = () => {
-        // allow "阿爸 阿媽 我" or "阿爸、阿媽" in one go
-        const names = inp.value.split(/[\s,，、\/]+/).map(x => x.trim()).filter(Boolean);
-        names.forEach(n => { if (!people.includes(n) && people.length < 20) people.push(n); });
-        inp.value = ""; msg.textContent = ""; draw(); inp.focus();
-      };
-      sheet.querySelector("[data-mp-add]").addEventListener("click", add);
-      inp.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); add(); } });
-      draw();
-      setTimeout(() => inp.focus(), 50);
-      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
-      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
-        if (inp.value.trim()) add();             // a name typed but not yet added still counts
-        if (!people.length){ msg.textContent = "最少要加一個人。"; inp.focus(); return; }
-        const first = !money.items.length;
-        money.people = people;
-        closeLayer(); render();
-        await saveNow("改咗夾錢嘅人");
-        if (first) openMoneyItemSheet(null);
-      });
-    });
   }
   function openMoneyItemSheet(id){
     const d = state.snapshot, money = moneyOf(d);
@@ -3523,13 +3479,39 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (t.closest("[data-moneyadd]")){
       e.preventDefault();
       // can't split a bill among nobody: ask who's going first
-      if (!moneyOf(state.snapshot).people.length) openMoneyPeopleSheet(); else openMoneyItemSheet(null);
+      if (!moneyOf(state.snapshot).people.length){
+        const inp = document.getElementById("mp-inline");
+        flash("先喺上面加人"); if (inp) inp.focus();
+      } else openMoneyItemSheet(null);
       return;
     }
     const li = t.closest("[data-moneyitem]");
     if (li){ e.preventDefault(); openMoneyItemSheet(li.dataset.moneyitem); return; }
-    if (t.closest("[data-moneypeople]")){ e.preventDefault(); openMoneyPeopleSheet(); }
+    if (t.closest("[data-mp-inline]")){ e.preventDefault(); addMoneyPeopleInline(); return; }
+    const del = t.closest("[data-mp-del]");
+    if (del){
+      e.preventDefault();
+      const money = moneyOf(state.snapshot), name = money.people[+del.dataset.mpDel];
+      // expenses keep the name they were recorded with; only the list changes
+      money.people.splice(+del.dataset.mpDel, 1);
+      render(); saveNow(`夾錢拎走咗「${name}」`);
+    }
   });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target && e.target.id === "mp-inline"){ e.preventDefault(); addMoneyPeopleInline(); }
+  });
+  // added and saved there and then: no separate sheet, no extra 儲存
+  function addMoneyPeopleInline(){
+    const inp = document.getElementById("mp-inline");
+    if (!inp) return;
+    const money = moneyOf(state.snapshot);
+    const names = inp.value.split(/[\s,，、\/]+/).map(x => x.trim()).filter(Boolean).filter(n => !money.people.includes(n));
+    if (!names.length){ inp.focus(); return; }
+    money.people.push(...names.slice(0, 20 - money.people.length));
+    render();
+    saveNow(`夾錢加咗：${names.join("、")}`);
+    const again = document.getElementById("mp-inline"); if (again) again.focus();
+  }
 
   // ---------- 出發前 checklist ----------
   function defaultChecklist(){
@@ -3904,7 +3886,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <div class="stayrow${st.photoUrl ? " hasphoto" : ""}">
             <button class="secedit staydel" data-staydelete="${si}" title="刪走呢間酒店" aria-label="刪走「${esc(st.name || "呢間酒店")}」">${icon("trash")}</button>
             ${st.photoUrl ? `<div class="stayphoto"><img src="${esc(st.photoUrl)}" alt="" loading="lazy"></div>` : ""}
-            <div class="v">${esc(st.name || "未填")}${st.aiPick ? `<span class="aipick">AI 建議</span>` : ""}</div>
+            <div class="v">${esc(st.name || "未填")}</div>
             ${stayStubHtml(d, st)}
             ${st.station ? `<div class="staystation">${icon("pin")}最近 <b>${esc(st.station)}</b>${st.walk ? ` · ${esc(st.walk)}` : ""}</div>` : ""}
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
@@ -6635,6 +6617,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     };
     return `<div class="hsblock sgblock">
       <h3>住宿推薦</h3>
+      <div class="sgask">
+        <label class="picker-label" for="sg-extra">仲有冇要啲咩？</label>
+        <div class="sgask-row"><input class="input" id="sg-extra" placeholder="例如：近難波、要有停車場、再平啲、想睇京都住一晚"><button class="btn primary" data-sgask>${icon("sparkle")}搵</button></div>
+      </div>
+      <div class="sgmore">
+        <div class="sgmore-row"><button class="btn" data-stayprefs>${icon("sparkle")}改要求再搵</button>
+          <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
+        <span class="hint">之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
+      </div>
       <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.areas || []).length ? `<p class="picker-label">可以住邊區</p>
       <div class="sgareas">${sg.areas.map(a => { const n = sg.hotels.filter(h => h.area === a.area).length; return `
@@ -6672,15 +6663,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           </div>
         </div>`; }).join("")}</div>
       <p class="hint">AI 推薦嘅價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
-      <div class="sgask">
-        <label class="picker-label" for="sg-extra">仲有冇要啲咩？</label>
-        <div class="sgask-row"><input class="input" id="sg-extra" placeholder="例如：近難波、要有停車場、再平啲、想睇京都住一晚"><button class="btn primary" data-sgask>${icon("sparkle")}搵</button></div>
-      </div>
-      <div class="sgmore">
-        <div class="sgmore-row"><button class="btn" data-stayprefs>${icon("sparkle")}改要求再搵</button>
-          <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
-        <span class="hint">之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
-      </div>
     </div>`;
   }
   // ---------- where the suggested hotels are ----------
@@ -6792,7 +6774,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // ---------- sorting the suggestions ----------
   // Sorting is a way of looking, not a change to the trip, so it lives in
   // the page's state and indices into the stored list stay valid.
-  const STAY_SORTS = [["ai", "AI 推薦"], ["cheap", "平到貴"], ["dear", "貴到平"], ["rating", "評分高"], ["near", "近車站"]];
+  const STAY_SORTS = [["ai", "預設"], ["cheap", "平到貴"], ["dear", "貴到平"], ["rating", "評分高"], ["near", "近車站"]];
   function priceFrom(h){
     const m = String(h.price || "").replace(/,/g, "").match(/(\d{3,6})/);
     return m ? +m[1] : null;
