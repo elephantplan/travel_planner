@@ -326,7 +326,9 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     ok('每一段都有得改', blocks.every(x => x.edit), blocks.filter(x => !x.edit).map(x => x.name));
     ok('每一段都有得上下郁', blocks.every(x => x.move), blocks.filter(x => !x.move).map(x => x.name));
     ok('每一段都有得刪／收埋', blocks.every(x => x.del), blocks.filter(x => !x.del).map(x => x.name));
-    ok('冇一段係特登畫到唔同樣', blocks.every(x => !x.card), blocks.filter(x => x.card).map(x => x.name));
+    // every block is a card now; what matters is that none is drawn differently
+    ok('冇一段係特登畫到唔同樣', blocks.every(x => x.card === blocks[0].card), blocks.map(x => [x.name, x.card]));
+    ok('每一段都係一張卡', blocks.every(x => x.card), blocks.filter(x => !x.card).map(x => x.name));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }

@@ -1007,6 +1007,15 @@ img{max-width:100%;}
 .dayhead .toollist{background:transparent;border-color:var(--rule);}
 @media (max-width:360px){ .tp-code{font-size:42px;} .tp-stub{gap:6px 16px;} }
 
+
+/* 行前準備 and the family's own groups: each block is its own card, so a
+   long fold reads as a stack of things to check, not one run-on page */
+.fold-body .hsblock,.fold-body .usec{background:var(--stock);border:1px solid var(--rule-soft);border-radius:18px;
+  padding:16px 16px 14px;margin:0 0 12px;box-shadow:var(--shadow-1);}
+.fold-body .hsblock h3,.fold-body .usec h3,.fold-body .hsblock > :first-child,.fold-body .usec > :first-child{margin-top:0;}
+.fold-body .hsblock .wtable{margin-bottom:4px;}
+.fold-body .hsblock > .foldtools{float:right;margin:-8px -8px 0 8px;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1468,7 +1477,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-01";
+  const BUILD = "2026-11-09-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2999,14 +3008,26 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   let hoursRunning = false;
   async function backfillHoursFor(day){
     if (hoursRunning || !day) return;
-    const todo = (day.items || []).filter(s => s && s.kind === "stop" && s.placeId
-      && (!(s.eatMeta || []).some(c => c.cls === "meta-chip hours") || !plain(s.kr)) && !hoursTried.has(s.placeId));
+    // photos too: places added by the AI, or typed without picking from the
+    // search list, arrived with none, and fetching them was a button per day
+    const needsPhoto = s => !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl) && plain(s.title);
+    const todo = (day.items || []).filter(s => s && s.kind === "stop"
+      && !hoursTried.has(s.placeId || s.mapUrl || s.title)
+      && (needsPhoto(s) || (s.placeId && (!(s.eatMeta || []).some(c => c.cls === "meta-chip hours") || !plain(s.kr)))));
     if (!todo.length) return;
     hoursRunning = true;
     let got = 0;
     try {
       for (const s of todo){
-        hoursTried.add(s.placeId);           // one attempt per place per session
+        hoursTried.add(s.placeId || s.mapUrl || s.title);   // one attempt per place per session
+        if (needsPhoto(s)){
+          try {
+            const r = await fetchStoredPhoto(s);
+            if (r && r.ok !== false && r.url){ s.photoUrl = r.url; got++; }
+            else if (r && r.reason === "nophoto") s.noPhoto = true;
+          } catch (_){}
+        }
+        if (!s.placeId) continue;
         const before = (s.eatMeta || []).length;
         await enrichHours(s);
         if ((s.eatMeta || []).length > before) got++;
@@ -3015,7 +3036,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     } finally { hoursRunning = false; }
     if (got){
       if (state.view === day.id) render();
-      await saveNow(`補返 ${got} 個地點嘅營業時間`, true);
+      await saveNow(`補返 ${got} 項地點資料（相／營業時間）`, true);
     }
   }
 
