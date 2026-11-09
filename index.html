@@ -285,6 +285,103 @@ section.triplist{margin-bottom:36px;}
   .ptr.busy .i{animation:none;}
   .ptr.settling{transition:none;}
 }
+
+/* ============================================================
+   BOARDING PASS — the home page's identity.
+   DumboFly is named like an airline and every trip leaves from
+   Hong Kong, so a trip is a pass: airport codes set large in
+   condensed Archivo, a tear-off stub for the dates, a countdown.
+   Everything else stays quiet: one surface, hairlines, no emoji.
+   ============================================================ */
+:root{ --gold:#A8740C; --stock:#FFFFFF; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --gold:#E2B24A; --stock:#171D1C; } }
+:root[data-theme="dark"]{ --gold:#E2B24A; --stock:#171D1C; }
+:root[data-theme="navy"]{ --gold:#E8BC57; --stock:#152036; }
+
+.brandmark{font-family:'Archivo',sans-serif;font-stretch:75%;font-weight:800;font-size:17px;
+  letter-spacing:.08em;text-transform:uppercase;}
+.brandmark .i{color:var(--gold);}
+
+.hero{padding:10px 2px 26px;}
+.hero-from{font-family:'Archivo',var(--f-body);font-stretch:80%;font-weight:700;font-size:12px !important;
+  letter-spacing:.14em;color:var(--gold) !important;margin:0 0 10px !important;}
+.hero h1{font-weight:800;font-size:clamp(30px,8.6vw,44px);letter-spacing:-.03em;line-height:1.15;}
+.hero p{font-size:14.5px;line-height:1.7;}
+
+/* the form as a booking panel: cells divided by hairlines, borderless inputs */
+.formcard{padding:0;overflow:hidden;background:var(--stock);border:1px solid var(--rule);
+  border-radius:22px;box-shadow:var(--shadow-2);}
+.formcard .field{margin:0;padding:14px 18px 12px;border-bottom:1px solid var(--rule);}
+.formcard .field label{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--ink-faint);margin-bottom:2px;}
+.formcard .input{border:0;background:transparent;padding:4px 0;min-height:36px;border-radius:0;font-size:17px;font-weight:600;}
+.formcard textarea.input{font-size:15px;font-weight:400;min-height:64px;}
+.formcard .input:focus{outline:none;}
+.formcard .field:focus-within{background:color-mix(in srgb,var(--gold) 7%,transparent);}
+.formcard .field:focus-within label{color:var(--gold);}
+.formcard .daterow{gap:0;margin:-14px -18px -12px;}
+.formcard .daterow > div{padding:14px 18px 12px;}
+.formcard .daterow > div + div{border-left:1px solid var(--rule);}
+.formcard input[type="date"].input{font-family:'Archivo',var(--f-body);font-stretch:85%;font-size:17px;font-weight:700;}
+.formcard .hint{margin-top:2px;}
+.formcard #form-err:not(:empty){padding:12px 18px 0;}
+.formcard #f-go{margin:16px 18px 18px;width:calc(100% - 36px);}
+.formcard .suggest{left:12px;right:12px;}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#14110A;font-weight:700;letter-spacing:.02em;}
+.btn.primary:disabled{background:var(--surface-2);border-color:var(--surface-2);color:var(--ink-faint);}
+
+.triplist-head h2{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--ink-soft);}
+.triplist-head .count{font-family:'Archivo',var(--f-body);font-stretch:80%;font-weight:700;}
+.tripgrid{gap:14px;}
+
+.pass{position:relative;background:var(--stock);border-radius:20px;
+  box-shadow:0 0 0 1px var(--rule),var(--shadow-1);transition:transform .18s ease,box-shadow .18s ease;}
+.pass:hover{transform:translateY(-2px);box-shadow:0 0 0 1px var(--ink-faint),var(--shadow-2);}
+.pass:active{transform:scale(.99);}
+.pass-link{position:absolute;inset:0;z-index:1;border-radius:inherit;}
+.pass-link:focus-visible{outline:2px solid var(--gold);outline-offset:3px;}
+.pass .tripdel{top:12px;right:12px;opacity:.55;}
+.pass .tripdel:hover{opacity:1;}
+
+.pass-main{padding:18px 20px 18px;}
+.pass-route{display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:12px;padding-right:28px;}
+.pass-pt{display:flex;flex-direction:column;min-width:0;}
+.pass-pt.to{text-align:right;align-items:flex-end;}
+.pass-code{font-family:'Archivo',var(--f-disp);font-stretch:75%;font-weight:800;
+  font-size:44px;line-height:.92;letter-spacing:.01em;color:var(--ink-soft);}
+.pass-pt.to .pass-code{color:var(--ink);}
+.pass-city{font-size:12px;color:var(--ink-faint);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:9em;}
+.pass-flight{position:relative;height:30px;margin-bottom:22px;color:var(--tc);}
+.pass-arc{position:absolute;left:0;right:0;bottom:4px;height:22px;
+  border-top:1.5px dashed color-mix(in srgb,var(--tc) 70%,transparent);border-radius:50% 50% 0 0 / 100% 100% 0 0;}
+.pass-flight .i{position:absolute;left:50%;top:-4px;width:18px;height:18px;transform:translateX(-50%) rotate(90deg);
+  background:var(--stock);padding:0 2px;box-sizing:content-box;}
+.pass-name{margin:16px 0 0;font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.4;}
+
+/* the perforation: a dashed rule with a notch bitten out of each edge */
+.pass-stub{position:relative;display:grid;grid-template-columns:repeat(3,auto) 1fr;align-items:end;gap:6px 22px;
+  padding:16px 20px 16px;border-top:1.5px dashed var(--rule);}
+.pass-stub::before,.pass-stub::after{content:"";position:absolute;top:-10px;width:20px;height:20px;border-radius:50%;
+  background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule);}
+.pass-stub::before{left:-10px;clip-path:inset(0 0 0 50%);}
+.pass-stub::after{right:-10px;clip-path:inset(0 50% 0 0);}
+.pass-cell{display:flex;flex-direction:column;}
+.pass-lbl{font-size:10.5px;font-weight:600;letter-spacing:.1em;color:var(--ink-faint);}
+.pass-cell b{font-family:'Archivo',var(--f-body);font-stretch:78%;font-weight:800;font-size:22px;line-height:1.1;
+  font-variant-numeric:tabular-nums;margin-top:2px;}
+.pass-cell small{font-size:11px;color:var(--ink-faint);}
+.pass-status{justify-self:end;align-self:center;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;
+  color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,transparent);white-space:nowrap;}
+.pass.live .pass-status{color:#14110A;background:var(--gold);}
+.pass.done .pass-status{color:var(--ink-faint);background:var(--surface-2);}
+.pass.done .pass-code,.pass.done .pass-pt.to .pass-code{color:var(--ink-faint);}
+.pass.done .pass-flight{color:var(--ink-faint);}
+.pass.done .pass-arc{border-top-color:var(--rule);}
+
+@media (max-width:360px){
+  .pass-code{font-size:36px;}
+  .pass-stub{gap:6px 16px;}
+}
+@media (prefers-reduced-motion:reduce){ .pass,.pass:hover{transform:none;transition:none;} }
 </style>
 </head>
 <body>
@@ -301,8 +398,9 @@ section.triplist{margin-bottom:36px;}
 
 <main class="wrap">
   <div class="hero">
+    <p class="hero-from">由香港出發</p>
     <h1>今次想去邊度？</h1>
-    <p>打低目的地、日期同要求，AI 幫你由零砌一個完整行程——連天氣、住宿、建議、地圖都齊晒。</p>
+    <p>揀目的地同日期，AI 由零砌一個完整行程：天氣、住宿、地圖都齊。</p>
   </div>
 
   <div class="card formcard">
@@ -313,10 +411,9 @@ section.triplist{margin-bottom:36px;}
       <div id="dest-picked"></div>
     </div>
     <div class="field">
-      <label>日期</label>
       <div class="daterow">
-        <input class="input mono" type="date" id="f-start">
-        <input class="input mono" type="date" id="f-end">
+        <div><label for="f-start">出發</label><input class="input mono" type="date" id="f-start"></div>
+        <div><label for="f-end">回程</label><input class="input mono" type="date" id="f-end"></div>
       </div>
     </div>
     <div class="field">
@@ -376,8 +473,9 @@ section.triplist{margin-bottom:36px;}
       "Content-Type": "application/json"
     }, extra || {});
   }
+  const EMOJI_RE = /(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{231A}-\u{23FF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{1F3FB}-\u{1F3FF}]?\u{200D}?)+[ \u3000]?/gu;
   function esc(s){
-    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    return String(s == null ? "" : s).replace(EMOJI_RE, "").replace(/\u{FE0F}/gu, "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
   // Same icon set as trip.html — 1.5px strokes on a 24 grid, currentColor, so
@@ -622,15 +720,69 @@ section.triplist{margin-bottom:36px;}
   // The whole card used to be one <a>, so there was nowhere to put an action
   // button (a <button> inside an <a> is invalid and swallows the click). The
   // link is now a stretched overlay and the delete button sits above it.
+  // Every trip leaves from Hong Kong, so each one is drawn as a boarding pass:
+  // HKG → the destination's airport code, with a tear-off stub for the dates.
+  const CITY_CODES = [
+    [/首爾|首尔|서울|seoul/i, "SEL", "首爾"], [/東京|东京|tokyo/i, "TYO", "東京"],
+    [/台北|臺北|taipei/i, "TPE", "台北"],   [/大阪|osaka/i, "OSA", "大阪"],
+    [/京都|kyoto/i, "UKY", "京都"],          [/釜山|부산|busan/i, "PUS", "釜山"],
+    [/福岡|fukuoka/i, "FUK", "福岡"],        [/札幌|sapporo|北海道|hokkaido/i, "SPK", "札幌"],
+    [/沖繩|沖縄|okinawa/i, "OKA", "沖繩"],    [/名古屋|nagoya/i, "NGO", "名古屋"],
+    [/濟州|济州|제주|jeju/i, "CJU", "濟州"],  [/曼谷|bangkok/i, "BKK", "曼谷"],
+    [/新加坡|singapore/i, "SIN", "新加坡"],  [/台中|taichung/i, "RMQ", "台中"],
+    [/高雄|kaohsiung/i, "KHH", "高雄"],      [/倫敦|london/i, "LON", "倫敦"],
+    [/巴黎|paris/i, "PAR", "巴黎"],          [/香港|hong ?kong/i, "HKG", "香港"],
+  ];
+  function cityOf(t){
+    const hay = [t.destination_local, t.name].filter(Boolean).join(" ");
+    for (const [re, code, zh] of CITY_CODES) if (re.test(hay)) return { code, zh };
+    const latin = String(t.destination_local || t.name || "").replace(/[^A-Za-z]/g, "").toUpperCase();
+    return { code: latin.length >= 3 ? latin.slice(0, 3) : "", zh: t.destination_local || "" };
+  }
+  const WD_SHORT = ["日","一","二","三","四","五","六"];
+  function passDate(iso){
+    const [y, m, d] = String(iso || "").split("-").map(Number);
+    if (!y) return { md: "—", wd: "" };
+    return { md: `${String(m).padStart(2,"0")}.${String(d).padStart(2,"0")}`, wd: WD_SHORT[new Date(y, m - 1, d).getDay()] };
+  }
+  function daysBetween(a, b){
+    return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
+  }
+  function passStatus(t){
+    const today = todayIso(), end = t.date_end || t.date_start;
+    if (!t.date_start) return { txt: "", cls: "" };
+    if (today < t.date_start){
+      const n = daysBetween(today, t.date_start);
+      return { txt: n === 1 ? "聽日出發" : `${n} 日後出發`, cls: "soon" };
+    }
+    if (today <= end) return { txt: `旅程中 · 第 ${daysBetween(t.date_start, today) + 1} 日`, cls: "live" };
+    return { txt: "已完成", cls: "done" };
+  }
   function tripCardHtml(t, i){
     const color = CARD_PALETTE[i % CARD_PALETTE.length];
-    return `<div class="tripcard" style="--tc:${color}">
-      <a class="tripcard-link" href="trip.html?trip=${t.id}" aria-label="${esc(t.name)}"></a>
-      <button class="tripdel" data-del="${t.id}" data-delname="${esc(t.destination_local || t.name)}" title="刪除呢個行程" aria-label="刪除呢個行程">${icon("trash")}</button>
-      <div class="row1"><span class="emoji">${esc(t.cover_emoji || "")}</span><span class="dest">${esc(t.destination_local || t.name)}</span></div>
-      <div class="dates mono">${esc(t.date_start)} — ${esc(t.date_end)}</div>
-      <div class="name">${esc(t.name)}</div>
-    </div>`;
+    const city = cityOf(t);
+    const dest = t.destination_local || t.name;
+    const a = passDate(t.date_start), b = passDate(t.date_end || t.date_start);
+    const nDays = t.date_start ? daysBetween(t.date_start, t.date_end || t.date_start) + 1 : 0;
+    const st = passStatus(t);
+    return `<article class="pass ${st.cls}" style="--tc:${color}">
+      <a class="pass-link" href="trip.html?trip=${t.id}" aria-label="${esc(t.name)}"></a>
+      <button class="tripdel" data-del="${t.id}" data-delname="${esc(dest)}" title="刪除呢個行程" aria-label="刪除呢個行程">${icon("trash")}</button>
+      <div class="pass-main">
+        <div class="pass-route">
+          <div class="pass-pt"><span class="pass-code">HKG</span><span class="pass-city">香港</span></div>
+          <div class="pass-flight" aria-hidden="true"><span class="pass-arc"></span>${icon("plane")}</div>
+          <div class="pass-pt to"><span class="pass-code">${esc(city.code || dest)}</span><span class="pass-city">${esc(city.zh || dest)}</span></div>
+        </div>
+        <h3 class="pass-name">${esc(t.name)}</h3>
+      </div>
+      <div class="pass-stub">
+        <div class="pass-cell"><span class="pass-lbl">出發</span><b>${a.md}</b><small>${a.wd ? "星期" + a.wd : ""}</small></div>
+        <div class="pass-cell"><span class="pass-lbl">回程</span><b>${b.md}</b><small>${b.wd ? "星期" + b.wd : ""}</small></div>
+        <div class="pass-cell"><span class="pass-lbl">行程</span><b>${nDays || "—"}</b><small>日</small></div>
+        ${st.txt ? `<div class="pass-status">${esc(st.txt)}</div>` : ""}
+      </div>
+    </article>`;
   }
 
   // Deleting is irreversible (the DB cascades every version + AI note away),
