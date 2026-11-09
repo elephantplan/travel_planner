@@ -1016,6 +1016,44 @@ img{max-width:100%;}
 .fold-body .hsblock .wtable{margin-bottom:4px;}
 .fold-body .hsblock > .foldtools{float:right;margin:-8px -8px 0 8px;}
 
+
+/* ---------- stop cards: the photo leads ----------
+   A 62px thumbnail beside a paragraph is how a forum post looks. A travel
+   app sells the place with the picture, so the photo runs edge to edge
+   across the top of the card and the rating sits on it; the text below
+   is the caption. Cards without a photo keep the compact layout. */
+.stopcard{overflow:hidden;border-radius:20px;}
+.stopcard:has(> .stopmain > .thumb) > .stopmain{flex-direction:column;gap:14px;padding:0 16px 4px;}
+.stopmain > .thumb{width:auto;height:auto;align-self:stretch;margin:0 -16px;aspect-ratio:16/10;border-radius:0;}
+.stopmain > .thumb img{transition:transform .5s ease;}
+.stopcard:hover .stopmain > .thumb img{transform:scale(1.03);}
+.stopmain > .thumb::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(0,0,0,.38),transparent 30%,transparent 72%,rgba(0,0,0,.42));}
+.thumb-rate{position:absolute;left:12px;bottom:10px;z-index:1;display:inline-flex;align-items:center;gap:4px;
+  padding:4px 9px;border-radius:999px;font-family:'Archivo',var(--f-mono);font-stretch:85%;font-weight:800;font-size:13px;
+  color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+.thumb-rate .i{width:13px;height:13px;fill:var(--gold);stroke:var(--gold);}
+.stopcard:has(.thumb-rate) .meta-chip.rating{display:none;}
+.stopcard:has(> .stopmain > .thumb) > .cardtools{top:10px;right:10px;flex-direction:row;gap:6px;}
+.stopcard:has(> .stopmain > .thumb) > .cardtools > *{color:#fff;background:rgba(10,12,16,.4);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+.stopcard:has(> .stopmain > .thumb) .stopname{font-size:18px;font-weight:800;letter-spacing:-.015em;line-height:1.35;}
+.stopname .kr{display:block;margin:3px 0 0;font-size:12px;}
+
+/* chips: soft fills, no outlines */
+.stopcard .meta-chip,.stopcard .niecepick{border:0;background:var(--surface-2);border-radius:999px;padding:4px 10px;font-size:12px;}
+.stopcard .meta-chip.rating{background:transparent;padding-left:0;}
+.stopcard .meta-chip.closed{background:var(--danger-bg);}
+/* the tip: a labelled note, not a quotation */
+.stopcard .tipbox{margin:10px 16px 4px;padding:10px 12px 10px 14px;border:0;border-radius:12px;
+  background:color-mix(in srgb,var(--gold) 10%,transparent);color:var(--ink);font-size:13.5px;line-height:1.65;}
+.stopcard .tipbox::before{content:"提示";display:block;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:2px;}
+/* links: small pills you can actually hit */
+.stopfoot{gap:6px;padding:12px 16px 16px;}
+.stopfoot .maplink{font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);
+  padding:7px 12px;border-radius:999px;}
+.stopfoot .maplink:hover{color:var(--ink);}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1477,7 +1515,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-02";
+  const BUILD = "2026-11-09-03";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4097,7 +4135,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // a photo is now a link in the footer row, and the box only exists once
     // there is a picture to put in it.
     const thumb = s.photoUrl
-      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy" data-photoimg="${i}"></div>`
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy" data-photoimg="${i}">${Number.isFinite(s.rating) ? `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}</span>` : ""}</div>`
       : "";
 
     const closedToday = stopClosedOnDay(s, day);
@@ -6302,7 +6340,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const named = plain(s.title);
     const fetchable = !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl);
     const thumb = s.photoUrl
-      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy"></div>`
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy">${Number.isFinite(s.rating) ? `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}</span>` : ""}</div>`
       : "";
     // only the newest AI batch is badged — otherwise every place the AI ever
     // found stays marked and the badge stops meaning "this is what just landed"
