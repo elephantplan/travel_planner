@@ -127,6 +127,23 @@ const SUGGEST = { ok: true, stays: {
   ok('撳 × 淨係刪嗰間建議', await accB.locator('.sgh').count() === 1);
   const s2 = [...saved].reverse().find(x => x.snapshot);
   ok('刪咗嘅建議都存咗', s2 && s2.snapshot.staySuggest.hotels.length === 1);
+  // adding one by hand puts it in the same list, on top, marked as theirs
+  const accM = p.locator('[data-fold="stay"]').locator('xpath=..');
+  ok('標題係「住宿推薦」', /住宿推薦/.test(await accM.innerText()) && !/AI 住宿建議/.test(await accM.innerText()));
+  await accM.locator('[data-staymanual]').first().click();
+  await p.waitForTimeout(300);
+  await p.fill('[data-mh="q"]', '難波假日酒店');
+  await p.waitForTimeout(900);
+  await p.locator('[data-mhp="0"]').click();
+  await p.fill('[data-mh="price"]', '每晚約 HK$1,100');
+  await p.fill('[data-mh="area"]', '難波');
+  await p.locator('.sheet [data-esave]').click();
+  await p.waitForTimeout(1500);
+  const sm = [...saved].reverse().find(x => x.snapshot);
+  const top = sm && sm.snapshot.staySuggest.hotels[0];
+  ok('自己加嘅放最頂', top && top.manual === true && top.price === '每晚約 HK$1,100' && top.area === '難波', top);
+  ok('配咗 Google 地點同相', top && top.placeId && top.photoUrl);
+  ok('卡上寫明「自己加」', /自己加/.test(await accM.locator('.sgh').first().innerText()));
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

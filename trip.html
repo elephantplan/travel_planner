@@ -1267,7 +1267,7 @@ a.btn{text-decoration:none;}
 body.readonly .secedit,body.readonly .editbtn,body.readonly .draghandle,body.readonly .addstop,body.readonly .addusec,
 body.readonly .addgroup,body.readonly .insertrow,body.readonly .ins,body.readonly .toollist,body.readonly .usec-add,
 body.readonly [data-moneyadd],body.readonly [data-moneypeople],body.readonly [data-flightedit],body.readonly [data-secrefresh],
-body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly .sgask,body.readonly [data-stayskip],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
+body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-staymanual],body.readonly .sgask,body.readonly [data-stayskip],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
 body.readonly [data-moneyitem]{pointer-events:none;}
 
 
@@ -1366,6 +1366,11 @@ body.readonly .sechide{display:none;}
 .sgask-row{display:flex;gap:8px;}
 .sgask-row .input{flex:1;min-width:0;}
 .sgask-row .btn{flex:0 0 auto;}
+
+
+.sgcta{display:flex;flex-wrap:wrap;gap:8px;}
+.sgmine{font-size:11px;font-weight:800;color:var(--ink);background:var(--surface);border:1px solid var(--rule);padding:1px 8px;border-radius:999px;}
+.sgmore-row{display:flex;flex-wrap:wrap;gap:8px;}
 
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
@@ -1828,7 +1833,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-18";
+  const BUILD = "2026-11-09-19";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6516,7 +6521,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const days = d.days || [];
     const dLab = (a, b) => `Day ${a}${b && b !== a ? "–" + b : ""}`;
     if (!sg || !(sg.hotels || []).length){
-      return `<div class="sgcta"><button class="btn${(d.stays || []).length ? "" : " primary"}" data-stayprefs>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 建議其他酒店" : "叫 AI 建議邊幾晚住邊區"}</button></div>`;
+      return `<div class="sgcta">
+        <button class="btn${(d.stays || []).length ? "" : " primary"}" data-stayprefs>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 推薦其他酒店" : "叫 AI 推薦邊幾晚住邊區"}</button>
+        <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>`;
     }
     const pf = d.stayPrefs;
     const bk = h => {
@@ -6527,7 +6534,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         (pf2 ? `&group_adults=${pf2.adults}&no_rooms=${pf2.rooms}&group_children=${pf2.kids}` : "");
     };
     return `<div class="hsblock sgblock">
-      <h3>AI 住宿建議</h3>
+      <h3>住宿推薦</h3>
       <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.areas || []).length ? `<p class="picker-label">可以住邊區</p>
       <div class="sgareas">${sg.areas.map(a => { const n = sg.hotels.filter(h => h.area === a.area).length; return `
@@ -6549,10 +6556,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
           <div class="sgh-body">
-            <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))} · ${esc(h.area)}</span>${h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
+            <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))}${h.area ? " · " + esc(h.area) : ""}</span>${h.manual ? `<span class="sgmine">自己加</span>` : h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
             ${h.local && h.local !== h.name ? `<div class="sgh-local">${esc(h.local)}</div>` : ""}
-            ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>網上搜尋估價</small></div>` : ""}
+            ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>${h.manual ? "自己記低" : "網上搜尋估價"}</small></div>` : ""}
             ${(h.highlights || []).length ? `<div class="sgh-hl">${h.highlights.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
             ${h.station ? `<div class="staystation">${icon("pin")}最近 <b>${esc(h.station)}</b>${h.walk ? ` · ${esc(h.walk)}` : ""}</div>` : ""}
             <div class="sgh-acts">
@@ -6564,13 +6571,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             </div>
           </div>
         </div>`; }).join("")}</div>
-      <p class="hint">價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
+      <p class="hint">AI 推薦嘅價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
       <div class="sgask">
         <label class="picker-label" for="sg-extra">仲有冇要啲咩？</label>
         <div class="sgask-row"><input class="input" id="sg-extra" placeholder="例如：近難波、要有停車場、再平啲、想睇京都住一晚"><button class="btn primary" data-sgask>${icon("sparkle")}搵</button></div>
       </div>
       <div class="sgmore">
-        <button class="btn" data-stayprefs>${icon("plus")}改要求再搵</button>
+        <div class="sgmore-row"><button class="btn" data-stayprefs>${icon("sparkle")}改要求再搵</button>
+          <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
         <span class="hint">之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
       </div>
     </div>`;
@@ -6611,6 +6619,74 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const fit = () => { map.invalidateSize(); if (frame.length) map.fitBounds(L.latLngBounds(frame).pad(0.15), { maxZoom: 16 }); };
       fit(); setTimeout(fit, 250);
     } catch (e){ el.innerHTML = `<div class="mapfallback">地圖載入唔到。</div>`; }
+  }
+
+  // ---------- adding a hotel by hand ----------
+  // A hotel a friend recommended, or one already seen on Booking, goes into
+  // the same list as the AI's, with the same photo, rating, map pin and
+  // station walk, so they can be compared side by side.
+  function openManualStaySheet(){
+    const snap = state.snapshot, days = snap.days || [];
+    const opts = sel => days.map((d, i) => `<option value="${i + 1}"${i + 1 === sel ? " selected" : ""}>Day ${i + 1} · ${esc(d.date)}</option>`).join("");
+    let picked = null, seq = 0, timer = null;
+    openSheet(`
+      <h3>自己加一間去比較</h3>
+      <p class="sec-sub">打酒店名，喺 Google 揀返真嘅嗰間。加咗會同 AI 推薦嘅放埋一齊，有相、評分、地圖同最近車站。</p>
+      <div class="field"><label>酒店名</label><input class="input" data-mh="q" placeholder="例如：大阪難波假日酒店" autocomplete="off"><div class="suggest" data-mh-res></div></div>
+      <div class="field"><label>區（可以留空）</label><input class="input" data-mh="area" placeholder="例如：心齋橋"></div>
+      <div class="field"><label>每晚價錢（可以留空）</label><input class="input" data-mh="price" placeholder="例如：每晚約 HK$1,100"></div>
+      <div class="field"><label>好處／備註（一行一點）</label><textarea class="textarea" data-mh="hl" rows="3" placeholder="朋友推介\n有大浴場"></textarea></div>
+      <div class="field"><label>住邊幾晚</label><div class="stayrange">
+        <select class="input" data-mh="from">${opts(1)}</select><span>→</span><select class="input" data-mh="to">${opts(days.length)}</select></div></div>
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave disabled>加入比較</button>
+      </div>`, sheet => {
+      const q = sheet.querySelector('[data-mh="q"]'), res = sheet.querySelector("[data-mh-res]"), save = sheet.querySelector("[data-esave]");
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      q.addEventListener("input", () => {
+        picked = null; save.disabled = true;
+        clearTimeout(timer);
+        const term = q.value.trim();
+        if (term.length < 2){ res.innerHTML = ""; return; }
+        timer = setTimeout(async () => {
+          const my = ++seq;
+          res.innerHTML = `<p class="hint">搵緊…</p>`;
+          let r = null;
+          try { r = await callAi({ action: "place-search", query: term }); } catch (_){}
+          if (my !== seq) return;
+          const places = (r && r.places) || [];
+          res.innerHTML = places.length ? places.slice(0, 5).map((p, i) => `<button type="button" class="suggest-item" data-mhp="${i}">
+              <div class="n">${esc(p.name)}</div>${p.address ? `<div class="a">${esc(p.address)}</div>` : ""}</button>`).join("")
+            : `<p class="hint">搵唔到，試吓打當地文字或者英文名。</p>`;
+          res.querySelectorAll("[data-mhp]").forEach(b => b.addEventListener("click", () => {
+            picked = places[+b.dataset.mhp];
+            q.value = picked.name; res.innerHTML = `<p class="hint">已揀「${esc(picked.name)}」</p>`;
+            save.disabled = false;
+          }));
+        }, 400);
+      });
+      save.addEventListener("click", async () => {
+        if (!picked) return;
+        const v = k => sheet.querySelector(`[data-mh="${k}"]`).value.trim();
+        const from = +v("from"), to = Math.max(from, +v("to"));
+        const h = { name: picked.name, local: "", area: v("area"), fromDay: from, toDay: to, price: v("price"),
+          highlights: v("hl").split("\n").map(x => x.trim()).filter(Boolean).slice(0, 3),
+          station: "", walk: "", manual: true, fresh: false, at: new Date().toISOString(),
+          placeId: picked.placeId, lat: picked.lat, lng: picked.lng, rating: picked.rating, ratingCount: picked.ratingCount };
+        closeLayer();
+        flash(`加緊「${h.name}」，攞緊相同評分…`, true);
+        try {
+          const ph = await fetchStoredPhoto({ placeId: h.placeId, title: h.name });
+          if (ph && ph.url) h.photoUrl = ph.url;
+        } catch (_){}
+        const sg = snap.staySuggest = snap.staySuggest || { at: new Date().toISOString(), plan: [], areas: [], hotels: [] };
+        sg.hotels = [h].concat((sg.hotels || []).filter(x => !(x.placeId && x.placeId === h.placeId)));
+        render();
+        await saveNow(`自己加咗「${h.name}」去住宿推薦比較`);
+        flash(`加咗「${h.name}」`);
+      });
+    });
   }
 
   // ---------- sorting the suggestions ----------
@@ -6810,6 +6886,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       } catch (err){ flash(err.message || "搵唔到"); render(); }
       return;
     }
+    const man = e.target.closest && e.target.closest("[data-staymanual]");
+    if (man){ e.preventDefault(); openManualStaySheet(); return; }
     const skip = e.target.closest && e.target.closest("[data-stayskip]");
     if (skip){
       e.preventDefault();
