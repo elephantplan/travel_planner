@@ -1296,6 +1296,16 @@ body.readonly [data-moneyitem]{pointer-events:none;}
 .sgh-acts{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;}
 .sgh-acts .maplink{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--stock);color:var(--ink-soft);}
 
+
+.stayrow{position:relative;}
+.staydel{position:absolute;top:12px;right:12px;z-index:2;opacity:1 !important;}
+.stayrow.hasphoto .staydel{color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+.stayrow:not(.hasphoto) .v{padding-right:44px;}
+.fold-body .hsblock[data-hskey="acc"] > .foldtools{left:12px;right:auto;}
+.sechide{display:flex;justify-content:flex-end;margin-top:10px;}
+.sechide .secedit{opacity:.7;font-size:12px;}
+body.readonly .sechide{display:none;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1757,7 +1767,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-12";
+  const BUILD = "2026-11-09-13";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3709,8 +3719,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const stays = d.stays || [];
     // the fold's own head already says 住宿, so the block keeps only its tools
     const body = `<div class="hsblock" data-hskey="acc">
-        <div class="foldtools">${secTools("acc")}</div>
-        ${stays.length ? stays.map(st => {
+        <div class="foldtools"><span class="sectools">${secEditBtn("acc")}</span></div>
+        ${stays.length ? stays.map((st, si) => {
           const subj = { title: st.name || "", kr: st.kr || "", mapUrl: st.mapUrl || "" };
           const links = mapLinksInOrder(
             (() => { const n = destIsKorea() ? naverPlaceUrl(subj) : ""; return n
@@ -3723,6 +3733,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           const wantNaver = destIsKorea() && !naverSearchable(plain(st.kr) || plain(st.name));
           return `
           <div class="stayrow${st.photoUrl ? " hasphoto" : ""}">
+            <button class="secedit staydel" data-staydelete="${si}" title="刪走呢間酒店" aria-label="刪走「${esc(st.name || "呢間酒店")}」">${icon("trash")}</button>
             ${st.photoUrl ? `<div class="stayphoto"><img src="${esc(st.photoUrl)}" alt="" loading="lazy"></div>` : ""}
             <div class="v">${esc(st.name || "未填")}${st.aiPick ? `<span class="aipick">AI 建議</span>` : ""}</div>
             ${stayStubHtml(d, st)}
@@ -3735,7 +3746,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           </div>`; }).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆自己加，或者叫 AI 建議邊幾晚住邊區。</p>`}
       </div>
-      ${staySuggestHtml(d)}`;
+      ${staySuggestHtml(d)}
+      <div class="sechide"><button class="secedit wordy secdel" data-delsec="acc" data-seclabel="住宿">${icon("trash")}收埋成段「住宿」</button></div>`;
     const names = stays.map(st => plain(st.name)).filter(Boolean);
     const hint = names.length > 1 ? `${names[0]} 等 ${names.length} 間`
                : names.length === 1 ? names[0] : "仲未填";
@@ -6539,6 +6551,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       try { await suggestStays(); await saveNow("AI 建議咗住宿"); }
       catch (err){ flash(err.message || "建議唔到"); render(); }
     }
+  });
+  document.addEventListener("click", async e => {
+    const b = e.target.closest && e.target.closest("[data-staydelete]");
+    if (!b || state.readonly) return;
+    e.preventDefault(); e.stopPropagation();
+    const snap = state.snapshot, i = +b.dataset.staydelete, st = (snap.stays || [])[i];
+    if (!st || !confirm(`刪走「${st.name || "呢間酒店"}」？（只係刪呢間，住宿呢段會保留）`)) return;
+    snap.stays.splice(i, 1);
+    syncAccommodation(snap);
+    render();
+    await saveNow(`刪走咗住宿「${st.name || ""}」`);
   });
   function stayRangeLabel(snap, s){
     const days = snap.days || [];

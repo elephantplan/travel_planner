@@ -65,6 +65,14 @@ const SUGGEST = { ok: true, stays: {
   ok('揀咗就取代嗰幾晚原本嘅酒店', stays.length === 1 && stays[0].name === '明洞九樹酒店', stays.map(s => s.name));
   ok('連埋 Google 地點同車站', stays[0] && stays[0].placeId && stays[0].station === '명동역');
   ok('酒店卡標明係 AI 建議', /AI 建議/.test(await p.locator('[data-hskey="acc"]').innerText()));
+  // the trash on a hotel removes that hotel, not the whole 住宿 section
+  p.once('dialog', d => d.accept());
+  await p.locator('[data-staydelete="0"]').click();
+  await p.waitForTimeout(900);
+  const after = [...saved].reverse().find(x => x.snapshot);
+  ok('刪酒店只係刪嗰間', after && after.snapshot.stays.length === 0, after && after.snapshot.stays.length);
+  ok('住宿呢段仲喺度', await p.locator('[data-fold="stay"]').count() === 1 && !((after.snapshot.hiddenSections || []).includes('acc')));
+  ok('收埋成段係另一粒寫明嘅掣', /收埋成段「住宿」/.test(await p.locator('[data-fold="stay"]').locator('xpath=..').innerText()));
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
