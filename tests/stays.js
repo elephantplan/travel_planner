@@ -10,6 +10,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   else { fail++; console.log('  FAIL ' + n + (x !== undefined ? '  → ' + JSON.stringify(x) : '')); } };
 
 const SUGGEST = { ok: true, stays: {
+  areas: [{ area: '明洞', best: true, pros: '三日都喺市中心，唔使搬酒店', cons: '晚上人多', goodFor: '第一次去' },
+          { area: '弘大', best: false, pros: '後生熱鬧', cons: '去景福宮要轉車', goodFor: '鍾意夜生活' }],
   plan: [{ fromDay: 1, toDay: 3, area: '明洞', why: '三日都喺市中心，唔使搬酒店' }],
   hotels: [
     { name: '明洞樂天酒店', local: '롯데호텔 서울', area: '明洞', fromDay: 1, toDay: 3, price: '每晚約 HK$1,500–2,000',
@@ -68,6 +70,12 @@ const SUGGEST = { ok: true, stays: {
   ok('有酒店位置地圖', await acc.locator('#map-stays').count() === 1);
   ok('每張卡有同地圖對應嘅字母', (await acc.locator('.sgpin').allInnerTexts()).join('') === 'AB', await acc.locator('.sgpin').allInnerTexts());
   ok('講邊幾晚住邊區', /Day 1–3/.test(t) && /住明洞/.test(t) && /唔使搬酒店/.test(t), t.slice(0, 120));
+  ok('列出幾個區，逐區講好處同留意', /可以住邊區/.test(t) && /弘大/.test(t) && /去景福宮要轉車/.test(t) && /AI 首選/.test(t));
+  await acc.locator('.sgfilter [data-stayarea="弘大"]').click();
+  await p.waitForTimeout(200);
+  ok('揀區就淨係睇嗰區嘅酒店', await acc.locator('.sgh').count() === 0, await acc.locator('.sgh').count());
+  await acc.locator('.sgfilter [data-stayarea=""]').click();
+  await p.waitForTimeout(200);
   ok('每間酒店有價錢', /HK\$1,500–2,000/.test(t) && /網上搜尋估價/.test(t));
   ok('有好處', /乙支路入口站直達/.test(t));
   ok('最近車站同自己計嘅步行時間', /最近\s*을지로입구역\s*·\s*步行約 4 分鐘/.test(t), (t.match(/最近[\s\S]{0,30}/) || [])[0]);
@@ -100,6 +108,12 @@ const SUGGEST = { ok: true, stays: {
   ok('刪酒店只係刪嗰間', after && after.snapshot.stays.length === 0, after && after.snapshot.stays.length);
   ok('住宿呢段仲喺度', await p.locator('[data-fold="stay"]').count() === 1 && !((after.snapshot.hiddenSections || []).includes('acc')));
   ok('收埋成段係另一粒寫明嘅掣', /收埋成段「住宿」/.test(await p.locator('[data-fold="stay"]').locator('xpath=..').innerText()));
+  // the quick box sends extra wishes straight away
+  const accQ = p.locator('[data-fold="stay"]').locator('xpath=..');
+  await accQ.locator('#sg-extra').fill('要有停車場');
+  await accQ.locator('[data-sgask]').click();
+  await p.waitForTimeout(2500);
+  ok('「仲有冇要啲咩」直接傳畀 AI', /今次額外要求/.test(sentText[sentText.length - 1] || '') && /停車場/.test(sentText[sentText.length - 1] || ''));
   // searching again keeps what was found and asks for different ones
   const accB = p.locator('[data-fold="stay"]').locator('xpath=..');
   await accB.locator('[data-stayprefs]').last().click();

@@ -143,22 +143,29 @@ const LOOKUP_PROMPT = (q: string, today: string) => `用 Google 搜尋查呢班�
 // web search and are marked as estimates; the app checks every hotel on
 // Google Maps and times the walk to the station itself.
 const STAY_PROMPT = (trip: string, today: string) => `你係香港人嘅旅遊顧問。下面係一個家庭嘅行程（JSON），今日係 ${today}。
-請建議佢哋邊幾晚住邊一區最方便（考慮每日去邊、交通、搬酒店嘅麻煩；唔使搬就唔好叫佢哋搬），然後每一區推介 3 間真實存在、評價好嘅酒店。
-用 Google 搜尋查價錢同最近嘅車站。價錢寫港幣大約範圍（例如「每晚約 HK$900–1,300」），查唔到就寫「出發前睇返訂房網」，唔好作。
-highlights 每間 2–3 點，每點最多 14 字（例如「梅田站行 3 分鐘」「有大浴場」「房間大啱一家人」）。
-fromDay / toDay 係第幾日（1 開始），toDay 係退房嗰日。全部用廣東話。
+1. 列出 3–4 個適合呢個行程嘅熱門住宿區（例如大阪：梅田、心齋橋／難波、本町、天王寺），唔好淨係講一區。
+   每區寫：pros（對呢個行程嘅好處，一句）、cons（要留意嘅地方，一句）、goodFor（啱咩人，例如「鍾意行街食嘢」「有長者」）。
+   揀一個最適合嘅區做 best:true（得一個），其他 false。
+2. 如果行程有幾日喺第二個城市（例如去京都住一兩晚會慳好多車程），喺 plan 度講邊幾晚住邊區；全程住同一個城市就 plan 留空陣列。
+3. 每一區推介 2–3 間真實存在、評價好嘅酒店。用 Google 搜尋查價錢同最近嘅車站。價錢寫港幣大約範圍（例如「每晚約 HK$900–1,300」），查唔到就寫「出發前睇返訂房網」，唔好作。
+   highlights 每間 2–3 點，每點最多 14 字。fromDay / toDay 係第幾日（1 開始），toDay 係退房嗰日。
+4. 如果 JSON 入面有「住宿要求」，一定要跟；有「想住嘅區」就淨係喺嗰區揀；有「已經建議過」就唔好再推介嗰啲酒店（但區可以再列）。
+全部用廣東話。
 行程：
 ${trip}
 只回覆一個 JSON（唔好有其他字、唔好 code fence）：
-{"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":"一句講點解"}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘"}]}`;
+{"areas":[{"area":"梅田","best":true,"pros":"","cons":"","goodFor":""}],"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":""}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘"}]}`;
 
 function cleanStays(p: any) {
   const n = (x: unknown, d: number) => Math.max(1, Math.floor(Number(x) || d));
   return {
+    areas: (Array.isArray(p?.areas) ? p.areas : []).slice(0, 6).map((a: any) => ({
+      area: str(a?.area, 30), best: a?.best === true, pros: str(a?.pros, 140), cons: str(a?.cons, 140), goodFor: str(a?.goodFor, 60),
+    })).filter((a: any) => a.area),
     plan: (Array.isArray(p?.plan) ? p.plan : []).slice(0, 6).map((x: any) => ({
       fromDay: n(x?.fromDay, 1), toDay: n(x?.toDay, n(x?.fromDay, 1)), area: str(x?.area, 30), why: str(x?.why, 120),
     })).filter((x: any) => x.area),
-    hotels: (Array.isArray(p?.hotels) ? p.hotels : []).slice(0, 12).map((h: any) => ({
+    hotels: (Array.isArray(p?.hotels) ? p.hotels : []).slice(0, 14).map((h: any) => ({
       name: str(h?.name, 60), local: str(h?.local, 80), area: str(h?.area, 30),
       fromDay: n(h?.fromDay, 1), toDay: n(h?.toDay, n(h?.fromDay, 1)),
       price: str(h?.price, 60),
