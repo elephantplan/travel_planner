@@ -1399,6 +1399,17 @@ body.readonly .sechide{display:none;}
 .mn-p button{border:0;background:transparent;color:var(--ink-faint);font-size:16px;line-height:1;margin-left:6px;cursor:pointer;padding:0 2px;}
 .mn-p{display:inline-flex;align-items:center;}
 
+
+.qa{position:relative;}
+.qa-del{position:absolute;top:10px;right:8px;width:30px;height:30px;border:0;border-radius:50%;background:transparent;color:var(--ink-faint);cursor:pointer;display:grid;place-items:center;}
+.qa-del .i{width:15px;height:15px;}
+.qa-del:hover{color:var(--danger);background:var(--danger-bg);}
+.qa .qa-head{padding-right:40px;}
+.qa-sg{display:inline;}
+.qa-sg .usec-add,.qa-sg .usec-inday{display:inline-flex;margin:6px 0 2px 0;}
+.daypick button.suggested{outline:2px solid var(--gold);outline-offset:1px;}
+body.readonly .qa-del{display:none;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1860,7 +1871,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-22";
+  const BUILD = "2026-11-09-23";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4357,14 +4368,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const line = sec && (sec.lines || [])[li];
     if (!line) return;
     const { head, body } = splitLine(line);
-    const { name, region } = placeFromHead(head);
+    openAddPlaceSheetFor(Object.assign(placeFromHead(head), { body }));
+  }
+  function openAddPlaceSheetFor({ name, region, body, time, day: preDay }){
+    const snap = state.snapshot;
     const boards = snap.boards || [];
     openSheet(`
       <h3>將「${esc(name)}」加去邊度？</h3>
       <p class="sec-sub">${esc(body)}</p>
       <p class="picker-label">行程日子</p>
       <div class="daypick">
-        ${(snap.days || []).map(d => `<button data-addto="${d.id}" style="--lc:${dayColorVar(d.id)}">
+        ${(snap.days || []).map(d => `<button data-addto="${d.id}" class="${d.id === preDay ? "suggested" : ""}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span><span class="dcode">Day ${d.id.replace("day", "")}</span>
           <span>${esc(d.title)}${tabWeekday(d) ? ` · ${esc(tabWeekday(d))}` : ""}</span></button>`).join("")}
       </div>
@@ -4372,15 +4386,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <div class="daypick">${boards.map(b => `<button data-addboard="${b.id}" style="--lc:var(--bookmark)">
           <span class="bullet"></span><span class="dcode">${icon("pin")}</span><span>${esc(b.name)}</span></button>`).join("")}</div>` : ""}
     `, sheet => {
-      const make = () => Object.assign(blankStop(), { title: name, desc: body,
+      const make = () => Object.assign(blankStop(), { title: name, desc: body || "", time: time || "",
         mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, region].filter(Boolean).join(" "))}` });
       sheet.querySelectorAll("[data-addto]").forEach(b => b.addEventListener("click", async () => {
         const day = dayById(b.dataset.addto);
         const st = make();
         const units = toUnits(day.items);
-        units.push({ seg: null, stop: st });
+        const at = time ? slotForTime(units, time) : units.length;
+        units.splice(at, 0, { seg: null, stop: st });
         day.items = fromUnits(units);
-        const at = units.length - 1;
         closeLayer();
         flash(`加咗「${name}」去 Day ${day.id.replace("day", "")}，搵緊地圖同相…`);
         render();
@@ -8984,6 +8998,37 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // ==================================================================
   const AI_KIND = { weather:"天氣", foliage:"季節", ask:"問嘢", suggest:"執行程", board:"清單主題" };
 
+  // A past day-plan answer lists its changes as 「【Day 3・加】名（約 15:30）」
+  // followed by a reason. Each one becomes a button to put that place into
+  // the trip (on that day, at that time), or says where it already is.
+  const QA_LINE = /^【\s*Day\s*(\d+)\s*[・·]\s*(加|改)\s*】\s*(.+?)\s*(?:[（(]\s*約?\s*(\d{1,2}[:：]\d{2})\s*[)）])?\s*$/;
+  function qaSuggestions(answer){
+    const lines = String(answer || "").split(/\n/), out = [];
+    lines.forEach((l, i) => {
+      const m = l.trim().match(QA_LINE);
+      if (!m) return;
+      const head = m[3].replace(/<[^>]*>/g, "").replace(/\s*[（(][^）)]*[）)]\s*$/, "").trim();
+      const days = state.snapshot.days || [];
+      out.push({ line: i, kind: m[2], name: placeFromHead(head).name || head, region: "",
+        time: m[4] ? "約 " + m[4].replace("：", ":") : "", body: (lines[i + 1] || "").trim(),
+        day: (days[+m[1] - 1] || {}).id || "" });
+    });
+    return out;
+  }
+  function qaAnswerHtml(r, ri){
+    const sgs = qaSuggestions(r.answer);
+    if (!sgs.length) return esc(r.answer);
+    const byLine = new Map(sgs.map((x, k) => [x.line, [x, k]]));
+    return String(r.answer).split(/\n/).map((l, i) => {
+      if (!byLine.has(i)) return esc(l);
+      const [x, k] = byLine.get(i);
+      const inDay = findInItinerary(state.snapshot, { title: x.name });
+      const tool = inDay
+        ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
+        : `<button type="button" class="usec-add" data-noteadd="${ri}|${k}">${icon("plus")}加去${x.day ? " D" + esc(x.day.replace("day", "")) : "行程"}</button>`;
+      return `<span class="qa-sg">${esc(l)}${tool}</span>`;
+    }).join("\n");
+  }
   function notesPageHtml(){
     return `
       <section class="sec" style="padding-top:24px;">
@@ -9034,8 +9079,28 @@ ${stayBlock}${dayBlocks}${secBlocks}
             </span>
             <span class="qa-q">${esc(r.question || "")}</span>
           </button>
-          <div class="qa-a" hidden>${esc(r.answer)}</div>
+          <div class="qa-a" hidden>${qaAnswerHtml(r, i)}</div>
+          <button class="qa-del" data-notedel="${i}" title="刪走呢條紀錄" aria-label="刪走呢條紀錄">${icon("trash")}</button>
         </div>`).join("");
+      list.querySelectorAll("[data-notedel]").forEach(btn => btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        const r = shown[+btn.dataset.notedel];
+        if (!r || !confirm(`刪走呢條紀錄？\n「${(r.question || "").slice(0, 40)}」\n刪咗冇得返轉頭。`)) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?id=eq.${encodeURIComponent(r.id)}`, { method: "DELETE", headers: sbHeaders() });
+          if (!res.ok) throw new Error("刪唔到 " + res.status);
+          rows = rows.filter(x => x !== r);
+          paint();
+          flash("刪咗");
+        } catch (err){ btn.disabled = false; flash(err.message); }
+      }));
+      list.querySelectorAll("[data-noteadd]").forEach(btn => btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const [ri, k] = btn.dataset.noteadd.split("|").map(Number);
+        const sg = qaSuggestions(shown[ri].answer)[k];
+        if (sg) openAddPlaceSheetFor(sg);
+      }));
       list.querySelectorAll("[data-note]").forEach(btn => btn.addEventListener("click", () => {
         const a = btn.nextElementSibling;
         a.hidden = !a.hidden;
