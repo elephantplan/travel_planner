@@ -1054,6 +1054,37 @@ img{max-width:100%;}
   padding:7px 12px;border-radius:999px;}
 .stopfoot .maplink:hover{color:var(--ink);}
 
+
+/* ---------- transit legs ----------
+   The leg between two stops is its own small card: the mode in a disc, the
+   time in bold, the route drawn as a line diagram, the map links as pills. */
+.seg-text{margin:4px 0 14px 14px;padding:12px 14px 12px;background:color-mix(in srgb,var(--stock) 60%,transparent);
+  border:1px dashed var(--rule);border-radius:16px;font-size:13px;color:var(--ink-soft);gap:8px 10px;}
+.seg-head{display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--ink);font-size:14px;}
+.seg-head .icon{width:30px;height:30px;border-radius:50%;display:inline-grid;place-items:center;flex:0 0 auto;
+  background:color-mix(in srgb,var(--lc) 18%,transparent);color:var(--lc);}
+.seg-head .icon .i{width:16px;height:16px;}
+.seg-text .segrefresh{background:var(--surface-2);}
+.rchain{list-style:none;margin:2px 0 0;padding:0 0 0 2px;width:100%;}
+.rchain li{position:relative;padding-left:22px;}
+.rc-st{font-size:13px;font-weight:600;color:var(--ink);line-height:1.5;padding-top:1px;padding-bottom:1px;}
+.rc-dot{position:absolute;left:5px;top:50%;width:11px;height:11px;margin-top:-5.5px;border-radius:50%;
+  background:var(--stock);box-shadow:inset 0 0 0 2.5px var(--ink-soft);}
+.rc-ln{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:5px;padding-bottom:5px;}
+.rc-ln::before{content:"";position:absolute;left:9px;top:-3px;bottom:-3px;width:3px;border-radius:2px;
+  background:var(--line,var(--ink-faint));}
+.rc-pill{display:inline-block;font-size:11.5px;font-weight:700;color:#fff;background:var(--line,var(--ink-faint));
+  padding:2px 9px;border-radius:999px;line-height:1.6;}
+.rc-ln small{font-size:11.5px;color:var(--ink-faint);}
+.seg-text .seg-links{gap:6px;margin-top:2px;}
+.seg-text .seg-links .maplink{font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);
+  padding:7px 12px;border-radius:999px;}
+.seg.stale .seg-text{border-color:color-mix(in srgb,var(--warn) 45%,transparent);}
+.seg-text > .seg-head{order:0;flex:1 1 auto;}
+.seg-text > .segrefresh{order:1;}
+.seg-text > .rchain,.seg-text > .seg-route{order:2;}
+.seg-text > .seg-links{order:3;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1515,7 +1546,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-03";
+  const BUILD = "2026-11-09-04";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2508,6 +2539,33 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   const MODE_ICON = { walk:"walk", metro:"metro", bus:"bus", taxi:"car", air:"plane", other:"walk" };
   // what to draw for a segment, old data or new
+  // A route arrives as one string — 安國 ─3號線・4站─ 忠武路 ─4號線・2站─ 明洞 —
+  // which read as a line of mono gibberish. Stations and lines alternate, so
+  // it is drawn as what it is: a little line diagram, each line in the colour
+  // the station signs use.
+  const LINE_COLORS = [
+    [/(^|\D)1\s*號線|line\s*1\b/i, "#0052A4"], [/(^|\D)2\s*號線|line\s*2\b/i, "#00A84D"],
+    [/(^|\D)3\s*號線|line\s*3\b/i, "#EF7C1C"], [/(^|\D)4\s*號線|line\s*4\b/i, "#00A5DE"],
+    [/(^|\D)5\s*號線|line\s*5\b/i, "#996CAC"], [/(^|\D)6\s*號線|line\s*6\b/i, "#CD7C2F"],
+    [/(^|\D)7\s*號線|line\s*7\b/i, "#747F00"], [/(^|\D)8\s*號線|line\s*8\b/i, "#E6186C"],
+    [/(^|\D)9\s*號線|line\s*9\b/i, "#BDB092"],
+    [/機場|airport|arex/i, "#8246AF"], [/板南|bannan/i, "#0070BD"], [/淡水|信義|tamsui|xinyi/i, "#E3002C"],
+    [/松山|新店|songshan|xindian/i, "#008659"], [/中和|新蘆|zhonghe|xinlu/i, "#F8B61C"], [/文湖|wenhu/i, "#C48C31"],
+    [/山手|yamanote/i, "#9ACD32"], [/銀座|ginza/i, "#FF9500"], [/丸之內|marunouchi/i, "#F62E36"],
+    [/新盆唐|shinbundang/i, "#D4003B"], [/水仁|盆唐|bundang/i, "#F5A200"], [/京義|中央|gyeongui/i, "#77C4A3"],
+  ];
+  function lineColor(t){ for (const [re, c] of LINE_COLORS) if (re.test(t)) return c; return ""; }
+  function routeChainHtml(route){
+    const parts = String(route).split(/\s*[─—]+\s*/).map(x => x.trim()).filter(Boolean);
+    if (parts.length < 3 || parts.length % 2 === 0)
+      return `<span class="seg-route">${esc(route)}</span>`;
+    return `<ol class="rchain">${parts.map((x, k) => {
+      if (k % 2 === 0) return `<li class="rc-st"><span class="rc-dot"></span>${esc(x)}</li>`;
+      const [name, ...rest] = x.split(/\s*[・·•]\s*/);
+      const c = lineColor(name);
+      return `<li class="rc-ln"${c ? ` style="--line:${c}"` : ""}><span class="rc-pill">${esc(name)}</span>${rest.length ? `<small>${esc(rest.join(" · "))}</small>` : ""}</li>`;
+    }).join("")}</ol>`;
+  }
   function segHtmlOf(seg){
     const mode = segMode(seg);
     const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
@@ -4092,7 +4150,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
       u.seg.stale    ? `<span class="seg-note warn">${icon("warn")}次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
-      segHtmlOf(u.seg) + (u.seg.route ? `<span class="seg-route">${esc(u.seg.route)}</span>` : "");
+      `<span class="seg-head">${segHtmlOf(u.seg)}</span>` + (u.seg.route ? routeChainHtml(u.seg.route) : "");
     // one segment, one button — refreshing all of a day's legs to update just
     // one used to burn a Google Directions call per leg every time
     const segRefresh = showSeg && !u.seg.checking
