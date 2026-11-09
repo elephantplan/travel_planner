@@ -1392,6 +1392,13 @@ body.readonly .sechide{display:none;}
 
 .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1 !important;color:#fff;background:rgba(10,12,16,.45);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;width:32px;height:32px;display:inline-grid;place-items:center;}
+
+.mn-addrow{display:flex;gap:8px;margin-bottom:12px;}
+.mn-addrow .input{flex:1;min-width:0;}
+.mn-chips{min-height:34px;}
+.mn-p button{border:0;background:transparent;color:var(--ink-faint);font-size:16px;line-height:1;margin-left:6px;cursor:pointer;padding:0 2px;}
+.mn-p{display:inline-flex;align-items:center;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1853,7 +1860,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-20";
+  const BUILD = "2026-11-09-21";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3417,7 +3424,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${(money.people || []).length ? "" : `<p class="fl-empty">先加埋一齊去嘅人，之後每次有人比錢就記低，最後自動計邊個要比返邊個幾多。</p>`}
       <div class="mn-people">${(money.people || []).map(p => `<span class="mn-p">${esc(p)}</span>`).join("")}
         <button class="btn mn-edit" data-moneypeople>${icon("pencil")}${(money.people || []).length ? "改人" : "加人"}</button></div>
-      ${(money.people || []).length ? `<button class="btn primary wide" data-moneyadd>${icon("plus")}記一筆</button>` : ""}
+      <button class="btn primary wide" data-moneyadd>${icon("plus")}記一筆</button>
       ${items.length ? `<ul class="mn-list">${items.slice().reverse().map(it => `<li data-moneyitem="${esc(it.id)}">
           <span class="mn-what">${esc(it.what || "未寫")}</span><span class="mn-amt">${esc(fmtMoney(+it.amount || 0, it.cur))}</span>
           <span class="mn-sub">${esc(it.paidBy)} 比 · ${it.split && it.split.length && it.split.length !== (money.people || []).length ? esc(it.split.join("、")) + " 分" : "全部人分"}</span></li>`).join("")}</ul>` : ""}
@@ -3427,6 +3434,52 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     </div>`;
     const hint = items.length ? `${items.length} 筆` : "記低邊個比咗錢";
     return foldHtml("money", "夾錢", hint, body);
+  }
+  // Who's going, one name at a time. A textarea with "爸爸 / 媽媽 / 我" as
+  // placeholder looked already filled in; saving it saved nobody, and the
+  // button seemed dead. Names are now chips you add and remove, and saving
+  // goes straight on to the first expense.
+  function openMoneyPeopleSheet(){
+    const money = moneyOf(state.snapshot);
+    let people = money.people.slice();
+    openSheet(`
+      <h3>一齊去嘅人</h3>
+      <p class="sec-sub">逐個打名，撳「加」。之後記數就揀邊個比、分俾邊個。</p>
+      <div class="mn-addrow"><input class="input" data-mp-in placeholder="打個名，例如 阿爸" autocomplete="off" enterkeyhint="done"><button type="button" class="btn primary" data-mp-add>加</button></div>
+      <div class="mn-people mn-chips" data-mp-list></div>
+      <p class="hint warn" data-mp-msg></p>
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>儲存${money.items.length ? "" : "，記第一筆"}</button>
+      </div>`, sheet => {
+      const inp = sheet.querySelector("[data-mp-in]"), list = sheet.querySelector("[data-mp-list]"), msg = sheet.querySelector("[data-mp-msg]");
+      const draw = () => {
+        list.innerHTML = people.length
+          ? people.map((n, i) => `<span class="mn-p">${esc(n)}<button type="button" data-mp-rm="${i}" aria-label="拎走${esc(n)}">×</button></span>`).join("")
+          : `<span class="hint">仲未有人</span>`;
+        list.querySelectorAll("[data-mp-rm]").forEach(b => b.addEventListener("click", () => { people.splice(+b.dataset.mpRm, 1); draw(); }));
+      };
+      const add = () => {
+        // allow "阿爸 阿媽 我" or "阿爸、阿媽" in one go
+        const names = inp.value.split(/[\s,，、\/]+/).map(x => x.trim()).filter(Boolean);
+        names.forEach(n => { if (!people.includes(n) && people.length < 20) people.push(n); });
+        inp.value = ""; msg.textContent = ""; draw(); inp.focus();
+      };
+      sheet.querySelector("[data-mp-add]").addEventListener("click", add);
+      inp.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); add(); } });
+      draw();
+      setTimeout(() => inp.focus(), 50);
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        if (inp.value.trim()) add();             // a name typed but not yet added still counts
+        if (!people.length){ msg.textContent = "最少要加一個人。"; inp.focus(); return; }
+        const first = !money.items.length;
+        money.people = people;
+        closeLayer(); render();
+        await saveNow("改咗夾錢嘅人");
+        if (first) openMoneyItemSheet(null);
+      });
+    });
   }
   function openMoneyItemSheet(id){
     const d = state.snapshot, money = moneyOf(d);
@@ -3467,19 +3520,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   document.addEventListener("click", e => {
     const t = e.target.closest && e.target;
     if (!t || state.readonly) return;
-    if (t.closest("[data-moneyadd]")){ e.preventDefault(); openMoneyItemSheet(null); return; }
+    if (t.closest("[data-moneyadd]")){
+      e.preventDefault();
+      // can't split a bill among nobody: ask who's going first
+      if (!moneyOf(state.snapshot).people.length) openMoneyPeopleSheet(); else openMoneyItemSheet(null);
+      return;
+    }
     const li = t.closest("[data-moneyitem]");
     if (li){ e.preventDefault(); openMoneyItemSheet(li.dataset.moneyitem); return; }
-    if (t.closest("[data-moneypeople]")){
-      e.preventDefault();
-      const money = moneyOf(state.snapshot);
-      openEditSheet("一齊去嘅人", "一行一個名。改名唔會改到已經記低嘅數。", [
-        { key: "people", type: "lines", rows: 6, label: "名", value: money.people.join("\n"), placeholder: "爸爸\n媽媽\n我" },
-      ], async out => {
-        money.people = [...new Set(out.people.map(x => x.trim()).filter(Boolean))].slice(0, 20);
-        render(); await saveNow("改咗夾錢嘅人");
-      });
-    }
+    if (t.closest("[data-moneypeople]")){ e.preventDefault(); openMoneyPeopleSheet(); }
   });
 
   // ---------- 出發前 checklist ----------

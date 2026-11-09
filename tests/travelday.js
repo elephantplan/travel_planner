@@ -121,6 +121,26 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     await p.close();
   }
 
+  console.log('\nD2. 夾錢：由零開始加人');
+  {
+    const { p, errs, saved } = await boot();
+    await p.locator('[data-fold="money"]').click();
+    await p.waitForTimeout(300);
+    await p.locator('[data-moneyadd]').click();          // no people yet: asks for them first
+    await p.waitForTimeout(300);
+    ok('未有人就先問有咩人', await p.locator('[data-mp-in]').count() === 1);
+    await p.fill('[data-mp-in]', '爸爸 媽媽、我');
+    await p.locator('[data-mp-add]').click();
+    ok('一次打幾個名都得', (await p.locator('[data-mp-list] .mn-p').count()) === 3);
+    await p.locator('.sheet [data-esave]').click();
+    await p.waitForTimeout(900);
+    ok('儲存完直接去記第一筆', await p.locator('[data-mf="amount"]').count() === 1);
+    const m = (lastSnap(saved) || {}).money;
+    ok('啲人存咗', m && m.people.join() === '爸爸,媽媽,我', m && m.people);
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
   console.log('\nE. 出發前 checklist');
   {
     const { p, errs, saved } = await boot();
