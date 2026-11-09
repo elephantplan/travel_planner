@@ -138,6 +138,36 @@ const LOOKUP_PROMPT = (q: string, today: string) => `用 Google 搜尋查呢班�
 只可以用搜尋到嘅資料，搵唔到嘅欄位留空，唔好估。閘口唔好填。
 最後只回覆一個 JSON（唔好有其他字、唔好 code fence）：{"flights":[{"no":"","from":"","to":"","dep":"","arr":"","terminal":""}]}`;
 
+// Where to sleep: which area for which nights, given where each day goes,
+// and a few real hotels in each area. Prices and station walks come from a
+// web search and are marked as estimates; the app checks every hotel on
+// Google Maps and times the walk to the station itself.
+const STAY_PROMPT = (trip: string, today: string) => `你係香港人嘅旅遊顧問。下面係一個家庭嘅行程（JSON），今日係 ${today}。
+請建議佢哋邊幾晚住邊一區最方便（考慮每日去邊、交通、搬酒店嘅麻煩；唔使搬就唔好叫佢哋搬），然後每一區推介 3 間真實存在、評價好嘅酒店。
+用 Google 搜尋查價錢同最近嘅車站。價錢寫港幣大約範圍（例如「每晚約 HK$900–1,300」），查唔到就寫「出發前睇返訂房網」，唔好作。
+highlights 每間 2–3 點，每點最多 14 字（例如「梅田站行 3 分鐘」「有大浴場」「房間大啱一家人」）。
+fromDay / toDay 係第幾日（1 開始），toDay 係退房嗰日。全部用廣東話。
+行程：
+${trip}
+只回覆一個 JSON（唔好有其他字、唔好 code fence）：
+{"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":"一句講點解"}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘"}]}`;
+
+function cleanStays(p: any) {
+  const n = (x: unknown, d: number) => Math.max(1, Math.floor(Number(x) || d));
+  return {
+    plan: (Array.isArray(p?.plan) ? p.plan : []).slice(0, 6).map((x: any) => ({
+      fromDay: n(x?.fromDay, 1), toDay: n(x?.toDay, n(x?.fromDay, 1)), area: str(x?.area, 30), why: str(x?.why, 120),
+    })).filter((x: any) => x.area),
+    hotels: (Array.isArray(p?.hotels) ? p.hotels : []).slice(0, 12).map((h: any) => ({
+      name: str(h?.name, 60), local: str(h?.local, 80), area: str(h?.area, 30),
+      fromDay: n(h?.fromDay, 1), toDay: n(h?.toDay, n(h?.fromDay, 1)),
+      price: str(h?.price, 60),
+      highlights: (Array.isArray(h?.highlights) ? h.highlights : []).slice(0, 3).map((x: unknown) => str(x, 24)).filter(Boolean),
+      station: str(h?.station, 40), walk: str(h?.walk, 30),
+    })).filter((h: any) => h.name),
+  };
+}
+
 function cleanFlights(list: unknown): any[] {
   const hhmm = (x: unknown) => { const m = String(x ?? "").match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
   return (Array.isArray(list) ? list : []).slice(0, 4).map((f: any) => ({
@@ -163,6 +193,15 @@ Deno.serve(async (req) => {
     .slice(0, 8);
   if (!text && !images.length) return json({ ok: false, message: "冇收到任何檔案或者文字。" });
   const today = iso(body?.today) || new Date().toISOString().slice(0, 10);
+
+  if (body?.mode === "stay-suggest") {
+    let raw = "";
+    try { raw = await callGemini([{ text: STAY_PROMPT(str(text, 12000), today) }], true); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
+    const out = cleanStays(parseJson(raw));
+    if (!out.hotels.length) return json({ ok: false, message: "AI 今次冇建議到酒店，再試一次。" });
+    return json({ ok: true, stays: out });
+  }
 
   if (body?.mode === "flight-lookup") {
     const q = str(text, 60);
