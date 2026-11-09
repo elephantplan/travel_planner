@@ -72,6 +72,15 @@ const SUGGEST = { ok: true, stays: {
   ok('有 Booking 睇價連結（帶日子、人數、房數）', bk.includes('checkin=') && bk.includes('group_adults=6') && bk.includes('no_rooms=2') && bk.includes('group_children=1'), bk);
   ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
+  // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one
+  await acc.locator('[data-staysort="cheap"]').click();
+  await p.waitForTimeout(200);
+  ok('平到貴', /九樹/.test(await acc.locator('.sgh-name').first().innerText()), await acc.locator('.sgh-name').first().innerText());
+  await acc.locator('[data-staysort="dear"]').click();
+  await p.waitForTimeout(200);
+  ok('貴到平', /樂天/.test(await acc.locator('.sgh-name').first().innerText()));
+  await acc.locator('[data-staysort="ai"]').click();
+  await p.waitForTimeout(200);
   await acc.locator('[data-staypick="1"]').click();
   await p.waitForTimeout(900);
   const last = [...saved].reverse().find(x => x.snapshot);

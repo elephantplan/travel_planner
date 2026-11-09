@@ -1332,6 +1332,11 @@ body.readonly .sechide{display:none;}
 .sgmore{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px;}
 .sgmore .hint{margin:0;}
 
+
+.sgsort{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 0 12px;padding-bottom:2px;}
+.sgsort::-webkit-scrollbar{display:none;}
+.sgsort .pfchip{flex:0 0 auto;padding:6px 12px;font-size:12.5px;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1793,7 +1798,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-15";
+  const BUILD = "2026-11-09-16";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6494,7 +6499,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <h3>AI 住宿建議</h3>
       <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.plan || []).length ? `<div class="sgplan">${sg.plan.map(x => `<div class="sgplan-row"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span></div>`).join("")}</div>` : ""}
-      <div class="sghotels">${sg.hotels.map((h, k) => `
+      <div class="sgsort" role="group" aria-label="排序">${STAY_SORTS.map(([k, l]) =>
+        `<button type="button" class="pfchip${(state.staySort || "ai") === k ? " on" : ""}" data-staysort="${k}">${l}</button>`).join("")}</div>
+      <div class="sghotels">${sortedStayIdx(sg.hotels).map(k => { const h = sg.hotels[k]; return `
         <div class="sgh">
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
@@ -6513,7 +6520,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Booking 睇價</a>
             </div>
           </div>
-        </div>`).join("")}</div>
+        </div>`; }).join("")}</div>
       <p class="hint">價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
       <div class="sgmore">
         <button class="btn" data-stayprefs>${icon("plus")}再搵多幾間</button>
@@ -6521,6 +6528,39 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
     </div>`;
   }
+  // ---------- sorting the suggestions ----------
+  // Sorting is a way of looking, not a change to the trip, so it lives in
+  // the page's state and indices into the stored list stay valid.
+  const STAY_SORTS = [["ai", "AI 推薦"], ["cheap", "平到貴"], ["dear", "貴到平"], ["rating", "評分高"], ["near", "近車站"]];
+  function priceFrom(h){
+    const m = String(h.price || "").replace(/,/g, "").match(/(\d{3,6})/);
+    return m ? +m[1] : null;
+  }
+  function walkMinOf(h){
+    const t = String(h.walk || ""), hr = t.match(/(\d+)\s*小時/), mn = t.match(/(\d+)\s*分鐘/);
+    return hr || mn ? (hr ? +hr[1] * 60 : 0) + (mn ? +mn[1] : 0) : null;
+  }
+  function sortedStayIdx(hotels){
+    const idx = hotels.map((_, k) => k), by = state.staySort || "ai";
+    // unknown values always sink to the bottom, whichever way it sorts
+    const cmp = (f, dir) => (a, b) => {
+      const x = f(hotels[a]), y = f(hotels[b]);
+      if (x == null && y == null) return a - b;
+      if (x == null) return 1; if (y == null) return -1;
+      return dir * (x - y) || a - b;
+    };
+    if (by === "cheap") idx.sort(cmp(priceFrom, 1));
+    else if (by === "dear") idx.sort(cmp(priceFrom, -1));
+    else if (by === "rating") idx.sort(cmp(h => Number.isFinite(h.rating) ? h.rating : null, -1));
+    else if (by === "near") idx.sort(cmp(walkMinOf, 1));
+    return idx;
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("[data-staysort]");
+    if (!b) return;
+    e.preventDefault(); state.staySort = b.dataset.staysort; render();
+  });
+
   // ---------- what the family wants from a hotel ----------
   const STAY_FOCUS = ["近車站（行 5 分鐘內）", "房間夠大", "有浴缸", "有大浴場／溫泉", "包早餐", "家庭房／三人房",
     "有洗衣機", "機場巴士直達", "可以寄行李", "近食肆同商場", "新／翻新過"];
@@ -9436,10 +9476,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // the family already entered by hand.
   async function recommendAccommodation(onProgress){
     if ((state.snapshot.stays || []).length) return;
-    // propose areas and hotels for the family to choose from; nothing is
-    // booked on their behalf. The older single-pick path below is the
-    // fallback when the suggestion service can't answer.
-    try { await suggestStays(onProgress); return; } catch (_){}
+    // Nothing is picked or suggested without asking what they want first:
+    // the 住宿 section offers 「叫 AI 建議」, which opens the questions.
+    return;
     const days = state.snapshot.days;
     onProgress && onProgress("AI 諗緊住邊度方便…");
     let r;
