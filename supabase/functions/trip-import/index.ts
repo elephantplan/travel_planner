@@ -35,14 +35,17 @@ function geminiKeys(): string[] {
 }
 const model = () => (Deno.env.get("GEMINI_TEXT_MODEL") || "").trim() || "gemini-3.5-flash";
 // When the main model is overloaded (503) or out of quota (429) — search
-// grounding in particular has its own, smaller quota — one older, widely
-// available model is tried before giving up. Override with GEMINI_FALLBACK_MODEL.
-const fallbackModel = () => (Deno.env.get("GEMINI_FALLBACK_MODEL") || "").trim() || "gemini-2.5-flash";
+// grounding in particular has its own, smaller quota — one other model is
+// tried before giving up. Google retires older models for new users (2.5
+// answers 404 now), so the default is a current one; override with
+// GEMINI_FALLBACK_MODEL.
+const fallbackModel = () => (Deno.env.get("GEMINI_FALLBACK_MODEL") || "").trim() || "gemini-3.6-flash";
 const retryable = (m: string) =>
   /429|RESOURCE_EXHAUSTED|quota|503|UNAVAILABLE|high demand|overloaded/i.test(m);
 
 async function callGemini(parts: unknown[], search = false): Promise<string> {
   let last = "Gemini key 未設定";
+  let firstErr = "";        // the configured model's own failure is the one worth reporting
   const models = [...new Set([model(), fallbackModel()])];
   models: for (const m of models) for (const key of geminiKeys()) {
     const res = await fetch(
@@ -60,17 +63,18 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
     if (!res.ok) {
       last = `Gemini error ${res.status} (model=${m}${search ? ", search" : ""}): ${(await res.text()).slice(0, 300)}`;
       console.error(last);
+      if (!firstErr) firstErr = last;
       if (retryable(last)) continue;
       // a model that can't do this (e.g. no search grounding) won't on
       // another key either — but the fallback model might
       if (m !== models[models.length - 1]) continue models;
-      throw new Error(last);
+      throw new Error(firstErr || last);
     }
     const data = await res.json();
     if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") throw new Error("TRUNCATED");
     return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
   }
-  throw new Error(last);
+  throw new Error(firstErr || last);
 }
 
 // The family needs to know whether to wait a minute or whether something is
