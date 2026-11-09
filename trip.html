@@ -1267,7 +1267,7 @@ a.btn{text-decoration:none;}
 body.readonly .secedit,body.readonly .editbtn,body.readonly .draghandle,body.readonly .addstop,body.readonly .addusec,
 body.readonly .addgroup,body.readonly .insertrow,body.readonly .ins,body.readonly .toollist,body.readonly .usec-add,
 body.readonly [data-moneyadd],body.readonly [data-moneypeople],body.readonly [data-flightedit],body.readonly [data-secrefresh],
-body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
+body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
 body.readonly [data-moneyitem]{pointer-events:none;}
 
 
@@ -1305,6 +1305,18 @@ body.readonly [data-moneyitem]{pointer-events:none;}
 .sechide{display:flex;justify-content:flex-end;margin-top:10px;}
 .sechide .secedit{opacity:.7;font-size:12px;}
 body.readonly .sechide{display:none;}
+
+
+.sgprefs{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;}
+.sgprefs b{color:var(--ink);}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.row3 .field{min-width:0;}
+.stepper{display:flex;align-items:center;gap:4px;}
+.stepper .input{text-align:center;padding:8px 4px;min-width:0;}
+.stepper button{flex:0 0 32px;height:36px;border-radius:10px;border:0;background:var(--surface-2);color:var(--ink);font-size:18px;cursor:pointer;}
+.chips1{display:flex;flex-wrap:wrap;gap:6px;}
+.pfchip{font-family:inherit;font-size:13px;padding:8px 12px;border-radius:999px;border:1px solid var(--rule);background:transparent;color:var(--ink-soft);cursor:pointer;}
+.pfchip.on{background:var(--gold);border-color:var(--gold);color:#14110A;font-weight:700;}
 
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
@@ -1767,7 +1779,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-13";
+  const BUILD = "2026-11-09-14";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6453,15 +6465,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const days = d.days || [];
     const dLab = (a, b) => `Day ${a}${b && b !== a ? "–" + b : ""}`;
     if (!sg || !(sg.hotels || []).length){
-      return `<div class="sgcta"><button class="btn${(d.stays || []).length ? "" : " primary"}" data-staysuggest>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 建議其他酒店" : "叫 AI 建議邊幾晚住邊區"}</button></div>`;
+      return `<div class="sgcta"><button class="btn${(d.stays || []).length ? "" : " primary"}" data-stayprefs>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 建議其他酒店" : "叫 AI 建議邊幾晚住邊區"}</button></div>`;
     }
+    const pf = d.stayPrefs;
     const bk = h => {
       const a = days[h.fromDay - 1], b = days[Math.min(h.toDay, days.length) - 1];
       const ci = a ? dayIso(a) : "", co = b ? dayIso(b) : "";
-      return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.local || h.name)}${ci ? "&checkin=" + ci : ""}${co && co !== ci ? "&checkout=" + co : ""}`;
+      const pf2 = d.stayPrefs;
+      return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.local || h.name)}${ci ? "&checkin=" + ci : ""}${co && co !== ci ? "&checkout=" + co : ""}` +
+        (pf2 ? `&group_adults=${pf2.adults}&no_rooms=${pf2.rooms}&group_children=${pf2.kids}` : "");
     };
     return `<div class="hsblock sgblock">
       <h3>AI 住宿建議</h3>
+      <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.plan || []).length ? `<div class="sgplan">${sg.plan.map(x => `<div class="sgplan-row"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span></div>`).join("")}</div>` : ""}
       <div class="sghotels">${sg.hotels.map((h, k) => `
         <div class="sgh">
@@ -6481,13 +6497,78 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           </div>
         </div>`).join("")}</div>
       <p class="hint">價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
-      <button class="btn" data-staysuggest>${icon("refresh")}再建議過</button>
+      <button class="btn" data-stayprefs>${icon("refresh")}改要求再建議</button>
     </div>`;
+  }
+  // ---------- what the family wants from a hotel ----------
+  const STAY_FOCUS = ["近車站（行 5 分鐘內）", "房間夠大", "有浴缸", "有大浴場／溫泉", "包早餐", "家庭房／三人房",
+    "有洗衣機", "機場巴士直達", "可以寄行李", "近食肆同商場", "新／翻新過"];
+  const STAY_BUDGET = ["唔限", "HK$800 以下", "HK$800–1,500", "HK$1,500–2,500", "HK$2,500 以上"];
+  const STAY_KIND = ["酒店", "公寓式酒店", "民宿／Airbnb", "唔限"];
+  function stayPrefsLine(pf){
+    if (!pf) return "";
+    const ppl = [pf.adults ? `${pf.adults} 大` : "", pf.kids ? `${pf.kids} 小` : ""].filter(Boolean).join(" ");
+    return [ppl, pf.rooms ? `${pf.rooms} 間房` : "", pf.budget && pf.budget !== "唔限" ? `每晚 ${pf.budget}` : "",
+      pf.kind && pf.kind !== "唔限" ? pf.kind : "", ...(pf.focus || [])].filter(Boolean).join("・");
+  }
+  function openStayPrefsSheet(){
+    const snap = state.snapshot;
+    const pf = Object.assign({ adults: 2, kids: 0, rooms: 1, budget: "唔限", kind: "酒店", focus: ["近車站（行 5 分鐘內）"], other: "" }, snap.stayPrefs || {});
+    const num = (k, label, min) => `<div class="field"><label>${label}</label>
+      <div class="stepper" data-step="${k}"><button type="button" data-d="-1">−</button><input class="input" inputmode="numeric" data-pf="${k}" value="${pf[k]}" data-min="${min}"><button type="button" data-d="1">＋</button></div></div>`;
+    openSheet(`
+      <h3>你想住點樣嘅酒店？</h3>
+      <p class="sec-sub">答幾條，AI 會跟住揀。下次會記得，隨時可以改。</p>
+      <div class="row3">${num("adults", "大人", 1)}${num("kids", "小朋友", 0)}${num("rooms", "幾多間房", 1)}</div>
+      <p class="fieldhint" data-perroom></p>
+      <div class="field"><label>每間房每晚預算</label>
+        <div class="chips1" data-pfone="budget">${STAY_BUDGET.map(x => `<button type="button" class="pfchip${pf.budget === x ? " on" : ""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
+      <div class="field"><label>最緊要（可以揀幾個）</label>
+        <div class="chips1" data-pfmany="focus">${STAY_FOCUS.map(x => `<button type="button" class="pfchip${(pf.focus || []).includes(x) ? " on" : ""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
+      <div class="field"><label>類型</label>
+        <div class="chips1" data-pfone="kind">${STAY_KIND.map(x => `<button type="button" class="pfchip${pf.kind === x ? " on" : ""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
+      <div class="field"><label>其他要求</label>
+        <textarea class="textarea" data-pf="other" rows="2" placeholder="例如：有長者，唔想上落樓梯；想住同一層；要可以加床">${esc(pf.other || "")}</textarea></div>
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>${icon("sparkle")}幫我搵</button>
+      </div>`, sheet => {
+      const perRoom = () => {
+        const a = +sheet.querySelector('[data-pf="adults"]').value || 0, k = +sheet.querySelector('[data-pf="kids"]').value || 0;
+        const r = Math.max(1, +sheet.querySelector('[data-pf="rooms"]').value || 1);
+        sheet.querySelector("[data-perroom]").textContent = `大約每間房 ${Math.ceil((a + k) / r)} 個人${(a + k) / r > 2 ? "，AI 會揀三人房、家庭房或者可以加床嘅" : ""}。`;
+      };
+      sheet.querySelectorAll(".stepper").forEach(st => st.querySelectorAll("[data-d]").forEach(b => b.addEventListener("click", () => {
+        const inp = st.querySelector("input");
+        inp.value = Math.max(+inp.dataset.min, (+inp.value || 0) + (+b.dataset.d)); perRoom();
+      })));
+      sheet.querySelectorAll("[data-pf]").forEach(i => i.addEventListener("input", perRoom));
+      perRoom();
+      sheet.querySelectorAll("[data-pfone] .pfchip").forEach(c => c.addEventListener("click", () => {
+        c.parentElement.querySelectorAll(".pfchip").forEach(x => x.classList.toggle("on", x === c)); }));
+      sheet.querySelectorAll("[data-pfmany] .pfchip").forEach(c => c.addEventListener("click", () => c.classList.toggle("on")));
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        const v = k => sheet.querySelector(`[data-pf="${k}"]`).value;
+        const one = k => (sheet.querySelector(`[data-pfone="${k}"] .pfchip.on`) || {}).dataset?.v || "";
+        snap.stayPrefs = { adults: Math.max(1, +v("adults") || 1), kids: Math.max(0, +v("kids") || 0), rooms: Math.max(1, +v("rooms") || 1),
+          budget: one("budget") || "唔限", kind: one("kind") || "唔限",
+          focus: [...sheet.querySelectorAll('[data-pfmany="focus"] .pfchip.on')].map(x => x.dataset.v), other: v("other").trim() };
+        closeLayer();
+        flash("AI 跟住你嘅要求搵緊酒店，大約半分鐘…", true);
+        try { await suggestStays(); await saveNow("按要求建議咗住宿"); flash("搵到喇，喺住宿嗰段睇"); }
+        catch (err){ flash(err.message || "建議唔到"); render(); }
+      });
+    });
   }
   async function suggestStays(onProgress){
     const snap = state.snapshot, days = snap.days || [];
+    const pf = snap.stayPrefs;
     const trip = JSON.stringify({
       destination: (snap.meta || {}).destinationLocal, brief: briefForAi(snap),
+      ...(pf ? { "住宿要求（一定要跟，highlights 要講返點樣符合）": {
+        人數: `${pf.adults} 個大人${pf.kids ? `、${pf.kids} 個小朋友` : ""}`, 房間: `${pf.rooms} 間（每間大約 ${Math.ceil((pf.adults + pf.kids) / pf.rooms)} 人）`,
+        每間房每晚預算: pf.budget, 類型: pf.kind, 最緊要: pf.focus, 其他: pf.other } } : {}),
       days: days.map((d, i) => ({ day: i + 1, date: d.date, title: d.title,
         stops: (d.items || []).filter(x => x.kind === "stop").map(x => plain(x.title)).filter(Boolean) })),
     });
@@ -6544,6 +6625,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.readonly) return;
     const pick = e.target.closest && e.target.closest("[data-staypick]");
     if (pick){ e.preventDefault(); pickSuggestedStay(+pick.dataset.staypick); return; }
+    const pfb = e.target.closest && e.target.closest("[data-stayprefs]");
+    if (pfb){ e.preventDefault(); openStayPrefsSheet(); return; }
     const sgb = e.target.closest && e.target.closest("[data-staysuggest]");
     if (sgb){
       e.preventDefault();

@@ -24,7 +24,7 @@ const SUGGEST = { ok: true, stays: {
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   const cur = JSON.parse(JSON.stringify(snap));
-  const saved = [], asked = [];
+  const saved = [], asked = [], sentText = [];
   await p.route('**/rest/v1/itinerary_versions**', r => {
     if (r.request().method() === 'POST'){ try { saved.push(JSON.parse(r.request().postData())); } catch (_){}
       return r.fulfill({ status: 201, contentType: 'application/json', body: '[]' }); }
@@ -34,7 +34,7 @@ const SUGGEST = { ok: true, stays: {
   await p.route('**/rest/v1/ai_notes**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/functions/v1/**', r => {
     const url = r.request().url(), body = JSON.parse(r.request().postData() || '{}');
-    if (/trip-import/.test(url)){ asked.push(body.mode); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) }); }
+    if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) }); }
     if (/place-photo-store/.test(url)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'http://localhost:8799/icons/icon-v2.svg' }) });
     if (body.action === 'place-search') return r.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify({ places: [{ name: body.query, placeId: 'pid-' + body.query.length, lat: 37.56, lng: 126.98, rating: 4.4, ratingCount: 900 }] }) });
@@ -46,9 +46,21 @@ const SUGGEST = { ok: true, stays: {
   await p.waitForTimeout(1200);
 
   const acc = p.locator('[data-fold="stay"]').locator('xpath=..');
-  ok('有掣叫 AI 建議其他酒店', await acc.locator('[data-staysuggest]').count() === 1);
-  await acc.locator('[data-staysuggest]').click();
+  ok('有掣叫 AI 建議其他酒店', await acc.locator('[data-stayprefs]').count() === 1);
+  await acc.locator('[data-stayprefs]').click();
+  await p.waitForTimeout(300);
+  // the preferences sheet: people, rooms, budget, what matters
+  ok('先問要求', /你想住點樣嘅酒店/.test(await p.locator('.sheet').innerText()));
+  await p.fill('[data-pf="adults"]', '6');
+  await p.fill('[data-pf="kids"]', '1');
+  await p.fill('[data-pf="rooms"]', '2');
+  await p.locator('[data-pfone="budget"] .pfchip', { hasText: 'HK$800–1,500' }).click();
+  await p.locator('[data-pfmany="focus"] .pfchip', { hasText: '有浴缸' }).click();
+  ok('講明每間房大約幾多人', /每間房 4 個人/.test(await p.locator('[data-perroom]').innerText()), await p.locator('[data-perroom]').innerText());
+  await p.locator('[data-esave]').click();
   await p.waitForTimeout(2500);
+  const sent = sentText[sentText.length - 1] || '';
+  ok('要求有傳畀 AI', /6 個大人/.test(sent) && /2 間/.test(sent) && /有浴缸/.test(sent) && /HK\$800–1,500/.test(sent), sent.slice(0, 200));
   const t = await acc.innerText();
   ok('問咗住宿建議', asked.includes('stay-suggest'), asked);
   ok('講邊幾晚住邊區', /Day 1–3/.test(t) && /住明洞/.test(t) && /唔使搬酒店/.test(t), t.slice(0, 120));
@@ -56,7 +68,9 @@ const SUGGEST = { ok: true, stays: {
   ok('有好處', /乙支路入口站直達/.test(t));
   ok('最近車站同自己計嘅步行時間', /最近\s*을지로입구역\s*·\s*步行約 4 分鐘/.test(t), (t.match(/最近[\s\S]{0,30}/) || [])[0]);
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
-  ok('有 Booking 睇價連結（帶日子）', (await acc.locator('a', { hasText: 'Booking' }).first().getAttribute('href')).includes('checkin='));
+  const bk = await acc.locator('a', { hasText: 'Booking' }).first().getAttribute('href');
+  ok('有 Booking 睇價連結（帶日子、人數、房數）', bk.includes('checkin=') && bk.includes('group_adults=6') && bk.includes('no_rooms=2') && bk.includes('group_children=1'), bk);
+  ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   await acc.locator('[data-staypick="1"]').click();
   await p.waitForTimeout(900);
