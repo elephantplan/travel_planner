@@ -34,14 +34,19 @@ function geminiKeys(): string[] {
   return keys;
 }
 const model = () => (Deno.env.get("GEMINI_TEXT_MODEL") || "").trim() || "gemini-3.5-flash";
+// When the main model is overloaded (503) or out of quota (429) — search
+// grounding in particular has its own, smaller quota — one older, widely
+// available model is tried before giving up. Override with GEMINI_FALLBACK_MODEL.
+const fallbackModel = () => (Deno.env.get("GEMINI_FALLBACK_MODEL") || "").trim() || "gemini-2.5-flash";
 const retryable = (m: string) =>
   /429|RESOURCE_EXHAUSTED|quota|503|UNAVAILABLE|high demand|overloaded/i.test(m);
 
 async function callGemini(parts: unknown[], search = false): Promise<string> {
   let last = "Gemini key 未設定";
-  for (const key of geminiKeys()) {
+  const models = [...new Set([model(), fallbackModel()])];
+  models: for (const m of models) for (const key of geminiKeys()) {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model()}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,8 +58,12 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
       },
     );
     if (!res.ok) {
-      last = `Gemini error ${res.status}: ${(await res.text()).slice(0, 300)}`;
+      last = `Gemini error ${res.status} (model=${m}${search ? ", search" : ""}): ${(await res.text()).slice(0, 300)}`;
+      console.error(last);
       if (retryable(last)) continue;
+      // a model that can't do this (e.g. no search grounding) won't on
+      // another key either — but the fallback model might
+      if (m !== models[models.length - 1]) continue models;
       throw new Error(last);
     }
     const data = await res.json();
@@ -62,6 +71,20 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
     return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
   }
   throw new Error(last);
+}
+
+// The family needs to know whether to wait a minute or whether something is
+// misconfigured, so the status and the model ride along in the message.
+function whyFailed(m: string): string {
+  const mod = (m.match(/model=([^,)]+)/) || [])[1] || "";
+  const tag = mod ? `（${mod}）` : "";
+  if (/\b503\b|UNAVAILABLE|high demand|overloaded/i.test(m)) return `AI 模型而家太多人用緊${tag}，後備模型都試過，等一兩分鐘再撳。`;
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(m)) {
+    if (/PerMinute/i.test(m)) return `一分鐘內撳得太密${tag}，等半分鐘再試。`;
+    return `Gemini 免費額度用晒${tag}${/search/.test(m) ? "，網上搜尋有自己較細嘅額度" : ""}，通常聽日重置。`;
+  }
+  if (/\b404\b|not found|is not supported/i.test(m)) return `模型名唔啱或者唔支援呢個功能${tag}，檢查 GEMINI_TEXT_MODEL。`;
+  return "AI 出錯：" + m.slice(0, 160);
 }
 
 function parseJson(t: string): any {
@@ -143,7 +166,7 @@ Deno.serve(async (req) => {
     if (!no) return json({ ok: false, message: "睇唔出航班號。" });
     let raw = "";
     try { raw = await callGemini([{ text: LOOKUP_PROMPT(q, today) }], true); }
-    catch (e) { return json({ ok: false, message: retryable(String(e)) ? "而家查唔到（太多人用），等陣再試。" : "查唔到：" + String(e).slice(0, 120) }); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
     const f = cleanFlights(parseJson(raw)?.flights).map((x: any) => ({ ...x, no: x.no || no }))[0];
     if (!f || (!f.dep && !f.from)) return json({ ok: false, message: `網上搵唔到 ${no} 嘅班次時間，可以自己打或者用機票截圖。` });
     return json({ ok: true, trip: { flights: [f] } });
@@ -163,7 +186,7 @@ Deno.serve(async (req) => {
     const m = String(e);
     return json({ ok: false, message: m.includes("TRUNCATED")
       ? "行程太長，AI 一次讀唔晒。試吓分開幾次導入（例如每次幾日）。"
-      : retryable(m) ? "AI 而家太忙或者用晒額度，等一陣再試。" : "AI 讀唔到：" + m.slice(0, 160) });
+      : whyFailed(m) });
   }
   const p = parseJson(raw);
   if (flightOnly) {
