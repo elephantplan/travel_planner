@@ -362,7 +362,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
   // moment anything was hidden, added or reordered.
   console.log('\nM. 行前準備旁邊嗰句副題');
   {
-    const { p, errs, saved } = await boot([sec('準備', 'prep')], c => { c.hiddenSections = ['transit']; });
+    const { p, errs, saved } = await boot([sec('準備', 'prep')], c => { c.hiddenSections = ['transit', 'checklist']; });
     const head = () => p.locator('[data-fold="prep"]').innerText();
     let h = await head();
     ok('預設係跟返入面有咩', /天氣・衣著・無障礙・季節・準備/.test(h), h);

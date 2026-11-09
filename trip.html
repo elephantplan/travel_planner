@@ -1206,6 +1206,70 @@ img{max-width:100%;}
 .usec-add .i{width:13px;height:13px;}
 .usec-inday{color:var(--lc);background:color-mix(in srgb,var(--lc) 14%,transparent);}
 
+
+a.btn{text-decoration:none;}
+/* ---------- 今日 ---------- */
+.todaycard{margin:16px 0 4px;padding:16px 18px;border-radius:20px;background:color-mix(in srgb,var(--lc) 12%,var(--stock));
+  border:1px solid color-mix(in srgb,var(--lc) 35%,transparent);}
+.tc-top{display:flex;align-items:center;gap:10px;}
+.tc-live{font-size:11px;font-weight:800;letter-spacing:.1em;color:#14110A;background:var(--gold);padding:3px 9px;border-radius:999px;}
+.tc-day{font-size:13px;font-weight:700;color:var(--ink-soft);}
+.tc-next{display:flex;flex-direction:column;margin-top:10px;}
+.tc-next b{font-size:20px;font-weight:800;letter-spacing:-.01em;line-height:1.3;}
+.tc-time{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;font-size:16px;color:var(--lc);margin-top:2px;}
+.tc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.todaynext{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border-radius:14px;
+  background:color-mix(in srgb,var(--gold) 10%,transparent);font-size:13.5px;}
+.todaynext .btn{margin-left:auto;min-height:34px;padding:0 14px;}
+
+/* ---------- 畀司機睇 ---------- */
+.taxicard{position:fixed;inset:0;z-index:120;background:#fff;color:#111;display:flex;flex-direction:column;justify-content:center;
+  padding:32px 24px calc(32px + env(safe-area-inset-bottom));text-align:center;cursor:pointer;}
+.taxi-x{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:0;background:#eee;color:#111;font-size:22px;}
+.taxi-ask{font-size:22px;font-weight:700;margin:0 0 18px;color:#444;}
+.taxi-local{font-size:clamp(30px,9vw,52px);font-weight:900;line-height:1.3;margin:0;word-break:break-word;}
+.taxi-name{font-size:18px;color:#555;margin:16px 0 0;}
+.taxi-hint{position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));font-size:13px;color:#999;margin:0;}
+
+/* ---------- 時間好趕 ---------- */
+.seg-tight{order:2;display:flex;align-items:center;gap:6px;width:100%;font-size:12.5px;font-weight:700;color:var(--danger);
+  background:var(--danger-bg);padding:7px 10px;border-radius:10px;}
+.seg-tight .i{width:14px;height:14px;}
+.seg.tight .seg-text{border-color:color-mix(in srgb,var(--danger) 45%,transparent);}
+
+/* ---------- 夾錢 ---------- */
+.mn-people{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;}
+.mn-p{font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--surface-2);}
+.mn-edit{min-height:30px;padding:0 10px;font-size:12px;}
+.mn-list{list-style:none;padding:0;margin:12px 0 0;display:flex;flex-direction:column;gap:6px;}
+.mn-list li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-radius:12px;background:var(--surface-2);cursor:pointer;}
+.mn-what{font-weight:700;font-size:14px;}
+.mn-amt{font-family:'Archivo',var(--f-mono);font-stretch:82%;font-weight:800;font-size:15px;text-align:right;}
+.mn-sub{grid-column:1/-1;font-size:12px;color:var(--ink-faint);}
+.mn-total{margin-top:12px;font-size:13px;font-weight:700;color:var(--ink-soft);}
+.mn-settle{margin-top:12px;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--gold) 10%,transparent);}
+.mn-row{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:14px;}
+.mn-row span{margin-left:auto;font-family:'Archivo',var(--f-mono);font-stretch:82%;font-weight:800;}
+.mn-split{display:flex;flex-wrap:wrap;gap:8px;}
+.mn-chk{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;background:var(--surface-2);font-size:14px;}
+
+/* ---------- checklist ---------- */
+.ck-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:4px 0 12px;}
+.ck-bar i{display:block;height:100%;background:var(--gold);border-radius:3px;transition:width .3s;}
+.ck-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
+.ck{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--surface-2);cursor:pointer;font-size:14px;}
+.ck input{width:20px;height:20px;accent-color:var(--gold);flex:0 0 auto;}
+.ck.done span{color:var(--ink-faint);text-decoration:line-through;}
+
+/* ---------- read-only (shared link, or offline) ---------- */
+.robar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:70;padding:9px 14px;border-radius:14px;
+  background:var(--surface);border:1px solid var(--rule);box-shadow:var(--shadow-2);font-size:12.5px;color:var(--ink-soft);text-align:center;}
+body.readonly .secedit,body.readonly .editbtn,body.readonly .draghandle,body.readonly .addstop,body.readonly .addusec,
+body.readonly .addgroup,body.readonly .insertrow,body.readonly .ins,body.readonly .toollist,body.readonly .usec-add,
+body.readonly [data-moneyadd],body.readonly [data-moneypeople],body.readonly [data-flightedit],body.readonly [data-secrefresh],
+body.readonly .segrefresh,body.readonly #btn-ai,body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
+body.readonly [data-moneyitem]{pointer-events:none;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1667,7 +1731,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-10";
+  const BUILD = "2026-11-09-11";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2170,6 +2234,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!saver.maxTimer) saver.maxTimer = setTimeout(() => flushSaves("max"), 8000);
   }
   function queueSave(summary, kind){
+    if (state.readonly) return;
     if (kind === "upkeep"){ saver.pendingUpkeep = true; return; }
     saver.pendingUser.push(summary);
     flash("改咗，未存…", true);
@@ -3116,6 +3181,214 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = shortTagText(d) || plain(d.title).replace(/^第\s*\d+\s*日$/, "");
     return t.length > 7 ? t.slice(0, 7) + "…" : t;
   }
+  // ---------- time helpers ----------
+  function clockMin(t){ const m = String(t || "").match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function fmtMin(n){ n = ((n % 1440) + 1440) % 1440; return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`; }
+  function localIso(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+  function dayIso(day){
+    const snap = state.snapshot, m = (snap && snap.meta) || {};
+    const i = (snap.days || []).indexOf(day);
+    if (i < 0 || !m.dateStart) return "";
+    const d = new Date(m.dateStart + "T00:00:00"); d.setDate(d.getDate() + i);
+    return localIso(d);
+  }
+  function todayDay(){ const t = localIso(new Date()); return ((state.snapshot && state.snapshot.days) || []).find(d => dayIso(d) === t) || null; }
+  // the stop the family is heading for now: the first one whose time has not
+  // passed by more than half an hour; with no times, the first stop of the day
+  function nextStopOf(day){
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const stops = (day.items || []).filter(i => i.kind === "stop" && plain(i.title));
+    if (!stops.length) return null;
+    const timed = stops.filter(x => clockMin(x.time) != null);
+    if (!timed.length) return stops[0];
+    return timed.find(x => clockMin(x.time) + 30 >= nowMin) || null;
+  }
+  function navUrlTo(s){
+    const name = plain(s.title) || plain(s.kr);
+    return s.placeId
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name)}&destination_place_id=${encodeURIComponent(s.placeId)}&travelmode=transit`
+      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(hasCoord(s) ? `${s.lat},${s.lng}` : (plain(s.kr) || name))}&travelmode=transit`;
+  }
+  function todayCardHtml(d){
+    const day = todayDay();
+    if (!day) return "";
+    const n = day.id.replace("day", ""), nx = nextStopOf(day);
+    return `<section class="todaycard" style="--lc:${dayColorVar(day.id)}">
+      <div class="tc-top"><span class="tc-live">今日</span><span class="tc-day">Day ${esc(n)} · ${esc(day.title)}</span></div>
+      ${nx ? `<div class="tc-next"><span class="tp-lbl">下一站</span><b>${esc(plain(nx.title))}</b>${clockMin(nx.time) != null ? `<span class="tc-time">${esc(fmtMin(clockMin(nx.time)))}</span>` : ""}</div>`
+           : `<div class="tc-next"><b>今日嘅站行完喇</b></div>`}
+      <div class="tc-acts">
+        <button class="btn" data-go-today="${day.id}">睇今日行程</button>
+        ${nx ? `<a class="btn primary" href="${esc(navUrlTo(nx))}" target="_blank" rel="noopener">${icon("map")}導航去下一站</a>` : ""}
+      </div>
+    </section>`;
+  }
+
+  // ---------- 畀司機睇 ----------
+  // A full-screen card a taxi driver can read at arm's length: the place in
+  // the local script, large, and "please take me here" in their language.
+  function taxiBtnHtml(local, name){
+    if (!plain(local)) return "";
+    return `<button class="maplink" data-taxi="${esc(plain(local))}" data-taxi-name="${esc(plain(name || ""))}">${icon("map")}畀司機睇</button>`;
+  }
+  function openTaxiCard(local, name){
+    const ask = /[가-힣]/.test(local) ? "여기로 가 주세요" : /[぀-ヿ]/.test(local) || destIsJapan() ? "ここまでお願いします" : "請帶我去呢度";
+    const layer = $("#layer");
+    layer.innerHTML = `<div class="taxicard" role="dialog" aria-label="畀司機睇">
+      <button class="taxi-x" aria-label="關閉">${icon("x") || "×"}</button>
+      <p class="taxi-ask">${esc(ask)}</p>
+      <p class="taxi-local">${esc(local)}</p>
+      ${name && name !== local ? `<p class="taxi-name">${esc(name)}</p>` : ""}
+      <p class="taxi-hint">撳任何位置關閉</p>
+    </div>`;
+    layer.querySelector(".taxicard").addEventListener("click", () => { layer.innerHTML = ""; });
+  }
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target.closest("[data-taxi]");
+    if (t){ e.preventDefault(); e.stopPropagation(); openTaxiCard(t.dataset.taxi, t.dataset.taxiName); return; }
+    const g = e.target.closest && e.target.closest("[data-go-today]");
+    if (g){ e.preventDefault(); state.view = g.dataset.goToday; window.scrollTo({ top: 0 }); render(); }
+  });
+
+  // ---------- 夾錢 ----------
+  // Who paid what, split among whom, and at the end who owes whom. Kept per
+  // currency rather than converted, because nobody agrees on the rate.
+  function moneyOf(d){
+    if (!d.money) d.money = { people: [], items: [] };
+    if (!Array.isArray(d.money.people)) d.money.people = [];
+    if (!Array.isArray(d.money.items)) d.money.items = [];
+    return d.money;
+  }
+  function localCurrency(){ return destIsJapan() ? "JPY" : destIsKorea() ? "KRW" : /台|taipei|taiwan/i.test(JSON.stringify((state.snapshot.meta || {}).destinationLocal || "")) ? "TWD" : "HKD"; }
+  function fmtMoney(n, cur){ return `${cur} ${Math.round(n * 100) / 100 === Math.round(n) ? Math.round(n).toLocaleString("en-US") : (Math.round(n * 100) / 100).toLocaleString("en-US")}`; }
+  function settle(money){
+    const byCur = {};
+    money.items.forEach(it => {
+      const amt = +it.amount; if (!Number.isFinite(amt) || !amt || !it.paidBy) return;
+      const among = (it.split && it.split.length ? it.split : money.people);
+      if (!among.length) return;
+      const b = byCur[it.cur] = byCur[it.cur] || {};
+      b[it.paidBy] = (b[it.paidBy] || 0) + amt;
+      among.forEach(p => { b[p] = (b[p] || 0) - amt / among.length; });
+    });
+    const out = [];
+    Object.entries(byCur).forEach(([cur, bal]) => {
+      const pos = Object.entries(bal).filter(x => x[1] > .005).sort((a, b) => b[1] - a[1]);
+      const neg = Object.entries(bal).filter(x => x[1] < -.005).sort((a, b) => a[1] - b[1]);
+      let i = 0, j = 0;
+      while (i < pos.length && j < neg.length){
+        const m = Math.min(pos[i][1], -neg[j][1]);
+        out.push({ from: neg[j][0], to: pos[i][0], amt: m, cur });
+        pos[i][1] -= m; neg[j][1] += m;
+        if (pos[i][1] < .005) i++; if (neg[j][1] > -.005) j++;
+      }
+    });
+    return out;
+  }
+  function moneyFoldHtml(d){
+    const money = d.money || { people: [], items: [] };
+    const items = money.items || [];
+    const totals = {};
+    items.forEach(it => { const a = +it.amount; if (Number.isFinite(a)) totals[it.cur] = (totals[it.cur] || 0) + a; });
+    const st = settle({ people: money.people || [], items });
+    const body = `<div class="hsblock moneyblock" data-hskey="money">
+      ${(money.people || []).length ? "" : `<p class="fl-empty">先加埋一齊去嘅人，之後每次有人比錢就記低，最後自動計邊個要比返邊個幾多。</p>`}
+      <div class="mn-people">${(money.people || []).map(p => `<span class="mn-p">${esc(p)}</span>`).join("")}
+        <button class="btn mn-edit" data-moneypeople>${icon("pencil")}${(money.people || []).length ? "改人" : "加人"}</button></div>
+      ${(money.people || []).length ? `<button class="btn primary wide" data-moneyadd>${icon("plus")}記一筆</button>` : ""}
+      ${items.length ? `<ul class="mn-list">${items.slice().reverse().map(it => `<li data-moneyitem="${esc(it.id)}">
+          <span class="mn-what">${esc(it.what || "未寫")}</span><span class="mn-amt">${esc(fmtMoney(+it.amount || 0, it.cur))}</span>
+          <span class="mn-sub">${esc(it.paidBy)} 比 · ${it.split && it.split.length && it.split.length !== (money.people || []).length ? esc(it.split.join("、")) + " 分" : "全部人分"}</span></li>`).join("")}</ul>` : ""}
+      ${Object.keys(totals).length ? `<div class="mn-total">總共 ${Object.entries(totals).map(([c, n]) => esc(fmtMoney(n, c))).join(" · ")}</div>` : ""}
+      ${st.length ? `<div class="mn-settle"><span class="tp-lbl">要比返</span>${st.map(x => `<div class="mn-row"><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${esc(fmtMoney(x.amt, x.cur))}</span></div>`).join("")}</div>`
+                  : items.length ? `<div class="mn-settle"><span class="tp-lbl">要比返</span><div class="mn-row">冇人欠人</div></div>` : ""}
+    </div>`;
+    const hint = items.length ? `${items.length} 筆` : "記低邊個比咗錢";
+    return foldHtml("money", "夾錢", hint, body);
+  }
+  function openMoneyItemSheet(id){
+    const d = state.snapshot, money = moneyOf(d);
+    const it = id ? money.items.find(x => x.id === id) : null;
+    const cur0 = it ? it.cur : (money.lastCur || localCurrency());
+    const curs = [...new Set([cur0, localCurrency(), "HKD"])];
+    openSheet(`
+      <h3>${it ? "改呢筆" : "記一筆"}</h3>
+      <div class="field"><label>買咗咩</label><input class="input" data-mf="what" value="${esc(it ? it.what : "")}" placeholder="例如 晚餐、的士、門票"></div>
+      <div class="row2"><div class="field"><label>幾錢</label><input class="input" data-mf="amount" inputmode="decimal" value="${esc(it ? it.amount : "")}" placeholder="0"></div>
+        <div class="field"><label>貨幣</label><select class="input" data-mf="cur">${curs.map(c => `<option${c === cur0 ? " selected" : ""}>${c}</option>`).join("")}</select></div></div>
+      <div class="field"><label>邊個比</label><select class="input" data-mf="paidBy">${money.people.map(p => `<option${it && it.paidBy === p ? " selected" : ""}>${esc(p)}</option>`).join("")}</select></div>
+      <div class="field"><label>分俾邊個</label><div class="mn-split">${money.people.map(p => `<label class="mn-chk"><input type="checkbox" value="${esc(p)}"${!it || !it.split || !it.split.length || it.split.includes(p) ? " checked" : ""}>${esc(p)}</label>`).join("")}</div></div>
+      <div class="editor-tools">
+        ${it ? `<button class="btn danger" data-mdel>刪走</button>` : ""}
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>儲存</button>
+      </div>`, sheet => {
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      const del = sheet.querySelector("[data-mdel]");
+      if (del) del.addEventListener("click", async () => {
+        money.items = money.items.filter(x => x.id !== id); closeLayer(); render(); await saveNow(`刪咗一筆數「${it.what || ""}」`);
+      });
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        const v = k => sheet.querySelector(`[data-mf="${k}"]`).value.trim();
+        const amount = parseFloat(v("amount").replace(/,/g, ""));
+        if (!Number.isFinite(amount) || amount <= 0){ sheet.querySelector('[data-mf="amount"]').focus(); return; }
+        const split = [...sheet.querySelectorAll(".mn-split input:checked")].map(x => x.value);
+        const rec = { id: it ? it.id : "m" + Date.now().toString(36), what: v("what"), amount, cur: v("cur"), paidBy: v("paidBy"),
+          split: split.length === money.people.length ? [] : split, at: it ? it.at : new Date().toISOString() };
+        if (it) Object.assign(it, rec); else money.items.push(rec);
+        money.lastCur = rec.cur;
+        closeLayer(); render();
+        await saveNow(`記低：${rec.paidBy} 比咗 ${fmtMoney(amount, rec.cur)}${rec.what ? "（" + rec.what + "）" : ""}`);
+      });
+    });
+  }
+  document.addEventListener("click", e => {
+    const t = e.target.closest && e.target;
+    if (!t || state.readonly) return;
+    if (t.closest("[data-moneyadd]")){ e.preventDefault(); openMoneyItemSheet(null); return; }
+    const li = t.closest("[data-moneyitem]");
+    if (li){ e.preventDefault(); openMoneyItemSheet(li.dataset.moneyitem); return; }
+    if (t.closest("[data-moneypeople]")){
+      e.preventDefault();
+      const money = moneyOf(state.snapshot);
+      openEditSheet("一齊去嘅人", "一行一個名。改名唔會改到已經記低嘅數。", [
+        { key: "people", type: "lines", rows: 6, label: "名", value: money.people.join("\n"), placeholder: "爸爸\n媽媽\n我" },
+      ], async out => {
+        money.people = [...new Set(out.people.map(x => x.trim()).filter(Boolean))].slice(0, 20);
+        render(); await saveNow("改咗夾錢嘅人");
+      });
+    }
+  });
+
+  // ---------- 出發前 checklist ----------
+  function defaultChecklist(){
+    const L = ["護照（有效期六個月以上）", "旅遊保險", "上網卡／eSIM", "當地現金同信用卡", "充電器、轉插、尿袋", "常用藥"];
+    if (destIsJapan()) L.splice(1, 0, "Visit Japan Web 入境登記", "ICOCA／Suica 交通卡");
+    if (destIsKorea()) L.splice(1, 0, "K-ETA（如需要）", "T-money 交通卡", "裝 Naver Map");
+    return L.map(t => ({ t, done: false }));
+  }
+  function checklistOf(d){ if (!Array.isArray(d.checklist)) d.checklist = defaultChecklist(); return d.checklist; }
+  function checklistHtml(d){
+    if (isSectionHidden(d, "checklist")) return "";
+    const list = Array.isArray(d.checklist) ? d.checklist : defaultChecklist();
+    const done = list.filter(x => x.done).length;
+    return `<div class="hsblock" data-hskey="checklist">
+      <h3>出發前 checklist${secTools("checklist")}</h3>
+      <p class="sec-sub">搞掂咗 ${done}／${list.length}，全家人見到同一份。</p>
+      <div class="ck-bar"><i style="width:${list.length ? Math.round(done / list.length * 100) : 0}%"></i></div>
+      <ul class="ck-list">${list.map((x, k) => `<li><label class="ck${x.done ? " done" : ""}"><input type="checkbox" data-ck="${k}"${x.done ? " checked" : ""}${state.readonly ? " disabled" : ""}><span>${esc(x.t)}</span></label></li>`).join("")}</ul>
+    </div>`;
+  }
+  document.addEventListener("change", async e => {
+    const c = e.target.closest && e.target.closest("[data-ck]");
+    if (!c || state.readonly) return;
+    const list = checklistOf(state.snapshot), it = list[+c.dataset.ck];
+    if (!it) return;
+    it.done = c.checked;
+    render();
+    await saveNow(`${it.done ? "剔咗" : "取消咗"}「${it.t}」`);
+  });
+
   function renderLines(){
     const el = $("#lines");
     const days = state.snapshot ? state.snapshot.days : [];
@@ -3290,7 +3563,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // it only stops overviewHtml from rendering the block; the underlying data
   // (stays, tripBrief, etc.) is untouched, so nothing else that reads it
   // (day pages, the AI calls) is affected, and it can always be brought back.
-  const HIDDEN_SECTION_LABELS = { acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", transit:"交通點畀錢", schedule:"日程調動", prep:"行前準備", extra:"自己加嘅資料" };
+  const HIDDEN_SECTION_LABELS = { checklist:"出發前 checklist", money:"夾錢", acc:"住宿", weather:"天氣", clothing:"點著衫", access:"無障礙標記", ai:"AI 設定", foliage:"季節提示", transit:"交通點畀錢", schedule:"日程調動", prep:"行前準備", extra:"自己加嘅資料" };
   // editKey lets a block whose editor lives under a different name (季節提示 is
   // edited by the shared "notes" sheet) still get exactly ONE pencil — passing
   // the editor key here instead of adding a second secEditBtn beside it.
@@ -3308,7 +3581,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // is now a token in one saved order (snap.homeOrder), and every block has
   // the same ↑↓. A saved order from before simply lacks the newer tokens,
   // which land at the end in the old default order, so nothing jumps around.
-  const PREP_BUILTINS = ["weather", "clothing", "access", "foliage", "schedule", "transit"];
+  const PREP_BUILTINS = ["checklist", "weather", "clothing", "access", "foliage", "schedule", "transit"];
   // Sections are addressed by array index elsewhere, which an order cannot
   // survive; an order needs a name that does not change when the array does.
   function ensureSectionIds(d){
@@ -3340,6 +3613,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <p class="sec-sub">${d.scheduleSwapNote}</p>
       </div>`;
     if (k === "transit") return transitInfoHtml(d.transitInfo, d);
+    if (k === "checklist") return checklistHtml(d);
     return homeBlockHtml(d, k);
   }
   // Movers only count blocks that are actually on screen, so ↑ on the first
@@ -3349,7 +3623,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // not be edited, it still said 交通 after 交通 was hidden, and it never
   // mentioned anything the family added. Unless somebody writes their own,
   // it now lists what is really in the group, in the order it is in.
-  const PREP_SHORT = { weather:"天氣", clothing:"衣著", access:"無障礙", foliage:"季節", schedule:"日程", transit:"交通" };
+  const PREP_SHORT = { checklist:"清單", weather:"天氣", clothing:"衣著", access:"無障礙", foliage:"季節", schedule:"日程", transit:"交通" };
   function prepAutoHint(d){
     const names = prepShown(d).map(k => k.startsWith("s:")
       ? plain(((d.sections || []).find(s => s && "s:" + s.id === k) || {}).title || "")
@@ -3429,7 +3703,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}</div>` : ""}
+            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}${taxiBtnHtml(st.kr, st.name)}</div>` : ""}
             ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
           </div>`; }).join("")
           : `<p class="hint">仲未填住宿。撳上面枝筆加返，可以加多過一間。</p>`}
@@ -3715,12 +3989,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${passStubHtml(d)}
       </section>
 
+      ${todayCardHtml(d)}
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>
 
       ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
+      ${moneyFoldHtml(d)}
       ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), groupHint(d, "prep"), prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
@@ -4486,6 +4762,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">${icon("pencil")}</button></h2>
         <p class="intro">${esc(day.desc)}</p>
         ${dayFlightChipHtml(day)}
+        ${todayDay() === day ? (() => { const nx = nextStopOf(day); return nx
+          ? `<div class="todaynext"><span class="tc-live">今日</span><span>下一站 <b>${esc(plain(nx.title))}</b>${clockMin(nx.time) != null ? ` · ${esc(fmtMin(clockMin(nx.time)))}` : ""}</span><a class="btn primary" href="${esc(navUrlTo(nx))}" target="_blank" rel="noopener">${icon("map")}導航</a></div>`
+          : `<div class="todaynext"><span class="tc-live">今日</span><span>今日嘅站行完喇</span></div>`; })() : ""}
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
           // which hotel this day belongs to, so a multi-hotel trip is obvious
@@ -4626,10 +4905,23 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       );
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
+    // a leg that takes longer than the gap between the two planned times
+    let tight = "";
+    if (showSeg && s && !u.seg.stale && !u.seg.checking){
+      const us = toUnits(day.items);
+      let prev = null;
+      for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; break; }
+      const t1 = prev && clockMin(prev.time), t2 = clockMin(s.time);
+      const txt = String(u.seg.text != null ? u.seg.text : segPlain(u.seg.html || ""));
+      const h = txt.match(/(\d+)\s*小時/), mm = txt.match(/(\d+)\s*分鐘/);
+      const need = (h ? +h[1] * 60 : 0) + (mm ? +mm[1] : 0);
+      if (t1 != null && t2 != null && need && t2 > t1 && t2 - t1 < need)
+        tight = `<span class="seg-tight">${icon("warn")}時間好趕：交通要 ${need} 分鐘，但兩個站只隔 ${t2 - t1} 分鐘</span>`;
+    }
     const segHtml = showSeg ? `
-      <div class="seg${u.seg.stale ? " stale" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
+      <div class="seg${u.seg.stale ? " stale" : ""}${tight ? " tight" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
         <div class="seg-rail"></div>
-        <div class="seg-text">${segBody}${segRefresh}${segLinks}</div>
+        <div class="seg-text">${segBody}${segRefresh}${tight}${segLinks}</div>
       </div>` : "";
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
@@ -4650,6 +4942,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const chips = []
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
       .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`] : [])
+      .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
@@ -4677,6 +4970,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
     { const c = copyBtnHtml(subj || s); if (c) links.push(c); }
+    { const tx = taxiBtnHtml((subj || s).kr, (subj || s).title); if (tx) links.push(tx); }
     if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `
@@ -5772,6 +6066,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // wired generically and every save goes through the same version-history path
   // as any other edit.
   const HOME_EDITORS = {
+    checklist: () => {
+      const d = state.snapshot, list = checklistOf(d);
+      openEditSheet("出發前 checklist", "一行一項。已經剔咗嘅會保留。", [
+        { key: "items", type: "lines", rows: 10, label: "項目", value: list.map(x => x.t).join("\n") },
+      ], async out => {
+        const was = new Map(list.map(x => [x.t, x.done]));
+        d.checklist = out.items.map(t => ({ t, done: !!was.get(t) }));
+        render(); await saveNow("改咗出發前 checklist");
+      });
+    },
     ai: () => {
       const d = state.snapshot;
       openEditSheet("AI 設定", "呢段字會加喺每一個 AI 功能嘅開頭，AI 就係靠佢知道你哋幾多人去、幾時去、有咩要注意。改完之後所有 AI 功能（問行程、建議、清單推介、天氣、季節）都會跟返新嘅。", [
@@ -7727,6 +8031,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <div class="exgroup-label">分享</div>
         <button class="btn wide" id="ex-share">${icon("link")}分享／複製呢個行程嘅連結</button>
         <p class="exhint">同一條連結，全家人都改得。裝咗落主畫面就冇咗網址列，呢度攞返。</p>
+        <button class="btn wide" id="ex-share-ro">${icon("link")}分享唯讀連結（畀長輩睇，改唔到）</button>
+        <p class="exhint">撳入去只睇到，冇改嘢嘅掣，唔怕佢撳亂。（唔係密碼保護：識改網址嘅人一樣改得。）</p>
       </div>
 
       <div class="exgroup">
@@ -7778,6 +8084,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
           catch (e){ if (e && e.name === "AbortError") return; }
         }
         copyInto("#ex-share", url, "複製咗連結");
+      });
+      sheet.querySelector("#ex-share-ro").addEventListener("click", async () => {
+        const u = new URL(location.href); u.searchParams.set("view", "1");
+        const url = u.toString(), title = (plain((snap.meta || {}).title) || "我嘅行程") + "（唯讀）";
+        if (navigator.share){
+          try { await navigator.share({ title, url }); return; }
+          catch (e){ if (e && e.name === "AbortError") return; }
+        }
+        copyInto("#ex-share-ro", url, "複製咗唯讀連結");
       });
       sheet.querySelector("#ex-prompt").addEventListener("click", () =>
         copyInto("#ex-prompt", exportAiPrompt(snap), "複製咗，貼落 AI 度"));
@@ -8230,6 +8545,27 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!line) return [];
     const hours = line.slice(line.indexOf(":") + 1).trim();
     return [`<span class="meta-chip hours today">呢日（星期${esc(wd)}）：${esc(hours)}</span>`];
+  }
+  // "You arrive at 19:00 and it shuts at 18:00" — read from Google's own
+  // hours for that weekday against the stop's planned time.
+  function hoursClashChip(s, day){
+    const t = clockMin(s.time);
+    if (t == null || !Array.isArray(s.weekdayText) || !day) return [];
+    const wd = weekdayCharOfDate(day.date);
+    const line = wd && s.weekdayText.find(l => l.startsWith(`星期${wd}`));
+    if (!line) return [];
+    const txt = line.slice(line.indexOf(":") + 1);
+    if (/24\s*小時|24 hours/i.test(txt)) return [];
+    const ranges = [...txt.matchAll(/(\d{1,2})[:：](\d{2})\s*[–\-~至到]\s*(\d{1,2})[:：](\d{2})/g)]
+      .map(m => { const o = +m[1] * 60 + +m[2]; let c = +m[3] * 60 + +m[4]; if (c <= o) c += 1440; return [o, c]; });
+    if (!ranges.length) return [];
+    if (ranges.some(([o, c]) => t >= o && t <= c - 30)) return [];
+    const near = ranges.find(([o, c]) => t > c - 30 && t <= c);
+    if (near) return [`<span class="meta-chip closed">${icon("warn")}你約 ${esc(fmtMin(t))} 到，${esc(fmtMin(near[1]))} 就關門，得返 ${near[1] - t} 分鐘</span>`];
+    const later = ranges.filter(([o]) => o > t).sort((a, b) => a[0] - b[0])[0];
+    if (later) return [`<span class="meta-chip closed">${icon("warn")}你約 ${esc(fmtMin(t))} 到，佢 ${esc(fmtMin(later[0]))} 先開</span>`];
+    const lastClose = Math.max(...ranges.map(r => r[1]));
+    return [`<span class="meta-chip closed">${icon("warn")}你約 ${esc(fmtMin(t))} 到，佢 ${esc(fmtMin(lastClose))} 已經關門</span>`];
   }
   function stopClosedOnDay(s, day){
     if (!Array.isArray(s.weekdayText) || !s.weekdayText.length) return false;
@@ -9175,13 +9511,30 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     state.tripId = tripId;
+    if (params.get("view") === "1"){ state.readonly = true; document.body.classList.add("readonly"); }
 
-    let row;
+    let row, bootErr = null;
+    const CACHE_KEY = "dumbofly_snap_" + tripId;
     try {
       row = await fetchLatestVersion();
       if (!row) throw new Error("呢個行程重未有版本紀錄。");
+      // a copy on the phone, for the subway with no signal
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), snapshot: row.snapshot })); } catch (_){}
     } catch (e){
-      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(netMsg(e))}<br>
+      bootErr = e;
+      let cached = null;
+      try { cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (_){}
+      if (cached && cached.snapshot){
+        // Offline: show the last copy, read-only, so a stale snapshot can
+        // never be saved back over somebody's newer edit.
+        row = { snapshot: cached.snapshot };
+        state.readonly = true; state.offline = cached.at;
+        document.body.classList.add("readonly");
+        window.addEventListener("online", () => location.reload(), { once: true });
+      }
+    }
+    if (!row){
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(netMsg(bootErr))}<br>
         <div style="margin-top:10px;"><button class="btn" id="retryboot">再試一次</button>
         <a class="btn" href="index.html">返去主頁</a></div></div></div>`;
       $("#retryboot").addEventListener("click", () => {
@@ -9191,11 +9544,20 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     state.snapshot = normalizeSnapshot(row.snapshot);
+    if (state.offline || state.readonly){
+      const bar = document.createElement("div");
+      bar.className = "robar";
+      bar.textContent = state.offline
+        ? `冇網絡：顯示 ${new Date(state.offline).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 存低嘅版本，有網就會自動更新（暫時改唔到）`
+        : "唯讀：只可以睇，唔可以改";
+      document.body.appendChild(bar);
+    }
     saver.lastPersistedJson = snapJson();
     const back = readPlace();
     const resumeY = (back && back.trip === tripId) ? back.y : 0;
     if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes"
         || dayById(back.view) || boardById(back.view))) state.view = back.view;
+    else if (todayDay()) state.view = todayDay().id;
     try {
       render();
       if (resumeY) requestAnimationFrame(() => window.scrollTo(0, resumeY));
