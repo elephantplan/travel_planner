@@ -1085,6 +1085,54 @@ img{max-width:100%;}
 .seg-text > .rchain,.seg-text > .seg-route{order:2;}
 .seg-text > .seg-links{order:3;}
 
+
+/* ---------- 住宿: a booking confirmation ----------
+   Photo across the top, the hotel name large, then a check-in / check-out
+   stub in the same condensed numerals as the trip's pass. */
+.fold-body .hsblock[data-hskey="acc"]{padding:0;overflow:hidden;}
+.fold-body .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;right:10px;z-index:2;float:none;margin:0;}
+.fold-body .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1;color:#fff;
+  background:rgba(10,12,16,.4);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+.fold-body .hsblock[data-hskey="acc"] > .hint{padding:16px;}
+.stayrow{border-top:1px dashed var(--rule);padding:18px 18px 16px;margin:0;}
+.stayrow:first-of-type{border-top:0;padding-top:18px;}
+.stayrow.hasphoto{padding-top:0;}
+.stayphoto{margin:0 -18px 16px;aspect-ratio:16/9;overflow:hidden;position:relative;background:var(--surface-2);}
+.stayphoto img{width:100%;height:100%;object-fit:cover;display:block;}
+.stayphoto::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.35),transparent 35%);}
+.stayrow .v{font-size:20px;font-weight:800;letter-spacing:-.015em;line-height:1.3;padding-right:56px;}
+.stayrow.hasphoto .v{padding-right:0;}
+.stayrow .d{font-size:13.5px;color:var(--ink-soft);line-height:1.7;margin-top:6px;}
+.stayrow .staystub{display:flex;align-items:flex-end;gap:14px;margin:14px 0 4px;padding:12px 14px;border-radius:14px;
+  background:var(--surface-2);font-family:inherit;font-size:inherit;letter-spacing:0;color:inherit;}
+.staystub-arrow{color:var(--ink-faint);align-self:center;}
+.staystub-arrow .i{width:16px;height:16px;}
+.staystub .staynights{margin-left:auto;text-align:right;align-items:flex-end;}
+.stayrow .chiprow{margin-top:12px;gap:6px;}
+.stayrow .chiprow .maplink,.stayrow .chiprow .copybtn{font-size:12.5px;font-weight:600;color:var(--ink-soft);
+  background:var(--surface-2);padding:7px 12px;border-radius:999px;border:0;}
+
+/* ---------- weather: a forecast strip, not a spreadsheet ---------- */
+.wtable,.wtable tbody{display:block;}
+.wtable tbody{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;}
+.wtable tbody::-webkit-scrollbar{display:none;}
+.wtable tr:first-child:has(th){display:none;}
+.wtable tr{display:flex;flex-direction:column;align-items:flex-start;flex:1 0 92px;padding:12px 12px 10px;
+  border-radius:14px;background:var(--surface-2);}
+.wtable td{display:block;border:0;padding:0;}
+.wtable td:first-child{font-family:'Archivo',var(--f-mono);font-stretch:82%;font-weight:700;font-size:12px;
+  color:var(--ink-faint);letter-spacing:.04em;margin-bottom:6px;}
+.wtable td.hi{font-family:'Archivo',var(--f-mono);font-stretch:78%;font-weight:800;font-size:28px;line-height:1;color:var(--ink);}
+.wtable td.lo{font-family:'Archivo',var(--f-mono);font-stretch:82%;font-weight:600;font-size:14px;color:var(--ink-faint);margin-top:2px;}
+.wtable td.lo::before{content:"低 ";font-family:var(--f-body);font-size:11px;font-weight:500;}
+.wtable td:last-child{font-size:12px;color:var(--ink-soft);margin-top:8px;line-height:1.45;}
+
+/* clothing & checklists: each line its own row with a soft marker */
+.fold-body .clist li{padding:10px 12px;border-radius:12px;background:var(--surface-2);}
+.fold-body .hsblock h3,.fold-body .usec h3{font-size:17px;font-weight:800;}
+.fold-body .legend{display:flex;flex-direction:column;gap:6px;}
+.fold-body .legend-item{padding:8px 12px;border-radius:12px;background:var(--surface-2);}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1546,7 +1594,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-04";
+  const BUILD = "2026-11-09-05";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3092,6 +3140,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
     markClampedDescs();
     if (state.view !== "overview") backfillHoursFor(dayById(state.view));
+    else backfillStayPhotos(state.snapshot);
     rememberPlace();
   }
 
@@ -3280,9 +3329,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           // the feature is broken — which is how the romanised address read.
           const wantNaver = destIsKorea() && !naverSearchable(plain(st.kr) || plain(st.name));
           return `
-          <div class="stayrow">
-            <div class="staywhen">${esc(stayRangeLabel(d, st))}</div>
+          <div class="stayrow${st.photoUrl ? " hasphoto" : ""}">
+            ${st.photoUrl ? `<div class="stayphoto"><img src="${esc(st.photoUrl)}" alt="" loading="lazy"></div>` : ""}
             <div class="v">${esc(st.name || "未填")}</div>
+            ${stayStubHtml(d, st)}
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
@@ -5566,6 +5616,43 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (a < 0 || b < 0) return false;
       return di >= Math.min(a,b) && di <= Math.max(a,b);
     }) || null;
+  }
+  // 入住 / 退房 / 幾晚, set like the stub on the trip's boarding pass
+  function stayStubHtml(snap, s){
+    const days = snap.days || [];
+    const ia = dayIndexById(snap, s.from), ib = dayIndexById(snap, s.to);
+    const a = days[ia], b = days[ib];
+    if (!a && !b) return `<div class="staywhen">${esc(stayRangeLabel(snap, s))}</div>`;
+    const split = dt => {
+      const m = String(dt || "").match(/(\d{1,2})月(\d{1,2})日\s*[（(]?([日一二三四五六])?/);
+      return m ? { md: `${m[1].padStart(2,"0")}.${m[2].padStart(2,"0")}`, wd: m[3] ? "星期" + m[3] : "" } : { md: esc(dt || "?"), wd: "" };
+    };
+    const ci = split(a && a.date), co = split(b && b.date);
+    const nights = (a && b) ? Math.max(1, ib - ia) : "";
+    return `<div class="staystub staywhen" aria-label="${esc(stayRangeLabel(snap, s))}">
+      <div class="tp-cell"><span class="tp-lbl">入住</span><b>${ci.md}</b><small>${ci.wd}</small></div>
+      <span class="staystub-arrow" aria-hidden="true">${icon("chevron")}</span>
+      <div class="tp-cell"><span class="tp-lbl">退房</span><b>${a && b && a.id === b.id ? ci.md : co.md}</b><small>${a && b && a.id === b.id ? "" : co.wd}</small></div>
+      ${nights ? `<div class="tp-cell staynights"><span class="tp-lbl">住</span><b>${nights}</b><small>晚</small></div>` : ""}
+    </div>`;
+  }
+  // a stay is a place like any other — give it a picture once, in the background
+  const stayPhotoTried = new Set();
+  async function backfillStayPhotos(snap){
+    const todo = (snap.stays || []).filter(st => st && st.name && !st.photoUrl && !st.noPhoto && !stayPhotoTried.has(st.name));
+    let got = 0;
+    for (const st of todo){
+      stayPhotoTried.add(st.name);
+      try {
+        const r = await fetchStoredPhoto({ title: st.name, kr: st.kr, placeId: st.placeId });
+        if (r && r.ok !== false && r.url){ st.photoUrl = r.url; got++; }
+        else if (r && r.reason === "nophoto") st.noPhoto = true;
+      } catch (_){}
+    }
+    if (got){
+      if (state.view === "overview") render();
+      await saveNow(`補返 ${got} 張住宿相`, true);
+    }
   }
   function stayRangeLabel(snap, s){
     const days = snap.days || [];
