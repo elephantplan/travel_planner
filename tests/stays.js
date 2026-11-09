@@ -56,6 +56,7 @@ const SUGGEST = { ok: true, stays: {
   await p.fill('[data-pf="rooms"]', '2');
   await p.locator('[data-pfone="budget"] .pfchip', { hasText: 'HK$800–1,500' }).click();
   await p.locator('[data-pfmany="focus"] .pfchip', { hasText: '有浴缸' }).click();
+  await p.fill('[data-pf="area"]', '心齋橋');
   ok('講明每間房大約幾多人', /每間房 4 個人/.test(await p.locator('[data-perroom]').innerText()), await p.locator('[data-perroom]').innerText());
   await p.locator('[data-esave]').click();
   await p.waitForTimeout(2500);
@@ -63,6 +64,9 @@ const SUGGEST = { ok: true, stays: {
   ok('要求有傳畀 AI', /6 個大人/.test(sent) && /2 間/.test(sent) && /有浴缸/.test(sent) && /HK\$800–1,500/.test(sent), sent.slice(0, 200));
   const t = await acc.innerText();
   ok('問咗住宿建議', asked.includes('stay-suggest'), asked);
+  ok('想住邊區當硬性要求傳畀 AI', /想住嘅區/.test(sent) && /心齋橋/.test(sent));
+  ok('有酒店位置地圖', await acc.locator('#map-stays').count() === 1);
+  ok('每張卡有同地圖對應嘅字母', (await acc.locator('.sgpin').allInnerTexts()).join('') === 'AB', await acc.locator('.sgpin').allInnerTexts());
   ok('講邊幾晚住邊區', /Day 1–3/.test(t) && /住明洞/.test(t) && /唔使搬酒店/.test(t), t.slice(0, 120));
   ok('每間酒店有價錢', /HK\$1,500–2,000/.test(t) && /網上搜尋估價/.test(t));
   ok('有好處', /乙支路入口站直達/.test(t));
@@ -70,7 +74,7 @@ const SUGGEST = { ok: true, stays: {
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
   const bk = await acc.locator('a', { hasText: 'Booking' }).first().getAttribute('href');
   ok('有 Booking 睇價連結（帶日子、人數、房數）', bk.includes('checkin=') && bk.includes('group_adults=6') && bk.includes('no_rooms=2') && bk.includes('group_children=1'), bk);
-  ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
+  ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one
   await acc.locator('[data-staysort="cheap"]').click();

@@ -1337,6 +1337,16 @@ body.readonly .sechide{display:none;}
 .sgsort::-webkit-scrollbar{display:none;}
 .sgsort .pfchip{flex:0 0 auto;padding:6px 12px;font-size:12.5px;}
 
+
+.sgmap{height:260px;margin:4px 0 6px;border-radius:16px;}
+.sgmarker{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--gold);color:#14110A;
+  font:800 13px/1 'Archivo',sans-serif;box-shadow:0 0 0 3px rgba(0,0,0,.35);}
+.sgmaplegend{display:flex;align-items:center;gap:6px;margin:0 0 12px;}
+.lg-h{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;background:var(--gold);color:#14110A;font:800 11px/1 'Archivo',sans-serif;}
+.lg-s{width:10px;height:10px;border-radius:50%;background:var(--ink-faint);display:inline-block;margin-left:6px;}
+.sgpin{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:var(--gold);color:#14110A;
+  font:800 12px/1 'Archivo',sans-serif;flex:0 0 auto;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1798,7 +1808,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-16";
+  const BUILD = "2026-11-09-17";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4810,6 +4820,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       movePrepBlock(state.snapshot, k, +step);
     }));
     initOverviewMap();
+    initStayMap();
   }
 
   // ==================================================================
@@ -6499,6 +6510,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <h3>AI 住宿建議</h3>
       <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.plan || []).length ? `<div class="sgplan">${sg.plan.map(x => `<div class="sgplan-row"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span></div>`).join("")}</div>` : ""}
+      ${sg.hotels.some(h => Number.isFinite(h.lat)) ? `<div class="mapbox sgmap" id="map-stays"></div>
+        <p class="hint sgmaplegend"><span class="lg-h">A</span> 建議嘅酒店　<span class="lg-s"></span> 行程入面嘅景點</p>` : ""}
       <div class="sgsort" role="group" aria-label="排序">${STAY_SORTS.map(([k, l]) =>
         `<button type="button" class="pfchip${(state.staySort || "ai") === k ? " on" : ""}" data-staysort="${k}">${l}</button>`).join("")}</div>
       <div class="sghotels">${sortedStayIdx(sg.hotels).map(k => { const h = sg.hotels[k]; return `
@@ -6506,7 +6519,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
           <div class="sgh-body">
-            <div class="sgh-top"><span class="sgd">${esc(dLab(h.fromDay, h.toDay))} · ${esc(h.area)}</span>${h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
+            <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))} · ${esc(h.area)}</span>${h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
             ${h.local && h.local !== h.name ? `<div class="sgh-local">${esc(h.local)}</div>` : ""}
             ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>網上搜尋估價</small></div>` : ""}
@@ -6528,6 +6541,44 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
     </div>`;
   }
+  // ---------- where the suggested hotels are ----------
+  // Lettered pins for the hotels (the same letter is on each card) over the
+  // trip's own places in each day's colour, so "near what we're doing" can
+  // be seen rather than taken on trust.
+  function stayLetter(k){ return k < 26 ? String.fromCharCode(65 + k) : String(k + 1); }
+  function initStayMap(){
+    const el = document.getElementById("map-stays");
+    if (!el) return;
+    if (typeof L === "undefined"){ el.innerHTML = `<div class="mapfallback">地圖要有網絡先載入到。</div>`; return; }
+    try {
+      const map = L.map(el, { scrollWheelZoom: false, zoomControl: true, attributionControl: false, tap: false });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
+      const all = [];
+      (state.snapshot.days || []).forEach(day => {
+        const color = dayHex(day.id);
+        normPoints(buildDayMapPoints(day)).forEach(p => {
+          L.circleMarker([p.lat, p.lng], { radius: 5, color, weight: 2, fillColor: color, fillOpacity: .55 })
+            .bindPopup(`Day ${day.id.replace("day", "")} · ${esc(p.name || "")}`).addTo(map);
+          all.push([p.lat, p.lng]);
+        });
+      });
+      (state.snapshot.staySuggest.hotels || []).forEach((h, k) => {
+        if (!Number.isFinite(h.lat) || !Number.isFinite(h.lng)) return;
+        L.marker([h.lat, h.lng], { icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+          html: `<div class="sgmarker">${stayLetter(k)}</div>` }) })
+          .bindPopup(`<b>${esc(h.name)}</b><br>${esc(h.price || "")}${h.station ? `<br>最近 ${esc(h.station)}${h.walk ? " · " + esc(h.walk) : ""}` : ""}`).addTo(map);
+        all.push([h.lat, h.lng]);
+      });
+      // Frame the hotels and the trip's places near them. An airport or a
+      // day trip 50 km away would otherwise shrink every hotel to one dot.
+      const hs = (state.snapshot.staySuggest.hotels || []).filter(h => Number.isFinite(h.lat)).map(h => [h.lat, h.lng]);
+      const km = (a, b) => Math.hypot((a[0] - b[0]) * 111, (a[1] - b[1]) * 111 * Math.cos(a[0] * Math.PI / 180));
+      const frame = hs.length ? hs.concat(all.filter(pt => hs.some(h => km(h, pt) < 8))) : all;
+      const fit = () => { map.invalidateSize(); if (frame.length) map.fitBounds(L.latLngBounds(frame).pad(0.15), { maxZoom: 16 }); };
+      fit(); setTimeout(fit, 250);
+    } catch (e){ el.innerHTML = `<div class="mapfallback">地圖載入唔到。</div>`; }
+  }
+
   // ---------- sorting the suggestions ----------
   // Sorting is a way of looking, not a change to the trip, so it lives in
   // the page's state and indices into the stored list stay valid.
@@ -6569,7 +6620,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function stayPrefsLine(pf){
     if (!pf) return "";
     const ppl = [pf.adults ? `${pf.adults} 大` : "", pf.kids ? `${pf.kids} 小` : ""].filter(Boolean).join(" ");
-    return [ppl, pf.rooms ? `${pf.rooms} 間房` : "", pf.budget && pf.budget !== "唔限" ? `每晚 ${pf.budget}` : "",
+    return [pf.area ? `住${pf.area}` : "", ppl, pf.rooms ? `${pf.rooms} 間房` : "", pf.budget && pf.budget !== "唔限" ? `每晚 ${pf.budget}` : "",
       pf.kind && pf.kind !== "唔限" ? pf.kind : "", ...(pf.focus || [])].filter(Boolean).join("・");
   }
   function openStayPrefsSheet(){
@@ -6588,6 +6639,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <div class="chips1" data-pfmany="focus">${STAY_FOCUS.map(x => `<button type="button" class="pfchip${(pf.focus || []).includes(x) ? " on" : ""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
       <div class="field"><label>類型</label>
         <div class="chips1" data-pfone="kind">${STAY_KIND.map(x => `<button type="button" class="pfchip${pf.kind === x ? " on" : ""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
+      <div class="field"><label>想住邊區（可以留空，AI 會自己揀）</label>
+        <input class="input" data-pf="area" value="${esc(pf.area || "")}" placeholder="例如：心齋橋、難波">
+        <p class="fieldhint">填咗就一定喺呢區揀；留空 AI 會按每日去邊建議，並講返點解。</p></div>
       <div class="field"><label>其他要求</label>
         <textarea class="textarea" data-pf="other" rows="2" placeholder="例如：有長者，唔想上落樓梯；想住同一層；要可以加床">${esc(pf.other || "")}</textarea></div>
       <div class="editor-tools">
@@ -6614,7 +6668,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const one = k => (sheet.querySelector(`[data-pfone="${k}"] .pfchip.on`) || {}).dataset?.v || "";
         snap.stayPrefs = { adults: Math.max(1, +v("adults") || 1), kids: Math.max(0, +v("kids") || 0), rooms: Math.max(1, +v("rooms") || 1),
           budget: one("budget") || "唔限", kind: one("kind") || "唔限",
-          focus: [...sheet.querySelectorAll('[data-pfmany="focus"] .pfchip.on')].map(x => x.dataset.v), other: v("other").trim() };
+          focus: [...sheet.querySelectorAll('[data-pfmany="focus"] .pfchip.on')].map(x => x.dataset.v), other: v("other").trim(),
+          area: v("area").trim() };
         closeLayer();
         flash("AI 跟住你嘅要求搵緊酒店，大約半分鐘…", true);
         try {
@@ -6635,7 +6690,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ...((snap.stays || []).length ? { "已經訂咗／揀咗": snap.stays.map(x => x.name) } : {}),
       ...(pf ? { "住宿要求（一定要跟，highlights 要講返點樣符合）": {
         人數: `${pf.adults} 個大人${pf.kids ? `、${pf.kids} 個小朋友` : ""}`, 房間: `${pf.rooms} 間（每間大約 ${Math.ceil((pf.adults + pf.kids) / pf.rooms)} 人）`,
-        每間房每晚預算: pf.budget, 類型: pf.kind, 最緊要: pf.focus, 其他: pf.other } } : {}),
+        每間房每晚預算: pf.budget, 類型: pf.kind, 最緊要: pf.focus, 其他: pf.other,
+        ...(pf.area ? { "想住嘅區（plan 同所有酒店都一定要喺呢區，why 要講住呢區對呢個行程嘅好處同要留意嘅地方）": pf.area } : {}) } } : {}),
       days: days.map((d, i) => ({ day: i + 1, date: d.date, title: d.title,
         stops: (d.items || []).filter(x => x.kind === "stop").map(x => plain(x.title)).filter(Boolean) })),
     });
