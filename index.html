@@ -926,6 +926,7 @@ section.triplist{margin-bottom:36px;}
         <li><div class="impday-h"><span class="impday-n">${i + 1}</span><b>${esc(d.title || "第 " + (i + 1) + " 日")}</b><small>${d.items.filter(x => x.kind === "stop").length} 個地點</small></div>
           <div class="impday-s">${d.items.map(x => `<span class="${x.kind === "note" ? "isnote" : ""}">${x.time ? `<em>${esc(x.time.replace(/^約\s*/, ""))}</em>` : ""}${esc(x.title)}</span>`).join("")}</div></li>`).join("")}
       </ol>
+      ${(t.flights || []).length ? `<p class="sheet-sub"><b>航班：</b>${t.flights.map(f => esc([f.no, f.dep && f.from ? f.dep + " " + f.from : f.from, "→", f.arr && f.to ? f.arr + " " + f.to : f.to].filter(Boolean).join(" "))).join("、")}</p>` : ""}
       ${t.stays.length ? `<p class="sheet-sub"><b>住宿：</b>${t.stays.map(s => esc(s.name)).join("、")}</p>` : `<p class="sheet-sub">冇讀到住宿，開咗之後 AI 會建議住邊區。</p>`}
       <div id="imp-err2"></div>
       <div class="sheet-btns">
@@ -936,7 +937,11 @@ section.triplist{margin-bottom:36px;}
     const startIn = sheet.querySelector("#imp-start"), endOut = sheet.querySelector("#imp-end");
     const go = sheet.querySelector("#imp-go");
     const sync = () => {
-      endOut.textContent = startIn.value ? addDaysIso(startIn.value, nDays - 1) : "先揀出發日";
+      // written the way the phone writes the start date next to it ("3 Dec 2026"),
+      // not as a raw ISO string
+      endOut.textContent = startIn.value
+        ? new Date(addDaysIso(startIn.value, nDays - 1) + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+        : "先揀出發日";
       go.disabled = !startIn.value || !sheet.querySelector("#imp-dest").value.trim();
     };
     startIn.addEventListener("input", sync); sheet.querySelector("#imp-dest").addEventListener("input", sync); sync();
@@ -989,7 +994,7 @@ section.triplist{margin-bottom:36px;}
       meta: { destinationLocal: destination, lat, lng, dateStart, dateEnd, title: name,
         eyebrow: formatEyebrow(dateStart, dateEnd), facts: [days.length + " 日行程"], hotelTags: [] },
       tripBrief: `你係一個廣東話（香港口語）旅遊助理，幫緊去 ${destination}（${dateStart} 至 ${dateEnd}）嘅一次旅行。行程係由佢哋自己嘅資料導入，盡量保留原本嘅安排。`,
-      days, stays,
+      days, stays, flights: Array.isArray(t.flights) ? t.flights : [],
       hiddenSections: ["foliage", "access"],
     };
     const verRes = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions`, {

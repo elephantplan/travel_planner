@@ -65,7 +65,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('交通段有路線掣', seg.length >= 2, seg.length);
     const g = seg.find(h => /google/.test(h)) || '';
     ok('Google 路線用 dir API', /\/maps\/dir\/\?api=1/.test(g), g);
-    ok('Google 路線帶起點同終點', /origin=37\.5/.test(g) && /destination=37\.5/.test(g), g);
+    // named places with their place id, so Google shows the names instead of 「已放置圖釘」
+    ok('Google 路線帶起點同終點（有名，唔係圖釘）', /origin=[^&]+&origin_place_id=p\d/.test(g) && /destination=[^&]+&destination_place_id=p\d/.test(g), g);
     ok('地鐵段用 transit 模式', /travelmode=transit/.test(g), g);
     const n = seg.find(h => /naver/.test(h)) || '';
     ok('Naver 路線係 directions URL', /map\.naver\.com\/p\/directions\//.test(n), n);
@@ -255,7 +256,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   {
     const { p, errs } = await boot(korea, null);
     ok('住宿係主頁上自己一段', await p.locator('[data-fold="stay"]').count() === 1);
-    ok('唔使撳就見到間酒店', /L7/.test(await p.locator('.fold.open .fold-body').first().innerText()));
+    ok('唔使撳就見到間酒店', /L7/.test(await p.locator('[data-hskey="acc"]').innerText()));
     ok('「行前準備」嗰度冇咗住宿', !/住宿/.test(await p.locator('[data-fold="prep"]').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();

@@ -1133,6 +1133,51 @@ img{max-width:100%;}
 .fold-body .legend{display:flex;flex-direction:column;gap:6px;}
 .fold-body .legend-item{padding:8px 12px;border-radius:12px;background:var(--surface-2);}
 
+
+/* ---------- day line summary ---------- */
+.dayline-desc{display:block;margin-top:4px;font-size:12.5px;line-height:1.55;color:var(--ink-soft);}
+
+/* ---------- section notes: point in bold, the rest quieter ---------- */
+.usec-list{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:6px;}
+.usec-list li{position:relative;padding:9px 12px 9px 26px;border-radius:12px;background:var(--surface-2);
+  font-size:13.5px;line-height:1.6;color:var(--ink-soft);}
+.usec-list li::before{content:"";position:absolute;left:12px;top:17px;width:5px;height:5px;border-radius:50%;background:var(--gold);}
+.usec-list li b{display:block;color:var(--ink);font-weight:700;}
+.usec-more{margin-top:6px;}
+.usec-more summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink-soft);padding:6px 2px;list-style:none;}
+.usec-more summary::-webkit-details-marker{display:none;}
+.usec-more summary::before{content:"+ ";color:var(--gold);}
+.usec-more[open] summary::before{content:"− ";}
+.usec-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+.usec-links a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink);text-decoration:none;
+  padding:7px 12px;border-radius:999px;background:color-mix(in srgb,var(--gold) 12%,transparent);}
+.usec-links a .i{width:13px;height:13px;color:var(--gold);}
+
+/* ---------- 航班 ---------- */
+.flightblock{position:relative;}
+.flightblock > .foldtools{position:absolute;top:10px;right:10px;z-index:2;float:none;margin:0;}
+.flight + .flight{margin-top:16px;padding-top:16px;border-top:1.5px dashed var(--rule);}
+.fl-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding-right:36px;}
+.fl-dir{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--gold);}
+.fl-no{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;font-size:15px;letter-spacing:.04em;}
+.fl-route{margin-bottom:6px;}
+.fl-route .tp-code{font-size:44px;}
+.fl-time{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:700;font-size:18px;color:var(--ink);margin-top:6px;}
+.fl-stub{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--surface-2);}
+.fl-stub .fl-status{margin-left:auto;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--stock);}
+.fl-empty{font-size:13.5px;color:var(--ink-soft);line-height:1.65;margin:4px 40px 12px 0;}
+.fl-actions{display:flex;flex-wrap:wrap;gap:8px;}
+.fl-form{border:0;padding:0;margin:14px 0 0;}
+.fl-form legend{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--gold);margin-bottom:8px;}
+.fl-scan{position:relative;margin-top:4px;}
+.hint.warn{color:var(--warn);}
+.flightchip{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px;padding:8px 12px;border-radius:12px;
+  background:color-mix(in srgb,var(--gold) 12%,transparent);font-size:13px;}
+.flightchip .i{width:16px;height:16px;color:var(--gold);transform:rotate(90deg);}
+.flightchip b{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;letter-spacing:.04em;}
+.flightchip span{font-family:'Archivo',var(--f-mono);font-stretch:85%;font-weight:600;}
+.flightchip .arr{color:var(--ink-faint);}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1594,7 +1639,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-06";
+  const BUILD = "2026-11-09-07";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -1769,7 +1814,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     altsOpen: new Set(),           // "dayId:unitIndex" whose backup picks are unfolded
     // 住宿 starts open: it is the one line on this page somebody reads every
     // evening, so it should not cost a tap. The rest start shut.
-    foldOpen: new Set(["stay"]),   // which overview groups are open
+    foldOpen: new Set(["stay", "flight"]),   // which overview groups are open
     descOpen: new Set()            // stops whose description the reader expanded
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
@@ -2684,12 +2729,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function naverModeOf(mode){
     return mode === "walk" ? "walk" : mode === "taxi" ? "car" : "transit";
   }
+  // With bare coordinates Google Maps labels both ends 「已放置圖釘」, so nobody
+  // can tell whether the right place was picked. A place id plus the name
+  // opens the real place, named; coordinates stay as the fallback.
+  function placeName(s){ return plain(s && s.title) || plain(s && s.name) || plain(s && s.kr); }
+  function gmapsEnd(s, key){
+    if (s && s.placeId && placeName(s))
+      return `${key}=${encodeURIComponent(placeName(s))}&${key}_place_id=${encodeURIComponent(s.placeId)}`;
+    const v = hasCoord(s) ? `${s.lat},${s.lng}` : plain(s && s.kr) || plain(s && s.title);
+    return v ? `${key}=${encodeURIComponent(v)}` : "";
+  }
   function gmapsDirUrl(from, to, mode){
-    const ref = s => hasCoord(s) ? `${s.lat},${s.lng}` : plain(s && s.kr) || plain(s && s.title);
-    const o = ref(from), d = ref(to);
+    const o = gmapsEnd(from, "origin"), d = gmapsEnd(to, "destination");
     if (!o || !d) return "";
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}` +
-           `&destination=${encodeURIComponent(d)}&travelmode=${travelModeOf(mode)}`;
+    return `https://www.google.com/maps/dir/?api=1&${o}&${d}&travelmode=${travelModeOf(mode)}`;
   }
   // Naver's directions URLs are built from coordinates, so a stop without one
   // simply doesn't get the button rather than opening a broken page.
@@ -2868,9 +2921,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     let mid = stops.slice(1, -1);
     const trimmed = mid.length > MAX_WAYPOINTS;
     if (trimmed) mid = mid.slice(0, MAX_WAYPOINTS);
-    const wp = mid.length ? `&waypoints=${mid.map(ref).map(encodeURIComponent).join("|")}` : "";
-    const g = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(ref(origin))}` +
-              `&destination=${encodeURIComponent(ref(dest))}${wp}&travelmode=transit`;
+    const named = mid.length && mid.every(x => x.placeId && placeName(x));
+    const wp = !mid.length ? "" : named
+      ? `&waypoints=${mid.map(x => encodeURIComponent(placeName(x))).join("|")}&waypoint_place_ids=${mid.map(x => encodeURIComponent(x.placeId)).join("|")}`
+      : `&waypoints=${mid.map(ref).map(encodeURIComponent).join("|")}`;
+    const g = `https://www.google.com/maps/dir/?api=1&${gmapsEnd(origin, "origin")}` +
+              `&${gmapsEnd(dest, "destination")}${wp}&travelmode=transit`;
     // Naver plots one leg at a time, so the day-level button opens the first
     // one rather than pretending it can draw the lot.
     const n = destIsKorea() ? naverDirUrl(stops[0], stops[1], "transit") : "";
@@ -3140,7 +3196,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
     markClampedDescs();
     if (state.view !== "overview") backfillHoursFor(dayById(state.view));
-    else backfillStayPhotos(state.snapshot);
+    else { backfillStayPhotos(state.snapshot); overviewUpkeep(state.snapshot); }
     rememberPlace();
   }
 
@@ -3350,9 +3406,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function homeBlockHtml(d, key){
     if (isSectionHidden(d, key)) return "";
     if (key === "weather"){
+      // a new trip has no numbers yet; an empty table is worse than no block
+      if (!(d.weatherRows || []).length) return "";
       return `<div class="hsblock" data-hskey="weather">
         <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}</h3>
-        <p class="sec-sub">歷年同期平均，出發前一週撳下面粒掣 check 返實時預報。</p>
+        <p class="sec-sub">${d.weatherFrom === "lastyear" ? "去年同一段日子嘅實際天氣，做參考" : "歷年同期平均"}，出發前一週撳下面粒掣 check 返實時預報。</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
@@ -3361,6 +3419,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>`;
     }
     if (key === "clothing"){
+      if (!(d.clothing || []).length) return "";
       return `<div class="hsblock" data-hskey="clothing">
         <h3>點著衫${secTools("clothing")}</h3>
         <ul class="clist">${(d.clothing||[]).map(c=>`<li>${c.icon ? `<span class="ico">${esc(c.icon)}</span>` : ""}<div>${c.html}</div></li>`).join("")}</ul>
@@ -3578,6 +3637,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <span class="dayline-title">${esc(day.title)}</span>
               <span class="dayline-when">${esc(day.date)}</span>
             </span>
+            ${plain(day.desc) ? `<span class="dayline-desc">${esc(plain(day.desc))}</span>` : ""}
             ${st.names.length ? `<span class="dayline-stops">${
               st.names.map(x => `<span>${esc(x)}</span>`).join("")
             }${st.more ? `<span class="dayline-more">＋${st.more}</span>` : ""}</span>` : ""}
@@ -3622,6 +3682,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${lines}
       </nav>
 
+      ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
       ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), groupHint(d, "prep"), prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
@@ -3738,13 +3799,65 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <button class="secedit secdel" data-usecdel="${i}" aria-label="刪走" title="刪走">${icon("trash")}</button>
           </span></h3>
           ${s.sub ? `<p class="sec-sub">${esc(s.sub)}</p>` : ""}
-          ${(s.lines || []).length ? `<ul class="usec-list">${(s.lines||[]).map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
-          ${(s.links || []).length ? `<div class="ailog-links">${(s.links||[]).map(l =>
-            `<a href="${esc(l.url)}" target="_blank" rel="noopener">${icon("link")}${esc(l.name || l.url)}</a>`).join("")}</div>` : ""}
+          ${sectionLinesHtml(s.lines || [])}
+          ${sectionLinksHtml(s)}
           <button class="btn" data-secrefresh="${i}" style="margin-top:9px;">${icon("refresh")}問 AI 攞「${esc(s.topic || s.title || "呢個題目")}」最新資料</button>
           <div class="lastupd">${s.updatedAt ? "上次更新：" + esc(whenLabel(s.updatedAt)) : "重未更新過"}</div>
           <div class="ai-out" id="secout-${i}"></div>
         </div>`;
+  }
+  // A wall of ten full sentences is hard to scan on a phone. Each line leads
+  // with its point in bold (the words before the first ：or ，), and past the
+  // first five the rest fold away.
+  function sectionLineHtml(l){
+    const t = plain(l).trim();
+    const m = t.match(/^(.{2,16}?)[：:]\s*(.+)$/) || t.match(/^(.{3,14}?)，(.+)$/);
+    return m ? `<li><b>${esc(m[1])}</b><span>${esc(m[2])}</span></li>` : `<li><span>${esc(t)}</span></li>`;
+  }
+  function sectionLinesHtml(lines){
+    if (!lines.length) return "";
+    const head = lines.slice(0, 5), rest = lines.slice(5);
+    return `<ul class="usec-list">${head.map(sectionLineHtml).join("")}</ul>` +
+      (rest.length ? `<details class="usec-more"><summary>睇多 ${rest.length} 項</summary><ul class="usec-list">${rest.map(sectionLineHtml).join("")}</ul></details>` : "");
+  }
+  // Official sites worth having one tap away, by country and by what the
+  // section is about. Only real, long-lived addresses; the AI's own links are
+  // kept and these are added when they are not already there.
+  function usefulLinksFor(topic){
+    const t = String(topic || "");
+    const mo = +(String((state.snapshot.meta || {}).dateStart || "").split("-")[1] || 0);
+    const jp = destIsJapan(), kr = destIsKorea(), tw = /台灣|台北|臺北|台中|高雄|taipei|taiwan/i.test(JSON.stringify((state.snapshot.meta || {}).destinationLocal || ""));
+    const L = [];
+    if (/天氣|著衫/.test(t)){
+      if (jp) L.push({ name:"tenki.jp 天氣", url:"https://tenki.jp/" }, { name:"日本氣象廳", url:"https://www.jma.go.jp/" });
+      if (kr) L.push({ name:"韓國氣象廳", url:"https://www.weather.go.kr/" });
+      if (tw) L.push({ name:"中央氣象署", url:"https://www.cwa.gov.tw/" });
+    }
+    if (/季節|紅葉|櫻花/.test(t)){
+      if (jp && mo >= 9 && mo <= 12) L.push({ name:"紅葉見頃情報（tenki.jp）", url:"https://tenki.jp/kouyou/" });
+      if (jp && mo >= 2 && mo <= 5) L.push({ name:"櫻花開花情報（tenki.jp）", url:"https://tenki.jp/sakura/" });
+      if (jp) L.push({ name:"JNTO 日本旅遊", url:"https://www.japan.travel/hk/" });
+      if (kr) L.push({ name:"VisitKorea", url:"https://english.visitkorea.or.kr/" });
+      if (tw) L.push({ name:"台灣觀光署", url:"https://www.taiwan.net.tw/" });
+    }
+    if (/交通|上網|貨幣|行李|出發前/.test(t)){
+      if (jp) L.push({ name:"Visit Japan Web 入境登記", url:"https://www.vjw.digital.go.jp/" });
+      if (kr) L.push({ name:"K-ETA 電子旅行許可", url:"https://www.k-eta.go.kr/" });
+      if (tw) L.push({ name:"台北捷運", url:"https://www.metro.taipei/" });
+    }
+    return L;
+  }
+  function sectionLinksHtml(s){
+    const host = u => { try { return new URL(u).host.replace(/^www\./, ""); } catch (_){ return u; } };
+    const seen = new Set(), all = [];
+    (s.links || []).concat(s.source === "ai" ? usefulLinksFor(s.topic || s.title) : []).forEach(l => {
+      if (!l || !/^https?:\/\//.test(l.url || "")) return;
+      const h = host(l.url) + (new URL(l.url).pathname.replace(/\/$/, ""));
+      if (seen.has(h)) return; seen.add(h); all.push(l);
+    });
+    if (!all.length) return "";
+    return `<div class="usec-links">${all.map(l =>
+      `<a href="${esc(l.url)}" target="_blank" rel="noopener">${icon("link")}${esc(l.name || host(l.url))}</a>`).join("")}</div>`;
   }
   function customSectionRows(d, where){
     const all = Array.isArray(d.sections) ? d.sections : [];
@@ -4031,7 +4144,142 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }));
   }
 
+  // ---------- 航班 ----------
+  // Most families book the flights first and plan around them. The flight is
+  // kept as a pass of its own — number, airports, times, terminal, booking
+  // reference — and shows on the first and last day so the day's plan starts
+  // and ends where the plane does. No fare search: prices move by the hour
+  // and a stale one is worse than none, so there is a link out instead.
+  const FLIGHT_DIRS = [["out", "去程"], ["back", "回程"]];
+  function flightsOf(d){ return Array.isArray(d.flights) ? d.flights.filter(f => f && (f.no || f.from || f.to)) : []; }
+  function apCode(x){ const t = plain(x).trim(); return /^[A-Za-z]{3}$/.test(t) ? t.toUpperCase() : t; }
+  function flightDateLabel(iso){
+    const [y, m, dd] = String(iso || "").split("-").map(Number);
+    if (!y) return "";
+    return `${m}月${dd}日（${["日","一","二","三","四","五","六"][new Date(y, m - 1, dd).getDay()]}）`;
+  }
+  function flightStatusUrl(f){ return f.no ? `https://www.google.com/search?q=${encodeURIComponent(f.no.replace(/\s+/g, "") + " flight status")}` : ""; }
+  function flightCardHtml(f){
+    const dir = (FLIGHT_DIRS.find(x => x[0] === f.dir) || [, "航班"])[1];
+    const st = flightStatusUrl(f);
+    return `<div class="flight">
+      <div class="fl-top"><span class="fl-dir">${esc(dir)}${f.date ? ` · ${esc(flightDateLabel(f.date))}` : ""}</span>
+        ${f.no ? `<span class="fl-no">${esc(f.no.toUpperCase())}</span>` : ""}</div>
+      <div class="tp-route fl-route">
+        <div class="tp-pt"><span class="tp-code">${esc(apCode(f.from) || "—")}</span><span class="fl-time">${esc(f.dep || "")}</span></div>
+        <div class="tp-flight" aria-hidden="true"><span class="tp-arc"></span>${icon("plane")}</div>
+        <div class="tp-pt to"><span class="tp-code">${esc(apCode(f.to) || "—")}</span><span class="fl-time">${esc(f.arr || "")}</span></div>
+      </div>
+      ${(f.terminal || f.ref || st) ? `<div class="fl-stub">
+        ${f.terminal ? `<div class="tp-cell"><span class="tp-lbl">航廈</span><b>${esc(f.terminal)}</b></div>` : ""}
+        ${f.ref ? `<div class="tp-cell"><span class="tp-lbl">訂位編號</span><b>${esc(f.ref.toUpperCase())}</b></div>` : ""}
+        ${st ? `<a class="maplink fl-status" href="${esc(st)}" target="_blank" rel="noopener">${icon("plane")}航班狀態</a>` : ""}
+      </div>` : ""}
+    </div>`;
+  }
+  function flightFoldHtml(d){
+    const fl = flightsOf(d);
+    const m = d.meta || {};
+    const gf = `https://www.google.com/travel/flights?q=${encodeURIComponent(`Flights from Hong Kong to ${m.destinationLocal || ""} on ${m.dateStart || ""} returning ${m.dateEnd || ""}`)}`;
+    const body = `<div class="hsblock flightblock" data-hskey="flight">
+        <div class="foldtools"><span class="sectools"><button class="secedit" data-flightedit aria-label="改航班" title="改航班">${icon("pencil")}</button></span></div>
+        ${fl.length ? fl.map(flightCardHtml).join("") : `
+          <p class="fl-empty">未加航班。加咗之後，第一日會由落機開始排，最後一日會預返去機場嘅時間。</p>
+          <div class="fl-actions">
+            <button class="btn primary" data-flightedit>加航班</button>
+            <a class="btn" href="${esc(gf)}" target="_blank" rel="noopener">${icon("plane")}未買？去 Google Flights 睇價</a>
+          </div>`}
+      </div>`;
+    const hint = fl.length ? fl.map(f => (f.no || "").toUpperCase()).filter(Boolean).join(" · ") || `${fl.length} 程` : "未加";
+    return foldHtml("flight", "航班", hint, body);
+  }
+  function dayFlightChipHtml(day){
+    const d = state.snapshot, days = d.days || [];
+    const fl = flightsOf(d);
+    const pick = fl.filter(f => {
+      if (f.date){ const lab = flightDateLabel(f.date); return lab && String(day.date || "").startsWith(lab.split("（")[0]); }
+      return (f.dir === "out" && day.id === (days[0] || {}).id) || (f.dir === "back" && day.id === (days[days.length - 1] || {}).id);
+    });
+    return pick.map(f => `<div class="flightchip">${icon("plane")}<b>${esc((f.no || "").toUpperCase())}</b>
+      <span>${esc(f.dep || "")} ${esc(apCode(f.from))}</span><span class="arr">→</span><span>${esc(f.arr || "")} ${esc(apCode(f.to))}</span></div>`).join("");
+  }
+  function openFlightSheet(){
+    const d = state.snapshot;
+    const m = d.meta || {};
+    const cur = dir => (flightsOf(d).find(f => f.dir === dir)) || {};
+    const fields = dir => {
+      const f = cur(dir);
+      const def = dir === "out" ? { from: "HKG", date: m.dateStart } : { to: "HKG", date: m.dateEnd };
+      const v = k => esc(f[k] != null && f[k] !== "" ? f[k] : (def[k] || ""));
+      return `<fieldset class="fl-form" data-fdir="${dir}"><legend>${dir === "out" ? "去程" : "回程"}</legend>
+        <div class="row2"><div class="field"><label>航班號</label><input class="input" data-ff="no" value="${v("no")}" placeholder="例如 CX506" autocapitalize="characters"></div>
+          <div class="field"><label>日期</label><input class="input" type="date" data-ff="date" value="${v("date")}"></div></div>
+        <div class="row2"><div class="field"><label>出發機場</label><input class="input" data-ff="from" value="${v("from")}" placeholder="HKG"></div>
+          <div class="field"><label>到達機場</label><input class="input" data-ff="to" value="${v("to")}" placeholder="KIX"></div></div>
+        <div class="row2"><div class="field"><label>起飛</label><input class="input" type="time" data-ff="dep" value="${v("dep")}"></div>
+          <div class="field"><label>到達</label><input class="input" type="time" data-ff="arr" value="${v("arr")}"></div></div>
+        <div class="row2"><div class="field"><label>航廈</label><input class="input" data-ff="terminal" value="${v("terminal")}" placeholder="T1"></div>
+          <div class="field"><label>訂位編號</label><input class="input" data-ff="ref" value="${v("ref")}" autocapitalize="characters"></div></div>
+      </fieldset>`;
+    };
+    openSheet(`
+      <h3>航班</h3>
+      <p class="sec-sub">自己打，或者揀機票確認信／電郵嘅截圖，AI 幫你填。</p>
+      <label class="btn wide fl-scan">${icon("camera")}<span>用機票截圖自動填</span><input type="file" accept="image/*" multiple hidden data-flscan></label>
+      <div class="fl-scanmsg"></div>
+      ${fields("out")}${fields("back")}
+      <div class="editor-tools">
+        <button class="btn" data-ecancel>取消</button>
+        <button class="btn primary" data-esave>儲存</button>
+      </div>`, sheet => {
+      sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      const scan = sheet.querySelector("[data-flscan]"), msg = sheet.querySelector(".fl-scanmsg");
+      scan.addEventListener("change", async () => {
+        const files = [...scan.files].slice(0, 4);
+        if (!files.length) return;
+        msg.innerHTML = `<p class="hint"><span class="spin"></span>AI 讀緊機票…</p>`;
+        try {
+          const images = [];
+          for (const f of files) images.push(await imageFileToPart(f));
+          const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method:"POST", headers: sbHeaders(),
+            body: JSON.stringify({ mode:"flight", images, today: new Date().toISOString().slice(0, 10) }) });
+          const r = await res.json();
+          const got = (r && r.trip && r.trip.flights) || [];
+          if (!got.length) throw new Error((r && r.message) || "喺張圖度搵唔到航班資料。");
+          got.forEach(f => {
+            const box = sheet.querySelector(`[data-fdir="${f.dir === "back" ? "back" : "out"}"]`);
+            ["no","date","from","to","dep","arr","terminal","ref"].forEach(k => { if (f[k]) box.querySelector(`[data-ff="${k}"]`).value = f[k]; });
+          });
+          msg.innerHTML = `<p class="hint">讀到 ${got.length} 程，睇吓啱唔啱先儲存。</p>`;
+        } catch (e){ msg.innerHTML = `<p class="hint warn">${esc(e.message || "讀唔到")}</p>`; }
+        scan.value = "";
+      });
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        d.flights = FLIGHT_DIRS.map(([dir]) => {
+          const box = sheet.querySelector(`[data-fdir="${dir}"]`), f = { dir };
+          box.querySelectorAll("[data-ff]").forEach(i => { f[i.dataset.ff] = i.value.trim(); });
+          return f;
+        }).filter(f => f.no || f.dep || f.arr || (f.from && f.to && f.from !== "HKG" && f.to !== "HKG") || f.ref);
+        closeLayer();
+        render();
+        await saveNow("改咗航班");
+      });
+    });
+  }
+  async function imageFileToPart(file){
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error("開唔到張圖")); i.src = url; });
+      const k = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return { mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
+    } finally { URL.revokeObjectURL(url); }
+  }
+
   function wireOverview(){
+    document.querySelectorAll("[data-flightedit]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); openFlightSheet(); }));
     document.querySelectorAll(".dayline[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -4086,6 +4334,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">${icon("pencil")}</button></h2>
         <p class="intro">${esc(day.desc)}</p>
+        ${dayFlightChipHtml(day)}
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
           // which hotel this day belongs to, so a multi-hotel trip is obvious
@@ -5635,6 +5884,52 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <div class="tp-cell"><span class="tp-lbl">退房</span><b>${a && b && a.id === b.id ? ci.md : co.md}</b><small>${a && b && a.id === b.id ? "" : co.wd}</small></div>
       ${nights ? `<div class="tp-cell staynights"><span class="tp-lbl">住</span><b>${nights}</b><small>晚</small></div>` : ""}
     </div>`;
+  }
+  // Trips made before these existed: the AI's standard notes landed in
+  // 自己加嘅資料, the weather table was empty, and days had no summary line.
+  let overviewUpkeepDone = false;
+  async function overviewUpkeep(snap){
+    if (overviewUpkeepDone || !snap) return;
+    overviewUpkeepDone = true;
+    let changed = false;
+    (snap.sections || []).forEach(x => {
+      if (x && x.source === "ai" && isStandardTopic(x.topic) && x.where !== "prep"){ x.where = "prep"; changed = true; }
+    });
+    if (changed) render();
+    // only trips the AI set up get the missing standard notes — a family's own
+    // hand-built trip is not filled with things they never asked for
+    const aiMade = (snap.sections || []).some(x => x && x.source === "ai" && isStandardTopic(x.topic));
+    if (aiMade){
+      const before = (snap.sections || []).length;
+      await recommendStandardSections();
+      if ((snap.sections || []).length > before) changed = true;
+    }
+    if (!(snap.weatherRows || []).length){
+      await fillWeatherRows();
+      if ((snap.weatherRows || []).length) changed = true;
+    }
+    if (await fillDaySummaries(snap)) changed = true;
+    if (changed){ render(); await saveNow("補返行前準備同每日簡介", true); }
+  }
+  // One sentence per day for the overview — what the day is, at a glance.
+  async function fillDaySummaries(snap){
+    const todo = (snap.days || []).filter(d => !plain(d.desc) && (d.items || []).some(i => i.kind === "stop"));
+    if (!todo.length) return false;
+    let r;
+    try {
+      r = await callAi({ action:"ask", itinerary: snap,
+        question: `幫以下每一日寫一句簡介（15 至 25 字，講嗰日大概做咩、去邊區），唔好加新地點，唔好用 emoji。` +
+          `每日一行，格式一定要係「dayN｜簡介」，唔好有其他字：\n` + todo.map(d => `${d.id}：${(d.items || []).filter(i => i.kind === "stop").map(i => plain(i.title)).join("、")}`).join("\n") });
+    } catch (_){ return false; }
+    const text = (r && (r.aiSummary || r.answer)) || "";
+    let got = 0;
+    text.split(/\n+/).forEach(line => {
+      const m = line.match(/(day\d+)\s*[｜|:：]\s*(.+)/i);
+      const d = m && todo.find(x => x.id === m[1].toLowerCase());
+      if (d && !plain(d.desc)){ d.desc = m[2].replace(/^[「"]|[」"]$/g, "").trim().slice(0, 60); got++; }
+    });
+    if (got && state.view === "overview") render();
+    return got > 0;
   }
   // a stay is a place like any other — give it a picture once, in the background
   const stayPhotoTried = new Set();
@@ -8415,12 +8710,37 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const snap = state.snapshot;
     if ((snap.weatherRows || []).length) return;
     onProgress && onProgress("攞緊真實天氣預報…");
-    let r;
-    try { r = await callAi({ action:"weather" }); } catch (e){ return; }
-    const rows = weatherRowsFromDaily(r && r.raw && r.raw.daily);
+    let r = null;
+    try { r = await callAi({ action:"weather" }); } catch (_){}
+    let rows = weatherRowsFromDaily(r && r.raw && r.raw.daily);
+    if (rows.length) snap.weatherFrom = "forecast";
+    else { rows = await lastYearWeatherRows(snap); if (rows.length) snap.weatherFrom = "lastyear"; }
     if (!rows.length) return;
     snap.weatherRows = rows;
     render();
+  }
+  // A trip more than about two weeks away has no forecast yet. Rather than
+  // an empty table (or invented "averages"), show what the same dates were
+  // actually like last year — Open-Meteo's archive, no key needed.
+  async function lastYearWeatherRows(snap){
+    const m = snap.meta || {};
+    if (!Number.isFinite(+m.lat) || !Number.isFinite(+m.lng) || !m.dateStart) return [];
+    const back = iso => { const [y, mo, d] = String(iso).split("-"); return `${+y - 1}-${mo}-${d}`; };
+    const a = back(m.dateStart), b = back(m.dateEnd || m.dateStart);
+    try {
+      const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${+m.lat}&longitude=${+m.lng}` +
+        `&start_date=${a}&end_date=${b}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`);
+      const j = await res.json();
+      const dd = j && j.daily;
+      if (!dd || !Array.isArray(dd.time)) return [];
+      return dd.time.map((iso, i) => {
+        const d = isoToUtc(iso), rain = dd.precipitation_sum && dd.precipitation_sum[i];
+        const hi = dd.temperature_2m_max[i], lo = dd.temperature_2m_min[i];
+        return { date: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`,
+          hi: hi == null ? "" : `${Math.round(hi)}°`, lo: lo == null ? "" : `${Math.round(lo)}°`,
+          note: rain == null ? "" : rain >= 1 ? `去年有雨 ${Math.round(rain)}mm` : "去年冇落雨" };
+      });
+    } catch (_){ return []; }
   }
   // The standard notes every trip wants, whatever the destination. Each is an
   // AI section with a stored topic, so it gets the same 🔄 refresh button as
@@ -8428,12 +8748,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function standardSectionTopics(){
     const m = state.snapshot.meta || {};
     const where = m.destinationLocal || m.title || "呢次旅程";
+    const mo = +(String(m.dateStart || "").split("-")[1] || 0);
     return [
       { topic: `${where} 天氣同點著衫`, label: "天氣同著衫建議" },
+      ...(mo ? [{ topic: `${where} ${mo} 月有咩季節限定（紅葉／櫻花／燈飾／祭典／當造美食），幾時去最好`, label: `${mo} 月限定` }] : []),
       { topic: `${where} 交通、上網卡同貨幣`, label: "交通／上網／貨幣" },
       { topic: `${where} 行李同出發前準備清單`, label: "行李清單" },
     ];
   }
+  function isStandardTopic(t){ return standardSectionTopics().some(x => x.topic === t); }
   async function recommendStandardSections(onProgress){
     const snap = state.snapshot;
     if (!Array.isArray(snap.sections)) snap.sections = [];
@@ -8444,7 +8767,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       try { r = await callAi({ action:"make-section", topic, itinerary: snap }); }
       catch (e){ continue; }
       if (!r || r.ok === false || !r.section) continue;
-      snap.sections.push(Object.assign(blankSection(), r.section, { source:"ai", topic, aiRefresh:true }));
+      snap.sections.push(Object.assign(blankSection("prep"), r.section, { source:"ai", topic, aiRefresh:true, where:"prep" }));
       render();
     }
   }
@@ -8495,6 +8818,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       await recommendAccommodation(msg => genBanner(msg));
       await fillWeatherRows(msg => genBanner(msg));
       await recommendStandardSections(msg => genBanner(msg));
+      genBanner("寫緊每日簡介…");
+      await fillDaySummaries(state.snapshot);
       await saveNow("導入完成：配好地點、相、交通同天氣");
       genBanner("導入完成。每個地點都配好地圖同相，可以逐日睇同再微調。", { done:true });
     } catch (e){

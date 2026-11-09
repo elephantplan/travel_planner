@@ -83,10 +83,33 @@ const PROMPT = (today: string) => `你係一個幫香港家庭整理旅行行程
 7. desc / tip：只抄來源寫咗嘅備註，冇就留空。
 8. 酒店／住宿：抄去 stays，fromDay / toDay 係第幾日（1 開始），入住嗰日同退房嗰日。冇寫就空陣列。
 9. destination：成個行程主要去嘅城市，用中文（例如 首爾、東京、台北）。
-10. title：成個行程嘅名，來源冇就用「<城市> 行程」。每日嘅 title 係嗰日嘅主題（最多 12 字），來源冇就用嗰日主要去嘅區或者第一個景點。
+10. 航班：來源有寫航班（航班號、起飛／到達時間、機場）就抄去 flights，dir 係 "out"（去程）或者 "back"（回程），機場盡量用三字代號（香港 HKG、關西 KIX、成田 NRT、羽田 HND、仁川 ICN、桃園 TPE）。航班嘅「香港出發」「大阪落機」唔好再當 stop 抄入 days。冇就空陣列。
+11. title：成個行程嘅名，來源冇就用「<城市> 行程」。每日嘅 title 係嗰日嘅主題（最多 12 字），來源冇就用嗰日主要去嘅區或者第一個景點。
 
 只回覆一個 JSON（唔好有其他字）：
-{"destination":"","title":"","dateStart":"YYYY-MM-DD 或 null","dateEnd":"YYYY-MM-DD 或 null","stays":[{"name":"","kr":"","fromDay":1,"toDay":2}],"days":[{"date":"YYYY-MM-DD 或 null","title":"","items":[{"kind":"stop","type":"normal","time":"約 10:00","title":"","kr":"","desc":"","tip":""}]}],"notes":"讀唔清楚或者冇抄到嘅嘢（廣東話，冇就留空）"}`;
+{"destination":"","title":"","dateStart":"YYYY-MM-DD 或 null","dateEnd":"YYYY-MM-DD 或 null","flights":[{"dir":"out","no":"CX506","date":"YYYY-MM-DD 或空","from":"HKG","to":"KIX","dep":"10:45","arr":"15:10","terminal":"","ref":""}],"stays":[{"name":"","kr":"","fromDay":1,"toDay":2}],"days":[{"date":"YYYY-MM-DD 或 null","title":"","items":[{"kind":"stop","type":"normal","time":"約 10:00","title":"","kr":"","desc":"","tip":""}]}],"notes":"讀唔清楚或者冇抄到嘅嘢（廣東話，冇就留空）"}`;
+
+const FLIGHT_PROMPT = (today: string) => `下面係機票確認信／電郵／App 嘅截圖。抄低入面嘅航班資料，唔好估。
+- dir：去程 "out"，回程 "back"（如果得一程，按日期判斷；第一程係去程）
+- no：航班號（例如 CX506）
+- date：YYYY-MM-DD（冇寫年份就揀今日 ${today} 之後最近嗰個）
+- from / to：機場三字代號（例如 HKG、KIX）
+- dep / arr：當地時間 HH:MM，24 小時制
+- terminal：出發航廈（例如 T1），冇就留空
+- ref：訂位編號（PNR／Booking reference），冇就留空
+只回覆一個 JSON：{"flights":[{"dir":"out","no":"","date":"","from":"","to":"","dep":"","arr":"","terminal":"","ref":""}]}`;
+
+function cleanFlights(list: unknown): any[] {
+  const hhmm = (x: unknown) => { const m = String(x ?? "").match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
+  return (Array.isArray(list) ? list : []).slice(0, 4).map((f: any) => ({
+    dir: f?.dir === "back" ? "back" : "out",
+    no: str(f?.no, 12).toUpperCase().replace(/\s+/g, ""),
+    date: iso(f?.date) || "",
+    from: str(f?.from, 20), to: str(f?.to, 20),
+    dep: hhmm(f?.dep), arr: hhmm(f?.arr),
+    terminal: str(f?.terminal, 10), ref: str(f?.ref, 12),
+  })).filter((f: any) => f.no || f.dep || f.arr);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -102,7 +125,8 @@ Deno.serve(async (req) => {
   if (!text && !images.length) return json({ ok: false, message: "冇收到任何檔案或者文字。" });
   const today = iso(body?.today) || new Date().toISOString().slice(0, 10);
 
-  const parts: unknown[] = [{ text: PROMPT(today) }];
+  const flightOnly = body?.mode === "flight";
+  const parts: unknown[] = [{ text: flightOnly ? FLIGHT_PROMPT(today) : PROMPT(today) }];
   if (text) parts.push({ text: "【文字／表格內容】\n" + text });
   images.forEach((im: any, i: number) => {
     parts.push({ text: `【第 ${i + 1} 張圖】` });
@@ -118,6 +142,10 @@ Deno.serve(async (req) => {
       : retryable(m) ? "AI 而家太忙或者用晒額度，等一陣再試。" : "AI 讀唔到：" + m.slice(0, 160) });
   }
   const p = parseJson(raw);
+  if (flightOnly) {
+    const flights = cleanFlights(p?.flights);
+    return json(flights.length ? { ok: true, trip: { flights } } : { ok: false, message: "喺張圖度搵唔到航班資料。" });
+  }
   if (!p || !Array.isArray(p.days)) return json({ ok: false, message: "AI 今次整理唔到，再試一次。" });
 
   // Never trust the shape; clamp every field to what the app expects.
@@ -145,7 +173,7 @@ Deno.serve(async (req) => {
     title: str(p.title, 40),
     dateStart: iso(p.dateStart) || days.find((d: any) => d.date)?.date || null,
     dateEnd: iso(p.dateEnd) || [...days].reverse().find((d: any) => d.date)?.date || null,
-    stays, days,
+    stays, days, flights: cleanFlights(p.flights),
     notes: str(p.notes, 600),
   } });
 });

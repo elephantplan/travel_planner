@@ -91,7 +91,7 @@ const TRIP = {
   ok('講明讀到幾多日', /讀到 2 日行程/.test(prev));
   ok('每日嘅地點都睇到', /中正紀念堂/.test(prev) && /九份老街/.test(prev));
   ok('日子預填好', await p.locator('#imp-start').inputValue() === '2026-12-30');
-  ok('回程自動計', /2026-12-31/.test(await p.locator('#imp-end').innerText()));
+  ok('回程自動計，同出發一樣寫法', /31/.test(await p.locator('#imp-end').innerText()) && /2026/.test(await p.locator('#imp-end').innerText()) && !/2026-12-31/.test(await p.locator('#imp-end').innerText()));
   ok('住宿讀到', /台北晶華酒店/.test(prev));
 
   console.log('\nC. 開行程');
