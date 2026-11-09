@@ -944,6 +944,69 @@ img{max-width:100%;}
 .dayline-dot{font-family:'Archivo',var(--f-disp);font-stretch:75%;font-weight:800;font-size:17px;}
 .dayhead h2,.hero h1{font-weight:800;}
 
+
+/* ============================================================
+   BOARDING PASS — shared with the home page.
+   The overview opens on the trip's own pass (HKG → destination,
+   perforated stub with dates and a countdown); everything below
+   takes the same stock, gold and condensed numerals.
+   ============================================================ */
+:root{ --gold:#A8740C; --stock:#FFFFFF; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --gold:#E2B24A; --stock:#171D1C; } }
+:root[data-theme="dark"]{ --gold:#E2B24A; --stock:#171D1C; }
+:root[data-theme="navy"]{ --gold:#E8BC57; --stock:#152036; }
+
+.brandmark .sys{font-weight:800;font-size:14.5px;}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#14110A;font-weight:700;}
+
+.hero.tpass{position:relative;margin-top:22px;padding:20px 20px 0;background:var(--stock);
+  border-radius:22px;box-shadow:0 0 0 1px var(--rule),var(--shadow-2,0 10px 30px -14px rgba(0,0,0,.4));}
+.hero.tpass h1{font-size:clamp(26px,7.4vw,36px);margin:8px 0 10px;}
+.hero.tpass .eyebrow{color:var(--gold);}
+.tp-route{display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:12px;margin-bottom:18px;}
+.tp-pt{display:flex;flex-direction:column;min-width:0;}
+.tp-pt.to{align-items:flex-end;text-align:right;}
+.tp-code{font-family:'Archivo',var(--f-disp);font-stretch:75%;font-weight:800;font-size:52px;line-height:.9;color:var(--ink-faint);}
+.tp-pt.to .tp-code{color:var(--ink);}
+.tp-city{font-size:12px;color:var(--ink-faint);margin-top:6px;}
+.tp-flight{position:relative;height:32px;margin-bottom:24px;color:var(--gold);}
+.tp-arc{position:absolute;left:0;right:0;bottom:4px;height:24px;border-top:1.5px dashed color-mix(in srgb,var(--gold) 70%,transparent);
+  border-radius:50% 50% 0 0 / 100% 100% 0 0;}
+.tp-flight .i{position:absolute;left:50%;top:-5px;width:19px;height:19px;transform:translateX(-50%) rotate(90deg);
+  background:var(--stock);padding:0 2px;box-sizing:content-box;}
+.tp-stub{position:relative;display:grid;grid-template-columns:repeat(3,auto) 1fr;align-items:end;gap:6px 22px;
+  margin:18px -20px 0;padding:16px 20px 18px;border-top:1.5px dashed var(--rule);}
+.tp-stub::before,.tp-stub::after{content:"";position:absolute;top:-10px;width:20px;height:20px;border-radius:50%;
+  background:var(--paper);box-shadow:inset 0 0 0 1px var(--rule);}
+.tp-stub::before{left:-10px;clip-path:inset(0 0 0 50%);}
+.tp-stub::after{right:-10px;clip-path:inset(0 50% 0 0);}
+.tp-cell{display:flex;flex-direction:column;}
+.tp-lbl{font-size:10.5px;font-weight:600;letter-spacing:.1em;color:var(--ink-faint);}
+.tp-cell b{font-family:'Archivo',var(--f-body);font-stretch:78%;font-weight:800;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums;margin-top:2px;}
+.tp-cell small{font-size:11px;color:var(--ink-faint);}
+.tp-status{justify-self:end;align-self:center;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap;
+  color:var(--gold);background:color-mix(in srgb,var(--gold) 14%,transparent);}
+.tp-status.live{color:#14110A;background:var(--gold);}
+.tp-status.done{color:var(--ink-faint);background:var(--surface-2);}
+
+/* the itinerary: each stop on pass stock, the line running beside it */
+.stopcard{background:var(--stock);border:1px solid var(--rule-soft);border-radius:16px;margin:0 0 10px 2px;
+  box-shadow:var(--shadow-1);}
+.stopcard::after{display:none;}
+.stopname{font-size:15.5px;font-weight:700;}
+.time,.stoptime{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:700;}
+
+/* folds read as labelled compartments */
+.fold-t{font-weight:800;font-size:16px;}
+.fold-h{color:var(--ink-faint);}
+
+/* the day header: a smaller pass of its own */
+.dayhead{position:relative;margin-top:18px;padding:20px 18px 18px;background:var(--stock);border-radius:22px;
+  box-shadow:0 0 0 1px var(--rule),var(--shadow-2,0 10px 30px -14px rgba(0,0,0,.4));}
+.dayhead .kline{background:none;border-top:1.5px dashed var(--lc);height:0;opacity:.55;}
+.dayhead .toollist{background:transparent;border-color:var(--rule);}
+@media (max-width:360px){ .tp-code{font-size:42px;} .tp-stub{gap:6px 16px;} }
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1034,7 +1097,7 @@ img{max-width:100%;}
 .dockbtn .dockbtn-i{display:inline-flex;}
 .dockbtn .i{width:15px;height:15px;}
 .dockbtn:hover{color:var(--ink);}
-.dockbtn.accent{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.dockbtn.accent{background:var(--gold);color:#14110A;border-color:var(--gold);font-weight:700;}
 .dockbtn:active{transform:scale(.96);}
 .savestate{
   position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));
@@ -1405,7 +1468,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-07-01";
+  const BUILD = "2026-11-09-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3376,7 +3439,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <p class="mapcap">示意路線，非精確導航；離市中心好遠嘅地點，比例上會壓縮顯示。清單度揸低嘅心水地點，未排入行程，所以冇連線。</p>`;
 
     return `
-      <section class="hero">
+      <section class="hero tpass">
+        ${passRouteHtml(d)}
         <div class="eyebrow">${esc(m.eyebrow || defaultEyebrow(d))}${secEditBtn("hero")}</div>
         <h1>${esc(m.title || "我嘅行程")}</h1>
         <div class="hero-meta">
@@ -3384,6 +3448,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             .map(f => `<span>${esc(f)}</span>`).join("<span>·</span>")}
         </div>
         <div class="chiprow">${(m.hotelTags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}</div>
+        ${passStubHtml(d)}
       </section>
 
       <nav class="linemap" aria-label="每一日">
@@ -4923,6 +4988,56 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const a = String(dateStart || "").split("-"), b = String(dateEnd || "").split("-");
     if (a.length < 3 || b.length < 3) return "";
     return `${a[1]}.${a[2]} — ${b[1]}.${b[2]} · ${a[0]}`;
+  }
+  // ---------- the trip as a boarding pass (same language as the home page) ----------
+  const CITY_CODES = [
+    [/首爾|首尔|서울|seoul/i, "SEL", "首爾"], [/東京|东京|tokyo/i, "TYO", "東京"],
+    [/台北|臺北|taipei/i, "TPE", "台北"],   [/大阪|osaka/i, "OSA", "大阪"],
+    [/京都|kyoto/i, "UKY", "京都"],          [/釜山|부산|busan/i, "PUS", "釜山"],
+    [/福岡|fukuoka/i, "FUK", "福岡"],        [/札幌|sapporo|北海道|hokkaido/i, "SPK", "札幌"],
+    [/沖繩|沖縄|okinawa/i, "OKA", "沖繩"],    [/名古屋|nagoya/i, "NGO", "名古屋"],
+    [/濟州|济州|제주|jeju/i, "CJU", "濟州"],  [/曼谷|bangkok/i, "BKK", "曼谷"],
+    [/新加坡|singapore/i, "SIN", "新加坡"],  [/台中|taichung/i, "RMQ", "台中"],
+    [/高雄|kaohsiung/i, "KHH", "高雄"],      [/倫敦|london/i, "LON", "倫敦"],
+    [/巴黎|paris/i, "PAR", "巴黎"],
+  ];
+  function tripCity(snap){
+    const m = (snap && snap.meta) || {};
+    const hay = [m.destinationLocal, m.title].filter(Boolean).join(" ");
+    for (const [re, code, zh] of CITY_CODES) if (re.test(hay)) return { code, zh };
+    const latin = String(m.destinationLocal || "").replace(/[^A-Za-z]/g, "").toUpperCase();
+    return { code: latin.length >= 3 ? latin.slice(0, 3) : "", zh: m.destinationLocal || "" };
+  }
+  function passRouteHtml(snap){
+    const c = tripCity(snap);
+    if (!c.code) return "";
+    return `<div class="tp-route" aria-label="由香港去${esc(c.zh)}">
+      <div class="tp-pt"><span class="tp-code">HKG</span><span class="tp-city">香港</span></div>
+      <div class="tp-flight" aria-hidden="true"><span class="tp-arc"></span>${icon("plane")}</div>
+      <div class="tp-pt to"><span class="tp-code">${esc(c.code)}</span><span class="tp-city">${esc(c.zh)}</span></div>
+    </div>`;
+  }
+  function passStubHtml(snap){
+    const m = (snap && snap.meta) || {};
+    const WDS = ["日","一","二","三","四","五","六"];
+    const cell = (lbl, iso) => {
+      const [y, mo, da] = String(iso || "").split("-").map(Number);
+      if (!y) return "";
+      return `<div class="tp-cell"><span class="tp-lbl">${lbl}</span><b>${String(mo).padStart(2,"0")}.${String(da).padStart(2,"0")}</b><small>星期${WDS[new Date(y, mo - 1, da).getDay()]}</small></div>`;
+    };
+    const n = ((snap && snap.days) || []).length;
+    let status = "", cls = "";
+    if (m.dateStart){
+      const today = new Date(); const t = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,"0")}-${String(today.getDate()).padStart(2,"0")}`;
+      const diff = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000);
+      const end = m.dateEnd || m.dateStart;
+      if (t < m.dateStart){ const k = diff(t, m.dateStart); status = k === 1 ? "聽日出發" : `${k} 日後出發`; cls = "soon"; }
+      else if (t <= end){ status = `旅程中 · 第 ${diff(m.dateStart, t) + 1} 日`; cls = "live"; }
+      else { status = "已完成"; cls = "done"; }
+    }
+    const cells = cell("出發", m.dateStart) + cell("回程", m.dateEnd) + (n ? `<div class="tp-cell"><span class="tp-lbl">行程</span><b>${n}</b><small>日</small></div>` : "");
+    if (!cells) return "";
+    return `<div class="tp-stub">${cells}${status ? `<span class="tp-status ${cls}">${esc(status)}</span>` : ""}</div>`;
   }
   function defaultEyebrow(snap){
     const m = (snap && snap.meta) || {};
