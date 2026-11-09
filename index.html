@@ -1141,7 +1141,9 @@ section.triplist{margin-bottom:36px;}
       return;
     }
     const today = todayIso();
-    const upcoming = trips.filter(t => (t.date_end || t.date_start) >= today);
+    // the next trip first; past trips stay most-recent-first
+    const upcoming = trips.filter(t => (t.date_end || t.date_start) >= today)
+      .sort((a, b) => String(a.date_start || "").localeCompare(String(b.date_start || "")));
     const past = trips.filter(t => (t.date_end || t.date_start) < today);
     $("#upcount").textContent = upcoming.length ? upcoming.length + " 個" : "";
     $("#pastcount").textContent = past.length ? past.length + " 個" : "";

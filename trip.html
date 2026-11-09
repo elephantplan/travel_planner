@@ -1164,6 +1164,7 @@ img{max-width:100%;}
 .fl-route .tp-code{font-size:44px;}
 .fl-time{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:700;font-size:18px;color:var(--ink);margin-top:6px;}
 .fl-stub{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--surface-2);}
+.fl-stub .fl-status + .fl-status{margin-left:0;}
 .fl-stub .fl-status{margin-left:auto;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--stock);}
 .fl-empty{font-size:13.5px;color:var(--ink-soft);line-height:1.65;margin:4px 40px 12px 0;}
 .fl-actions{display:flex;flex-wrap:wrap;gap:8px;}
@@ -1177,6 +1178,24 @@ img{max-width:100%;}
 .flightchip b{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;letter-spacing:.04em;}
 .flightchip span{font-family:'Archivo',var(--f-mono);font-stretch:85%;font-weight:600;}
 .flightchip .arr{color:var(--ink-faint);}
+
+
+/* day tabs: number + weekday, and where the day goes */
+.linebtn .lt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25;}
+.linebtn .lt1{display:flex;align-items:baseline;gap:5px;}
+.linebtn .wd{font-size:10.5px;color:var(--ink-faint);}
+.linebtn .lt2{font-size:11px;color:var(--ink-faint);font-weight:500;max-width:7.5em;overflow:hidden;text-overflow:ellipsis;}
+.linebtn[aria-selected="true"] .lt2{color:var(--ink-soft);}
+
+/* flight form: iOS date/time inputs have an intrinsic width that broke out of the grid */
+.fl-form .row2 > .field{min-width:0;}
+.fl-form .input{min-width:0;width:100%;max-width:100%;display:block;-webkit-appearance:none;appearance:none;}
+.fl-form input[type="date"].input{text-align:left;}
+.fl-noRow{display:flex;gap:6px;}
+.fl-noRow .input{flex:1;}
+.fl-look{flex:0 0 auto;min-height:0;padding:0 12px;border-radius:12px;}
+.fl-lookmsg{font-size:12px;color:var(--ink-faint);margin:-4px 0 8px;line-height:1.55;}
+.fl-lookmsg.warn{color:var(--warn);}
 
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
@@ -1639,7 +1658,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-07";
+  const BUILD = "2026-11-09-08";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3081,6 +3100,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return String(d.shortTag || "").replace(new RegExp("^\\s*D" + n + "\\s*[.·・:：-]?\\s*", "i"), "").trim();
   }
 
+  // The tabs said only D1…D5, so finding "the Kyoto day" meant opening each.
+  // Under the number: the weekday, and roughly where that day goes.
+  function tabWeekday(d){ const m = String(d.date || "").match(/[（(]([日一二三四五六])[）)]/); return m ? "星期" + m[1] : ""; }
+  function tabArea(d){
+    const t = shortTagText(d) || plain(d.title).replace(/^第\s*\d+\s*日$/, "");
+    return t.length > 7 ? t.slice(0, 7) + "…" : t;
+  }
   function renderLines(){
     const el = $("#lines");
     const days = state.snapshot ? state.snapshot.days : [];
@@ -3091,8 +3117,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${days.map(d => `
         <button class="linebtn" role="tab" data-go="${d.id}" aria-selected="${state.view===d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span>
-          <span class="lbl">D${d.id.replace('day','')}</span>
-          <span>${esc(shortTagText(d))}</span>
+          <span class="lt">
+            <span class="lt1"><span class="lbl">D${d.id.replace('day','')}</span>${tabWeekday(d) ? `<span class="wd">${esc(tabWeekday(d))}</span>` : ""}</span>
+            ${tabArea(d) ? `<span class="lt2">${esc(tabArea(d))}</span>` : ""}
+          </span>
         </button>`).join("")}
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
@@ -4173,7 +4201,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${(f.terminal || f.ref || st) ? `<div class="fl-stub">
         ${f.terminal ? `<div class="tp-cell"><span class="tp-lbl">航廈</span><b>${esc(f.terminal)}</b></div>` : ""}
         ${f.ref ? `<div class="tp-cell"><span class="tp-lbl">訂位編號</span><b>${esc(f.ref.toUpperCase())}</b></div>` : ""}
-        ${st ? `<a class="maplink fl-status" href="${esc(st)}" target="_blank" rel="noopener">${icon("plane")}航班狀態</a>` : ""}
+        ${st ? `<a class="maplink fl-status" href="${esc(st)}" target="_blank" rel="noopener">${icon("plane")}航班狀態／閘口</a>` : ""}
+        ${f.no ? `<a class="maplink fl-status" href="https://www.flightradar24.com/data/flights/${esc(f.no.replace(/\s+/g, "").toLowerCase())}" target="_blank" rel="noopener">${icon("map")}Flightradar24</a>` : ""}
       </div>` : ""}
     </div>`;
   }
@@ -4207,18 +4236,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const d = state.snapshot;
     const m = d.meta || {};
     const cur = dir => (flightsOf(d).find(f => f.dir === dir)) || {};
+    const outNow = cur("out");
     const fields = dir => {
       const f = cur(dir);
-      const def = dir === "out" ? { from: "HKG", date: m.dateStart } : { to: "HKG", date: m.dateEnd };
+      // the way home starts where the way out landed
+      const def = dir === "out" ? { from: "HKG", date: m.dateStart } : { from: outNow.to || "", to: "HKG", date: m.dateEnd };
       const v = k => esc(f[k] != null && f[k] !== "" ? f[k] : (def[k] || ""));
       return `<fieldset class="fl-form" data-fdir="${dir}"><legend>${dir === "out" ? "去程" : "回程"}</legend>
-        <div class="row2"><div class="field"><label>航班號</label><input class="input" data-ff="no" value="${v("no")}" placeholder="例如 CX506" autocapitalize="characters"></div>
+        <div class="row2"><div class="field"><label>航班號</label>
+            <div class="fl-noRow"><input class="input" data-ff="no" value="${v("no")}" placeholder="例如 CX506" autocapitalize="characters"><button type="button" class="btn fl-look" data-fllook="${dir}">查</button></div></div>
           <div class="field"><label>日期</label><input class="input" type="date" data-ff="date" value="${v("date")}"></div></div>
-        <div class="row2"><div class="field"><label>出發機場</label><input class="input" data-ff="from" value="${v("from")}" placeholder="HKG"></div>
-          <div class="field"><label>到達機場</label><input class="input" data-ff="to" value="${v("to")}" placeholder="KIX"></div></div>
-        <div class="row2"><div class="field"><label>起飛</label><input class="input" type="time" data-ff="dep" value="${v("dep")}"></div>
-          <div class="field"><label>到達</label><input class="input" type="time" data-ff="arr" value="${v("arr")}"></div></div>
-        <div class="row2"><div class="field"><label>航廈</label><input class="input" data-ff="terminal" value="${v("terminal")}" placeholder="T1"></div>
+        <p class="fl-lookmsg" data-fllookmsg="${dir}">打咗航班號同日期，撳「查」會幫你填時間同機場。</p>
+        <div class="row2"><div class="field"><label>出發機場</label><input class="input" data-ff="from" value="${v("from")}" placeholder="三字代號" autocapitalize="characters"></div>
+          <div class="field"><label>到達機場</label><input class="input" data-ff="to" value="${v("to")}" placeholder="三字代號" autocapitalize="characters"></div></div>
+        <div class="row2"><div class="field"><label>起飛（當地時間）</label><input class="input" data-ff="dep" value="${v("dep")}" placeholder="例如 10:45" inputmode="numeric"></div>
+          <div class="field"><label>到達（當地時間）</label><input class="input" data-ff="arr" value="${v("arr")}" placeholder="例如 15:10" inputmode="numeric"></div></div>
+        <div class="row2"><div class="field"><label>航廈</label><input class="input" data-ff="terminal" value="${v("terminal")}" placeholder="例如 T1"></div>
           <div class="field"><label>訂位編號</label><input class="input" data-ff="ref" value="${v("ref")}" autocapitalize="characters"></div></div>
       </fieldset>`;
     };
@@ -4233,6 +4266,29 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <button class="btn primary" data-esave>儲存</button>
       </div>`, sheet => {
       sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
+      // typing the way-out arrival fills the way-back departure, if still empty
+      const outTo = sheet.querySelector('[data-fdir="out"] [data-ff="to"]'), backFrom = sheet.querySelector('[data-fdir="back"] [data-ff="from"]');
+      outTo.addEventListener("input", () => { if (!backFrom.dataset.touched) backFrom.value = outTo.value.toUpperCase(); });
+      backFrom.addEventListener("input", () => { backFrom.dataset.touched = "1"; });
+      // look the flight up by number and date
+      sheet.querySelectorAll("[data-fllook]").forEach(btn => btn.addEventListener("click", async () => {
+        const dir = btn.dataset.fllook, box = sheet.querySelector(`[data-fdir="${dir}"]`);
+        const msg2 = sheet.querySelector(`[data-fllookmsg="${dir}"]`);
+        const no = box.querySelector('[data-ff="no"]').value.trim(), date = box.querySelector('[data-ff="date"]').value;
+        if (!no){ msg2.className = "fl-lookmsg warn"; msg2.textContent = "先打航班號。"; return; }
+        btn.disabled = true; msg2.className = "fl-lookmsg"; msg2.innerHTML = `<span class="spin"></span>查緊 ${esc(no.toUpperCase())}…`;
+        try {
+          const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method:"POST", headers: sbHeaders(),
+            body: JSON.stringify({ mode:"flight-lookup", text: `${no} ${date}`, today: new Date().toISOString().slice(0, 10) }) });
+          const r = await res.json();
+          const f = r && r.trip && r.trip.flights && r.trip.flights[0];
+          if (!f) throw new Error((r && r.message) || "查唔到呢班機。");
+          ["from","to","dep","arr","terminal"].forEach(k => { if (f[k]) box.querySelector(`[data-ff="${k}"]`).value = f[k]; });
+          if (dir === "out" && f.to && !backFrom.dataset.touched) backFrom.value = f.to;
+          msg2.textContent = `查到：${[f.from, f.dep].filter(Boolean).join(" ")} → ${[f.to, f.arr].filter(Boolean).join(" ")}。係用網上搜尋查嘅定期班次時間，出發前要再 check 航空公司；閘口要出發當日先有，撳卡上「航班狀態」睇。`;
+        } catch (e){ msg2.className = "fl-lookmsg warn"; msg2.textContent = e.message || "查唔到"; }
+        btn.disabled = false;
+      }));
       const scan = sheet.querySelector("[data-flscan]"), msg = sheet.querySelector(".fl-scanmsg");
       scan.addEventListener("change", async () => {
         const files = [...scan.files].slice(0, 4);

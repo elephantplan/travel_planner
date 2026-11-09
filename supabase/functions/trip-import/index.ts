@@ -37,7 +37,7 @@ const model = () => (Deno.env.get("GEMINI_TEXT_MODEL") || "").trim() || "gemini-
 const retryable = (m: string) =>
   /429|RESOURCE_EXHAUSTED|quota|503|UNAVAILABLE|high demand|overloaded/i.test(m);
 
-async function callGemini(parts: unknown[]): Promise<string> {
+async function callGemini(parts: unknown[], search = false): Promise<string> {
   let last = "Gemini key 未設定";
   for (const key of geminiKeys()) {
     const res = await fetch(
@@ -45,7 +45,11 @@ async function callGemini(parts: unknown[]): Promise<string> {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: "application/json" } }),
+        // Search grounding and JSON mode can't be combined, so a searched
+        // answer comes back as text and is parsed the same forgiving way.
+        body: JSON.stringify(search
+          ? { contents: [{ parts }], tools: [{ google_search: {} }] }
+          : { contents: [{ parts }], generationConfig: { responseMimeType: "application/json" } }),
       },
     );
     if (!res.ok) {
@@ -99,6 +103,14 @@ const FLIGHT_PROMPT = (today: string) => `下面係機票確認信／電郵／Ap
 - ref：訂位編號（PNR／Booking reference），冇就留空
 只回覆一個 JSON：{"flights":[{"dir":"out","no":"","date":"","from":"","to":"","dep":"","arr":"","terminal":"","ref":""}]}`;
 
+// A flight number and a date are enough to find the scheduled times; the
+// model searches the web for the timetable. Gates are only assigned on the
+// day, so they are never guessed here.
+const LOOKUP_PROMPT = (q: string, today: string) => `用 Google 搜尋查呢班機嘅定期班次資料：${q}（今日係 ${today}）。
+要搵：出發機場、到達機場（三字代號）、預定起飛同到達時間（當地時間，24 小時制 HH:MM）、出發航廈。
+只可以用搜尋到嘅資料，搵唔到嘅欄位留空，唔好估。閘口唔好填。
+最後只回覆一個 JSON（唔好有其他字、唔好 code fence）：{"flights":[{"no":"","from":"","to":"","dep":"","arr":"","terminal":""}]}`;
+
 function cleanFlights(list: unknown): any[] {
   const hhmm = (x: unknown) => { const m = String(x ?? "").match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
   return (Array.isArray(list) ? list : []).slice(0, 4).map((f: any) => ({
@@ -124,6 +136,18 @@ Deno.serve(async (req) => {
     .slice(0, 8);
   if (!text && !images.length) return json({ ok: false, message: "冇收到任何檔案或者文字。" });
   const today = iso(body?.today) || new Date().toISOString().slice(0, 10);
+
+  if (body?.mode === "flight-lookup") {
+    const q = str(text, 60);
+    const no = (q.match(/[A-Za-z0-9]{2}\s?\d{1,4}[A-Za-z]?/) || [""])[0].replace(/\s+/g, "").toUpperCase();
+    if (!no) return json({ ok: false, message: "睇唔出航班號。" });
+    let raw = "";
+    try { raw = await callGemini([{ text: LOOKUP_PROMPT(q, today) }], true); }
+    catch (e) { return json({ ok: false, message: retryable(String(e)) ? "而家查唔到（太多人用），等陣再試。" : "查唔到：" + String(e).slice(0, 120) }); }
+    const f = cleanFlights(parseJson(raw)?.flights).map((x: any) => ({ ...x, no: x.no || no }))[0];
+    if (!f || (!f.dep && !f.from)) return json({ ok: false, message: `網上搵唔到 ${no} 嘅班次時間，可以自己打或者用機票截圖。` });
+    return json({ ok: true, trip: { flights: [f] } });
+  }
 
   const flightOnly = body?.mode === "flight";
   const parts: unknown[] = [{ text: flightOnly ? FLIGHT_PROMPT(today) : PROMPT(today) }];
