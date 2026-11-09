@@ -1267,7 +1267,7 @@ a.btn{text-decoration:none;}
 body.readonly .secedit,body.readonly .editbtn,body.readonly .draghandle,body.readonly .addstop,body.readonly .addusec,
 body.readonly .addgroup,body.readonly .insertrow,body.readonly .ins,body.readonly .toollist,body.readonly .usec-add,
 body.readonly [data-moneyadd],body.readonly [data-moneypeople],body.readonly [data-flightedit],body.readonly [data-secrefresh],
-body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
+body.readonly .segrefresh,body.readonly #btn-ai,body.readonly [data-staysuggest],body.readonly [data-stayskip],body.readonly [data-stayprefs],body.readonly [data-staypick],body.readonly .foldtools,body.readonly [data-getphoto],body.readonly .grouptools{display:none !important;}
 body.readonly [data-moneyitem]{pointer-events:none;}
 
 
@@ -1317,6 +1317,20 @@ body.readonly .sechide{display:none;}
 .chips1{display:flex;flex-wrap:wrap;gap:6px;}
 .pfchip{font-family:inherit;font-size:13px;padding:8px 12px;border-radius:999px;border:1px solid var(--rule);background:transparent;color:var(--ink-soft);cursor:pointer;}
 .pfchip.on{background:var(--gold);border-color:var(--gold);color:#14110A;font-weight:700;}
+
+
+.stayempty{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;}
+.stayempty .hint{margin:0;}
+.sgh{position:relative;}
+.sgh-x{position:absolute;top:10px;right:10px;z-index:3;width:32px;height:32px;border-radius:50%;border:0;cursor:pointer;
+  font-size:20px;line-height:1;color:#fff;background:rgba(10,12,16,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+.sgh:not(:has(.sgh-photo)) .sgh-x{color:var(--ink-soft);background:var(--stock);}
+.sgh-top{display:flex;align-items:center;gap:8px;padding-right:36px;}
+.sgnew{font-size:11px;font-weight:800;color:#14110A;background:var(--gold);padding:1px 8px;border-radius:999px;}
+.sgchosen{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:var(--ok);}
+.sgchosen .i{width:15px;height:15px;}
+.sgmore{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px;}
+.sgmore .hint{margin:0;}
 
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
@@ -1779,7 +1793,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-14";
+  const BUILD = "2026-11-09-15";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3731,7 +3745,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const stays = d.stays || [];
     // the fold's own head already says 住宿, so the block keeps only its tools
     const body = `<div class="hsblock" data-hskey="acc">
-        <div class="foldtools"><span class="sectools">${secEditBtn("acc")}</span></div>
+        ${stays.length ? `<div class="foldtools"><span class="sectools">${secEditBtn("acc")}</span></div>` : ""}
         ${stays.length ? stays.map((st, si) => {
           const subj = { title: st.name || "", kr: st.kr || "", mapUrl: st.mapUrl || "" };
           const links = mapLinksInOrder(
@@ -3756,7 +3770,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}${taxiBtnHtml(st.kr, st.name)}</div>` : ""}
             ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
           </div>`; }).join("")
-          : `<p class="hint">仲未填住宿。撳上面枝筆自己加，或者叫 AI 建議邊幾晚住邊區。</p>`}
+          : `<div class="stayempty"><p class="hint">仲未填住宿。自己加，或者叫 AI 建議邊幾晚住邊區。</p>
+              <button class="btn" data-editsec="acc">${icon("plus")}自己加酒店</button></div>`}
       </div>
       ${staySuggestHtml(d)}
       <div class="sechide"><button class="secedit wordy secdel" data-delsec="acc" data-seclabel="住宿">${icon("trash")}收埋成段「住宿」</button></div>`;
@@ -6481,23 +6496,29 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${(sg.plan || []).length ? `<div class="sgplan">${sg.plan.map(x => `<div class="sgplan-row"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span></div>`).join("")}</div>` : ""}
       <div class="sghotels">${sg.hotels.map((h, k) => `
         <div class="sgh">
+          <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
           <div class="sgh-body">
-            <div class="sgh-top"><span class="sgd">${esc(dLab(h.fromDay, h.toDay))} · ${esc(h.area)}</span></div>
+            <div class="sgh-top"><span class="sgd">${esc(dLab(h.fromDay, h.toDay))} · ${esc(h.area)}</span>${h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
             ${h.local && h.local !== h.name ? `<div class="sgh-local">${esc(h.local)}</div>` : ""}
             ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>網上搜尋估價</small></div>` : ""}
             ${(h.highlights || []).length ? `<div class="sgh-hl">${h.highlights.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
             ${h.station ? `<div class="staystation">${icon("pin")}最近 <b>${esc(h.station)}</b>${h.walk ? ` · ${esc(h.walk)}` : ""}</div>` : ""}
             <div class="sgh-acts">
-              <button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>
+              ${(d.stays || []).some(x => (h.placeId && x.placeId === h.placeId) || x.name === h.name)
+                ? `<span class="sgchosen">${icon("check")}已揀</span>`
+                : `<button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>`}
               ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.local || h.name, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
               <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Booking 睇價</a>
             </div>
           </div>
         </div>`).join("")}</div>
       <p class="hint">價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
-      <button class="btn" data-stayprefs>${icon("refresh")}改要求再建議</button>
+      <div class="sgmore">
+        <button class="btn" data-stayprefs>${icon("plus")}再搵多幾間</button>
+        <span class="hint">之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
+      </div>
     </div>`;
   }
   // ---------- what the family wants from a hotel ----------
@@ -6556,7 +6577,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           focus: [...sheet.querySelectorAll('[data-pfmany="focus"] .pfchip.on')].map(x => x.dataset.v), other: v("other").trim() };
         closeLayer();
         flash("AI 跟住你嘅要求搵緊酒店，大約半分鐘…", true);
-        try { await suggestStays(); await saveNow("按要求建議咗住宿"); flash("搵到喇，喺住宿嗰段睇"); }
+        try {
+          const n = await suggestStays();
+          await saveNow("按要求建議咗住宿");
+          flash(n ? `搵到 ${n} 間新嘅，放咗喺最頂` : "今次冇搵到新嘅酒店，試吓改要求");
+        }
         catch (err){ flash(err.message || "建議唔到"); render(); }
       });
     });
@@ -6566,6 +6591,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const pf = snap.stayPrefs;
     const trip = JSON.stringify({
       destination: (snap.meta || {}).destinationLocal, brief: briefForAi(snap),
+      ...(((snap.staySuggest || {}).hotels || []).length ? { "已經建議過（唔好再推介呢啲，要揀其他）": snap.staySuggest.hotels.map(h => h.name) } : {}),
+      ...((snap.stays || []).length ? { "已經訂咗／揀咗": snap.stays.map(x => x.name) } : {}),
       ...(pf ? { "住宿要求（一定要跟，highlights 要講返點樣符合）": {
         人數: `${pf.adults} 個大人${pf.kids ? `、${pf.kids} 個小朋友` : ""}`, 房間: `${pf.rooms} 間（每間大約 ${Math.ceil((pf.adults + pf.kids) / pf.rooms)} 人）`,
         每間房每晚預算: pf.budget, 類型: pf.kind, 最緊要: pf.focus, 其他: pf.other } } : {}),
@@ -6598,8 +6625,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }
       } catch (_){}
     });
-    snap.staySuggest = { at: new Date().toISOString(), plan: sg.plan || [], hotels: sg.hotels };
+    // new ones go on top, marked; earlier ones stay unless the family
+    // removed them. The same hotel twice (by Google place or name) is kept once.
+    const old = ((snap.staySuggest || {}).hotels || []).map(h => Object.assign(h, { fresh: false }));
+    const key = h => h.placeId || plain(h.local || h.name);
+    const seen = new Set(old.map(key));
+    const added = sg.hotels.filter(h => !seen.has(key(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
+    snap.staySuggest = { at: new Date().toISOString(), plan: (sg.plan || []).length ? sg.plan : ((snap.staySuggest || {}).plan || []),
+      hotels: [...added, ...old] };
     render();
+    return added.length;
   }
   async function pickSuggestedStay(k){
     const snap = state.snapshot, days = snap.days || [];
@@ -6625,6 +6660,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.readonly) return;
     const pick = e.target.closest && e.target.closest("[data-staypick]");
     if (pick){ e.preventDefault(); pickSuggestedStay(+pick.dataset.staypick); return; }
+    const skip = e.target.closest && e.target.closest("[data-stayskip]");
+    if (skip){
+      e.preventDefault();
+      const sg = state.snapshot.staySuggest, h = sg && sg.hotels[+skip.dataset.stayskip];
+      if (!h) return;
+      sg.hotels.splice(+skip.dataset.stayskip, 1);
+      render();
+      await saveNow(`唔要 AI 建議嘅「${h.name}」`);
+      return;
+    }
     const pfb = e.target.closest && e.target.closest("[data-stayprefs]");
     if (pfb){ e.preventDefault(); openStayPrefsSheet(); return; }
     const sgb = e.target.closest && e.target.closest("[data-staysuggest]");

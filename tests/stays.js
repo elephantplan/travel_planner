@@ -87,6 +87,19 @@ const SUGGEST = { ok: true, stays: {
   ok('刪酒店只係刪嗰間', after && after.snapshot.stays.length === 0, after && after.snapshot.stays.length);
   ok('住宿呢段仲喺度', await p.locator('[data-fold="stay"]').count() === 1 && !((after.snapshot.hiddenSections || []).includes('acc')));
   ok('收埋成段係另一粒寫明嘅掣', /收埋成段「住宿」/.test(await p.locator('[data-fold="stay"]').locator('xpath=..').innerText()));
+  // searching again keeps what was found and asks for different ones
+  const accB = p.locator('[data-fold="stay"]').locator('xpath=..');
+  await accB.locator('[data-stayprefs]').last().click();
+  await p.waitForTimeout(300);
+  await p.locator('[data-esave]').click();
+  await p.waitForTimeout(2500);
+  ok('再搵會叫 AI 唔好重複', /已經建議過/.test(sentText[sentText.length - 1] || '') && /明洞樂天酒店/.test(sentText[sentText.length - 1] || ''));
+  ok('之前搵到嘅冇冇咗', await accB.locator('.sgh').count() === 2, await accB.locator('.sgh').count());
+  await accB.locator('[data-stayskip="0"]').click();
+  await p.waitForTimeout(900);
+  ok('撳 × 淨係刪嗰間建議', await accB.locator('.sgh').count() === 1);
+  const s2 = [...saved].reverse().find(x => x.snapshot);
+  ok('刪咗嘅建議都存咗', s2 && s2.snapshot.staySuggest.hotels.length === 1);
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
