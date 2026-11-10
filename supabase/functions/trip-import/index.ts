@@ -196,7 +196,8 @@ async function nearbyPlaces(body: any) {
         const m = dist(r.geometry.location);
         return { name: String(r.name || ""), placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
           rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, walk: Math.max(1, Math.round(m * 1.3 / 80)),
-          price: Number.isFinite(r.price_level) ? r.price_level : null, area: String(r.vicinity || "").slice(0, 60) };
+          price: Number.isFinite(r.price_level) ? r.price_level : null, area: String(r.vicinity || "").slice(0, 60),
+          types: (Array.isArray(r.types) ? r.types : []).slice(0, 5) };
       })
       .sort((a: any, b: any) => b.rating * Math.log(b.ratingCount + 1) - a.rating * Math.log(a.ratingCount + 1))
       .slice(0, 6);

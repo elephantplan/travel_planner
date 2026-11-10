@@ -1112,13 +1112,18 @@ img{max-width:100%;}
 .adv-warn{padding-left:20px;font-size:11px;color:var(--ink-faint);}
 .seg-text > .advbtn{order:5;}
 .nearlist{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}
-.nearrow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;text-align:left;padding:10px 12px;border-radius:12px;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink);cursor:pointer;width:100%;}
-.nearrow:active{transform:scale(.99);}
-.nr-n{font-size:14px;font-weight:700;line-height:1.4;}
-.nr-f{grid-column:1;font-size:12px;color:var(--ink-soft);line-height:1.45;}
+.nearrow{display:flex;gap:10px;align-items:center;text-align:left;padding:10px 12px;border-radius:12px;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink);width:100%;}
+.nr-t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.nr-n{font-size:14px;font-weight:700;line-height:1.4;color:var(--ink);text-decoration:none;}
+.nr-n .i{width:11px;height:11px;color:var(--ink-faint);}
+.nr-f{font-size:12px;color:var(--ink-soft);line-height:1.45;}
+.nr-a{font-size:11px;color:var(--ink-faint);line-height:1.4;}
+.nearbtns{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;}
+.nearbtns .btn{flex:1 1 45%;font-size:13px;}
+.nearbtns .btn.on{border-color:var(--gold);color:var(--gold);}
 .nr-f .i{width:11px;height:11px;color:var(--gold);vertical-align:-1px;margin-right:2px;}
-.nr-add{grid-row:1 / span 2;grid-column:2;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--gold);color:#14110A;}
+.nr-add{flex:0 0 auto;width:34px;height:34px;border:0;cursor:pointer;border-radius:50%;display:grid;place-items:center;background:var(--gold);color:#14110A;}
 .nr-add .i{width:16px;height:16px;}
 #ins-q{margin:10px 0 12px;}
 .ins-more{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
@@ -1632,7 +1637,7 @@ body.readonly .qa-del{display:none;}
 .sheet-wide{max-width:720px;margin:0 auto;}
 @keyframes rise{from{transform:translateY(14px);opacity:.4;}to{transform:none;opacity:1;}}
 .grabber{width:34px;height:3px;border-radius:2px;background:var(--rule);margin:0 auto 14px;}
-.sheet h3{font-size:17px;font-weight:700;margin:0 0 4px;letter-spacing:-.015em;}
+.sheet h3{font-size:17px;font-weight:700;margin:0 0 4px;letter-spacing:-.015em;padding-right:52px;}
 .sheet .sec-sub{margin-bottom:14px;}
 .sheet-close{position:absolute;top:14px;right:18px;}
 
@@ -1964,7 +1969,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-13";
+  const BUILD = "2026-11-10-14";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3446,7 +3451,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // train data in Japan, so the old lookup fell back to 「步行約 60 分鐘」;
   // the leg lookup there (and whenever a mode is picked by hand) goes to
   // trip-import, which can also ask Gemini for the usual train route.
+  // A phone that leaves the app mid-request can leave that request hanging for
+  // good — and while it hung, nothing else on the day was ever timed again.
+  function withTimeout(promise, ms, fallback){
+    let t; return Promise.race([promise, new Promise(res => { t = setTimeout(() => res(fallback), ms); })]).finally(() => clearTimeout(t));
+  }
   async function legLookup(from, to, opt = {}){
+    return withTimeout(legLookupRaw(from, to, opt), 25000, { ok:false, message:"等咗太耐，撳重新計再試" });
+  }
+  async function legLookupRaw(from, to, opt = {}){
     const prefer = opt.prefer || "auto";
     if (prefer === "auto" && !destIsJapan()){
       const r = await callAi({ action:"transit", from, to });
@@ -3544,11 +3557,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     try {
       const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
         body: JSON.stringify({ mode: "trip-advice", today: localIso(new Date()), text: JSON.stringify(ctx) }) });
-      const r = await res.json();
+      const r = await withTimeout(res.json(), 60000, null);
       if (!r || r.ok === false || !r.advice){ flash((r && r.message) || "查唔到，等陣再試"); return null; }
       const { seg, put } = legOf(day, key);
       if (!seg) return null;
-      put(Object.assign({}, seg, { advice: Object.assign({}, r.advice, { at: new Date().toISOString(), for: `${ctx.由} → ${ctx.去}` }) }));
+      const short = t => cleanPlaceName(String(t).replace(/（[^）]*）$/, ""));
+      put(Object.assign({}, seg, { advice: Object.assign({}, r.advice, { at: new Date().toISOString(), for: `${short(ctx.由)} → ${short(ctx.去)}` }) }));
       flash("查到喇");
       await saveNow(`AI 建議咗「${ctx.由} → ${ctx.去}」點去`);
       return legOf(day, key).seg.advice;
@@ -3563,7 +3577,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${o.book ? `<div class="ao-row"><i>使唔使買定</i>${esc(o.book)}</div>` : ""}
         ${o.howToBuy ? `<div class="ao-row"><i>點買</i>${esc(o.howToBuy)}</div>` : ""}
       </div>`).join("");
-    openSheet(`<h3>${esc(a.for || "點去")}</h3>
+    openSheet(`<h3>${esc(cleanPlaceName(a.for || "") || "點去")}</h3>
       <p class="sec-sub">AI 上網查完整理嘅建議${a.at ? `（${esc(String(a.at).slice(0, 10))} 查）` : ""}</p>
       <div class="advopts">${opts}</div>
       ${a.depart ? `<div class="ao-row big"><i>建議幾點上車</i>${esc(a.depart)}</div>` : ""}
@@ -3609,7 +3623,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       st.placeTried = true;
       const q = cleanPlaceName(st.title);
       try {
-        const r = await callAi({ action:"place-search", query: q });
+        const r = await withTimeout(callAi({ action:"place-search", query: q }), 20000, null);
         const p = r && r.places && r.places[0];
         if (p && p.placeId){
           st.placeId = p.placeId;
@@ -3696,7 +3710,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     render();
 
     let why = "";
-    for (const i of todo){
+    await Promise.all(todo.map(async i => {
       const prev = prevStop(i);
       const from = (prev && prev === firstStopObj && !isRealPlace(prev) && stayRef(day)) || stopRef(prev);
       const to = stopRef(units[i].stop);
@@ -3712,7 +3726,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (!done) units[i].seg.checking = false;
       day.items = fromUnits(units);
       render();
-    }
+    }));
     if (why) state.transitProblem = why;
     render();
     await saveNow("更新咗交通時間", true);
@@ -6019,19 +6033,27 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (nearbyCache.has(k)) return nearbyCache.get(k);
     try {
       const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "nearby", lat: pt.lat, lng: pt.lng, kind, skip,
-          lang: destIsJapan() ? "ja" : destIsKorea() ? "ko" : "zh-TW" }) });
+        body: JSON.stringify({ mode: "nearby", lat: pt.lat, lng: pt.lng, kind, skip, lang: "zh-TW" }) });
       const r = await res.json();
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       nearbyCache.set(k, list);
       return list;
     } catch (_){ return []; }
   }
+  const PLACE_KIND = { cafe:"咖啡店", bakery:"麵包甜品", bar:"酒吧", meal_takeaway:"外賣小食", restaurant:"餐廳",
+    museum:"博物館", park:"公園", art_gallery:"美術館", shopping_mall:"商場", department_store:"百貨公司", zoo:"動物園",
+    aquarium:"水族館", amusement_park:"遊樂園", place_of_worship:"寺廟神社", church:"教堂", hindu_temple:"寺廟", tourist_attraction:"景點" };
   function placeRowHtml(p, k, tag){
-    const rate = Number.isFinite(p.rating) ? `${icon("star")}${p.rating.toFixed(1)}${p.ratingCount ? `（${p.ratingCount.toLocaleString()}）` : ""}` : "";
-    const facts = [p.walk ? `行 ${p.walk} 分鐘` : "", p.address || p.area || ""].filter(Boolean).map(esc);
-    return `<button type="button" class="nearrow" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""}>
-      <span class="nr-n">${esc(p.name)}</span><span class="nr-f">${[rate, ...facts].filter(Boolean).join("・")}</span><span class="nr-add">${icon("plus")}</span></button>`;
+    const kind = (p.types || []).map(t => PLACE_KIND[t]).find(Boolean) || "";
+    const rate = Number.isFinite(p.rating) ? `${icon("star")}${p.rating.toFixed(1)}${p.ratingCount ? `（${p.ratingCount.toLocaleString()} 個評分）` : ""}` : "";
+    const price = Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "";
+    const facts = [kind, price, p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).map(esc);
+    const g = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId }) : "";
+    return `<div class="nearrow">
+      <span class="nr-t">${g ? `<a class="nr-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name)} ${icon("link")}</a>` : `<span class="nr-n">${esc(p.name)}</span>`}
+        <span class="nr-f">${[rate, ...facts].filter(Boolean).join("・")}</span>
+        ${p.address || p.area ? `<span class="nr-a">${esc(p.address || p.area)}</span>` : ""}</span>
+      <button type="button" class="nr-add" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""} aria-label="加「${esc(p.name)}」入行程">${icon("plus")}</button></div>`;
   }
   function openInsertSheet(day, pos){
     const units = toUnits(day.items);
@@ -6054,10 +6076,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <p class="sec-sub">${esc(where)}</p>
       <input class="input" id="ins-q" placeholder="搵地點，例如：一蘭拉麵 道頓堀" autocomplete="off">
       <div id="ins-res"></div>
-      ${anchors.length ? `<div id="ins-near">${anchors.map((a, ai) => `
-        <p class="picker-label">「${esc(a.name)}」附近值得食</p><div class="nearlist" data-near="eat${ai}"><p class="hint">搵緊…</p></div>
-        <p class="picker-label">「${esc(a.name)}」附近值得去</p><div class="nearlist" data-near="see${ai}"><p class="hint">搵緊…</p></div>`).join("")}
-        <p class="hint">Google 上面評分 4 分以上、行 10 分鐘左右到嘅地方。</p></div>` : ""}
+      ${anchors.length ? `<div id="ins-near">
+        <p class="picker-label">唔知加咩？幫你搵附近</p>
+        <div class="nearbtns">${anchors.map((a, ai) => `
+          <button type="button" class="btn" data-nearask="eat${ai}">${icon("sparkle")}「${esc(a.name)}」附近有咩食</button>
+          <button type="button" class="btn" data-nearask="see${ai}">${icon("sparkle")}「${esc(a.name)}」附近有咩去</button>`).join("")}</div>
+        <div id="ins-nearres"></div></div>` : ""}
       <div class="ins-more">
         <button class="btn" id="ins-note">${icon("note")}加一段 note</button>
         <button class="btn" id="ins-blank">${icon("pencil")}自己打名</button>
@@ -6088,19 +6112,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }, 350);
       });
       setTimeout(() => q.focus(), 50);
-      // nearby — in order, so a place near both stops is listed once
-      const shown = new Set();
-      (async () => { for (const [ai, a] of anchors.entries()){
-        for (const kind of ["eat", "see"]){
-          const box = sheet.querySelector(`[data-near="${kind}${ai}"]`);
-          const list = (await nearbyFor(a, kind, [...onDay])).filter(p => !onDay.has(p.placeId) && !shown.has(p.placeId)).slice(0, 4);
-          list.forEach(p => shown.add(p.placeId));
-          if (!box || !box.isConnected) return;
-          box.innerHTML = list.length ? list.map((p, k) => { const id = `${kind}${ai}-${k}`; found[id] = p; return placeRowHtml(p, id, kind); }).join("")
-            : `<p class="hint">附近冇搵到評分高嘅${kind === "eat" ? "食肆" : "景點"}。</p>`;
-          wirePicks(box);
-        }
-      } })();
+      // nearby — only when asked for
+      sheet.querySelectorAll("[data-nearask]").forEach(btn => btn.addEventListener("click", async () => {
+        const kind = btn.dataset.nearask.slice(0, 3), a = anchors[+btn.dataset.nearask.slice(3)];
+        const out = sheet.querySelector("#ins-nearres");
+        sheet.querySelectorAll("[data-nearask]").forEach(x => x.classList.toggle("on", x === btn));
+        out.innerHTML = `<p class="hint">搵緊「${esc(a.name)}」附近${kind === "eat" ? "值得食" : "值得去"}嘅地方…</p>`;
+        const list = (await nearbyFor(a, kind, [...onDay])).filter(p => !onDay.has(p.placeId)).slice(0, 6);
+        if (!out.isConnected) return;
+        out.innerHTML = list.length
+          ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return placeRowHtml(p, id, kind); }).join("")}</div>
+             <p class="hint">Google 上面評分 4 分以上、${kind === "eat" ? "行 10 分鐘內" : "行 20 分鐘內"}嘅地方。撳名睇 Google 相同評論，撳 ＋ 加入行程。</p>`
+          : `<p class="hint">附近冇搵到評分高嘅${kind === "eat" ? "食肆" : "景點"}。</p>`;
+        wirePicks(out);
+      }));
     });
   }
   // A place picked from search or 「附近」 arrives with its Google id, so it
@@ -6118,7 +6143,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     syncMapPoints(day);
     render();
     await saveNow(`加咗「${p.name}」`);
-    flash(`加咗「${p.name}」，攞緊相同營業時間…`);
+    flash(`加咗「${p.name}」，計緊交通同攞相…`);
+    {
+      const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
+      let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
+      state.transitProblem = "";
+      refreshTransit(day, [k, nx].filter(x => x > 0));
+    }
     try { await Promise.all([enrichHours(st), enrichPhoto(st, p.name), enrichLocalName(st)]); } catch (_){}
     if (state.view === day.id) render();
     await saveNow(`補返「${p.name}」嘅相同資料`, true);
