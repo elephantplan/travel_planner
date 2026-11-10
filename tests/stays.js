@@ -94,8 +94,8 @@ const SUGGEST = { ok: true, stays: {
   ok('有好處', /乙支路入口站直達/.test(t));
   ok('最近車站同自己計嘅步行時間', /最近\s*을지로입구역\s*·\s*步行約 4 分鐘/.test(t), (t.match(/最近[\s\S]{0,30}/) || [])[0]);
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
-  const bk = await acc.locator('a', { hasText: 'Booking' }).first().getAttribute('href');
-  ok('有 Booking 睇價連結（帶日子、人數、房數）', bk.includes('checkin=') && bk.includes('group_adults=6') && bk.includes('no_rooms=2') && bk.includes('group_children=1'), bk);
+  const bk = await acc.locator('a', { hasText: 'Google 睇價' }).first().getAttribute('href');
+  ok('有 Google 睇價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
   ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one

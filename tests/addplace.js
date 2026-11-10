@@ -34,7 +34,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.route('**tile**', r => r.abort());
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
-  await p.locator('[data-fold="prep"]').click();
+  await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "prep");
   await p.waitForTimeout(400);
 
   const block = p.locator('.usec').filter({ hasText: '去邊睇紅葉好' });

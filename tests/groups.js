@@ -90,7 +90,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.waitForTimeout(900);
     ok('真係加咗落呢個大段落',
        /電子入境卡/.test(await p.locator('[data-usecorder="gTEST"]').innerText()));
-    await p.locator('[data-fold="extra"]').click();   // folds only render when open
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "extra");   // folds only render when open
     await p.waitForTimeout(400);
     ok('唔會走咗落自己加嘅資料',
        !/電子入境卡/.test(await p.locator('[data-usecorder="extra"]').innerText()));
@@ -134,7 +134,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     ok('刪之前講明入面啲嘢會點', /搬返落「自己加嘅資料」/.test(asked), asked);
     ok('個大段落冇咗', await p.locator('[data-fold="g:gTEST"]').count() === 0);
 
-    await p.locator('[data-fold="extra"]').click();
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "extra");
     await p.waitForTimeout(400);
     const extra = await p.locator('[data-usecorder="extra"]').innerText();
     ok('入面嗰個 section 搬咗落自己加嘅資料', /電子入境卡/.test(extra), extra);
@@ -156,7 +156,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
       c.groups = [];
       c.sections = [sec('孤兒 section', 'gGONE')];
     });
-    await p.locator('[data-fold="extra"]').click();
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "extra");
     await p.waitForTimeout(400);
     ok('照樣喺主頁見到佢', /孤兒 section/.test(await p.locator('[data-usecorder="extra"]').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);

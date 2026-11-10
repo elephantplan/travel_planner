@@ -29,7 +29,7 @@ const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u
   await p.route('**tile**', r => r.abort());
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
-  await p.locator('[data-fold="prep"]').click().catch(() => {});
+  await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "prep");
   await p.waitForTimeout(300);
   const home = await p.locator('#app').innerText();
   ok('主頁冇 emoji', !EMOJI.test(home), (home.match(EMOJI) || [])[0]);

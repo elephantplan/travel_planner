@@ -1084,6 +1084,20 @@ img{max-width:100%;}
 .seg-text > .segrefresh{order:1;}
 .seg-text > .rchain,.seg-text > .seg-route{order:2;}
 .seg-text > .seg-links{order:3;}
+/* compact: one line — mode disc, time, map link, refresh — with no card
+   around it; the route diagram (when there is one) drops underneath */
+.seg-text{margin:0 0 0 14px;padding:6px 0;background:none;border:0;border-radius:0;gap:4px 8px;flex-wrap:wrap;}
+.seg-head{gap:7px;font-size:13px;font-weight:600;color:var(--ink-soft);}
+.seg-head .icon{width:22px;height:22px;}
+.seg-head .icon .i{width:12px;height:12px;}
+.seg-text > .seg-head{flex:0 1 auto;}
+.seg-text > .seg-links{order:1;width:auto;margin:0 0 0 auto;gap:4px;}
+.seg-text .seg-links .maplink{font-size:12px;padding:4px 10px;}
+.seg-text > .segrefresh{order:2;width:26px;height:26px;margin-left:0;background:none;}
+.seg-text > .rchain,.seg-text > .seg-route,.seg-text > .seg-tight{order:3;}
+.seg-text .rchain{margin-top:0;}
+.seg.stale .seg-text,.seg.tight .seg-text{padding:6px 10px;border:1px dashed color-mix(in srgb,var(--warn) 45%,transparent);border-radius:12px;margin:4px 0 4px 14px;}
+.seg.tight .seg-text{border-color:color-mix(in srgb,var(--danger) 45%,transparent);}
 
 
 /* ---------- 住宿: a booking confirmation ----------
@@ -1884,7 +1898,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-01";
+  const BUILD = "2026-11-10-02";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2059,7 +2073,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     altsOpen: new Set(),           // "dayId:unitIndex" whose backup picks are unfolded
     // 住宿 starts open: it is the one line on this page somebody reads every
     // evening, so it should not cost a tap. The rest start shut.
-    foldOpen: new Set(["stay", "flight"]),   // which overview groups are open
+    foldOpen: new Set(["stay", "flight", "prep", "extra"]),   // which overview groups are open
     descOpen: new Set()            // stops whose description the reader expanded
   };
   function inSelectMode(day){ return !!(state.selectMode && state.selectMode.dayId === day.id); }
@@ -4209,11 +4223,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
       ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
-      ${moneyFoldHtml(d)}
+      ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
       ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), groupHint(d, "prep"), prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
-      ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
       ${isSectionHidden(d, "extra") ? "" : foldHtml("extra", groupTitle(d, "extra"), groupHint(d, "extra"), customSectionsHtml(d))}
+      ${moneyFoldHtml(d)}
       ${foldHtml("ai", "AI 設定", "AI 答嘢用嘅背景", aiPanel)}
       ${foldHtml("hidden", "隱藏咗嘅段落", "", hiddenSectionsHtml(d))}
 
@@ -5117,8 +5131,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const g = (from && to) ? gmapsDirUrl(from, to, mode) : "";
       const n = (from && to && destIsKorea()) ? naverDirUrl(from, to, mode) : "";
       const parts = mapLinksInOrder(
-        n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener">${icon("map")}Naver 路線</a>` : "",
-        g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("map")}Google 路線</a>` : "",
+        n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
+        g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
@@ -6641,8 +6655,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const a = days[h.fromDay - 1], b = days[Math.min(h.toDay, days.length) - 1];
       const ci = a ? dayIso(a) : "", co = b ? dayIso(b) : "";
       const pf2 = d.stayPrefs;
-      return `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.local || h.name)}${ci ? "&checkin=" + ci : ""}${co && co !== ci ? "&checkout=" + co : ""}` +
-        (pf2 ? `&group_adults=${pf2.adults}&no_rooms=${pf2.rooms}&group_children=${pf2.kids}` : "");
+      // Google Hotels compares every booking site at once and finds the
+      // hotel by name; Booking's own search often came back empty
+      const dest = (d.meta || {}).destinationLocal || "";
+      const q = [h.name, dest && !String(h.name).includes(dest) ? dest : ""].filter(Boolean).join(" ");
+      return `https://www.google.com/travel/search?q=${encodeURIComponent(q)}&hl=zh-HK&gl=hk&curr=HKD` +
+        (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
+        (pf2 ? `&adults=${pf2.adults + (pf2.kids || 0)}&rooms=${pf2.rooms}` : "");
     };
     return `<div class="hsblock sgblock">
       <h3>住宿推薦</h3>
@@ -6691,7 +6710,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 ? `<span class="sgchosen">${icon("check")}已揀</span>`
                 : `<button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>`}
               ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.local || h.name, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
-              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Booking 睇價</a>
+              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 睇價</a>
             </div>
           </div>
         </div>`; }).join("")}</div>

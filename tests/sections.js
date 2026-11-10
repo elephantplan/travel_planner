@@ -39,7 +39,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.waitForTimeout(1100);
     return { p, errs, saved };
   }
-  const openFold = async (p, k) => { await p.locator(`[data-fold="${k}"]`).click(); await p.waitForTimeout(350); };
+  const openFold = async (p, k) => { await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, k); await p.waitForTimeout(350); };
   const lastSnap = saved => { for (let i = saved.length - 1; i >= 0; i--) if (saved[i] && saved[i].snapshot) return saved[i].snapshot; return null; };
 
   console.log('\nA. 一個 section 擺得入「行前準備」');
@@ -368,7 +368,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     ok('預設係跟返入面有咩', /天氣・衣著・無障礙・季節・準備/.test(h), h);
     ok('收埋咗嘅交通唔會再寫出嚟', !/交通/.test(h), h);
 
-    await p.locator('[data-fold="prep"]').click();
+    await openFold(p, 'prep');
     await p.waitForTimeout(400);
     ok('粒掣講明改得副題', /改名同副題/.test(await p.locator('[data-groupedit="prep"]').innerText()));
     await p.locator('[data-groupedit="prep"]').click();

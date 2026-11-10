@@ -54,7 +54,7 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     await p.route('**tile**', r => r.abort());
     await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(1100);
-    await p.locator('[data-fold="prep"]').click();      // the weather/foliage blocks live in here
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "prep");      // the weather/foliage blocks live in here
     await p.waitForTimeout(400);
     return { p, errs, saved };
   }
@@ -136,7 +136,7 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     await p.route('**tile**', r => r.abort());
     await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(1100);
-    await p.locator('[data-fold="prep"]').click();
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "prep");
     await p.waitForTimeout(400);
     const before = await p.locator('[data-hskey="weather"] .wtable').innerText();
 

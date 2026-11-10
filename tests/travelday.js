@@ -155,7 +155,7 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
   console.log('\nE. 出發前 checklist');
   {
     const { p, errs, saved } = await boot();
-    await p.locator('[data-fold="prep"]').click();
+    await p.evaluate(k => { const b = document.querySelector(`[data-fold="${k}"]`); if (b && b.getAttribute("aria-expanded") !== "true") b.click(); }, "prep");
     await p.waitForTimeout(300);
     const blk = p.locator('[data-hskey="checklist"]');
     ok('有 checklist', await blk.count() === 1);
