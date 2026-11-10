@@ -134,23 +134,27 @@ const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
 async function nearestStation(loc: any, lang: string) {
   const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   if (!key || !loc || !Number.isFinite(loc.lat)) return null;
-  for (const type of ["train_station", "subway_station"]) {
+  // Google tags most subway stations (蹴上, 心斎橋 …) only as subway_station,
+  // so both kinds are asked for and the closer one wins
+  const R = 6371000, toR = (x: number) => x * Math.PI / 180;
+  const dist = (g: any) => {
+    const a = Math.sin(toR(g.lat - loc.lat) / 2) ** 2 + Math.cos(toR(loc.lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - loc.lng) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  };
+  const found = await Promise.all(["train_station", "subway_station"].map(async (type) => {
     try {
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${loc.lat},${loc.lng}` +
         `&rankby=distance&type=${type}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
       const data = await (await fetch(url)).json();
       const r = data?.results?.[0];
       const g = r?.geometry?.location;
-      if (!r || !g) continue;
-      const R = 6371000, toR = (x: number) => x * Math.PI / 180;
-      const a = Math.sin(toR(g.lat - loc.lat) / 2) ** 2 + Math.cos(toR(loc.lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - loc.lng) / 2) ** 2;
-      const m = 2 * R * Math.asin(Math.sqrt(a));
-      if (m > 2000) return null;
-      const name = String(r.name || "").replace(/[（(][^）)]*[）)]/g, "").trim();
-      return { name, walk: Math.max(1, Math.round(m * 1.3 / 80)) };
-    } catch { /* try the next type */ }
-  }
-  return null;
+      return r && g ? { name: String(r.name || ""), m: dist(g) } : null;
+    } catch { return null; }
+  }));
+  const best = found.filter(Boolean).sort((x: any, y: any) => x.m - y.m)[0] as any;
+  if (!best || best.m > 2500) return null;
+  const name = best.name.replace(/[（(][^）)]*[）)]/g, "").trim();
+  return name ? { name, walk: Math.max(1, Math.round(best.m * 1.3 / 80)) } : null;
 }
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
