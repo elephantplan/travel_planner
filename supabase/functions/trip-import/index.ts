@@ -95,7 +95,8 @@ function whyFailed(m: string): string {
 // Google's Directions API returns no public transport at all in Japan, so the
 // old lookup could only offer a 60-minute walk. Walking, driving and (where
 // Google has it) transit come from Google; where it has no transit the leg
-// says so and points at the Google Maps app instead of guessing.
+// says so and points at the Google Maps app instead of guessing. Legs to
+// another city are flagged `long` so the app can offer the trip-advice mode.
 function legRef(r: any): string {
   if (!r || typeof r !== "object") return "";
   if (typeof r.placeId === "string" && r.placeId) return "place_id:" + r.placeId;
@@ -111,7 +112,7 @@ async function gDirections(o: string, d: string, mode: string, lang: string) {
     const data = await (await fetch(url)).json();
     const leg = data?.status === "OK" && data?.routes?.[0]?.legs?.[0];
     if (!leg) return { problem: String(data?.status || "UNKNOWN") };
-    return { seconds: Number(leg.duration?.value) || 0, steps: leg.steps || [], start: leg.start_location, end: leg.end_location };
+    return { seconds: Number(leg.duration?.value) || 0, meters: Number(leg.distance?.value) || 0, steps: leg.steps || [] };
   } catch (e) { return { problem: String(e) }; }
 }
 function rideOf(steps: any[]) {
@@ -129,38 +130,6 @@ function rideOf(steps: any[]) {
     from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
 }
 const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
-// Which station to use at one end of a leg. The very nearest is often a
-// small one on a line going nowhere useful (西梅田 instead of 大阪), so a
-// major station — judged by how many Google reviews it has — wins if it is
-// within about a 15-minute walk. Walking time is the straight line × 1.3 at
-// 80 m a minute, so it is a rough figure.
-async function nearestStation(loc: any, lang: string) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
-  if (!key || !loc || !Number.isFinite(loc.lat)) return null;
-  const R = 6371000, toR = (x: number) => x * Math.PI / 180;
-  const dist = (g: any) => {
-    const a = Math.sin(toR(g.lat - loc.lat) / 2) ** 2 + Math.cos(toR(loc.lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - loc.lng) / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(a));
-  };
-  // Google tags most subway stations (蹴上, 心斎橋 …) only as subway_station
-  const lists = await Promise.all(["train_station", "subway_station"].map(async (type) => {
-    try {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${loc.lat},${loc.lng}` +
-        `&rankby=distance&type=${type}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
-      const data = await (await fetch(url)).json();
-      return (data?.results || []).slice(0, 10).filter((r: any) => r?.geometry?.location).map((r: any) => ({
-        name: String(r.name || "").replace(/[（(][^）)]*[）)]/g, "").trim(),
-        m: dist(r.geometry.location), n: Number(r.user_ratings_total) || 0 }));
-    } catch { return []; }
-  }));
-  const all = lists.flat().filter((x: any) => x.name).sort((x: any, y: any) => x.m - y.m);
-  if (!all.length || all[0].m > 2500) return null;
-  // reviews on a log scale, less a penalty per 400 m walked
-  const score = (x: any) => Math.log(x.n + 1) - x.m / 400;
-  const near = all.filter((x: any) => x.m <= 1000);
-  const best = near.length ? near.sort((x: any, y: any) => score(y) - score(x))[0] : all[0];
-  return { name: best.name, walk: Math.max(1, Math.round(best.m * 1.3 / 80)) };
-}
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
@@ -185,7 +154,7 @@ async function legBetween(body: any) {
     const r = rideOf(t.steps);
     if (r) return { ok: true, mode: r.subway ? "metro" : "bus",
       text: `${r.subway ? "電車" : "巴士"}約 ${mins(t.seconds)} 分鐘${r.transfers ? `・轉${r.transfers}次` : ""}`,
-      route: r.chain, fromStation: r.from, toStation: r.to };
+      route: r.chain, long: t.seconds >= 45 * 60 };
   }
   // No transit from Google's API (all of Japan). A guessed train route was
   // wrong too often to show, so say what is known for sure — the taxi and
@@ -194,16 +163,40 @@ async function legBetween(body: any) {
   const c: any = await gDirections(o, d, "driving", lang);
   if (!w) w = await gDirections(o, d, "walking", lang);
   const bits = [c.seconds ? `的士約 ${mins(c.seconds)} 分鐘` : "", w?.seconds && w.seconds <= 2700 ? `行路約 ${mins(w.seconds)} 分鐘` : ""].filter(Boolean);
-  // which station to which: enough to look the train up by name
-  const a = w?.start || c?.start, b = w?.end || c?.end;
-  const [s1, s2] = await Promise.all([nearestStation(a, lang || "ja"), nearestStation(b, lang || "ja")]);
-  if (s1 && s2 && s1.name && s2.name && s1.name !== s2.name)
-    return { ok: true, mode: "metro", noTime: true, text: `${s1.name} → ${s2.name}`,
-      fromStation: s1.name, toStation: s2.name, walkTo: s1.walk, walkFrom: s2.walk,
-      note: [`行 ${s1.walk} 分鐘去車站`, `落車行 ${s2.walk} 分鐘`, ...bits].join("・") };
+  // a trip to another city (Osaka → Kyoto) is worth asking how to do it
+  const long = (c.seconds || 0) >= 40 * 60 || (c.meters || 0) >= 25000;
   if (prefer === "transit" || c.seconds || w?.seconds)
-    return { ok: true, mode: "metro", noTime: true, text: `電車／巴士：撳 Google 睇班次${bits.length ? "（" + bits.join("，") + "）" : ""}` };
+    return { ok: true, mode: "metro", noTime: true, long, text: `電車／巴士：撳 Google 睇班次${bits.length ? "（" + bits.join("，") + "）" : ""}` };
   return { ok: false, message: "計唔到呢段交通。" };
+}
+
+// A long leg — another city, an airport — asked the way a travel agent
+// would answer: which train, whether to buy ahead and how, how often it
+// runs, when to set off for the next stop, and whether the plan is too tight.
+const ADVICE_PROMPT = (q: string, today: string) => `你係香港人嘅旅遊交通顧問，今日係 ${today}，可以用 Google 搜尋查最新資料。
+下面 JSON 係一家人要行嘅一段長途交通：由邊度去邊度、日子、星期幾、幾多人，同埋（如果有）要幾點到。
+請答：
+1. options：2–3 個搭法（例如大阪去京都：JR 京都線新快速、阪急京都線、京阪本線），每個寫：
+   name（搭咩車）、route（喺邊個站上車 → 邊個站落車，有轉車寫埋）、minutes（車程大約幾多分鐘，數字）、
+   price（每位大人大約幾錢，用當地貨幣，例如 ¥580）、freq（大約幾耐一班，例如「每 15 分鐘一班」）、
+   book（要唔要預先買飛或者訂位，例如「唔使，入閘拍 IC 卡就得」或者「建議提早喺官網訂指定席」）、
+   howToBuy（點買，例如「車站售票機」「ICOCA 拍卡」「Klook／官網」）。最適合佢哋嗰個 best:true（得一個）。
+2. depart：按佢哋要到嘅時間，建議大約幾點喺邊個站上車（冇講要幾點到就寫一般建議）。
+3. feasible：一句講時間夠唔夠、會唔會太趕、有冇繁忙時間或者季節人多要留意。
+4. tips：最多 3 點實用提示（每點最多 30 字）。
+只可以用搜尋到嘅資料，唔肯定嘅寫「要自己再 check」，唔好作。全部用廣東話。
+${q}
+只回覆一個 JSON（唔好有其他字、唔好 code fence）：
+{"options":[{"name":"","route":"","minutes":30,"price":"","freq":"","book":"","howToBuy":"","best":true}],"depart":"","feasible":"","tips":[""]}`;
+function cleanAdvice(p: any) {
+  const opts = (Array.isArray(p?.options) ? p.options : []).slice(0, 3).map((o: any) => {
+    const m = Math.round(Number(o?.minutes));
+    return { name: str(o?.name, 40), route: str(o?.route, 80), minutes: m > 0 && m < 600 ? m : null,
+      price: str(o?.price, 30), freq: str(o?.freq, 30), book: str(o?.book, 80), howToBuy: str(o?.howToBuy, 80), best: o?.best === true };
+  }).filter((o: any) => o.name);
+  if (opts.length && !opts.some((o: any) => o.best)) opts[0].best = true;
+  return { options: opts, depart: str(p?.depart, 100), feasible: str(p?.feasible, 140),
+    tips: (Array.isArray(p?.tips) ? p.tips : []).slice(0, 3).map((x: unknown) => str(x, 60)).filter(Boolean) };
 }
 
 function parseJson(t: string): any {
@@ -364,6 +357,15 @@ Deno.serve(async (req) => {
     const p = parseJson(raw);
     if (!p?.hotel) return json({ ok: false, message: "查唔到呢間酒店嘅資料。" });
     return json({ ok: true, hotel: cleanHotel(p.hotel) });
+  }
+
+  if (body?.mode === "trip-advice") {
+    let raw = "";
+    try { raw = await callGemini([{ text: ADVICE_PROMPT(str(text, 4000), today) }], true); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
+    const a = cleanAdvice(parseJson(raw));
+    if (!a.options.length) return json({ ok: false, message: "AI 今次查唔到呢段點去，再試一次。" });
+    return json({ ok: true, advice: a });
   }
 
   if (body?.mode === "flight-lookup") {

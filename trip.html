@@ -1102,6 +1102,26 @@ img{max-width:100%;}
 .rr-ln small{font-size:11px;color:var(--ink-faint);}
 .rr-ln i,.stpair i{font-style:normal;color:var(--ink-faint);}
 .rc-pill{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--line,var(--ink-faint));padding:1px 8px;border-radius:999px;line-height:1.6;}
+.advice{order:5;width:100%;margin-top:4px;padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--gold) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--gold) 30%,transparent);display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+.adv-h{display:flex;gap:6px;align-items:flex-start;font-size:13px;color:var(--ink);line-height:1.5;}
+.adv-h .i{width:14px;height:14px;color:var(--gold);flex:0 0 auto;margin-top:3px;}
+.adv-s{font-size:12px;color:var(--ink-soft);line-height:1.5;padding-left:20px;}
+.advice .maplink{margin-left:14px;}
+.seg-text > .advbtn{order:5;}
+.advopts{display:flex;flex-direction:column;gap:10px;margin:12px 0;}
+.advopt{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);}
+.advopt.best{border-color:color-mix(in srgb,var(--gold) 55%,transparent);}
+.ao-top{display:flex;align-items:center;gap:8px;font-size:15px;}
+.ao-route{font-size:13px;color:var(--ink-soft);margin-top:2px;}
+.ao-facts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;}
+.ao-facts span{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);padding:3px 9px;border-radius:999px;}
+.ao-row{font-size:13px;color:var(--ink);line-height:1.55;margin-top:4px;}
+.ao-row i{display:block;font-style:normal;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--ink-faint);}
+.ao-row.big{margin:10px 0;}
+.ao-tips{margin:8px 0;padding-left:18px;font-size:13px;color:var(--ink-soft);line-height:1.6;}
+.ao-warn{display:flex;gap:6px;font-size:12px;color:var(--warn);line-height:1.55;margin:12px 0;}
+.ao-warn .i{width:14px;height:14px;flex:0 0 auto;margin-top:2px;}
 .stpair{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .stpair b{color:var(--ink);font-weight:700;}
 .stpair small{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-faint);}
@@ -1930,7 +1950,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-10";
+  const BUILD = "2026-11-10-12";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3389,17 +3409,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       : `<span class="seg-note">${legBusy.has(day.id + which) ? "計緊交通…" : "交通未計到"}</span>`;
     const refresh = !state.readonly ? `<button class="segrefresh" data-legrefresh="${which}" title="重新計" aria-label="重新計呢段交通">${icon("refresh")}</button>` : "";
     const seg = `<div class="seg hotelleg" data-mode="${leg ? mode : "other"}"><div class="seg-rail"></div>
-      <div class="seg-text">${body}${refresh}${links}</div></div>`;
+      <div class="seg-text">${body}${refresh}${links}${leg ? adviceHtml(leg, which) : ""}</div></div>`;
     return which === "hotelLeg" ? hotelStopHtml(st, which) + seg : seg + hotelStopHtml(st, which);
   }
   // the mode disc doubles as the switch between 行路 / 大眾運輸 / 揸車
   function segModeBtn(seg, attr){
     const mode = segMode(seg);
     const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
-    const label = seg.st1 && seg.st2
-      ? `<span class="stpair"><small>車站</small><b>${esc(seg.st1)}</b><i>→</i><b>${esc(seg.st2)}</b></span>`
-      : esc(text);
-    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${label}${seg.note ? `<small class="seg-sub">${esc(seg.note)}</small>` : ""}`;
+    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}`;
   }
   // Google everywhere; Naver in Korea
   function legLinks(gFrom, gTo, nFrom, nTo, mode, seg){
@@ -3408,8 +3425,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const parts = mapLinksInOrder(
       n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
       g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
-    const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(seg) : "";
-    if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
     return parts.length ? `<span class="seg-links">${parts.join("")}</span>` : "";
   }
 
@@ -3436,9 +3451,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segFromLookup(r, prefer){
     const seg = buildSeg(r.mode || "walk", r.text, r.route);
     if (prefer && prefer !== "auto") seg.prefer = prefer;
-    if (r.noTime) seg.noTime = true;
-    if (r.fromStation && r.toStation){ seg.st1 = r.fromStation; seg.st2 = r.toStation; seg.stv = 2; }
-    if (r.note) seg.note = r.note;
+    if (r.noTime){ seg.noTime = true; seg.stv = 3; }
+    if (r.long) seg.long = true;
     return seg;
   }
   async function computeHotelLeg(day, which){
@@ -3466,6 +3480,93 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // someone pressed 重算. Legs between two real places are now asked for as
   // soon as nobody is mid-edit on that day — once each, so a failure doesn't
   // loop; the button is still there to retry.
+  // ---------- long legs: how to actually do it ----------
+  // Going to another city (Osaka → Kyoto) is where a family needs more than
+  // a time: which train, whether to buy ahead and how, how often it runs,
+  // when to leave, and whether the plan is too tight. Asked once, kept on
+  // the leg, always with a reminder to check it themselves.
+  const ADVICE_CHECK = "以上係 AI 根據網上資料整理，班次、車費同要唔要訂位隨時會變，出發前一定要自己再 check（例如鐵路公司官網、Google 地圖）。";
+  function adviceHtml(seg, key){
+    if (!seg) return "";
+    const a = seg.advice;
+    if (a && (a.options || []).length){
+      const b = a.options.find(o => o.best) || a.options[0];
+      return `<div class="advice">
+        <div class="adv-h">${icon("sparkle")}<span>AI 建議：<b>${esc(b.name)}</b>${b.minutes ? ` 約 ${b.minutes} 分鐘` : ""}${b.price ? `・${esc(b.price)}` : ""}</span></div>
+        ${b.book ? `<div class="adv-s">${esc(b.book)}</div>` : ""}
+        <button type="button" class="maplink" data-advice="${esc(key)}">睇晒建議（要自己再 check）</button>
+      </div>`;
+    }
+    if (!seg.long || state.readonly || state.offline) return "";
+    return `<button type="button" class="maplink advbtn" data-advice="${esc(key)}">${icon("sparkle")}長途：AI 建議點去、使唔使買定飛</button>`;
+  }
+  function adviceContext(day, key){
+    const snap = state.snapshot, units = toUnits(day.items), pf = snap.stayPrefs;
+    let from = "", to = "", arrive = "", leave = "";
+    if (key === "hotelLeg" || key === "backLeg"){
+      const info = hotelLegInfo(day, key);
+      if (!info) return null;
+      [from, to] = info.names;
+      if (key === "hotelLeg") arrive = plain(info.s.time || ""); else leave = plain(info.s.time || "");
+    } else {
+      const i = +key, s2 = units[i] && units[i].stop;
+      let prev = null; for (let j = i - 1; j >= 0; j--) if (units[j].stop){ prev = units[j].stop; break; }
+      if (!s2 || !prev) return null;
+      from = plainTitle(prev); to = plainTitle(s2); arrive = plain(s2.time || ""); leave = plain(prev.time || "");
+    }
+    return { 由: from, 去: to, 日子: dayIso(day) || day.date, 星期: tabWeekday(day), 城市: (snap.meta || {}).destinationLocal || "",
+      人數: pf ? `${pf.adults} 個大人${pf.kids ? `、${pf.kids} 個小朋友` : ""}` : "", 要幾點到: arrive, 上一站大約幾點走: leave };
+  }
+  function legOf(day, key){
+    if (key === "hotelLeg" || key === "backLeg") return { seg: day[key], put: seg => { day[key] = seg; } };
+    const units = toUnits(day.items), i = +key;
+    return { seg: units[i] && units[i].seg, put: seg => { units[i].seg = seg; day.items = fromUnits(units); } };
+  }
+  async function askAdvice(day, key){
+    const ctx = adviceContext(day, key);
+    if (!ctx) return null;
+    flash("AI 查緊點去，大約半分鐘…", true);
+    try {
+      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "trip-advice", today: localIso(new Date()), text: JSON.stringify(ctx) }) });
+      const r = await res.json();
+      if (!r || r.ok === false || !r.advice){ flash((r && r.message) || "查唔到，等陣再試"); return null; }
+      const { seg, put } = legOf(day, key);
+      if (!seg) return null;
+      put(Object.assign({}, seg, { advice: Object.assign({}, r.advice, { at: new Date().toISOString(), for: `${ctx.由} → ${ctx.去}` }) }));
+      flash("查到喇");
+      await saveNow(`AI 建議咗「${ctx.由} → ${ctx.去}」點去`);
+      return legOf(day, key).seg.advice;
+    } catch (e){ flash("查唔到：" + e.message); return null; }
+  }
+  function openAdviceSheet(day, key, a){
+    const opts = (a.options || []).map(o => `
+      <div class="advopt${o.best ? " best" : ""}">
+        <div class="ao-top"><b>${esc(o.name)}</b>${o.best ? `<span class="sgbest">建議</span>` : ""}</div>
+        ${o.route ? `<div class="ao-route">${esc(o.route)}</div>` : ""}
+        <div class="ao-facts">${[o.minutes ? `約 ${o.minutes} 分鐘` : "", o.price, o.freq].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}</div>
+        ${o.book ? `<div class="ao-row"><i>使唔使買定</i>${esc(o.book)}</div>` : ""}
+        ${o.howToBuy ? `<div class="ao-row"><i>點買</i>${esc(o.howToBuy)}</div>` : ""}
+      </div>`).join("");
+    openSheet(`<h3>${esc(a.for || "點去")}</h3>
+      <p class="sec-sub">AI 上網查完整理嘅建議${a.at ? `（${esc(String(a.at).slice(0, 10))} 查）` : ""}</p>
+      <div class="advopts">${opts}</div>
+      ${a.depart ? `<div class="ao-row big"><i>建議幾點上車</i>${esc(a.depart)}</div>` : ""}
+      ${a.feasible ? `<div class="ao-row big"><i>時間夠唔夠</i>${esc(a.feasible)}</div>` : ""}
+      ${(a.tips || []).length ? `<ul class="ao-tips">${a.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+      <p class="ao-warn">${icon("warn")}${ADVICE_CHECK}</p>
+      <div class="editor-tools"><button class="btn" data-readvice>${icon("refresh")}重新問 AI</button><button class="btn primary" data-close>知道</button></div>`,
+      layer => {
+        const b = layer.querySelector("[data-readvice]");
+        if (b) b.addEventListener("click", async () => {
+          b.disabled = true; b.textContent = "問緊…";
+          const n = await askAdvice(day, key);
+          closeLayer(); render();
+          if (n) openAdviceSheet(day, key, n);
+        });
+      });
+  }
+
   // Titles carry notes for people — 「永觀堂 (9am - 4pm)」, 「<午餐> 鰻魚飯」,
   // 「購物：思夢樂」 — which make Google search for the wrong thing or nothing.
   function cleanPlaceName(t){
@@ -3508,15 +3609,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (got){ day.items = fromUnits(units); syncMapPoints(day); }
     return got;
   }
-  // Yahoo!乗換案内 searches by name (stations, spots, addresses), so a train
-  // leg in Japan can open there with both ends filled in
-  // Long official names (「浄土宗西山禅林寺派 … 禪林寺(永観堂)」) find
-  // nothing there, so the search goes station to station.
-  function yahooTransitUrl(seg){
-    if (!seg || !seg.st1 || !seg.st2) return "";
-    const n = x => String(x).replace(/駅$/, "").trim();
-    return `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(n(seg.st1))}&to=${encodeURIComponent(n(seg.st2))}`;
-  }
   // Legs saved by older builds that are known to be wrong: an AI-guessed train
   // route, or — in Japan, where Google's API has no trains — a long walk that
   // was only the fallback. Each is looked up again once.
@@ -3524,8 +3616,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!seg || seg.prefer) return false;
     if (seg.est) return true;
     if (!destIsJapan()) return false;
-    // from before stations were looked up, or picked as just the nearest one
-    if (seg.noTime) return !seg.st1 || seg.stv !== 2;
+    // from the builds that guessed station names
+    if (seg.noTime) return seg.stv !== 3;
     // Google's API has no trains in Japan: any timed train leg is from an old build
     if (/^(metro|bus|other)$/.test(segMode(seg))) return true;
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
@@ -5420,8 +5512,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
-      const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(u.seg) : "";
-      if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     // a leg that takes longer than the gap between the two planned times
@@ -5440,7 +5530,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}${tight ? " tight" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
         <div class="seg-rail"></div>
-        <div class="seg-text">${segBody}${segRefresh}${tight}${segLinks}</div>
+        <div class="seg-text">${segBody}${segRefresh}${tight}${segLinks}${u.seg.stale || u.seg.checking ? "" : adviceHtml(u.seg, String(i))}</div>
       </div>` : "";
 
     if (!s) return `<div class="unit" data-i="${i}">${segHtml}</div>`;
@@ -5838,6 +5928,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         flash(day[which].text === before ? "計咗，結果一樣" : "已更新");
         saveNow("重新計咗酒店出入嘅交通", true);
       } else flash("計唔到，等陣再試");
+    }));
+    document.querySelectorAll("[data-advice]").forEach(b => b.addEventListener("click", async e => {
+      e.stopPropagation();
+      const key = b.dataset.advice;
+      const cur = legOf(day, key).seg;
+      if (cur && cur.advice){ openAdviceSheet(day, key, cur.advice); return; }
+      if (state.readonly) return;
+      b.disabled = true; b.innerHTML = `<span class="spin"></span>AI 查緊…`;
+      const a = await askAdvice(day, key);
+      render();
+      if (a) openAdviceSheet(day, key, a);
     }));
     document.querySelectorAll("[data-legmode]").forEach(b => b.addEventListener("click", e => {
       e.stopPropagation();

@@ -114,7 +114,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     jp.days[1].items.splice(4, 0, { kind: 'connector', mode: 'metro', text: '大眾運輸約 32 分鐘' });
     const p2 = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
     p2.on('pageerror', e => errs.push(e.message));
-    const jl = [], ja = [], jq = [];
+    const jl = [], ja = [], jq = [], adv = [];
     await p2.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await p2.route('**/rest/v1/itinerary_versions**', r => r.request().method() === 'POST'
       ? r.fulfill({ status: 201, contentType: 'application/json', body: '[]' })
@@ -127,8 +127,13 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ places: [{ name: '永観堂', placeId: 'pE', lat: 35.0145, lng: 135.7944 }] }) }); }
       if (body.mode === 'leg'){ jl.push(body);
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'metro',
-          text: '梅田駅 → 大阪城公園駅', noTime: true, fromStation: '梅田駅', toStation: '大阪城公園駅',
-          note: '行 4 分鐘去車站・落車行 6 分鐘・的士約 12 分鐘・行路約 35 分鐘' }) }); }
+          text: '電車／巴士：撳 Google 睇班次（的士約 61 分鐘）', noTime: true, long: true }) }); }
+      if (body.mode === 'trip-advice'){ adv.push(JSON.parse(body.text || '{}'));
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, advice: {
+          options: [{ name: 'JR 京都線新快速', route: '大阪 → 京都，轉地鐵東西線去蹴上', minutes: 29, price: '¥580', freq: '每 15 分鐘一班',
+            book: '唔使，入閘拍 IC 卡就得', howToBuy: 'ICOCA 拍卡', best: true },
+            { name: '阪急京都線特急', route: '大阪梅田 → 京都河原町', minutes: 43, price: '¥410', freq: '每 10 分鐘一班', book: '唔使', howToBuy: '售票機' }],
+          depart: '08:30 左右喺大阪站上車', feasible: '時間夠，但紅葉季人多', tips: ['買定 ICOCA'] } }) }); }
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     });
     await p2.route('**tile**', r => r.abort());
@@ -139,9 +144,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('日本行程用新嘅交通查詢，唔再淨係得行路', jl.length >= 1 && ja.length === 0, [jl.length, ja.length]);
     ok('冇舊版 AI 估嘅路線殘留', !/AI 估/.test(await p2.locator('#app').innerText()));
     const t2 = await p2.locator('.seg.hotelleg').first().innerText();
-    ok('講明由邊個站去邊個站，有的士同行路時間做參考', /梅田駅\s*→\s*大阪城公園駅/.test(t2) && /的士約 12 分鐘/.test(t2), t2);
-    const pair = await p2.locator('.seg.hotelleg .stpair').first().boundingBox();
-    ok('兩個站排喺同一行（左右）', pair && pair.height < 30, pair);
+    ok('講明電車睇 Google，有的士時間做參考', /撳 Google 睇班次/.test(t2) && /的士約 61 分鐘/.test(t2), t2);
+    ok('唔再估站名', !/駅\s*→/.test(t2) && await p2.locator('.stpair').count() === 0);
     ok('Google 路線用大眾運輸模式', /travelmode=transit/.test(await p2.locator('.seg.hotelleg').first().locator('a[href*="google.com/maps/dir"]').getAttribute('href')));
     ok('唔會當「12 分鐘」嚟計時間好趕', !/時間好趕/.test(await p2.locator('#app').innerText()));
     ok('舊版 AI 估嘅交通會自動重新計', jl.some(x => x.to && x.to.placeId === 'p6'), jl.map(x => x.to));
@@ -149,8 +153,21 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('配返 Google 之後重新計佢前後嘅交通', jl.some(x => x.from && x.from.placeId === 'pE'), jl.map(x => x.from));
     ok('配返之後朝早都由酒店出發', /永觀堂/.test(await p2.locator('.stopcard').first().innerText()) && await p2.locator('.hotelrow').count() === 2);
     ok('舊嘅「大眾運輸約」重新計過', !/大眾運輸約 32 分鐘/.test(await p2.locator('#app').innerText()));
-    const yh = await p2.locator('.seg.hotelleg').first().locator('a[href*="transit.yahoo.co.jp"]').getAttribute('href').catch(() => '');
-    ok('Yahoo!乗換案内用站名搜（唔用長嘅正式名）', /from=%E6%A2%85%E7%94%B0&to=%E5%A4%A7%E9%98%AA%E5%9F%8E%E5%85%AC%E5%9C%92$/.test(yh || ''), yh);
+    ok('冇 Yahoo 掣', await p2.locator('a[href*="transit.yahoo"]').count() === 0);
+    const advBtn = p2.locator('.seg.hotelleg').first().locator('[data-advice]');
+    ok('長途段有「AI 建議點去」', await advBtn.count() === 1 && /使唔使買定飛/.test(await advBtn.innerText()));
+    await advBtn.click();
+    await p2.waitForTimeout(1200);
+    const ctx = adv[0] || {};
+    ok('問嘅時候講埋由邊去邊、日子、星期', ctx.由 && ctx.去 && /永觀堂/.test(ctx.去) && /^\d{4}-\d{2}-\d{2}$/.test(ctx.日子) && /星期/.test(ctx.星期), ctx);
+    const sh = await p2.locator('.sheet').innerText();
+    ok('講搭咩車、幾耐、幾錢、幾耐一班', /JR 京都線新快速/.test(sh) && /約 29 分鐘/.test(sh) && /¥580/.test(sh) && /每 15 分鐘一班/.test(sh), sh.slice(0, 200));
+    ok('講使唔使買定同點買', /使唔使買定/.test(sh) && /入閘拍 IC 卡/.test(sh) && /ICOCA 拍卡/.test(sh));
+    ok('建議幾點上車同做唔做到', /08:30 左右喺大阪站上車/.test(sh) && /時間夠/.test(sh));
+    ok('提醒要自己再 check', /一定要自己再 check/.test(sh));
+    await p2.locator('.sheet [data-close]').last().click();
+    await p2.waitForTimeout(300);
+    ok('段交通下面留低簡短建議', /AI 建議：JR 京都線新快速 約 29 分鐘・¥580/.test(await p2.locator('.seg.hotelleg').first().innerText()));
     ok('冇 NAVITIME 掣', await p2.locator('a[href*="navitime"]').count() === 0);
     await p2.close();
   }
