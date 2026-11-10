@@ -1098,8 +1098,23 @@ img{max-width:100%;}
 .seg-text .rchain{margin-top:0;}
 .stopcard:not(:has(> .stopmain > .thumb)) > .cardtools{flex-direction:row;gap:4px;}
 .stopcard:not(:has(> .stopmain > .thumb)) > .stopmain{padding-right:80px;}
-.hotelleg .seg-text > .hl-from{order:-1;width:100%;display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-faint);}
-.hotelleg .hl-from .i{width:12px;height:12px;}
+.hotelrow{margin:2px 0 6px;}
+.hotelnode{width:22px !important;height:22px !important;border-radius:50% !important;display:grid !important;place-items:center;
+  background:var(--gold) !important;color:#14110A;border:0 !important;}
+.hotelnode .i{width:12px;height:12px;}
+.hotelcard{margin:0 0 4px 2px;padding:10px 14px;border-radius:16px;border:1px solid color-mix(in srgb,var(--gold) 45%,transparent);
+  background:color-mix(in srgb,var(--gold) 10%,var(--stock));display:flex;flex-direction:column;gap:2px;}
+.hc-k{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--gold);}
+.hc-n{font-size:15px;font-weight:700;color:var(--ink);line-height:1.4;}
+.hc-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.hc-links .maplink{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);padding:5px 11px;border-radius:999px;}
+.modebtn{display:inline-grid;place-items:center;padding:0;border:0;background:none;cursor:pointer;border-radius:50%;}
+.modebtn .icon{box-shadow:0 0 0 1px color-mix(in srgb,var(--lc) 40%,transparent);}
+.seg-est{font-size:10.5px;font-weight:700;color:var(--ink-faint);border:1px solid var(--rule);border-radius:999px;padding:0 6px;margin-left:2px;}
+.modepick{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+.modepick .btn{justify-content:flex-start;}
+/* card buttons wrap onto a second row instead of hiding off to the right */
+.stopfoot{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none;mask-image:none;}
 .seg.stale .seg-text,.seg.tight .seg-text{padding:6px 10px;border:1px dashed color-mix(in srgb,var(--warn) 45%,transparent);border-radius:12px;margin:4px 0 4px 14px;}
 .seg.tight .seg-text{border-color:color-mix(in srgb,var(--danger) 45%,transparent);}
 
@@ -1902,7 +1917,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-03";
+  const BUILD = "2026-11-10-04";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3285,14 +3300,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return null;
   }
 
-  // ---------- leaving the hotel each morning ----------
-  // Every day but the first starts at last night's hotel, so the trip to the
-  // day's first place is a leg like any other and gets timed like one.
-  function morningStay(day){
-    const snap = state.snapshot, di = dayIndexById(snap, day.id);
-    if (di <= 0) return null;                      // day 1 starts at the airport
-    const st = stayForDay(snap, snap.days[di - 1]);
-    return st && plain(st.name) ? st : null;
+  // ---------- the hotel at both ends of the day ----------
+  // Every day but the first starts at last night's hotel, and every day but
+  // the last ends at tonight's. Both are shown as a stop of their own on the
+  // line, with the leg to the first place and from the last one timed like
+  // any other.
+  function nightStay(di){
+    const snap = state.snapshot, days = snap.days || [];
+    if (di < 0 || di >= days.length - 1) return null;   // the last night is spent travelling home
+    const c = (snap.stays || []).filter(s => {
+      const a = dayIndexById(snap, s.from), b = dayIndexById(snap, s.to);
+      return a >= 0 && b >= 0 && di >= Math.min(a, b) && di <= Math.max(a, b);
+    }).sort((x, y) => dayIndexById(snap, y.from) - dayIndexById(snap, x.from));   // check-in day: the new one
+    return c[0] && plain(c[0].name) ? c[0] : null;
   }
   function stayPointRef(st){
     if (st.placeId) return { placeId: st.placeId };
@@ -3301,41 +3321,131 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = plain(st.kr) || plain(st.name);
     return t ? { text: t } : null;
   }
-  function hotelLegInfo(day){
-    const st = morningStay(day);
-    if (!st) return null;
-    const units = toUnits(day.items), first = firstStopUnit(units);
-    if (first < 0) return null;
-    const s = units[first].stop;
-    // a 「酒店出發」 row already is the hotel; the leg after it covers this
-    if (!isRealPlace(s) || (HOTEL_ROW.test(plain(s.title) || "") && !s.placeId)) return null;
-    if (plain(s.title) === plain(st.name) || (st.placeId && s.placeId === st.placeId)) return null;
-    const from = stayPointRef(st), to = stopRef(s);
-    if (!from || !to) return null;
-    return { st, s, from, to, key: JSON.stringify([from, to]) };
+  function stayIsStop(st, s){
+    return !isRealPlace(s) && HOTEL_ROW.test(plain(s.title) || "")
+      || plain(s.title) === plain(st.name) || !!(st.placeId && s.placeId === st.placeId);
   }
-  let hotelLegBusy = false;
-  function hotelLegHtml(day){
-    const info = hotelLegInfo(day);
+  // which: "hotelLeg" (morning, hotel → first place) or "backLeg" (evening)
+  function hotelLegInfo(day, which = "hotelLeg"){
+    const di = dayIndexById(state.snapshot, day.id);
+    const st = which === "hotelLeg" ? (di > 0 ? nightStay(di - 1) : null) : nightStay(di);
+    if (!st) return null;
+    const units = toUnits(day.items);
+    let k = -1;
+    if (which === "hotelLeg") k = firstStopUnit(units);
+    else for (let j = units.length - 1; j >= 0; j--) if (units[j].stop){ k = j; break; }
+    if (k < 0) return null;
+    const s = units[k].stop;
+    if (stayIsStop(st, s)) return null;
+    // a 「酒店出發」 logistics row without a place of its own is the hotel already
+    if (which === "hotelLeg" && !isRealPlace(s)) return null;
+    const hotel = stayPointRef(st), place = stopRef(s);
+    if (!hotel || !place) return null;
+    const from = which === "hotelLeg" ? hotel : place, to = which === "hotelLeg" ? place : hotel;
+    const prefer = (day[which] && day[which].prefer) || "auto";
+    return { st, s, k, from, to, prefer, key: JSON.stringify([from, to, prefer]),
+             names: which === "hotelLeg" ? [st.name, plainTitle(s)] : [plainTitle(s), st.name] };
+  }
+  function plainTitle(s){ return plain(s.kr) ? `${plain(s.title)}（${plain(s.kr)}）` : plain(s.title); }
+  const legBusy = new Set();
+  function hotelStopHtml(st, which){
+    const g = googlePlaceUrl({ title: st.name, kr: st.kr || "", placeId: st.placeId || "", mapUrl: st.mapUrl || "" });
+    const tx = taxiBtnHtml(st.kr, st.name);
+    return `<div class="stop hotelrow">
+      <div class="stop-rail"><span class="stoptime"></span><span class="node hotelnode">${icon("home")}</span></div>
+      <div class="hotelcard">
+        <span class="hc-k">${which === "hotelLeg" ? "由酒店出發" : "返酒店"}</span>
+        <b class="hc-n">${esc(plain(st.name))}</b>
+        <span class="hc-links">${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""}${tx}</span>
+      </div>
+    </div>`;
+  }
+  function hotelLegHtml(day, which = "hotelLeg"){
+    const info = hotelLegInfo(day, which);
     if (!info) return "";
-    const leg = day.hotelLeg && day.hotelLeg.key === info.key ? day.hotelLeg : null;
+    const leg = day[which] && day[which].key === info.key ? day[which] : null;
     const st = info.st;
     const subj = { title: st.name, kr: st.kr || "", placeId: st.placeId || "", mapUrl: st.mapUrl || "",
                    lat: st.lat === "" ? NaN : Number(st.lat), lng: st.lng === "" ? NaN : Number(st.lng) };
+    const hotelG = subj.placeId ? subj : { title: subj.title, kr: subj.kr };
+    const a = which === "hotelLeg" ? subj : info.s, b = which === "hotelLeg" ? info.s : subj;
     const mode = leg ? segMode(leg) : "metro";
-    // with no place id, Google is given the hotel's name rather than bare
-    // coordinates, which it would label 「已放置圖釘」
-    const g = gmapsDirUrl(subj.placeId ? subj : { title: subj.title, kr: subj.kr }, info.s, mode);
-    const n = destIsKorea() ? naverDirUrl(subj, info.s, mode) : "";
-    const links = mapLinksInOrder(
+    const links = legLinks(which === "hotelLeg" ? hotelG : info.s, which === "hotelLeg" ? info.s : hotelG, a, b, mode, leg);
+    const body = leg ? `<span class="seg-head">${segModeBtn(leg, `data-legmode="${which}"`)}</span>` + (leg.route ? routeChainHtml(leg.route) : "")
+      : `<span class="seg-note">${legBusy.has(day.id + which) ? "計緊交通…" : "交通未計到"}</span>`;
+    const refresh = !state.readonly ? `<button class="segrefresh" data-legrefresh="${which}" title="重新計" aria-label="重新計呢段交通">${icon("refresh")}</button>` : "";
+    const seg = `<div class="seg hotelleg" data-mode="${leg ? mode : "other"}"><div class="seg-rail"></div>
+      <div class="seg-text">${body}${refresh}${links}</div></div>`;
+    return which === "hotelLeg" ? hotelStopHtml(st, which) + seg : seg + hotelStopHtml(st, which);
+  }
+  // the mode disc doubles as the switch between 行路 / 大眾運輸 / 揸車
+  function segModeBtn(seg, attr){
+    const mode = segMode(seg);
+    const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
+    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}${seg.est ? `<small class="seg-est">AI 估</small>` : ""}`;
+  }
+  // Google everywhere; Naver in Korea; NAVITIME in Japan once the boarding
+  // and alighting stations are known (it searches station to station)
+  function legLinks(gFrom, gTo, nFrom, nTo, mode, seg){
+    const g = gmapsDirUrl(gFrom, gTo, mode);
+    const n = destIsKorea() ? naverDirUrl(nFrom, nTo, mode) : "";
+    const nt = destIsJapan() && seg && seg.st1 && seg.st2 && mode !== "walk" && mode !== "taxi"
+      ? `https://www.navitime.co.jp/transfer/searchlist?orvStationName=${encodeURIComponent(seg.st1)}&dnvStationName=${encodeURIComponent(seg.st2)}` : "";
+    const parts = mapLinksInOrder(
       n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
       g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
-    const body = leg ? `<span class="seg-head">${segHtmlOf(leg)}</span>` + (leg.route ? routeChainHtml(leg.route) : "")
-      : `<span class="seg-note">${hotelLegBusy ? "計緊由酒店出發要幾耐…" : "由酒店出發"}</span>`;
-    const refresh = leg && !state.readonly ? `<button class="segrefresh" data-hotellegrefresh title="重新計由酒店出發" aria-label="重新計由酒店出發">${icon("refresh")}</button>` : "";
-    return `<div class="seg hotelleg" data-mode="${leg ? mode : "other"}"><div class="seg-rail"></div>
-      <div class="seg-text"><span class="hl-from">${icon("home")}由 ${esc(plain(st.name))} 出發</span>${body}${refresh}${links.length ? `<span class="seg-links">${links.join("")}</span>` : ""}</div></div>`;
+    if (nt) parts.push(`<a class="maplink" href="${esc(nt)}" target="_blank" rel="noopener" aria-label="NAVITIME 轉車">${icon("map")}NAVITIME</a>`);
+    return parts.length ? `<span class="seg-links">${parts.join("")}</span>` : "";
   }
+
+  // One leg, the way the family asked for it. Google's Directions API has no
+  // train data in Japan, so the old lookup fell back to 「步行約 60 分鐘」;
+  // the leg lookup there (and whenever a mode is picked by hand) goes to
+  // trip-import, which can also ask Gemini for the usual train route.
+  async function legLookup(from, to, opt = {}){
+    const prefer = opt.prefer || "auto";
+    if (prefer === "auto" && !destIsJapan()){
+      const r = await callAi({ action:"transit", from, to });
+      const m = r && String(r.text || "").match(/(\d+)\s*分鐘/);
+      const longWalk = r && r.ok !== false && r.mode === "walk" && m && +m[1] > 20;
+      if (!longWalk) return r;
+    }
+    try {
+      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method:"POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode:"leg", from, to, prefer, fromName: opt.fromName || "", toName: opt.toName || "",
+          city: ((state.snapshot || {}).meta || {}).destinationLocal || "",
+          lang: destIsJapan() ? "ja" : destIsKorea() ? "ko" : "zh-TW" }) });
+      return await res.json();
+    } catch (e){ return { ok:false, message: e.message }; }
+  }
+  function segFromLookup(r, prefer){
+    const seg = buildSeg(r.mode || "walk", r.text, r.route);
+    if (prefer && prefer !== "auto") seg.prefer = prefer;
+    if (r.estimated) seg.est = true;
+    if (r.fromStation && r.toStation){ seg.st1 = r.fromStation; seg.st2 = r.toStation; }
+    return seg;
+  }
+  async function computeHotelLeg(day, which){
+    const info = hotelLegInfo(day, which);
+    if (!info) return false;
+    legBusy.add(day.id + which);
+    if (state.view === day.id) render();
+    let got = false;
+    try {
+      const r = await legLookup(info.from, info.to, { prefer: info.prefer, fromName: info.names[0], toName: info.names[1] });
+      if (r && r.ok !== false && r.text){ day[which] = Object.assign(segFromLookup(r, info.prefer), { key: info.key }); got = true; }
+    } catch (_){}
+    legBusy.delete(day.id + which);
+    if (state.view === day.id) render();
+    return got;
+  }
+  function openModeSheet(cur, onPick){
+    const opts = [["auto", "自動（由 Google 揀）"], ["transit", "大眾運輸（地鐵／電車／巴士）"], ["walk", "行路"], ["drive", "揸車／的士"]];
+    openSheet(`<h3>呢段點去？</h3>
+      <div class="modepick">${opts.map(([k, l]) => `<button type="button" class="btn${(cur || "auto") === k ? " primary" : ""}" data-pickmode="${k}">${l}</button>`).join("")}</div>`,
+      layer => layer.querySelectorAll("[data-pickmode]").forEach(b => b.addEventListener("click", () => { closeLayer(); onPick(b.dataset.pickmode); })));
+  }
+
   // Adding or moving a place used to leave 「次序改咗，交通時間要再確認」 until
   // someone pressed 重算. Legs between two real places are now asked for as
   // soon as nobody is mid-edit on that day — once each, so a failure doesn't
@@ -3358,21 +3468,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         return true;
       });
       if (todo.length) await refreshTransit(day, todo);
-      const info = hotelLegInfo(day);
-      const hk = "h" + day.id + (info ? info.key : "");
-      if (info && !(day.hotelLeg && day.hotelLeg.key === info.key) && !autoTransitTried.has(hk)){
+      let got = 0;
+      for (const which of ["hotelLeg", "backLeg"]){
+        const info = hotelLegInfo(day, which);
+        const hk = which + day.id + (info ? info.key : "");
+        if (!info || (day[which] && day[which].key === info.key) || autoTransitTried.has(hk)) continue;
         autoTransitTried.add(hk);
-        hotelLegBusy = true;
-        if (state.view === day.id) render();
-        let got = false;
-        try {
-          const r = await callAi({ action:"transit", from: info.from, to: info.to });
-          if (r && r.ok !== false && r.text){ day.hotelLeg = Object.assign(buildSeg(r.mode || "metro", r.text, r.route), { key: info.key }); got = true; }
-        } catch (_){}
-        hotelLegBusy = false;
-        if (state.view === day.id) render();
-        if (got) await saveNow("計咗由酒店出發嘅交通", true);
+        if (await computeHotelLeg(day, which)) got++;
       }
+      if (got) await saveNow("計咗酒店出入嘅交通", true);
     } finally { autoTransitBusy = false; }
   }
 
@@ -3402,11 +3506,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const prev = prevStop(i);
       const from = (prev && prev === firstStopObj && !isRealPlace(prev) && stayRef(day)) || stopRef(prev);
       const to = stopRef(units[i].stop);
+      const prefer = units[i].seg && units[i].seg.prefer || "auto";
       let done = false;
       if (from && to){
         try {
-          const r = await callAi({ action:"transit", from, to });
-          if (r && r.ok !== false && r.text){ units[i].seg = buildSeg(r.mode || "walk", r.text, r.route); done = true; }
+          const r = await legLookup(from, to, { prefer, fromName: prev ? plainTitle(prev) : "", toName: plainTitle(units[i].stop) });
+          if (r && r.ok !== false && r.text){ units[i].seg = segFromLookup(r, prefer); done = true; }
           else if (r && r.message) why = r.message;
         } catch (e){ why = e.message; }   // leave it flagged rather than show a wrong number
       }
@@ -5205,7 +5310,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const segBody = !showSeg ? "" :
       u.seg.checking ? `<span class="seg-note">計緊交通時間…</span>` :
       u.seg.stale    ? `<span class="seg-note warn">${icon("warn")}次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
-      `<span class="seg-head">${segHtmlOf(u.seg)}</span>` + (u.seg.route ? routeChainHtml(u.seg.route) : "");
+      `<span class="seg-head">${state.readonly ? segHtmlOf(u.seg) : segModeBtn(u.seg, `data-segmode="${i}"`)}</span>` + (u.seg.route ? routeChainHtml(u.seg.route) : "");
     // one segment, one button — refreshing all of a day's legs to update just
     // one used to burn a Google Directions call per leg every time
     const segRefresh = showSeg && !u.seg.checking
@@ -5229,6 +5334,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
+      const nt = destIsJapan() && u.seg.st1 && u.seg.st2 && !/^(walk|taxi)$/.test(mode)
+        ? `https://www.navitime.co.jp/transfer/searchlist?orvStationName=${encodeURIComponent(u.seg.st1)}&dnvStationName=${encodeURIComponent(u.seg.st2)}` : "";
+      if (nt) parts.push(`<a class="maplink" href="${esc(nt)}" target="_blank" rel="noopener" aria-label="NAVITIME 轉車">${icon("map")}NAVITIME</a>`);
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     // a leg that takes longer than the gap between the two planned times
@@ -5304,7 +5412,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     return `
       <div class="unit" data-i="${i}">
-        ${i === firstStop ? hotelLegHtml(day) : ""}
+        ${i === firstStop ? hotelLegHtml(day, "hotelLeg") : ""}
         ${segHtml}
         <div class="stop">
           <div class="stop-rail">
@@ -5334,7 +5442,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${!selecting && open ? editorHtml(day, u, i, total) : ""}
           </div>
         </div>
+        ${!selecting && i === lastStopIndex(day) ? hotelLegHtml(day, "backLeg") : ""}
       </div>`;
+  }
+  function lastStopIndex(day){
+    const us = toUnits(day.items);
+    for (let j = us.length - 1; j >= 0; j--) if (us[j].stop) return j;
+    return -1;
   }
 
   function noteEditorHtml(note, i){
@@ -5628,11 +5742,32 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     wireEditor(day);
     wireNoteEditor(day);
     wireDrag(day, line);
-    document.querySelectorAll("[data-hotellegrefresh]").forEach(b => b.addEventListener("click", e => {
+    document.querySelectorAll("[data-legrefresh]").forEach(b => b.addEventListener("click", async e => {
       e.stopPropagation();
-      delete day.hotelLeg;
-      [...autoTransitTried].filter(k => k.startsWith("h" + day.id)).forEach(k => autoTransitTried.delete(k));
-      autoTransit(day);
+      const which = b.dataset.legrefresh;
+      if (await computeHotelLeg(day, which)) saveNow("重新計咗酒店出入嘅交通", true);
+    }));
+    document.querySelectorAll("[data-legmode]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const which = b.dataset.legmode;
+      openModeSheet(day[which] && day[which].prefer, async m => {
+        day[which] = Object.assign({}, day[which] || {}, { prefer: m, key: "" });
+        if (await computeHotelLeg(day, which)) await saveNow("改咗酒店出入嘅交通方式");
+      });
+    }));
+    document.querySelectorAll("[data-segmode]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const i = +b.dataset.segmode;
+      const units = toUnits(day.items);
+      const seg = units[i] && units[i].seg;
+      if (!seg) return;
+      openModeSheet(seg.prefer, async m => {
+        units[i].seg = Object.assign({}, seg, { prefer: m === "auto" ? undefined : m });
+        day.items = fromUnits(units);
+        state.transitProblem = "";
+        await refreshTransit(day, [i]);
+        await saveNow("改咗交通方式");
+      });
     }));
     setTimeout(() => { if (state.view === day.id) autoTransit(day); }, 0);
   }

@@ -91,6 +91,98 @@ function whyFailed(m: string): string {
   return "AI 出錯：" + m.slice(0, 160);
 }
 
+// ---------- one leg between two places ----------
+// Google's Directions API returns no public transport at all in Japan, so the
+// old lookup could only offer a 60-minute walk. Walking and driving still
+// come from Google; trains come from Google where it has them and otherwise
+// from Gemini with search, marked as an estimate.
+function legRef(r: any): string {
+  if (!r || typeof r !== "object") return "";
+  if (typeof r.placeId === "string" && r.placeId) return "place_id:" + r.placeId;
+  if (Number.isFinite(r.lat) && Number.isFinite(r.lng)) return `${r.lat},${r.lng}`;
+  return typeof r.text === "string" ? r.text.slice(0, 200) : "";
+}
+async function gDirections(o: string, d: string, mode: string, lang: string) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key) return { problem: "冇 Google key" };
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(o)}` +
+    `&destination=${encodeURIComponent(d)}&mode=${mode}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
+  try {
+    const data = await (await fetch(url)).json();
+    const leg = data?.status === "OK" && data?.routes?.[0]?.legs?.[0];
+    if (!leg) return { problem: String(data?.status || "UNKNOWN") };
+    return { seconds: Number(leg.duration?.value) || 0, steps: leg.steps || [] };
+  } catch (e) { return { problem: String(e) }; }
+}
+function rideOf(steps: any[]) {
+  const rides = steps.filter((x: any) => x.travel_mode === "TRANSIT" && x.transit_details);
+  if (!rides.length) return null;
+  let chain = "", subway = false;
+  rides.forEach((x: any, i: number) => {
+    const td = x.transit_details, t = td?.line?.vehicle?.type || "";
+    if (t !== "BUS") subway = true;
+    const label = (td?.line?.short_name || td?.line?.name || (t === "BUS" ? "巴士" : "電車")).trim();
+    if (i === 0) chain += td.departure_stop?.name || "";
+    chain += ` ─${label}${td.num_stops ? `・${td.num_stops}站` : ""}─ ${td.arrival_stop?.name || ""}`;
+  });
+  return { chain, transfers: rides.length - 1, subway,
+    from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
+}
+const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
+const LEG_PROMPT = (from: string, to: string, city: string) => `你係${city || "當地"}嘅交通專家，可以上網查。
+由「${from}」去「${to}」搭公共交通（電車、地鐵或者巴士），揀一般遊客最常用又快嘅路線。
+只回覆一個 JSON，唔好其他字：
+{"minutes": 總共幾多分鐘（包埋行去車站同等車）, "kind": "電車" 或 "地鐵" 或 "巴士",
+ "transfers": 轉車次數, "route": "上車站 ─路線名・N站─ 落車站（有轉車就照樣接落去）",
+ "fromStation": "上車站名（當地文字，唔好加「駅」以外嘅字）", "toStation": "落車站名（當地文字）"}
+兩個地點行路 15 分鐘內到就答 {"minutes": 分鐘, "kind": "步行"}。`;
+async function legBetween(body: any) {
+  const o = legRef(body?.from), d = legRef(body?.to);
+  if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
+  const prefer = ["walk", "drive", "transit"].includes(body?.prefer) ? body.prefer : "auto";
+  const lang = typeof body?.lang === "string" ? body.lang.slice(0, 8) : "";
+  const walkOut = (w: any) => ({ ok: true, mode: "walk", text: `步行約 ${mins(w.seconds)} 分鐘` });
+  if (prefer === "walk") {
+    const w: any = await gDirections(o, d, "walking", lang);
+    return w.seconds ? walkOut(w) : { ok: false, message: "Google 計唔到行路路線。" };
+  }
+  if (prefer === "drive") {
+    const c: any = await gDirections(o, d, "driving", lang);
+    return c.seconds ? { ok: true, mode: "taxi", text: `揸車／的士約 ${mins(c.seconds)} 分鐘` } : { ok: false, message: "Google 計唔到車程。" };
+  }
+  let w: any = null;
+  if (prefer === "auto") {
+    w = await gDirections(o, d, "walking", lang);
+    if (w.seconds && w.seconds <= 900) return walkOut(w);
+  }
+  const t: any = await gDirections(o, d, "transit", lang);
+  if (t.seconds) {
+    const r = rideOf(t.steps);
+    if (r) return { ok: true, mode: r.subway ? "metro" : "bus",
+      text: `${r.subway ? "電車" : "巴士"}約 ${mins(t.seconds)} 分鐘${r.transfers ? `・轉${r.transfers}次` : ""}`,
+      route: r.chain, fromStation: r.from, toStation: r.to };
+  }
+  // no transit from Google (all of Japan): ask Gemini for the usual route
+  if (geminiKeys().length) {
+    try {
+      const p = parseJson(await callGemini([{ text: LEG_PROMPT(String(body?.fromName || o).slice(0, 120), String(body?.toName || d).slice(0, 120), String(body?.city || "").slice(0, 40)) }], true));
+      const m = Math.round(Number(p?.minutes));
+      if (m > 0 && m < 600) {
+        if (/步行/.test(String(p?.kind || ""))) return { ok: true, mode: "walk", text: `步行約 ${m} 分鐘`, estimated: true };
+        const kind = /巴士/.test(String(p?.kind)) ? "巴士" : /地鐵/.test(String(p?.kind)) ? "地鐵" : "電車";
+        const x = Math.max(0, Math.round(Number(p?.transfers) || 0));
+        return { ok: true, mode: kind === "巴士" ? "bus" : "metro", text: `${kind}約 ${m} 分鐘${x ? `・轉${x}次` : ""}`,
+          route: String(p?.route || "").slice(0, 200), fromStation: String(p?.fromStation || "").slice(0, 40),
+          toStation: String(p?.toStation || "").slice(0, 40), estimated: true };
+      }
+    } catch (e) { console.error("leg estimate", String(e)); }
+  }
+  const c: any = await gDirections(o, d, "driving", lang);
+  if (c.seconds) return { ok: true, mode: "taxi", text: `揸車／的士約 ${mins(c.seconds)} 分鐘` };
+  if (w?.seconds) return walkOut(w);
+  return { ok: false, message: "計唔到呢段交通。" };
+}
+
 function parseJson(t: string): any {
   const c = t.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
   try { return JSON.parse(c); } catch { /* try the braces */ }
@@ -223,6 +315,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, message: "POST only" }, 405);
   let body: any = {};
   try { body = await req.json(); } catch { return json({ ok: false, message: "bad json" }, 400); }
+  if (body?.mode === "leg") return json(await legBetween(body));
   if (!geminiKeys().length) return json({ ok: false, message: "AI 功能未設定（冇 GEMINI_API_KEY）。" });
 
   const text = str(body?.text, 60000);

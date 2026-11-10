@@ -22,7 +22,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   d2[2].kr = '北村韓屋村';
   // an edit left the leg into 南山 flagged
   d2.splice(3, 0, { kind: 'connector', html: '', stale: true });
-  const saved = [], transit = [];
+  const saved = [], transit = [], legs = [];
   await p.route('**/rest/v1/itinerary_versions**', r => {
     if (r.request().method() === 'POST'){ try { saved.push(JSON.parse(r.request().postData())); } catch (_){}
       return r.fulfill({ status: 201, contentType: 'application/json', body: '[]' }); }
@@ -36,6 +36,10 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
       const fromHotel = body.from && Number.isFinite(body.from.lat) && body.from.lat === 37.5636;
       return r.fulfill({ status: 200, contentType: 'application/json',
         body: JSON.stringify({ ok: true, mode: 'metro', text: fromHotel ? '地鐵約 25 分鐘' : '地鐵約 18 分鐘' }) }); }
+    if (body.mode === 'leg'){ legs.push(body);
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body.prefer === 'walk'
+        ? { ok: true, mode: 'walk', text: '步行約 30 分鐘' }
+        : { ok: true, mode: 'metro', text: '電車約 20 分鐘', fromStation: '梅田', toStation: '大阪城公園', estimated: true }) }); }
     return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
   });
   await p.route('**tile**', r => r.abort());
@@ -44,16 +48,20 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
   await p.waitForTimeout(2500);
 
-  console.log('\nA. 由酒店出發');
-  const leg = p.locator('.hotelleg');
-  ok('第一個地點前面有由酒店出發嗰段', await leg.count() === 1);
-  const lt = await leg.innerText();
-  ok('講明由邊間酒店出發同要幾耐', /由 明洞 L7 酒店 出發/.test(lt) && /地鐵約 25 分鐘/.test(lt), lt);
-  ok('有 Google 路線', await leg.locator('a[href*="google.com/maps/dir"]').count() === 1);
+  console.log('\nA. 由酒店出發，返酒店');
+  const rows = p.locator('.hotelrow');
+  ok('一日頭尾都有酒店', await rows.count() === 2, await rows.count());
+  const r0 = await rows.first().innerText(), r1 = await rows.last().innerText();
+  ok('頭係「由酒店出發」，尾係「返酒店」', /由酒店出發/.test(r0) && /明洞 L7 酒店/.test(r0) && /返酒店/.test(r1), [r0, r1]);
+  const legT = await p.locator('.seg.hotelleg').allInnerTexts();
+  ok('出門要幾耐', /地鐵約 25 分鐘/.test(legT[0] || ''), legT);
+  ok('返酒店都計埋', legT.length === 2 && /分鐘/.test(legT[1] || ''), legT);
+  ok('有 Google 路線', await p.locator('.seg.hotelleg').first().locator('a[href*="google.com/maps/dir"]').count() === 1);
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
   await p.evaluate(() => document.querySelector('[data-go="day1"]').click());
-  await p.waitForTimeout(800);
-  ok('第一日（由機場開始）冇呢段', await p.locator('.hotelleg').count() === 0);
+  await p.waitForTimeout(1500);
+  const d1 = await p.locator('.hotelrow').allInnerTexts();
+  ok('第一日由機場開始，淨係有返酒店', d1.length === 1 && /返酒店/.test(d1[0]), d1);
 
   console.log('\nB. 交通自動更新');
   await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
@@ -68,6 +76,15 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
   await p.waitForTimeout(1200);
   ok('計過嘅唔會一開就再問', transit.length === n, transit.length - n);
+
+  console.log('\nB2. 自己揀交通方式');
+  await p.locator('[data-segmode]').last().click();
+  await p.waitForTimeout(300);
+  ok('有得揀行路／大眾運輸／揸車', /行路/.test(await p.locator('.sheet').innerText()) && /揸車/.test(await p.locator('.sheet').innerText()) && /大眾運輸/.test(await p.locator('.sheet').innerText()));
+  await p.locator('[data-pickmode="walk"]').click();
+  await p.waitForTimeout(1200);
+  ok('照你揀嘅方式計', legs.some(x => x.prefer === 'walk'), legs.map(x => x.prefer));
+  ok('顯示新時間', /步行約 30 分鐘/.test(await p.locator('#app').innerText()));
 
   console.log('\nC. 提醒同營業時間');
   const card = p.locator('.stopcard').first();
@@ -85,6 +102,39 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('存咗', last() && !last().days[1].items[0].tip);
   ok('由酒店出發嘅時間跟住一齊存低', last() && last().days[1].hotelLeg && /25 分鐘/.test(last().days[1].hotelLeg.text));
   ok('中文名同當地名一樣就唔寫兩次', !/北村韓屋村\s*北村韓屋村/.test(await p.locator('#app').innerText()));
+  console.log('\nD. 日本：Google 冇電車資料');
+  {
+    const jp = JSON.parse(JSON.stringify(snap));
+    jp.meta.destinationLocal = '大阪';
+    const p2 = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
+    p2.on('pageerror', e => errs.push(e.message));
+    const jl = [], ja = [];
+    await p2.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await p2.route('**/rest/v1/itinerary_versions**', r => r.request().method() === 'POST'
+      ? r.fulfill({ status: 201, contentType: 'application/json', body: '[]' })
+      : r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, created_at: '2026-09-20T00:00:00Z',
+          edited_by: 'x', source: 'seed', summary: 's', snapshot: jp, has_snapshot: true }]) }));
+    await p2.route('**/functions/v1/**', r => {
+      const body = JSON.parse(r.request().postData() || '{}');
+      if (body.action === 'transit') ja.push(body);
+      if (body.mode === 'leg'){ jl.push(body);
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'metro',
+          text: '電車約 20 分鐘', route: '梅田 ─JR大阪環状線・3站─ 大阪城公園', fromStation: '梅田', toStation: '大阪城公園', estimated: true }) }); }
+      return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
+    await p2.route('**tile**', r => r.abort());
+    await p2.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(1200);
+    await p2.evaluate(() => document.querySelector('[data-go="day2"]').click());
+    await p2.waitForTimeout(2500);
+    ok('日本行程用新嘅交通查詢，唔再淨係得行路', jl.length >= 1 && ja.length === 0, [jl.length, ja.length]);
+    ok('有地點名同城市幫 AI 估', jl.every(x => x.city === '大阪' && x.toName));
+    const t2 = await p2.locator('.seg.hotelleg').first().innerText();
+    ok('寫明係 AI 估', /電車約 20 分鐘/.test(t2) && /AI 估/.test(t2), t2);
+    const nt = await p2.locator('.seg.hotelleg').first().locator('a[href*="navitime"]').getAttribute('href').catch(() => '');
+    ok('有 NAVITIME 轉車連結（由上車站去落車站）', /orvStationName=%E6%A2%85%E7%94%B0/.test(nt || '') && /dnvStationName=/.test(nt || ''), nt);
+    await p2.close();
+  }
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
