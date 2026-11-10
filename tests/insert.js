@@ -16,7 +16,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const cur = JSON.parse(JSON.stringify(snap));
   // a leg saved half-way through a calculation
   cur.days[1].items.splice(3, 0, { kind: 'connector', html: '', stale: true, checking: true });
-  const saved = [], near = [], transit = [], briefs = [];
+  const saved = [], nearQ = [], near = [], transit = [], briefs = [];
   await p.route('**/rest/v1/itinerary_versions**', r => {
     if (r.request().method() === 'POST'){ try { saved.push(JSON.parse(r.request().postData())); } catch (_){}
       return r.fulfill({ status: 201, contentType: 'application/json', body: '[]' }); }
@@ -35,6 +35,11 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     if (body.mode === 'place-brief'){ briefs.push(body);
       await new Promise(res => setTimeout(res, 700));
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, brief: { what: '首爾有名嘅手工餃子店', mustTry: '餃子、刀削麵', food: true, rating: 4.3, ratingCount: 9000 } }) }); }
+    if (body.mode === 'near-search'){ nearQ.push(body);
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, places: [
+        { name: body.query + ' 遠店', placeId: 'pF', lat: 37.6, lng: 127.0, rating: 4.5, ratingCount: 900, meters: 2400 },
+        { name: body.query + ' 本店', placeId: 'pQ', lat: 37.58, lng: 126.98, address: '首爾', rating: 4.2, meters: 300 },
+        { name: body.query + ' 中店', placeId: 'pM', lat: 37.59, lng: 126.99, rating: 4.0, meters: 900 } ] }) }); }
     if (body.action === 'place-search') return r.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify({ places: [{ name: body.query + ' 本店', placeId: 'pQ', lat: 37.58, lng: 126.98, address: '首爾', rating: 4.2 }] }) });
     if (body.action === 'transit'){ transit.push(body);
@@ -92,6 +97,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(500);
   await p.fill('#ins-q', '明洞餃子');
   await p.waitForTimeout(900);
+  const rows = await p.locator('#ins-res .nearrow').allInnerTexts();
+  ok('連鎖店按離上一個地點遠近排', nearQ.length >= 1 && Number.isFinite(nearQ[0].lat) && /本店/.test(rows[0] || '') && /中店/.test(rows[1] || '') && /遠店/.test(rows[2] || ''), rows);
+  ok('顯示距離同最近', /最近・離「.+」約 300 米・行 5 分鐘/.test(rows[0] || '') && /約 2\.4 公里/.test(rows[2] || '') && /按離「/.test(await p.locator('#ins-res').innerText()), rows);
   await p.locator('#ins-res .nr-add').first().click();
   await p.waitForTimeout(300);
   ok('寫緊介紹嗰陣張卡有大象動畫', await p.locator('.stopcard .eleload .ele').count() >= 1);

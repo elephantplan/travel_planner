@@ -1119,6 +1119,10 @@ img{max-width:100%;}
 .nr-n .i{width:11px;height:11px;color:var(--ink-faint);}
 .nr-f{font-size:12px;color:var(--ink-soft);line-height:1.45;}
 .nr-a{font-size:11px;color:var(--ink-faint);line-height:1.4;}
+.nr-d{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--ink);line-height:1.4;}
+.nr-d svg{width:12px;height:12px;flex:none;color:var(--ink-soft);}
+.nr-d.best{color:var(--gold);} .nr-d.best svg{color:var(--gold);}
+.ins-sort{display:flex;align-items:center;gap:4px;margin:10px 0 2px;} .ins-sort svg{width:12px;height:12px;}
 .nearbtns{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;}
 /* add-place sheet: two ways in */
 .instabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:12px 0 14px;border-radius:14px;background:var(--surface-2);}
@@ -2063,7 +2067,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-17";
+  const BUILD = "2026-11-10-18";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6165,15 +6169,29 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const PLACE_KIND = { cafe:"咖啡店", bakery:"麵包甜品", bar:"酒吧", meal_takeaway:"外賣小食", restaurant:"餐廳",
     museum:"博物館", park:"公園", art_gallery:"美術館", shopping_mall:"商場", department_store:"百貨公司", zoo:"動物園",
     aquarium:"水族館", amusement_park:"遊樂園", place_of_worship:"寺廟神社", church:"教堂", hindu_temple:"寺廟", tourist_attraction:"景點" };
+  // straight-line distance in metres, and how to say it on a card
+  function metersBetween(a, b){
+    if (!a || !b || !Number.isFinite(Number(a.lat)) || !Number.isFinite(Number(b.lat)) || b.lat === "" || b.lat == null) return NaN;
+    const R = 6371000, r = x => x * Math.PI / 180, la = Number(a.lat), lb = Number(b.lat);
+    const h = Math.sin(r(lb - la) / 2) ** 2 + Math.cos(r(la)) * Math.cos(r(lb)) * Math.sin(r(Number(b.lng) - Number(a.lng)) / 2) ** 2;
+    return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+  }
+  function distLabel(m, from){
+    const d = m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} 米` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} 公里`;
+    const walk = Math.max(1, Math.round(m * 1.3 / 80));   // streets aren't straight
+    return `離「${from}」約 ${d}${walk <= 25 ? `・行 ${walk} 分鐘` : ""}`;
+  }
   function placeRowHtml(p, k, tag){
     const kind = (p.types || []).map(t => PLACE_KIND[t]).find(Boolean) || "";
     const rate = Number.isFinite(p.rating) ? `${icon("star")}${p.rating.toFixed(1)}${p.ratingCount ? `（${p.ratingCount.toLocaleString()} 個評分）` : ""}` : "";
     const price = Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "";
-    const facts = [kind, price, p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).map(esc);
+    const facts = [kind, price, p.walk && !p.distText ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).map(esc);
+    const dist = p.distText ? `<span class="nr-d${p.nearest ? " best" : ""}">${icon("pin")}${p.nearest ? "最近・" : ""}${esc(p.distText)}</span>` : "";
     const g = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId }) : "";
     return `<div class="nearrow">
       <span class="nr-t">${g ? `<a class="nr-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name)} ${icon("link")}</a>` : `<span class="nr-n">${esc(p.name)}</span>`}
         <span class="nr-f">${[rate, ...facts].filter(Boolean).join("・")}</span>
+        ${dist}
         ${p.address || p.area ? `<span class="nr-a">${esc(p.address || p.area)}</span>` : ""}</span>
       <button type="button" class="nr-add" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""} aria-label="加「${esc(p.name)}」入行程">${icon("plus")}</button></div>`;
   }
@@ -6308,6 +6326,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const pt = s => s && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)) && s.lat !== "" && s.lat != null ? { lat: Number(s.lat), lng: Number(s.lng), name: cleanPlaceName(s.title) } : null;
     const anchors = [pt(prevS), pt(nextS)].filter(Boolean).filter((a, k, arr) => !k || Math.abs(a.lat - arr[0].lat) + Math.abs(a.lng - arr[0].lng) > 0.004);
     const onDay = new Set(units.filter(u => u.stop && u.stop.placeId).map(u => u.stop.placeId));
+    const ref = pt(prevS) || pt(nextS);   // distances in 「自己搵」 are from here
     const found = {};
     openSheet(`
       <h3>加地點</h3>
@@ -6361,10 +6380,25 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         t = setTimeout(async () => {
           res.innerHTML = `<p class="hint">搵緊…</p>`;
           try {
-            const r = await callAi({ action: "place-search", query: v });
-            const list = (r && r.places) || [];
+            // branches of a chain near the stop before (or after) come first,
+            // each with how far it is from that stop
+            let list = [];
+            if (ref){
+              const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+                body: JSON.stringify({ mode: "near-search", query: v, lat: ref.lat, lng: ref.lng }) }), 15000, null).catch(() => null);
+              const j = rs ? await rs.json().catch(() => null) : null;
+              if (j && Array.isArray(j.places)) list = j.places;
+            }
+            if (!list.length){ const r = await callAi({ action: "place-search", query: v }); list = (r && r.places) || []; }
+            if (q.value.trim() !== v) return;
             if (!list.length){ res.innerHTML = `<p class="hint">搵唔到，試吓打當地文名，或者撳「自己打名」。</p>`; return; }
-            res.innerHTML = `<div class="nearlist">${list.slice(0, 6).map((p, k) => { found["q" + k] = p; return placeRowHtml(p, "q" + k); }).join("")}</div>`;
+            if (ref){
+              list.forEach(p => { const m = Number.isFinite(p.meters) ? p.meters : metersBetween(ref, p); p.meters = m;
+                if (Number.isFinite(m)) p.distText = distLabel(m, ref.name); });
+              list.sort((a, b) => (Number.isFinite(a.meters) ? a.meters : 1e9) - (Number.isFinite(b.meters) ? b.meters : 1e9));
+              if (list.length > 1 && Number.isFinite(list[0].meters)) list[0].nearest = true;
+            }
+            res.innerHTML = `${ref && list.some(p => p.distText) ? `<p class="hint ins-sort">${icon("pin")}按離「${esc(ref.name)}」嘅距離排</p>` : ""}<div class="nearlist">${list.slice(0, 8).map((p, k) => { found["q" + k] = p; return placeRowHtml(p, "q" + k); }).join("")}</div>`;
             wirePicks(res);
           } catch (e){ res.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
         }, 350);

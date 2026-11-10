@@ -170,6 +170,35 @@ async function legBetween(body: any) {
   return { ok: false, message: "計唔到呢段交通。" };
 }
 
+// A name typed by hand, looked up around a point — for chains (一蘭,
+// Starbucks) Google then returns the branches close to the previous stop
+// instead of the most famous ones, each with its distance in metres.
+async function nearSearch(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const lat = Number(body?.lat), lng = Number(body?.lng);
+  const q = str(body?.query, 80);
+  if (!key || !q || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, places: [] };
+  const R = 6371000, toR = (x: number) => x * Math.PI / 180;
+  const dist = (g: any) => {
+    const a = Math.sin(toR(g.lat - lat) / 2) ** 2 + Math.cos(toR(lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - lng) / 2) ** 2;
+    return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+  };
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}` +
+    `&location=${lat},${lng}&radius=3000&key=${key}`;
+  try {
+    const data = await (await fetch(url)).json();
+    const places = (data?.results || [])
+      .filter((r: any) => r?.place_id && r?.geometry?.location && r.business_status !== "CLOSED_PERMANENTLY")
+      .map((r: any) => ({ placeId: r.place_id, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 120),
+        lat: r.geometry.location.lat, lng: r.geometry.location.lng,
+        rating: typeof r.rating === "number" ? r.rating : null,
+        ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
+        types: (Array.isArray(r.types) ? r.types : []).slice(0, 5), meters: dist(r.geometry.location) }))
+      .slice(0, 12);
+    return { ok: true, places };
+  } catch (e) { return { ok: false, places: [], message: String(e) }; }
+}
+
 // What is worth a stop near a place already on the day: Google's own
 // well-rated restaurants or sights within a short walk, so a suggestion is
 // a real place with a real rating, not something a model made up.
@@ -476,6 +505,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ ok: false, message: "bad json" }, 400); }
   if (body?.mode === "leg") return json(await legBetween(body));
   if (body?.mode === "nearby") return json(await nearbyPlaces(body));
+  if (body?.mode === "near-search") return json(await nearSearch(body));
   if (body?.mode === "suggest-add") return json(await suggestAdd(body));
   if (body?.mode === "place-brief") return json(await placeBrief(body));
   if (!geminiKeys().length) return json({ ok: false, message: "AI 功能未設定（冇 GEMINI_API_KEY）。" });
