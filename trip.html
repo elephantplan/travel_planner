@@ -1410,6 +1410,15 @@ body.readonly .sechide{display:none;}
 .daypick button.suggested{outline:2px solid var(--gold);outline-offset:1px;}
 body.readonly .qa-del{display:none;}
 
+
+.sgscore{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 6px;margin-top:8px;}
+.sgscore b{font-family:'Archivo',sans-serif;font-stretch:78%;font-weight:800;font-size:24px;color:var(--gold);line-height:1;}
+.sgscore span{font-size:12px;font-weight:700;color:var(--ink-soft);}
+.sgscore small{flex-basis:100%;font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+.sgh-room{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--ink-soft);}
+.sgh-room .i{width:14px;height:14px;color:var(--gold);}
+.sgh-conv{margin-top:6px;font-size:13px;color:var(--ink-soft);line-height:1.55;}
+
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
    calls to action. They are one list of occasional chores, so they look
@@ -1871,7 +1880,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-23";
+  const BUILD = "2026-11-09-24";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4330,7 +4339,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // An AI note that names a place ("永觀堂（京都）— 紅葉之王…") is a
   // suggestion you act on, so it gets a button to drop it into a day. Lines
   // that are advice rather than places — transport, clothing, money — don't.
-  const NOT_A_PLACE = /交通|安排|貼士|注意|天氣|氣溫|穿搭|著衫|衣著|預算|貨幣|找換|上網|行李|提示|建議|記得|時間|時段|門票|預約|排隊|保暖|洋蔥|外套|落雨|雨具|鞋|錢|卡$|簽證|入境|保險|退稅|攻略|總結|重點|心得/;
+  const NOT_A_PLACE = /交通|安排|貼士|注意|天氣|氣溫|穿搭|著衫|衣著|預算|貨幣|找換|上網|行李|提示|建議|記得|時間|時段|門票|預約|排隊|保暖|洋蔥|外套|落雨|雨具|鞋|錢|卡$|簽證|入境|保險|退稅|攻略|總結|重點|心得|當造|當季|季節|時令|水果|士多啤梨|特產|手信|食材|限定|必食|必買|美食$/;
   function lineIsPlace(sec, head){
     if (!sec || sec.source !== "ai" || !head) return false;
     if (/天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "")) return false;
@@ -6664,7 +6673,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))}${h.area ? " · " + esc(h.area) : ""}</span>${h.manual ? `<span class="sgmine">自己加</span>` : h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
             ${h.local && h.local !== h.name ? `<div class="sgh-local">${esc(h.local)}</div>` : ""}
-            ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>${h.manual ? "自己記低" : "網上搜尋估價"}</small></div>` : ""}
+            ${Number.isFinite(h.score) ? `<div class="sgscore"><b>${h.score}</b><span>/10 推介指數</span>${h.scoreWhy ? `<small>${esc(h.scoreWhy)}</small>` : ""}</div>` : ""}
+            ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>${h.manual && !h.priceAi ? "自己記低" : "網上搜尋估價"}${h.priceAi ? `（AI 估：${esc(h.priceAi)}）` : ""}</small></div>` : ""}
+            ${h.roomSize ? `<div class="sgh-room">${icon("home")}房間 ${esc(h.roomSize)}</div>` : ""}
+            ${h.convenience ? `<div class="sgh-conv">${esc(h.convenience)}</div>` : ""}
             ${(h.highlights || []).length ? `<div class="sgh-hl">${h.highlights.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
             ${h.station ? `<div class="staystation">${icon("pin")}最近 <b>${esc(h.station)}</b>${h.walk ? ` · ${esc(h.walk)}` : ""}</div>` : ""}
             <div class="sgh-acts">
@@ -6776,6 +6788,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           const ph = await fetchStoredPhoto({ placeId: h.placeId, title: h.name });
           if (ph && ph.url) h.photoUrl = ph.url;
         } catch (_){}
+        flash(`AI 分析緊「${h.name}」：價錢、房間、車站、推介指數…`, true);
+        await checkStayHotel(h);
         const sg = snap.staySuggest = snap.staySuggest || { at: new Date().toISOString(), plan: [], areas: [], hotels: [] };
         sg.hotels = [h].concat((sg.hotels || []).filter(x => !(x.placeId && x.placeId === h.placeId)));
         render();
@@ -6785,10 +6799,33 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     });
   }
 
+  // A hotel the family added gets the same look the AI's picks get: price for
+  // their headcount, room size, station and walk, convenience for this
+  // itinerary, and a score. What they typed themselves is never overwritten.
+  async function checkStayHotel(h){
+    try {
+      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "stay-check", today: localIso(new Date()),
+          text: JSON.stringify({ hotel: { name: h.name, area: h.area, placeId: h.placeId }, ...stayContext() }) }) });
+      const r = await res.json();
+      const x = r && r.ok !== false && r.hotel;
+      if (!x) return false;
+      ["area", "local", "price", "roomSize", "station", "walk", "convenience", "scoreWhy"].forEach(k => { if (!h[k] && x[k]) h[k] = x[k]; });
+      if (h.score == null && x.score != null) h.score = x.score;
+      if (x.price && h.price && h.price !== x.price) h.priceAi = x.price;
+      h.highlights = [...new Set([...(h.highlights || []), ...(x.highlights || [])])].slice(0, 4);
+      if (h.station && h.placeId){
+        const t = await callAi({ action: "transit", from: { placeId: h.placeId }, to: { text: h.station } });
+        if (t && t.ok !== false && t.text) h.walk = t.text;
+      }
+      return true;
+    } catch (_){ return false; }
+  }
+
   // ---------- sorting the suggestions ----------
   // Sorting is a way of looking, not a change to the trip, so it lives in
   // the page's state and indices into the stored list stay valid.
-  const STAY_SORTS = [["ai", "預設"], ["cheap", "平到貴"], ["dear", "貴到平"], ["rating", "評分高"], ["near", "近車站"]];
+  const STAY_SORTS = [["ai", "預設"], ["score", "推介指數"], ["cheap", "平到貴"], ["dear", "貴到平"], ["rating", "評分高"], ["near", "近車站"]];
   function priceFrom(h){
     const m = String(h.price || "").replace(/,/g, "").match(/(\d{3,6})/);
     return m ? +m[1] : null;
@@ -6809,6 +6846,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (by === "cheap") idx.sort(cmp(priceFrom, 1));
     else if (by === "dear") idx.sort(cmp(priceFrom, -1));
     else if (by === "rating") idx.sort(cmp(h => Number.isFinite(h.rating) ? h.rating : null, -1));
+    else if (by === "score") idx.sort(cmp(h => Number.isFinite(h.score) ? h.score : null, -1));
     else if (by === "near") idx.sort(cmp(walkMinOf, 1));
     return idx;
   }
@@ -6852,7 +6890,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <textarea class="textarea" data-pf="other" rows="2" placeholder="例如：有長者，唔想上落樓梯；想住同一層；要可以加床">${esc(pf.other || "")}</textarea></div>
       <div class="editor-tools">
         <button class="btn" data-ecancel>取消</button>
-        <button class="btn primary" data-esave>${icon("sparkle")}幫我搵</button>
+        <button class="btn" data-psave>淨係儲存</button>
+        <button class="btn primary" data-esave>${icon("sparkle")}儲存同搵</button>
       </div>`, sheet => {
       const perRoom = () => {
         const a = +sheet.querySelector('[data-pf="adults"]').value || 0, k = +sheet.querySelector('[data-pf="kids"]').value || 0;
@@ -6869,13 +6908,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         c.parentElement.querySelectorAll(".pfchip").forEach(x => x.classList.toggle("on", x === c)); }));
       sheet.querySelectorAll("[data-pfmany] .pfchip").forEach(c => c.addEventListener("click", () => c.classList.toggle("on")));
       sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
-      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+      const collect = () => {
         const v = k => sheet.querySelector(`[data-pf="${k}"]`).value;
         const one = k => (sheet.querySelector(`[data-pfone="${k}"] .pfchip.on`) || {}).dataset?.v || "";
         snap.stayPrefs = { adults: Math.max(1, +v("adults") || 1), kids: Math.max(0, +v("kids") || 0), rooms: Math.max(1, +v("rooms") || 1),
           budget: one("budget") || "唔限", kind: one("kind") || "唔限",
           focus: [...sheet.querySelectorAll('[data-pfmany="focus"] .pfchip.on')].map(x => x.dataset.v), other: v("other").trim(),
           area: v("area").trim() };
+      };
+      sheet.querySelector("[data-psave]").addEventListener("click", async () => {
+        collect(); closeLayer(); render();
+        await saveNow("改咗住宿要求"); flash("儲存咗要求，未有搵");
+      });
+      sheet.querySelector("[data-esave]").addEventListener("click", async () => {
+        collect();
         closeLayer();
         flash("AI 跟住你嘅要求搵緊酒店，大約半分鐘…", true);
         try {
@@ -6886,6 +6932,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         catch (err){ flash(err.message || "建議唔到"); render(); }
       });
     });
+  }
+  function stayContext(){
+    const snap = state.snapshot, days = snap.days || [], pf = snap.stayPrefs;
+    return {
+      destination: (snap.meta || {}).destinationLocal, brief: briefForAi(snap),
+      days: days.map((d, i) => ({ day: i + 1, date: d.date, title: d.title,
+        stops: (d.items || []).filter(x => x.kind === "stop").map(x => plain(x.title)).filter(Boolean) })),
+      ...(pf ? { 人數: `${pf.adults} 個大人${pf.kids ? `、${pf.kids} 個小朋友` : ""}`, 房間: `${pf.rooms} 間`,
+        每間房每晚預算: pf.budget, 最緊要: pf.focus, 其他要求: pf.other } : { 人數: "未講（當 2 個大人 1 間房）" }),
+    };
   }
   async function suggestStays(onProgress, extra){
     const snap = state.snapshot, days = snap.days || [];

@@ -149,12 +149,41 @@ const STAY_PROMPT = (trip: string, today: string) => `你係香港人嘅旅遊�
 2. 如果行程有幾日喺第二個城市（例如去京都住一兩晚會慳好多車程），喺 plan 度講邊幾晚住邊區；全程住同一個城市就 plan 留空陣列。
 3. 每一區推介 2–3 間真實存在、評價好嘅酒店。用 Google 搜尋查價錢同最近嘅車站。價錢寫港幣大約範圍（例如「每晚約 HK$900–1,300」），查唔到就寫「出發前睇返訂房網」，唔好作。
    highlights 每間 2–3 點，每點最多 14 字。fromDay / toDay 係第幾日（1 開始），toDay 係退房嗰日。
+   price 要按佢哋嘅人數同房數計（例如 2 間房就寫兩間房加埋每晚大約幾錢）。roomSize 寫房間大約幾大同啱幾多人（例如「約 25㎡，3 人住得落」），查唔到就留空。
+   score 係 1–10 嘅推介指數：按呢個行程（每日去邊、交通方唔方便、搬唔搬酒店）同佢哋嘅要求打分；scoreWhy 一句講點解。
 4. 如果 JSON 入面有「住宿要求」，一定要跟；有「想住嘅區」就淨係喺嗰區揀；有「已經建議過」就唔好再推介嗰啲酒店（但區可以再列）。
 全部用廣東話。
 行程：
 ${trip}
 只回覆一個 JSON（唔好有其他字、唔好 code fence）：
-{"areas":[{"area":"梅田","best":true,"pros":"","cons":"","goodFor":""}],"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":""}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘"}]}`;
+{"areas":[{"area":"梅田","best":true,"pros":"","cons":"","goodFor":""}],"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":""}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘","roomSize":"約 25㎡，3 人住得落","score":8,"scoreWhy":"一句"}]}`;
+
+// One hotel the family found themselves, given the same analysis as the
+// AI's own picks so they compare like for like.
+const STAY_CHECK_PROMPT = (q: string, today: string) => `你係香港人嘅旅遊顧問，今日係 ${today}。下面 JSON 有一間佢哋自己揀嘅酒店（hotel）同佢哋嘅行程、人數、要求。
+用 Google 搜尋查呢間酒店，答：
+- area：喺邊區
+- local：當地語言名
+- price：按佢哋嘅人數同房數，每晚大約幾錢（港幣範圍）；查唔到就寫「出發前睇返訂房網」
+- roomSize：房間大約幾大、啱幾多人；查唔到留空
+- station：最近車站（當地語言）；walk：步行大約幾耐
+- highlights：2–3 點好處或者要留意（每點最多 14 字）
+- convenience：一句講對呢個行程方唔方便（例如去京都、去機場、每日嘅景點）
+- score：1–10 推介指數，scoreWhy 一句講點解
+只可以用搜尋到嘅資料，唔好作。全部用廣東話。
+${q}
+只回覆一個 JSON（唔好有其他字、唔好 code fence）：
+{"hotel":{"area":"","local":"","price":"","roomSize":"","station":"","walk":"","highlights":[""],"convenience":"","score":7,"scoreWhy":""}}`;
+
+function cleanHotel(h: any) {
+  const sc = Math.round(Number(h?.score));
+  return {
+    area: str(h?.area, 30), local: str(h?.local, 80), price: str(h?.price, 80), roomSize: str(h?.roomSize, 40),
+    station: str(h?.station, 40), walk: str(h?.walk, 30), convenience: str(h?.convenience, 120),
+    highlights: (Array.isArray(h?.highlights) ? h.highlights : []).slice(0, 3).map((x: unknown) => str(x, 24)).filter(Boolean),
+    score: sc >= 1 && sc <= 10 ? sc : null, scoreWhy: str(h?.scoreWhy, 100),
+  };
+}
 
 function cleanStays(p: any) {
   const n = (x: unknown, d: number) => Math.max(1, Math.floor(Number(x) || d));
@@ -171,6 +200,8 @@ function cleanStays(p: any) {
       price: str(h?.price, 60),
       highlights: (Array.isArray(h?.highlights) ? h.highlights : []).slice(0, 3).map((x: unknown) => str(x, 24)).filter(Boolean),
       station: str(h?.station, 40), walk: str(h?.walk, 30),
+      roomSize: str(h?.roomSize, 40), score: (() => { const v = Math.round(Number(h?.score)); return v >= 1 && v <= 10 ? v : null; })(),
+      scoreWhy: str(h?.scoreWhy, 100),
     })).filter((h: any) => h.name),
   };
 }
@@ -208,6 +239,15 @@ Deno.serve(async (req) => {
     const out = cleanStays(parseJson(raw));
     if (!out.hotels.length) return json({ ok: false, message: "AI 今次冇建議到酒店，再試一次。" });
     return json({ ok: true, stays: out });
+  }
+
+  if (body?.mode === "stay-check") {
+    let raw = "";
+    try { raw = await callGemini([{ text: STAY_CHECK_PROMPT(str(text, 12000), today) }], true); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
+    const p = parseJson(raw);
+    if (!p?.hotel) return json({ ok: false, message: "查唔到呢間酒店嘅資料。" });
+    return json({ ok: true, hotel: cleanHotel(p.hotel) });
   }
 
   if (body?.mode === "flight-lookup") {

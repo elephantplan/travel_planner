@@ -36,6 +36,12 @@ const SUGGEST = { ok: true, stays: {
   await p.route('**/rest/v1/ai_notes**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/functions/v1/**', r => {
     const url = r.request().url(), body = JSON.parse(r.request().postData() || '{}');
+    if (/trip-import/.test(url) && body.mode === 'stay-check'){ asked.push(body.mode); sentText.push(body.text || '');
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, hotel: {
+        area: '難波', local: 'ホリデイ・イン大阪難波', price: '兩間房每晚約 HK$2,200', roomSize: '約 22㎡，3 人住得落',
+        station: 'なんば駅', walk: '步行約 5 分鐘', highlights: ['近道頓堀'], convenience: '去京都要轉車，但食嘢行街好方便',
+        score: 7, scoreWhy: '行街方便，但離梅田景點遠少少' } }) });
+    }
     if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) }); }
     if (/place-photo-store/.test(url)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'http://localhost:8799/icons/icon-v2.svg' }) });
     if (body.action === 'place-search') return r.fulfill({ status: 200, contentType: 'application/json',
@@ -117,6 +123,16 @@ const SUGGEST = { ok: true, stays: {
   await p.waitForTimeout(2500);
   ok('「仲有冇要啲咩」直接傳畀 AI', /今次額外要求/.test(sentText[sentText.length - 1] || '') && /停車場/.test(sentText[sentText.length - 1] || ''));
   // searching again keeps what was found and asks for different ones
+  // the questions can be saved without starting a search
+  const before = asked.length;
+  await p.locator('#app [data-stayprefs]').last().click();
+  await p.waitForTimeout(300);
+  await p.locator('[data-pfmany="focus"] .pfchip', { hasText: '包早餐' }).click();
+  await p.locator('[data-psave]').click();
+  await p.waitForTimeout(900);
+  ok('「淨係儲存」唔會搵', asked.length === before);
+  const sp = [...saved].reverse().find(x => x.snapshot);
+  ok('要求存咗', sp && sp.snapshot.stayPrefs.focus.includes('包早餐'));
   const accB = p.locator('#app');
   await accB.locator('[data-stayprefs]').last().click();
   await p.waitForTimeout(300);
@@ -146,6 +162,12 @@ const SUGGEST = { ok: true, stays: {
   ok('自己加嘅放最頂', top && top.manual === true && top.price === '每晚約 HK$1,100' && top.area === '難波', top);
   ok('配咗 Google 地點同相', top && top.placeId && top.photoUrl);
   ok('卡上寫明「自己加」', /自己加/.test(await accM.locator('.sgh').first().innerText()));
+  const card = await accM.locator('.sgh').first().innerText();
+  ok('自己加嘅都有推介指數同原因', /7\s*\/10 推介指數/.test(card) && /離梅田景點遠少少/.test(card), card.slice(0, 200));
+  ok('房間大細同方唔方便', /約 22㎡/.test(card) && /去京都要轉車/.test(card));
+  ok('自己打嘅價錢保留，AI 估價放隔籬', /HK\$1,100/.test(card) && /AI 估：兩間房每晚約 HK\$2,200/.test(card));
+  ok('最近車站用 Google 計步行', /なんば駅[\s\S]*步行約 4 分鐘/.test(card));
+  ok('分析時傳埋人數同行程', /stay-check/.test(asked.join()) && /行程|days/.test(sentText[sentText.length - 1] || ''));
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
