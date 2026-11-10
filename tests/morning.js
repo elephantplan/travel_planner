@@ -127,7 +127,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ places: [{ name: '永観堂', placeId: 'pE', lat: 35.0145, lng: 135.7944 }] }) }); }
       if (body.mode === 'leg'){ jl.push(body);
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'metro',
-          text: '電車／巴士：撳 Google 睇班次（的士約 12 分鐘，行路約 35 分鐘）', noTime: true }) }); }
+          text: '梅田駅 → 大阪城公園駅', noTime: true, fromStation: '梅田駅', toStation: '大阪城公園駅',
+          note: '行 4 分鐘去車站・落車行 6 分鐘・的士約 12 分鐘・行路約 35 分鐘' }) }); }
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     });
     await p2.route('**tile**', r => r.abort());
@@ -138,16 +139,18 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('日本行程用新嘅交通查詢，唔再淨係得行路', jl.length >= 1 && ja.length === 0, [jl.length, ja.length]);
     ok('冇舊版 AI 估嘅路線殘留', !/AI 估/.test(await p2.locator('#app').innerText()));
     const t2 = await p2.locator('.seg.hotelleg').first().innerText();
-    ok('講明電車睇 Google，有的士同行路時間做參考', /撳 Google 睇班次/.test(t2) && /的士約 12 分鐘/.test(t2), t2);
+    ok('講明由邊個站去邊個站，有的士同行路時間做參考', /梅田駅\s*→\s*大阪城公園駅/.test(t2) && /的士約 12 分鐘/.test(t2), t2);
+    const pair = await p2.locator('.seg.hotelleg .stpair').first().boundingBox();
+    ok('兩個站排喺同一行（左右）', pair && pair.height < 30, pair);
     ok('Google 路線用大眾運輸模式', /travelmode=transit/.test(await p2.locator('.seg.hotelleg').first().locator('a[href*="google.com/maps/dir"]').getAttribute('href')));
     ok('唔會當「12 分鐘」嚟計時間好趕', !/時間好趕/.test(await p2.locator('#app').innerText()));
     ok('舊版 AI 估嘅交通會自動重新計', jl.some(x => x.to && x.to.placeId === 'p6'), jl.map(x => x.to));
-    ok('名入面嘅營業時間唔會拎去搜尋，仲加埋城市', jq.includes('永觀堂 大阪'), jq);
+    ok('名入面嘅營業時間唔會拎去搜尋', jq.includes('永觀堂'), jq);
     ok('配返 Google 之後重新計佢前後嘅交通', jl.some(x => x.from && x.from.placeId === 'pE'), jl.map(x => x.from));
     ok('配返之後朝早都由酒店出發', /永觀堂/.test(await p2.locator('.stopcard').first().innerText()) && await p2.locator('.hotelrow').count() === 2);
     ok('舊嘅「大眾運輸約」重新計過', !/大眾運輸約 32 分鐘/.test(await p2.locator('#app').innerText()));
     const yh = await p2.locator('.seg.hotelleg').first().locator('a[href*="transit.yahoo.co.jp"]').getAttribute('href').catch(() => '');
-    ok('電車段有 Yahoo!乗換案内（起點終點都填好）', /search\/result\?from=/.test(yh || '') && /&to=/.test(yh || ''), yh);
+    ok('Yahoo!乗換案内用站名搜（唔用長嘅正式名）', /from=%E6%A2%85%E7%94%B0&to=%E5%A4%A7%E9%98%AA%E5%9F%8E%E5%85%AC%E5%9C%92$/.test(yh || ''), yh);
     ok('冇 NAVITIME 掣', await p2.locator('a[href*="navitime"]').count() === 0);
     await p2.close();
   }

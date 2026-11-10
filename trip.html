@@ -1096,6 +1096,16 @@ img{max-width:100%;}
 .seg-text > .segrefresh{order:2;width:26px;height:26px;margin-left:0;background:none;}
 .seg-text > .rchain,.seg-text > .seg-route,.seg-text > .seg-tight{order:3;}
 .seg-text .rchain{margin-top:0;}
+.seg-text > .rrow{order:3;width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:12.5px;}
+.rr-st{font-weight:700;color:var(--ink);}
+.rr-ln{display:inline-flex;align-items:center;gap:4px;}
+.rr-ln small{font-size:11px;color:var(--ink-faint);}
+.rr-ln i,.stpair i{font-style:normal;color:var(--ink-faint);}
+.rc-pill{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--line,var(--ink-faint));padding:1px 8px;border-radius:999px;line-height:1.6;}
+.stpair{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.stpair b{color:var(--ink);font-weight:700;}
+.seg-head{flex-wrap:wrap;}
+.seg-sub{flex-basis:100%;padding-left:29px;font-size:11.5px;font-weight:500;color:var(--ink-faint);line-height:1.5;}
 .stopcard:not(:has(> .stopmain > .thumb)) > .cardtools{flex-direction:row;gap:4px;}
 .stopcard:not(:has(> .stopmain > .thumb)) > .stopmain{padding-right:80px;}
 .hotelrow{margin:2px 0 6px;}
@@ -1916,7 +1926,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-06";
+  const BUILD = "2026-11-10-08";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2930,12 +2940,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const parts = String(route).split(/\s*[─—]+\s*/).map(x => x.trim()).filter(Boolean);
     if (parts.length < 3 || parts.length % 2 === 0)
       return `<span class="seg-route">${esc(route)}</span>`;
-    return `<ol class="rchain">${parts.map((x, k) => {
-      if (k % 2 === 0) return `<li class="rc-st"><span class="rc-dot"></span>${esc(x)}</li>`;
+    // one line, left to right: 安國 ─[3號線 4站]→ 忠武路 ─[4號線]→ 明洞
+    return `<span class="rrow">${parts.map((x, k) => {
+      if (k % 2 === 0) return `<b class="rr-st">${esc(x)}</b>`;
       const [name, ...rest] = x.split(/\s*[・·•]\s*/);
       const c = lineColor(name);
-      return `<li class="rc-ln"${c ? ` style="--line:${c}"` : ""}><span class="rc-pill">${esc(name)}</span>${rest.length ? `<small>${esc(rest.join(" · "))}</small>` : ""}</li>`;
-    }).join("")}</ol>`;
+      return `<span class="rr-ln"${c ? ` style="--line:${c}"` : ""}><span class="rc-pill">${esc(name)}</span>${rest.length ? `<small>${esc(rest.join(" · "))}</small>` : ""}<i>→</i></span>`;
+    }).join("")}</span>`;
   }
   function segHtmlOf(seg){
     const mode = segMode(seg);
@@ -3369,7 +3380,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const hotelG = subj.placeId ? subj : { title: subj.title, kr: subj.kr };
     const a = which === "hotelLeg" ? subj : info.s, b = which === "hotelLeg" ? info.s : subj;
     const mode = leg ? segMode(leg) : "metro";
-    const links = legLinks(which === "hotelLeg" ? hotelG : info.s, which === "hotelLeg" ? info.s : hotelG, a, b, mode);
+    const links = legLinks(which === "hotelLeg" ? hotelG : info.s, which === "hotelLeg" ? info.s : hotelG, a, b, mode, leg);
     const body = leg ? `<span class="seg-head">${segModeBtn(leg, `data-legmode="${which}"`)}</span>` + (leg.route ? routeChainHtml(leg.route) : "")
       : `<span class="seg-note">${legBusy.has(day.id + which) ? "計緊交通…" : "交通未計到"}</span>`;
     const refresh = !state.readonly ? `<button class="segrefresh" data-legrefresh="${which}" title="重新計" aria-label="重新計呢段交通">${icon("refresh")}</button>` : "";
@@ -3381,16 +3392,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segModeBtn(seg, attr){
     const mode = segMode(seg);
     const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
-    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}`;
+    const label = seg.st1 && seg.st2
+      ? `<span class="stpair"><b>${esc(seg.st1)}</b><i>→</i><b>${esc(seg.st2)}</b></span>`
+      : esc(text);
+    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${label}${seg.note ? `<small class="seg-sub">${esc(seg.note)}</small>` : ""}`;
   }
   // Google everywhere; Naver in Korea
-  function legLinks(gFrom, gTo, nFrom, nTo, mode){
+  function legLinks(gFrom, gTo, nFrom, nTo, mode, seg){
     const g = gmapsDirUrl(gFrom, gTo, mode);
     const n = destIsKorea() ? naverDirUrl(nFrom, nTo, mode) : "";
     const parts = mapLinksInOrder(
       n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
       g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
-    const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(nFrom, nTo) : "";
+    const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(seg) : "";
     if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
     return parts.length ? `<span class="seg-links">${parts.join("")}</span>` : "";
   }
@@ -3401,9 +3415,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // trip-import, which can also ask Gemini for the usual train route.
   async function legLookup(from, to, opt = {}){
     const prefer = opt.prefer || "auto";
-    const city = ((state.snapshot || {}).meta || {}).destinationLocal || "";
-    const withCity = r => r && r.text && city && !r.text.includes(city) ? { text: `${r.text} ${city}` } : r;
-    from = withCity(from); to = withCity(to);
     if (prefer === "auto" && !destIsJapan()){
       const r = await callAi({ action:"transit", from, to });
       const m = r && String(r.text || "").match(/(\d+)\s*分鐘/);
@@ -3422,6 +3433,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const seg = buildSeg(r.mode || "walk", r.text, r.route);
     if (prefer && prefer !== "auto") seg.prefer = prefer;
     if (r.noTime) seg.noTime = true;
+    if (r.fromStation && r.toStation){ seg.st1 = r.fromStation; seg.st2 = r.toStation; }
+    if (r.note) seg.note = r.note;
     return seg;
   }
   async function computeHotelLeg(day, which){
@@ -3462,7 +3475,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // wrong guess. Look each one up once by its cleaned name in this city.
   const NOT_A_STOP = /自由活動|休息|出發|返酒店|集合|check.?in|check.?out|機場|落機|起飛|降落|寄存/i;
   async function matchLoosePlaces(day){
-    const city = ((state.snapshot || {}).meta || {}).destinationLocal || "";
+    // no city added: a day trip (永觀堂 on an Osaka trip is in Kyoto) would be
+    // pulled to the wrong place, while a famous name alone is found correctly
     const units = toUnits(day.items);
     const todo = units.map((u, i) => i).filter(i => {
       const st = units[i].stop;
@@ -3475,7 +3489,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       st.placeTried = true;
       const q = cleanPlaceName(st.title);
       try {
-        const r = await callAi({ action:"place-search", query: city && !q.includes(city) ? `${q} ${city}` : q });
+        const r = await callAi({ action:"place-search", query: q });
         const p = r && r.places && r.places[0];
         if (p && p.placeId){
           st.placeId = p.placeId;
@@ -3492,10 +3506,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   // Yahoo!乗換案内 searches by name (stations, spots, addresses), so a train
   // leg in Japan can open there with both ends filled in
-  function yahooTransitUrl(a, b){
-    const n = x => plain(x && x.kr) || cleanPlaceName(x && (x.title || x.name));
-    const f = n(a), t = n(b);
-    return f && t ? `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(f)}&to=${encodeURIComponent(t)}` : "";
+  // Long official names (「浄土宗西山禅林寺派 … 禪林寺(永観堂)」) find
+  // nothing there, so the search goes station to station.
+  function yahooTransitUrl(seg){
+    if (!seg || !seg.st1 || !seg.st2) return "";
+    const n = x => String(x).replace(/駅$/, "").trim();
+    return `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(n(seg.st1))}&to=${encodeURIComponent(n(seg.st2))}`;
   }
   // Legs saved by older builds that are known to be wrong: an AI-guessed train
   // route, or — in Japan, where Google's API has no trains — a long walk that
@@ -3503,7 +3519,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segSuspect(seg){
     if (!seg || seg.prefer) return false;
     if (seg.est) return true;
-    if (!destIsJapan() || seg.noTime) return false;
+    if (!destIsJapan()) return false;
+    if (seg.noTime) return !seg.st1;          // from before stations were looked up
     // Google's API has no trains in Japan: any timed train leg is from an old build
     if (/^(metro|bus|other)$/.test(segMode(seg))) return true;
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
@@ -5394,7 +5411,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
-      const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(from, to) : "";
+      const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(u.seg) : "";
       if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }

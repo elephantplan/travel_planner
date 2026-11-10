@@ -111,7 +111,7 @@ async function gDirections(o: string, d: string, mode: string, lang: string) {
     const data = await (await fetch(url)).json();
     const leg = data?.status === "OK" && data?.routes?.[0]?.legs?.[0];
     if (!leg) return { problem: String(data?.status || "UNKNOWN") };
-    return { seconds: Number(leg.duration?.value) || 0, steps: leg.steps || [] };
+    return { seconds: Number(leg.duration?.value) || 0, steps: leg.steps || [], start: leg.start_location, end: leg.end_location };
   } catch (e) { return { problem: String(e) }; }
 }
 function rideOf(steps: any[]) {
@@ -129,6 +129,29 @@ function rideOf(steps: any[]) {
     from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
 }
 const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
+// The nearest railway station to a point, from Places Nearby Search, with a
+// rough walking time (straight line × 1.3 at 80 m a minute).
+async function nearestStation(loc: any, lang: string) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key || !loc || !Number.isFinite(loc.lat)) return null;
+  for (const type of ["train_station", "subway_station"]) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${loc.lat},${loc.lng}` +
+        `&rankby=distance&type=${type}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
+      const data = await (await fetch(url)).json();
+      const r = data?.results?.[0];
+      const g = r?.geometry?.location;
+      if (!r || !g) continue;
+      const R = 6371000, toR = (x: number) => x * Math.PI / 180;
+      const a = Math.sin(toR(g.lat - loc.lat) / 2) ** 2 + Math.cos(toR(loc.lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - loc.lng) / 2) ** 2;
+      const m = 2 * R * Math.asin(Math.sqrt(a));
+      if (m > 2000) return null;
+      const name = String(r.name || "").replace(/[（(][^）)]*[）)]/g, "").trim();
+      return { name, walk: Math.max(1, Math.round(m * 1.3 / 80)) };
+    } catch { /* try the next type */ }
+  }
+  return null;
+}
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
@@ -162,6 +185,13 @@ async function legBetween(body: any) {
   const c: any = await gDirections(o, d, "driving", lang);
   if (!w) w = await gDirections(o, d, "walking", lang);
   const bits = [c.seconds ? `的士約 ${mins(c.seconds)} 分鐘` : "", w?.seconds && w.seconds <= 2700 ? `行路約 ${mins(w.seconds)} 分鐘` : ""].filter(Boolean);
+  // which station to which: enough to look the train up by name
+  const a = w?.start || c?.start, b = w?.end || c?.end;
+  const [s1, s2] = await Promise.all([nearestStation(a, lang || "ja"), nearestStation(b, lang || "ja")]);
+  if (s1 && s2 && s1.name && s2.name && s1.name !== s2.name)
+    return { ok: true, mode: "metro", noTime: true, text: `${s1.name} → ${s2.name}`,
+      fromStation: s1.name, toStation: s2.name, walkTo: s1.walk, walkFrom: s2.walk,
+      note: [`行 ${s1.walk} 分鐘去車站`, `落車行 ${s2.walk} 分鐘`, ...bits].join("・") };
   if (prefer === "transit" || c.seconds || w?.seconds)
     return { ok: true, mode: "metro", noTime: true, text: `電車／巴士：撳 Google 睇班次${bits.length ? "（" + bits.join("，") + "）" : ""}` };
   return { ok: false, message: "計唔到呢段交通。" };
