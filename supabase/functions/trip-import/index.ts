@@ -243,10 +243,10 @@ async function placeFacts(placeId: string) {
   if (!key || !placeId) return null;
   try {
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-      `&fields=name,types,rating,user_ratings_total,price_level,editorial_summary,reviews&reviews_sort=most_relevant&language=zh-TW&key=${key}`;
+      `&fields=name,types,formatted_address,rating,user_ratings_total,price_level,editorial_summary,reviews&reviews_sort=most_relevant&language=zh-TW&key=${key}`;
     const r = (await (await fetch(url)).json())?.result;
     if (!r) return null;
-    return { placeId, name: String(r.name || ""), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
+    return { placeId, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 80), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
       ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
       summary: String(r.editorial_summary?.overview || "").slice(0, 200),
       reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
@@ -258,6 +258,8 @@ ${ask ? `佢哋嘅要求：${ask}。按幾啱佢哋要求由最啱排到最唔�
 - what：一句介紹佢係咩地方、有咩特色（最多 40 字）
 - mustTry：${kind === "eat" ? "根據評論，大家推介食咩（寫具體菜式，最多 40 字）" : kind === "shop" ? "根據評論，值得買乜或者有咩店（最多 40 字）" : "根據評論，最值得睇乜或者玩乜（最多 40 字）"}
 只可以根據提供嘅簡介同評論寫，評論冇講就留空，唔好作。
+菜系同國籍要睇店名、地址（喺邊個國家）同評論先寫，唔肯定就唔好寫國籍：例如喺日本嘅「焼肉」係日式燒肉，唔好寫成韓式；「焼鳥」係日式串燒。
+菜式名用中文寫，日文／韓文名可以喺後面括號（例如「牛肋肉（カルビ）」）。
 ${items}
 只回覆 JSON：{"places":[{"placeId":"","name_zh":"","what":"","mustTry":""${ask ? `,"fit":""` : ""}}]}`;
 async function briefs(facts: any[], kind: string, ask = "") {

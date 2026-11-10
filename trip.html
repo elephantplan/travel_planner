@@ -799,7 +799,7 @@ img{max-width:100%;}
    are actually being cut (measured after render), so short ones stay clean. */
 .stopdesc{
   font-size:12.5px;color:var(--ink-soft);line-height:1.65;margin-top:5px;
-  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
+  white-space:pre-line;
 }
 .stopdesc.open{display:block;-webkit-line-clamp:unset;}
 .descmore{
@@ -1119,6 +1119,7 @@ img{max-width:100%;}
 .nr-n .i{width:11px;height:11px;color:var(--ink-faint);}
 .nr-f{font-size:12px;color:var(--ink-soft);line-height:1.45;}
 .nr-a{font-size:11px;color:var(--ink-faint);line-height:1.4;}
+.loadwrap{min-height:60vh;display:flex;align-items:center;justify-content:center;}
 .nr-d{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--ink);line-height:1.4;}
 .nr-d svg{width:12px;height:12px;flex:none;color:var(--ink-soft);}
 .nr-d.best{color:var(--gold);} .nr-d.best svg{color:var(--gold);}
@@ -2067,7 +2068,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-18";
+  const BUILD = "2026-11-10-19";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2133,6 +2134,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // screen; what is stored is left alone.
   const EMOJI_RE = /(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{231A}-\u{23FF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{1F3FB}-\u{1F3FF}]?\u{200D}?)+[ \u3000]?/gu;
   function noEmoji(s){ return String(s).replace(EMOJI_RE, "").replace(/\u{FE0F}/gu, ""); }
+  // the first thing on screen while the trip loads is the little elephant
+  try { const a0 = document.getElementById("app");
+    if (a0 && a0.querySelector(".loading")) a0.innerHTML = `<div class="loadwrap">${elephantHtml("載入緊行程…")}</div>`; } catch (_){}
   function esc(s){
     return noEmoji(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
@@ -4162,9 +4166,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // A description, cut to three lines until asked otherwise.
   function descHtml(s, key){
     if (!s.desc) return "";
-    const open = state.descOpen.has(key);
-    return `<div class="stopdesc${open ? " open" : ""}" data-desckey="${esc(key)}">${esc(s.desc)}</div>
-      <button class="descmore${open ? " show" : ""}" data-descmore="${esc(key)}">${open ? "收埋" : "更多"}</button>`;
+    // shown in full — the intro and 必食 are short, and tapping 更多 on
+    // every card to read them was the bigger annoyance
+    return `<div class="stopdesc open" data-desckey="${esc(key)}">${esc(s.desc)}</div>`;
   }
 
   // Whether a paragraph is actually being cut depends on the column width and
@@ -4224,7 +4228,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     renderBrandmark();
     renderLines();
     const app = $("#app");
-    if (!state.snapshot){ app.innerHTML = `<p class="loading">載入緊行程…</p>`; return; }
+    if (!state.snapshot){ app.innerHTML = `<div class="loadwrap">${elephantHtml("載入緊行程…")}</div>`; return; }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
     if (state.view === "stays"){ app.innerHTML = staysPageHtml(state.snapshot); wireStaysPage(); rememberPlace(); return; }
     const board = boardById(state.view);
@@ -5430,7 +5434,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       scan.addEventListener("change", async () => {
         const files = [...scan.files].slice(0, 4);
         if (!files.length) return;
-        msg.innerHTML = `<p class="hint"><span class="spin"></span>AI 讀緊機票…</p>`;
+        msg.innerHTML = elephantHtml("AI 讀緊機票…", true);
         try {
           const images = [];
           for (const f of files) images.push(await imageFileToPart(f));
@@ -6200,8 +6204,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // An original round elephant with big ears does one of three things while
   // it waits: sniffs along with a magnifying glass, flaps its ears and
   // floats, or tilts its head over a map. Picked at random each time.
-  const ELE_MOVES = ["sniff", "fly", "map"];
   function elephantSvg(move){
+    const ELE_MOVES = ["sniff", "fly", "map"];   // inside, so it works before this line has run
     const m = move || ELE_MOVES[Math.floor(Math.random() * ELE_MOVES.length)];
     return `<svg class="ele ele-${m}" viewBox="0 0 132 104" aria-hidden="true">
       <ellipse class="ele-shadow" cx="66" cy="98" rx="34" ry="4"/>
@@ -6277,12 +6281,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return r && r.ok !== false && r.brief ? r.brief : null;
     } catch (_){ return null; }
   }
+  // Version of the auto-written intros. Older ones guessed a cuisine's
+  // country (a Japanese 焼肉 shop called 韓式) and left dishes in Japanese, so
+  // an intro the app wrote itself (「…\n必食：…」) is redone once.
+  const BRIEF_V = 2;
+  const autoBrief = st => /\n(必食|必睇|必買|推介)：/.test(String(st.desc || "")) && st.briefV !== BRIEF_V;
   function applyBrief(st, b, kind){
     if (!b) return false;
     const label = MUST_LABEL[b.food ? "eat" : kind] || "推介";
     const text = [b.what, b.mustTry ? `${label}：${b.mustTry}` : ""].filter(Boolean).join("\n");
-    if (!text || plain(st.desc)) return false;
+    if (!text || (plain(st.desc) && !autoBrief(st))) return false;
     st.desc = text;
+    st.briefV = BRIEF_V;
     if (b.food && st.type !== "eat") st.type = "eat";
     if (Number.isFinite(b.rating) && !Number.isFinite(st.rating)){ st.rating = b.rating; st.ratingCount = b.ratingCount; }
     return true;
@@ -6292,7 +6302,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   let briefBusy = false;
   async function backfillBriefs(day){
     if (briefBusy || state.readonly || state.offline) return;
-    const todo = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && !plain(st.desc) && !st.briefTried && !briefTried.has(st.placeId)).slice(0, 4);
+    const todo = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && ((!plain(st.desc) && !st.briefTried) || autoBrief(st)) && !briefTried.has(st.placeId)).slice(0, 4);
     if (!todo.length) return;
     briefBusy = true;
     let got = 0;
@@ -6305,6 +6315,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         st.briefTried = true;
         briefLoading.delete(st);
         if (applyBrief(st, b)) got++;
+        else if (autoBrief(st)) st.briefV = BRIEF_V;     // no better answer — keep it, stop asking
       }));
       todo.forEach(st => briefLoading.delete(st));
     } finally { briefBusy = false; }
@@ -6378,7 +6389,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const v = q.value.trim();
         if (v.length < 2){ res.innerHTML = ""; return; }
         t = setTimeout(async () => {
-          res.innerHTML = `<p class="hint">搵緊…</p>`;
+          res.innerHTML = elephantHtml("搵緊…", true);
           try {
             // branches of a chain near the stop before (or after) come first,
             // each with how far it is from that stop
@@ -6461,7 +6472,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       lat: Number.isFinite(p.lat) ? p.lat : null, lng: Number.isFinite(p.lng) ? p.lng : null });
     if (Number.isFinite(p.rating)){ st.rating = p.rating; st.ratingCount = p.ratingCount; }
     if (p.name_zh && p.name_zh !== p.name){ st.title = p.name_zh; st.kr = p.name; }
-    if (p.what || p.mustTry) st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n");
+    if (p.what || p.mustTry){ st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n"); st.briefV = BRIEF_V; }
     units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
     for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
     day.items = fromUnits(units);
@@ -6553,7 +6564,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const q = titleInput.value.trim();
       if (q.length < 2){ sugBox.innerHTML = ""; return; }
       sugTimer = setTimeout(async () => {
-        sugBox.innerHTML = `<p class="hint">搵緊…</p>`;
+        sugBox.innerHTML = elephantHtml("搵緊…", true);
         try {
           const r = await callAi({ action:"place-search", query:q });
           if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -6575,7 +6586,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
+            sugBox.innerHTML = elephantHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
             // the local name is fetched at the moment of choosing — search
             // results only carry Google's English name
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name), enrichLocalName(s)]);
@@ -6599,7 +6610,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const q = altQ.value.trim();
         if (q.length < 2){ altSug.innerHTML = ""; return; }
         altTimer = setTimeout(async () => {
-          altSug.innerHTML = `<p class="hint">搵緊…</p>`;
+          altSug.innerHTML = elephantHtml("搵緊…", true);
           try {
             const r = await callAi({ action:"place-search", query:q });
             if (r.ok === false){ altSug.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -7694,7 +7705,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (term.length < 2){ res.innerHTML = ""; return; }
         timer = setTimeout(async () => {
           const my = ++seq;
-          res.innerHTML = `<p class="hint">搵緊…</p>`;
+          res.innerHTML = elephantHtml("搵緊…", true);
           let r = null;
           try { r = await callAi({ action: "place-search", query: term }); } catch (_){}
           if (my !== seq) return;
@@ -9111,7 +9122,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const q = titleInput.value.trim();
       if (q.length < 2){ sugBox.innerHTML = ""; return; }
       sugTimer = setTimeout(async () => {
-        sugBox.innerHTML = `<p class="hint">搵緊…</p>`;
+        sugBox.innerHTML = elephantHtml("搵緊…", true);
         try {
           const r = await callAi({ action:"place-search", query:q });
           if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -9133,7 +9144,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = `<p class="hint">已揀「${esc(p.name)}」，搵緊相同營業時間…</p>`;
+            sugBox.innerHTML = elephantHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
             // the local name is fetched at the moment of choosing — search
             // results only carry Google's English name
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name), enrichLocalName(s)]);
@@ -9415,62 +9426,57 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return L.join("\n");
   }
 
-  // A brief for an AI model, not for a person: the itinerary stripped down to
-  // the few facts a diagram needs (which day, what time, where, how you get
-  // there), plus instructions for drawing it. Ratings, links, photos and notes
-  // are left out on purpose — they are what make the chart unreadable.
+  // A brief for an image model: the itinerary as a cheerful illustrated
+  // poster — one column a day, a small drawing beside every stop, a theme
+  // taken from the place and the season. Only the facts a poster needs go
+  // in: day, date, theme, place names. Times appear only where something is
+  // booked, because a 「時間未定」 on every row is what made the old one dull.
   function exportAiPrompt(snap){
     const m = snap.meta || {};
     const title = plain(m.title) || "行程";
     const days = snap.days || [];
+    const dest = plain(m.destinationLocal) || plain(m.destination) || "";
+    const mon = Number(String(m.dateStart || "").slice(5, 7));
+    const season = !mon ? "" : mon <= 2 || mon === 12 ? "冬天（雪、聖誕燈飾、暖笠笠）" : mon <= 5 ? "春天（櫻花、嫩綠）"
+      : mon <= 8 ? "夏天（藍天、海、祭典）" : "秋天（紅葉、銀杏、金黃色）";
+    const booked = t => /已\s*(訂|預約|book|reserv)/i.test(t) && !/未\s*(訂|預約|book)/i.test(t);
     const L = [];
 
-    L.push("你係一個資訊圖表設計師。下面係一個已經排好嘅旅行行程，請幫我畫一張清晰易睇嘅「行程圖」。");
+    L.push("幫我畫一張可愛、色彩豐富嘅插畫風「旅行行程海報」，似繪本或者旅遊雜誌嘅手繪地圖海報咁，一家大細睇到都會開心。");
     L.push("");
-    L.push("【要求】");
-    L.push("1. 一日一欄（或者一行），由 Day 1 順住排到最後一日，唔好打亂次序。");
-    L.push("2. 每一日要睇得出：日期、星期、當日主題，同埋當日由早到晚順序嘅地點。");
-    L.push("3. 每個地點格淨係寫三樣嘢：時間、地點名、當地語言名（細字）。唔好加介紹、描述、評分、營業時間、地址——呢啲我特登冇俾你，因為加落去張圖就會好花。");
-    L.push("4. 兩個地點之間要標返點樣過去（例如步行 10 分鐘、地鐵 20 分鐘）。");
-    L.push("5. 張圖要一眼睇得曬。用色克制：一日一隻色就夠，唔好每格都唔同色，唔好加陰影同漸變。寧願疏啲、留白多啲，都好過逼到密密麻麻。字要夠大，手機睇得清楚。");
-    L.push("6. 只可以用下面俾你嘅資料，唔好自己加地點、加時間、或者作任何我冇提供嘅嘢。地名要一字不改咁抄返。");
-    L.push("7. 每個時段我只會俾你一個地點。如果我心目中有後備選擇，我已經抽起咗，所以唔好自己加「或者」、「二選一」呢類嘢。");
-    L.push("8. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案），我自己開嚟睇同印。");
+    L.push("【風格】");
+    L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${season ? `，${season}` : ""}。四周用當地地標、季節元素（例如樹葉、花）做花邊，色調溫暖、飽滿。`);
+    L.push("2. 最頂有一個大大嘅手繪標題（用下面嘅行程名），下面一粒小牌寫日期同目的地。");
+    L.push("3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。一定要係原創角色，唔好用任何卡通片、動畫或者遊戲入面已經有嘅角色。");
+    L.push("4. 一日一直欄，由左至右排，每欄頂有圓形「Day N」標記、日期同星期、當日主題。");
+    L.push("5. 每個地點左邊畫一個細細嘅彩色插圖（食物就畫嗰款食物，景點畫建築或者風景，購物畫店舖或者袋，酒店畫屋仔，交通畫車或者飛機），右邊寫地點名，下面細字寫當地語言名。");
+    L.push("6. 唔好寫時間，唔好寫交通。只有我標咗「已訂」嘅地點先寫時間，用紅色細字。");
+    L.push("7. 唔好加介紹、評分、地址；地名要一字不改咁抄，唔好自己加地點。");
+    L.push("8. 字要清楚易讀，中文唔好錯字。橫向（例如 4:3），手機放大睇得清。");
     L.push("");
     L.push("【行程資料】");
     L.push(`行程名：${title}`);
     if (m.dateStart && m.dateEnd) L.push(`日期：${m.dateStart} 至 ${m.dateEnd}（共 ${days.length} 日）`);
-    if (plain(m.destinationLocal)) L.push(`目的地：${plain(m.destinationLocal)}`);
+    if (dest) L.push(`目的地：${dest}`);
     L.push("");
 
     days.forEach(day => {
       const n = String(day.id).replace("day", "");
       L.push(`## Day ${n}｜${plain(day.date)}｜${plain(day.title) || "未定主題"}`);
-      const st = stayForDay(snap, day);
-      if (st && st.name) L.push(`住宿：${plain(st.name)}`);
       const units = toUnits(day.items);
       const stops = units.filter(u => u.stop);
-      if (!stops.length){
-        L.push("（呢日未排嘢）");
-        L.push("");
-        return;
-      }
-      units.forEach((u, i) => {
-        if (u.note) return;          // personal reminders don't belong on a chart
-        if (!u.stop) return;
-        if (i > 0 && u.seg){
-          const t = u.seg.text != null ? u.seg.text : segPlain(u.seg.html || "");
-          if (t) L.push(`   ↓ ${t}`);
-        }
+      if (!stops.length){ L.push("（呢日未排嘢）"); L.push(""); return; }
+      stops.forEach(u => {
         const s = u.stop;
-        const time = plain(s.time) || "時間未定";
         const kr = plain(s.kr);
-        // Time, name, local name — and nothing else. The descriptions are
-        // paragraphs, and feeding them to a diagram is what made the last one
-        // unreadable: the model dutifully printed every word. Backups are left
-        // out for the same reason; the chart is the plan, not the shortlist.
-        L.push(`${time}｜${plain(s.title)}${kr ? `（${kr}）` : ""}`);
+        const tip = plain(s.tip || "");
+        const kind = s.type === "eat" ? "［食］" : "";
+        const hh = plain(s.time).replace(/^約\s*/, "") || (tip.match(/\d{1,2}\s*[:：]\s*\d{2}/) || [""])[0];
+        const t = booked(tip) ? `（已訂${hh ? " " + hh : ""}）` : "";
+        L.push(`・${kind}${cleanPlaceName(plain(s.title)) || plain(s.title)}${kr ? `（${kr}）` : ""}${t}`);
       });
+      const st = stayForDay(snap, day);
+      if (st && st.name) L.push(`・［住］${plain(st.name)}`);
       L.push("");
     });
     return L.join("\n");
@@ -9703,7 +9709,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <div class="exgroup">
         <div class="exgroup-label">畀 AI 畫圖</div>
         <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}行程圖（逐日去邊度）</button>
-        <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令入面已經寫明要分日、要有時間同交通、唔准自己作地點。</p>
+        <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令會叫佢畫成可愛插畫風海報：一日一欄、每個地點配個小插圖、配合當地季節；淨係已訂位嘅地方先寫時間，唔准自己作地點。</p>
         <button class="btn wide" id="ex-prep">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
         <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同樣唔准 AI 自己作。</p>
       </div>
@@ -10071,7 +10077,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <h2 class="sec-title">問過啲咩</h2>
         <p class="sec-sub">全家人問過 AI 嘅嘢都喺呢度，最新喺上面。撳一下睇返完整答案。</p>
         <div class="chiprow" id="note-filter"></div>
-        <div id="note-list"><p class="hint">載入緊…</p></div>
+        <div id="note-list">${elephantHtml("載入緊…", true)}</div>
       </section>`;
   }
 
@@ -10763,7 +10769,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   $("#btn-history").addEventListener("click", async () => {
     openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p>
       <div class="whoami">呢部機用緊嘅名：<b>${esc(state.editedBy || "家人（未設定）")}</b><button class="btn" id="setname">${icon("pencil")}改名</button></div>
-      <div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
+      <div class="vlist" id="vlist">${elephantHtml("載入緊改動紀錄…", true)}</div>`, async layer => {
       const sn = layer.querySelector("#setname");
       if (sn) sn.addEventListener("click", () => openNameSheet());
       const list = layer.querySelector("#vlist");
@@ -10840,7 +10846,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           e.preventDefault();
           const holder = document.createElement("div");
           holder.className = "diffwrap";
-          holder.innerHTML = `<p class="hint">比較緊…</p>`;
+          holder.innerHTML = elephantHtml("比較緊…", true);
           list.prepend(holder);
           try {
             const old = await fetchVersionSnapshot(b.dataset.cmpnow);
@@ -10858,7 +10864,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           if (picked.length !== 2){ alert("揀啱兩個版本先可以比較。"); return; }
           const holder = document.createElement("div");
           holder.className = "diffwrap";
-          holder.innerHTML = `<p class="hint">比較緊…</p>`;
+          holder.innerHTML = elephantHtml("比較緊…", true);
           list.prepend(holder);
           try {
             const [older, newer] = await Promise.all([fetchVersionSnapshot(picked[1]), fetchVersionSnapshot(picked[0])]);
@@ -11287,7 +11293,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <div style="margin-top:10px;"><button class="btn" id="retryboot">再試一次</button>
         <a class="btn" href="index.html">返去主頁</a></div></div></div>`;
       $("#retryboot").addEventListener("click", () => {
-        $("#app").innerHTML = `<div class="sec"><p class="hint">載入緊…</p></div>`;
+        $("#app").innerHTML = `<div class="loadwrap">${elephantHtml("載入緊…")}</div>`;
         boot();
       });
       return;

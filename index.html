@@ -443,6 +443,58 @@ section.triplist{margin-bottom:36px;}
 .impday-s .isnote{color:var(--ink-faint);}
 .spin{width:14px;height:14px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;display:inline-block;
   animation:ptrspin .7s linear infinite;margin-right:6px;vertical-align:-2px;}
+/* the elephant */
+.eleload{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;text-align:center;}
+.eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
+.eleload.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
+.eleload.small .ele{width:58px;height:46px;}
+.ele{width:132px;height:104px;overflow:visible;}
+.ele-body,.ele-skull,.ele-leg,.ele-trunk path:first-child{fill:#9FB0C4;}
+.ele-ear{fill:#8DA0B6;}
+.ele-ear-in{fill:#F2BFC9;opacity:.85;}
+.ele-eye{fill:#1E2430;} .ele-glint{fill:#fff;}
+.ele-cheek{fill:#F2A7B6;opacity:.7;}
+.ele-tail,.ele-hair{fill:none;stroke:#8DA0B6;stroke-width:2.4;stroke-linecap:round;}
+.ele-scarf{fill:var(--gold);}
+.ele-shadow{fill:var(--ink);opacity:.12;}
+.ele-lens circle{fill:rgba(220,236,255,.7);stroke:#E9C46A;stroke-width:2.4;}
+.ele-lens path{stroke:#E9C46A;stroke-width:3;stroke-linecap:round;}
+.ele-mapsheet path:first-child{fill:#F4EBD7;stroke:#C9B48A;stroke-width:1.2;}
+.ele-route{fill:none;stroke:#D2564C;stroke-width:1.6;stroke-dasharray:3 2;}
+.ele-puffs circle{fill:#C9D3DF;opacity:.7;}
+.ele-ear,.ele-ear-in{transform-box:fill-box;transform-origin:20% 40%;}
+.ele-trunk{transform-box:fill-box;transform-origin:85% 10%;}
+.ele-head{transform-box:fill-box;transform-origin:70% 80%;}
+.ele-leg{transform-box:fill-box;transform-origin:50% 0;}
+/* sniff: trotting, trunk sweeping a magnifying glass */
+.ele-sniff .ele-all{animation:ele-trot .9s ease-in-out infinite;}
+.ele-sniff .ele-trunk{animation:ele-sweep 1.8s ease-in-out infinite;}
+.ele-sniff .l1,.ele-sniff .l4{animation:ele-step .9s ease-in-out infinite;}
+.ele-sniff .l2,.ele-sniff .l3{animation:ele-step .9s ease-in-out infinite reverse;}
+.ele-sniff .ele-ear.front,.ele-sniff .ele-ear-in{animation:ele-wiggle 1.8s ease-in-out infinite;}
+/* fly: big ears flapping, floating up and down */
+.ele-fly .ele-all{animation:ele-float 1.6s ease-in-out infinite;}
+.ele-fly .ele-ear,.ele-fly .ele-ear-in{animation:ele-flap .32s ease-in-out infinite alternate;}
+.ele-fly .ele-shadow{animation:ele-shrink 1.6s ease-in-out infinite;}
+.ele-fly .ele-puffs{animation:ele-puff 1.6s ease-out infinite;}
+/* map: head tilting over a map, trunk tracing the route */
+.ele-map .ele-head{animation:ele-tilt 2.4s ease-in-out infinite;}
+.ele-map .ele-trunk{animation:ele-trace 2.4s ease-in-out infinite;}
+.ele-map .ele-route{animation:ele-dash 1.2s linear infinite;}
+@keyframes ele-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes ele-step{0%,100%{transform:rotate(9deg)}50%{transform:rotate(-9deg)}}
+@keyframes ele-sweep{0%,100%{transform:rotate(-10deg)}50%{transform:rotate(14deg)}}
+@keyframes ele-wiggle{0%,80%,100%{transform:rotate(0)}88%{transform:rotate(-8deg)}94%{transform:rotate(5deg)}}
+@keyframes ele-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes ele-flap{from{transform:rotate(-6deg) scaleY(1)}to{transform:rotate(-30deg) scaleY(.8)}}
+@keyframes ele-shrink{0%,100%{transform:scaleX(1);opacity:.12}50%{transform:scaleX(.7);opacity:.05}}
+@keyframes ele-puff{0%{opacity:0;transform:translate(0,0)}30%{opacity:.7}100%{opacity:0;transform:translate(10px,-6px)}}
+@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-9deg)}60%{transform:rotate(4deg)}}
+@keyframes ele-trace{0%,100%{transform:rotate(0)}40%{transform:rotate(18deg)}70%{transform:rotate(8deg)}}
+@keyframes ele-dash{to{stroke-dashoffset:-10}}
+.ele-shadow{transform-box:fill-box;transform-origin:center;}
+@media (prefers-reduced-motion:reduce){.ele *{animation:none !important;}}
+.loading .eleload,.empty .eleload{margin:20px auto;}
 </style>
 </head>
 <body>
@@ -494,7 +546,7 @@ section.triplist{margin-bottom:36px;}
 
   <section class="triplist">
     <div class="triplist-head"><h2>未去嘅行程</h2><span class="count" id="upcount"></span></div>
-    <div class="tripgrid" id="upcoming"><div class="loading">載入緊…</div></div>
+    <div class="tripgrid" id="upcoming"><div class="loading" id="bootload">載入緊…</div></div>
   </section>
 
   <section class="triplist">
@@ -1123,6 +1175,39 @@ section.triplist{margin-bottom:36px;}
     });
   }
 
+  function elephantSvg(move){
+    const ELE_MOVES = ["sniff", "fly", "map"];   // inside, so it works before this line has run
+    const m = move || ELE_MOVES[Math.floor(Math.random() * ELE_MOVES.length)];
+    return `<svg class="ele ele-${m}" viewBox="0 0 132 104" aria-hidden="true">
+      <ellipse class="ele-shadow" cx="66" cy="98" rx="34" ry="4"/>
+      <g class="ele-all">
+        <path class="ele-tail" d="M96 58 q10 2 9 12"/>
+        <rect class="ele-leg l1" x="52" y="74" width="10" height="16" rx="5"/>
+        <rect class="ele-leg l2" x="82" y="74" width="10" height="16" rx="5"/>
+        <ellipse class="ele-body" cx="72" cy="62" rx="28" ry="21"/>
+        <rect class="ele-leg l3" x="60" y="76" width="10" height="16" rx="5"/>
+        <rect class="ele-leg l4" x="88" y="76" width="10" height="16" rx="5"/>
+        <path class="ele-scarf" d="M38 58 q10 9 24 0 l-2 6 q-10 6 -20 0z"/>
+        <g class="ele-head">
+          <ellipse class="ele-ear back" cx="62" cy="38" rx="16" ry="19"/>
+          <circle class="ele-skull" cx="44" cy="42" r="19"/>
+          <g class="ele-trunk"><path d="M30 48 q-8 8 -6 20 q1 5 5 4 q3 -1 2 -5 q-2 -9 5 -14z"/>
+            ${m === "sniff" ? `<g class="ele-lens"><circle cx="22" cy="78" r="7"/><path d="M27 83 l6 6"/></g>` : ""}</g>
+          <ellipse class="ele-ear front" cx="56" cy="40" rx="17" ry="20"/>
+          <ellipse class="ele-ear-in" cx="57" cy="41" rx="10" ry="13"/>
+          <circle class="ele-eye" cx="38" cy="38" r="2.6"/><circle class="ele-glint" cx="38.9" cy="37.1" r="0.9"/>
+          <circle class="ele-cheek" cx="33" cy="46" r="3.4"/>
+          <path class="ele-hair" d="M44 23 q2 -6 6 -5 M47 24 q4 -4 7 -1"/>
+        </g>
+        ${m === "map" ? `<g class="ele-mapsheet"><path d="M14 66 l12 -4 l12 4 l12 -4 v20 l-12 4 l-12 -4 l-12 4z"/><path class="ele-route" d="M18 76 q8 -8 14 -2 t14 -4"/></g>` : ""}
+      </g>
+      ${m === "fly" ? `<g class="ele-puffs"><circle cx="104" cy="88" r="3"/><circle cx="112" cy="84" r="2"/></g>` : ""}
+    </svg>`;
+  }
+  function elephantHtml(text, small){
+    return `<div class="eleload${small ? " small" : ""}" role="status">${elephantSvg()}<span>${esc(text)}</span></div>`;
+  }
+  { const bl = document.getElementById("bootload"); if (bl) bl.innerHTML = elephantHtml("載入緊行程…"); }
   async function loadTrips(){
     const upEl = $("#upcoming"), pastEl = $("#past");
     let trips;
@@ -1135,7 +1220,7 @@ section.triplist{margin-bottom:36px;}
         <div style="margin-top:10px;"><button class="btn" id="retrytrips">再試一次</button></div></div>`;
       pastEl.innerHTML = "";
       $("#retrytrips").addEventListener("click", () => {
-        upEl.innerHTML = `<div class="empty">載入緊…</div>`;
+        upEl.innerHTML = `<div class="empty">${elephantHtml("載入緊行程…")}</div>`;
         loadTrips();
       });
       return;
