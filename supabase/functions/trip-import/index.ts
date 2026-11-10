@@ -170,6 +170,40 @@ async function legBetween(body: any) {
   return { ok: false, message: "計唔到呢段交通。" };
 }
 
+// What is worth a stop near a place already on the day: Google's own
+// well-rated restaurants or sights within a short walk, so a suggestion is
+// a real place with a real rating, not something a model made up.
+async function nearbyPlaces(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const lat = Number(body?.lat), lng = Number(body?.lng);
+  if (!key || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, message: "冇位置資料。" };
+  const eat = body?.kind === "eat";
+  const lang = typeof body?.lang === "string" ? body.lang.slice(0, 8) : "";
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}` +
+    `&radius=${eat ? 700 : 1500}&type=${eat ? "restaurant" : "tourist_attraction"}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
+  try {
+    const data = await (await fetch(url)).json();
+    const R = 6371000, toR = (x: number) => x * Math.PI / 180;
+    const dist = (g: any) => {
+      const a = Math.sin(toR(g.lat - lat) / 2) ** 2 + Math.cos(toR(lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - lng) / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    };
+    const skip = new Set((Array.isArray(body?.skip) ? body.skip : []).map(String));
+    const places = (data?.results || [])
+      .filter((r: any) => r?.place_id && !skip.has(r.place_id) && r.business_status !== "CLOSED_PERMANENTLY"
+        && Number(r.rating) >= 4 && Number(r.user_ratings_total) >= (eat ? 80 : 150))
+      .map((r: any) => {
+        const m = dist(r.geometry.location);
+        return { name: String(r.name || ""), placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
+          rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, walk: Math.max(1, Math.round(m * 1.3 / 80)),
+          price: Number.isFinite(r.price_level) ? r.price_level : null, area: String(r.vicinity || "").slice(0, 60) };
+      })
+      .sort((a: any, b: any) => b.rating * Math.log(b.ratingCount + 1) - a.rating * Math.log(a.ratingCount + 1))
+      .slice(0, 6);
+    return { ok: true, places };
+  } catch (e) { return { ok: false, message: String(e) }; }
+}
+
 // A long leg — another city, an airport — asked the way a travel agent
 // would answer: which train, whether to buy ahead and how, how often it
 // runs, when to set off for the next stop, and whether the plan is too tight.
@@ -332,6 +366,7 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { return json({ ok: false, message: "bad json" }, 400); }
   if (body?.mode === "leg") return json(await legBetween(body));
+  if (body?.mode === "nearby") return json(await nearbyPlaces(body));
   if (!geminiKeys().length) return json({ ok: false, message: "AI 功能未設定（冇 GEMINI_API_KEY）。" });
 
   const text = str(body?.text, 60000);
