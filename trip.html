@@ -1128,6 +1128,9 @@ img{max-width:100%;}
 #ins-q{margin:10px 0 12px;}
 .ins-more{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
 .ins-more .btn{flex:1 1 auto;}
+.whoami{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink-soft);margin:6px 0 12px;padding:10px 12px;border-radius:12px;background:var(--surface-2);}
+.whoami b{color:var(--ink);}
+.whoami .btn{margin-left:auto;padding:6px 12px;font-size:12.5px;}
 .advopts{display:flex;flex-direction:column;gap:10px;margin:12px 0;}
 .advopt{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);}
 .advopt.best{border-color:color-mix(in srgb,var(--gold) 55%,transparent);}
@@ -1969,7 +1972,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-14";
+  const BUILD = "2026-11-10-15";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2135,7 +2138,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     view: "overview",              // "overview" | dayId
     open: new Set(),               // "dayId:unitIndex" currently expanded
     mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
-    editedBy: localStorage.getItem("seoul_trip_name") || "",
+    editedBy: (() => { try { return localStorage.getItem("trip_editor_name") || localStorage.getItem("seoul_trip_name") || ""; } catch (_){ return ""; } })(),
     readOnlyLabel: null,           // set when previewing an old version
     renamingBoard: null,           // boardId currently showing its rename input
     boardIdeas: null,              // last AI answer shown inline on a board page
@@ -2151,6 +2154,30 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
   // never interrupt an edit to ask who is typing; a name can be set in 歷史 if wanted
   function getEditedBy(){ return state.editedBy || "家人"; }
+  // Each phone keeps its own name, so 改動紀錄 says who changed what. A phone
+  // that never set one shows as 「家人」; it is asked once, on its first edit.
+  function setEditorName(n){
+    state.editedBy = String(n || "").trim().slice(0, 20);
+    try { localStorage.setItem("trip_editor_name", state.editedBy); localStorage.removeItem("seoul_trip_name"); } catch (_){}
+  }
+  function openNameSheet(after){
+    openSheet(`<h3>你係邊個？</h3>
+      <p class="sec-sub">呢部機改行程嘅時候，「改動紀錄」會寫呢個名，等大家知邊個改咗咩。只係記喺呢部機。</p>
+      <div class="field"><label>你嘅名</label><input class="input" id="nm-in" maxlength="20" value="${esc(state.editedBy || "")}" placeholder="例如：爸爸、阿妹、Tiffany"></div>
+      <div class="editor-tools"><button class="btn" data-close>遲啲先</button><button class="btn primary" id="nm-save">儲存</button></div>`,
+      layer => {
+        const inp = layer.querySelector("#nm-in");
+        setTimeout(() => inp.focus(), 50);
+        const save = () => { setEditorName(inp.value); closeLayer(); flash(state.editedBy ? `之後嘅改動會寫「${state.editedBy}」` : "冇名，會寫「家人」"); if (after) after(); };
+        layer.querySelector("#nm-save").addEventListener("click", save);
+        inp.addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+      });
+  }
+  function askNameOnce(){
+    if (state.editedBy || state.readonly || navigator.webdriver) return;
+    try { if (localStorage.getItem("trip_name_asked")) return; localStorage.setItem("trip_name_asked", "1"); } catch (_){ return; }
+    setTimeout(() => { if (!document.querySelector("#layer .sheet")) openNameSheet(); }, 800);
+  }
 
   // ---------- theme ----------
   // The chrome's icons live in markup that ships before the script runs, so
@@ -2523,6 +2550,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // and if each of those waited for a real POST the coalescing would never
   // happen. Nothing reads a version row back after saving, so this is safe.
   function saveNow(summary, trivial){
+    if (!trivial) askNameOnce();
     queueSave(summary, trivial ? "upkeep" : "user");
     if (!trivial) scheduleFlush(600);
     return Promise.resolve();
@@ -10432,7 +10460,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
   // ---------- history ----------
   $("#btn-history").addEventListener("click", async () => {
-    openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p><div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
+    openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p>
+      <div class="whoami">呢部機用緊嘅名：<b>${esc(state.editedBy || "家人（未設定）")}</b><button class="btn" id="setname">${icon("pencil")}改名</button></div>
+      <div class="vlist" id="vlist"><p class="hint">載入緊…</p></div>`, async layer => {
+      const sn = layer.querySelector("#setname");
+      if (sn) sn.addEventListener("click", () => openNameSheet());
       const list = layer.querySelector("#vlist");
       let rows, showTrivial = false;
       // background/technical saves (交通時間／評分／地圖座標呢類) are marked
