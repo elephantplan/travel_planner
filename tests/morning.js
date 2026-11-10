@@ -106,6 +106,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   {
     const jp = JSON.parse(JSON.stringify(snap));
     jp.meta.destinationLocal = '大阪';
+    jp.days[1].items.splice(3, 0, { kind: 'connector', mode: 'metro', text: '地鐵約 15 分鐘', route: '谷町四丁目 ─谷町線・2站─ 南森町', est: true });
     const p2 = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
     p2.on('pageerror', e => errs.push(e.message));
     const jl = [], ja = [];
@@ -119,7 +120,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
       if (body.action === 'transit') ja.push(body);
       if (body.mode === 'leg'){ jl.push(body);
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'metro',
-          text: '電車約 20 分鐘', route: '梅田 ─JR大阪環状線・3站─ 大阪城公園', fromStation: '梅田', toStation: '大阪城公園', estimated: true }) }); }
+          text: '電車／巴士：撳 Google 睇班次（的士約 12 分鐘，行路約 35 分鐘）', noTime: true }) }); }
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     });
     await p2.route('**tile**', r => r.abort());
@@ -128,11 +129,13 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     await p2.evaluate(() => document.querySelector('[data-go="day2"]').click());
     await p2.waitForTimeout(2500);
     ok('日本行程用新嘅交通查詢，唔再淨係得行路', jl.length >= 1 && ja.length === 0, [jl.length, ja.length]);
-    ok('有地點名同城市幫 AI 估', jl.every(x => x.city === '大阪' && x.toName));
+    ok('冇舊版 AI 估嘅路線殘留', !/AI 估/.test(await p2.locator('#app').innerText()));
     const t2 = await p2.locator('.seg.hotelleg').first().innerText();
-    ok('寫明係 AI 估', /電車約 20 分鐘/.test(t2) && /AI 估/.test(t2), t2);
-    const nt = await p2.locator('.seg.hotelleg').first().locator('a[href*="navitime"]').getAttribute('href').catch(() => '');
-    ok('有 NAVITIME 轉車連結（由上車站去落車站）', /orvStationName=%E6%A2%85%E7%94%B0/.test(nt || '') && /dnvStationName=/.test(nt || ''), nt);
+    ok('講明電車睇 Google，有的士同行路時間做參考', /撳 Google 睇班次/.test(t2) && /的士約 12 分鐘/.test(t2), t2);
+    ok('Google 路線用大眾運輸模式', /travelmode=transit/.test(await p2.locator('.seg.hotelleg').first().locator('a[href*="google.com/maps/dir"]').getAttribute('href')));
+    ok('唔會當「12 分鐘」嚟計時間好趕', !/時間好趕/.test(await p2.locator('#app').innerText()));
+    ok('舊版 AI 估嘅交通會自動重新計', jl.some(x => x.to && x.to.placeId === 'p6'), jl.map(x => x.to));
+    ok('冇 NAVITIME 掣', await p2.locator('a[href*="navitime"]').count() === 0);
     await p2.close();
   }
   ok('冇 JS 錯誤', errs.length === 0, errs);

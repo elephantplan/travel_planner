@@ -93,9 +93,9 @@ function whyFailed(m: string): string {
 
 // ---------- one leg between two places ----------
 // Google's Directions API returns no public transport at all in Japan, so the
-// old lookup could only offer a 60-minute walk. Walking and driving still
-// come from Google; trains come from Google where it has them and otherwise
-// from Gemini with search, marked as an estimate.
+// old lookup could only offer a 60-minute walk. Walking, driving and (where
+// Google has it) transit come from Google; where it has no transit the leg
+// says so and points at the Google Maps app instead of guessing.
 function legRef(r: any): string {
   if (!r || typeof r !== "object") return "";
   if (typeof r.placeId === "string" && r.placeId) return "place_id:" + r.placeId;
@@ -129,13 +129,6 @@ function rideOf(steps: any[]) {
     from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
 }
 const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
-const LEG_PROMPT = (from: string, to: string, city: string) => `你係${city || "當地"}嘅交通專家，可以上網查。
-由「${from}」去「${to}」搭公共交通（電車、地鐵或者巴士），揀一般遊客最常用又快嘅路線。
-只回覆一個 JSON，唔好其他字：
-{"minutes": 總共幾多分鐘（包埋行去車站同等車）, "kind": "電車" 或 "地鐵" 或 "巴士",
- "transfers": 轉車次數, "route": "上車站 ─路線名・N站─ 落車站（有轉車就照樣接落去）",
- "fromStation": "上車站名（當地文字，唔好加「駅」以外嘅字）", "toStation": "落車站名（當地文字）"}
-兩個地點行路 15 分鐘內到就答 {"minutes": 分鐘, "kind": "步行"}。`;
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
@@ -162,24 +155,15 @@ async function legBetween(body: any) {
       text: `${r.subway ? "電車" : "巴士"}約 ${mins(t.seconds)} 分鐘${r.transfers ? `・轉${r.transfers}次` : ""}`,
       route: r.chain, fromStation: r.from, toStation: r.to };
   }
-  // no transit from Google (all of Japan): ask Gemini for the usual route
-  if (geminiKeys().length) {
-    try {
-      const p = parseJson(await callGemini([{ text: LEG_PROMPT(String(body?.fromName || o).slice(0, 120), String(body?.toName || d).slice(0, 120), String(body?.city || "").slice(0, 40)) }], true));
-      const m = Math.round(Number(p?.minutes));
-      if (m > 0 && m < 600) {
-        if (/步行/.test(String(p?.kind || ""))) return { ok: true, mode: "walk", text: `步行約 ${m} 分鐘`, estimated: true };
-        const kind = /巴士/.test(String(p?.kind)) ? "巴士" : /地鐵/.test(String(p?.kind)) ? "地鐵" : "電車";
-        const x = Math.max(0, Math.round(Number(p?.transfers) || 0));
-        return { ok: true, mode: kind === "巴士" ? "bus" : "metro", text: `${kind}約 ${m} 分鐘${x ? `・轉${x}次` : ""}`,
-          route: String(p?.route || "").slice(0, 200), fromStation: String(p?.fromStation || "").slice(0, 40),
-          toStation: String(p?.toStation || "").slice(0, 40), estimated: true };
-      }
-    } catch (e) { console.error("leg estimate", String(e)); }
-  }
+  // No transit from Google's API (all of Japan). A guessed train route was
+  // wrong too often to show, so say what is known for sure — the taxi and
+  // walking times — and leave the trains to the Google Maps app, which does
+  // have Japanese timetables.
   const c: any = await gDirections(o, d, "driving", lang);
-  if (c.seconds) return { ok: true, mode: "taxi", text: `揸車／的士約 ${mins(c.seconds)} 分鐘` };
-  if (w?.seconds) return walkOut(w);
+  if (!w) w = await gDirections(o, d, "walking", lang);
+  const bits = [c.seconds ? `的士約 ${mins(c.seconds)} 分鐘` : "", w?.seconds && w.seconds <= 2700 ? `行路約 ${mins(w.seconds)} 分鐘` : ""].filter(Boolean);
+  if (prefer === "transit" || c.seconds || w?.seconds)
+    return { ok: true, mode: "metro", noTime: true, text: `電車／巴士：撳 Google 睇班次${bits.length ? "（" + bits.join("，") + "）" : ""}` };
   return { ok: false, message: "計唔到呢段交通。" };
 }
 

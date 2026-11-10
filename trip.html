@@ -1110,7 +1110,6 @@ img{max-width:100%;}
 .hc-links .maplink{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--surface-2);padding:5px 11px;border-radius:999px;}
 .modebtn{display:inline-grid;place-items:center;padding:0;border:0;background:none;cursor:pointer;border-radius:50%;}
 .modebtn .icon{box-shadow:0 0 0 1px color-mix(in srgb,var(--lc) 40%,transparent);}
-.seg-est{font-size:10.5px;font-weight:700;color:var(--ink-faint);border:1px solid var(--rule);border-radius:999px;padding:0 6px;margin-left:2px;}
 .modepick{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
 .modepick .btn{justify-content:flex-start;}
 /* card buttons wrap onto a second row instead of hiding off to the right */
@@ -1917,7 +1916,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-04";
+  const BUILD = "2026-11-10-05";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3370,7 +3369,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const hotelG = subj.placeId ? subj : { title: subj.title, kr: subj.kr };
     const a = which === "hotelLeg" ? subj : info.s, b = which === "hotelLeg" ? info.s : subj;
     const mode = leg ? segMode(leg) : "metro";
-    const links = legLinks(which === "hotelLeg" ? hotelG : info.s, which === "hotelLeg" ? info.s : hotelG, a, b, mode, leg);
+    const links = legLinks(which === "hotelLeg" ? hotelG : info.s, which === "hotelLeg" ? info.s : hotelG, a, b, mode);
     const body = leg ? `<span class="seg-head">${segModeBtn(leg, `data-legmode="${which}"`)}</span>` + (leg.route ? routeChainHtml(leg.route) : "")
       : `<span class="seg-note">${legBusy.has(day.id + which) ? "計緊交通…" : "交通未計到"}</span>`;
     const refresh = !state.readonly ? `<button class="segrefresh" data-legrefresh="${which}" title="重新計" aria-label="重新計呢段交通">${icon("refresh")}</button>` : "";
@@ -3382,19 +3381,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segModeBtn(seg, attr){
     const mode = segMode(seg);
     const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
-    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}${seg.est ? `<small class="seg-est">AI 估</small>` : ""}`;
+    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}`;
   }
-  // Google everywhere; Naver in Korea; NAVITIME in Japan once the boarding
-  // and alighting stations are known (it searches station to station)
-  function legLinks(gFrom, gTo, nFrom, nTo, mode, seg){
+  // Google everywhere; Naver in Korea
+  function legLinks(gFrom, gTo, nFrom, nTo, mode){
     const g = gmapsDirUrl(gFrom, gTo, mode);
     const n = destIsKorea() ? naverDirUrl(nFrom, nTo, mode) : "";
-    const nt = destIsJapan() && seg && seg.st1 && seg.st2 && mode !== "walk" && mode !== "taxi"
-      ? `https://www.navitime.co.jp/transfer/searchlist?orvStationName=${encodeURIComponent(seg.st1)}&dnvStationName=${encodeURIComponent(seg.st2)}` : "";
     const parts = mapLinksInOrder(
       n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
       g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
-    if (nt) parts.push(`<a class="maplink" href="${esc(nt)}" target="_blank" rel="noopener" aria-label="NAVITIME 轉車">${icon("map")}NAVITIME</a>`);
     return parts.length ? `<span class="seg-links">${parts.join("")}</span>` : "";
   }
 
@@ -3421,8 +3416,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segFromLookup(r, prefer){
     const seg = buildSeg(r.mode || "walk", r.text, r.route);
     if (prefer && prefer !== "auto") seg.prefer = prefer;
-    if (r.estimated) seg.est = true;
-    if (r.fromStation && r.toStation){ seg.st1 = r.fromStation; seg.st2 = r.toStation; }
+    if (r.noTime) seg.noTime = true;
     return seg;
   }
   async function computeHotelLeg(day, which){
@@ -3450,6 +3444,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // someone pressed 重算. Legs between two real places are now asked for as
   // soon as nobody is mid-edit on that day — once each, so a failure doesn't
   // loop; the button is still there to retry.
+  // Legs saved by older builds that are known to be wrong: an AI-guessed train
+  // route, or — in Japan, where Google's API has no trains — a long walk that
+  // was only the fallback. Each is looked up again once.
+  function segSuspect(seg){
+    if (!seg || seg.prefer) return false;
+    if (seg.est) return true;
+    const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
+    return destIsJapan() && segMode(seg) === "walk" && !!m && +m[1] > 20;
+  }
   const autoTransitTried = new Set();
   let autoTransitBusy = false;
   async function autoTransit(day){
@@ -3461,7 +3464,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const prevOf = i => { for (let j = i - 1; j >= 0; j--) if (units[j].stop) return units[j].stop; return null; };
       const todo = units.map((u, i) => i).filter(i => {
         const u = units[i];
-        if (i <= first || !u.stop || !u.seg || !u.seg.stale || u.seg.checking || !isRealPlace(u.stop)) return false;
+        if (i <= first || !u.stop || !u.seg || !(u.seg.stale || segSuspect(u.seg)) || u.seg.checking || !isRealPlace(u.stop)) return false;
         const k = day.id + JSON.stringify([stopRef(prevOf(i)), stopRef(u.stop)]);
         if (autoTransitTried.has(k)) return false;
         autoTransitTried.add(k);
@@ -3472,7 +3475,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       for (const which of ["hotelLeg", "backLeg"]){
         const info = hotelLegInfo(day, which);
         const hk = which + day.id + (info ? info.key : "");
-        if (!info || (day[which] && day[which].key === info.key) || autoTransitTried.has(hk)) continue;
+        if (!info || (day[which] && day[which].key === info.key && !segSuspect(day[which])) || autoTransitTried.has(hk)) continue;
         autoTransitTried.add(hk);
         if (await computeHotelLeg(day, which)) got++;
       }
@@ -5334,14 +5337,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
-      const nt = destIsJapan() && u.seg.st1 && u.seg.st2 && !/^(walk|taxi)$/.test(mode)
-        ? `https://www.navitime.co.jp/transfer/searchlist?orvStationName=${encodeURIComponent(u.seg.st1)}&dnvStationName=${encodeURIComponent(u.seg.st2)}` : "";
-      if (nt) parts.push(`<a class="maplink" href="${esc(nt)}" target="_blank" rel="noopener" aria-label="NAVITIME 轉車">${icon("map")}NAVITIME</a>`);
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     // a leg that takes longer than the gap between the two planned times
     let tight = "";
-    if (showSeg && s && !u.seg.stale && !u.seg.checking){
+    if (showSeg && s && !u.seg.stale && !u.seg.checking && !u.seg.noTime){
       const us = toUnits(day.items);
       let prev = null;
       for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; break; }
