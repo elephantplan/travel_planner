@@ -107,9 +107,14 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     const jp = JSON.parse(JSON.stringify(snap));
     jp.meta.destinationLocal = '大阪';
     jp.days[1].items.splice(3, 0, { kind: 'connector', mode: 'metro', text: '地鐵約 15 分鐘', route: '谷町四丁目 ─谷町線・2站─ 南森町', est: true });
+    // a place whose name carries the opening hours never got matched on Google
+    jp.days[1].items.unshift({ kind: 'stop', title: '永觀堂 (9am - 4pm)', kr: '', placeId: '', type: 'sight' },
+      { kind: 'connector', mode: 'metro', text: '電車／巴士：撳 Google 睇班次（的士約 59 分鐘）', noTime: true });
+    // an old 「大眾運輸約」 leg, which in Japan was really a walking time
+    jp.days[1].items.splice(4, 0, { kind: 'connector', mode: 'metro', text: '大眾運輸約 32 分鐘' });
     const p2 = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
     p2.on('pageerror', e => errs.push(e.message));
-    const jl = [], ja = [];
+    const jl = [], ja = [], jq = [];
     await p2.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await p2.route('**/rest/v1/itinerary_versions**', r => r.request().method() === 'POST'
       ? r.fulfill({ status: 201, contentType: 'application/json', body: '[]' })
@@ -118,6 +123,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     await p2.route('**/functions/v1/**', r => {
       const body = JSON.parse(r.request().postData() || '{}');
       if (body.action === 'transit') ja.push(body);
+      if (body.action === 'place-search'){ jq.push(body.query);
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ places: [{ name: '永観堂', placeId: 'pE', lat: 35.0145, lng: 135.7944 }] }) }); }
       if (body.mode === 'leg'){ jl.push(body);
         return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'metro',
           text: '電車／巴士：撳 Google 睇班次（的士約 12 分鐘，行路約 35 分鐘）', noTime: true }) }); }
@@ -135,6 +142,12 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('Google 路線用大眾運輸模式', /travelmode=transit/.test(await p2.locator('.seg.hotelleg').first().locator('a[href*="google.com/maps/dir"]').getAttribute('href')));
     ok('唔會當「12 分鐘」嚟計時間好趕', !/時間好趕/.test(await p2.locator('#app').innerText()));
     ok('舊版 AI 估嘅交通會自動重新計', jl.some(x => x.to && x.to.placeId === 'p6'), jl.map(x => x.to));
+    ok('名入面嘅營業時間唔會拎去搜尋，仲加埋城市', jq.includes('永觀堂 大阪'), jq);
+    ok('配返 Google 之後重新計佢前後嘅交通', jl.some(x => x.from && x.from.placeId === 'pE'), jl.map(x => x.from));
+    ok('配返之後朝早都由酒店出發', /永觀堂/.test(await p2.locator('.stopcard').first().innerText()) && await p2.locator('.hotelrow').count() === 2);
+    ok('舊嘅「大眾運輸約」重新計過', !/大眾運輸約 32 分鐘/.test(await p2.locator('#app').innerText()));
+    const yh = await p2.locator('.seg.hotelleg').first().locator('a[href*="transit.yahoo.co.jp"]').getAttribute('href').catch(() => '');
+    ok('電車段有 Yahoo!乗換案内（起點終點都填好）', /search\/result\?from=/.test(yh || '') && /&to=/.test(yh || ''), yh);
     ok('冇 NAVITIME 掣', await p2.locator('a[href*="navitime"]').count() === 0);
     await p2.close();
   }

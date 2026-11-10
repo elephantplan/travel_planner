@@ -1916,7 +1916,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-05";
+  const BUILD = "2026-11-10-06";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3280,7 +3280,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!s) return null;
     if (s.placeId) return { placeId: s.placeId };
     if (Number.isFinite(s.lat) && Number.isFinite(s.lng)) return { lat: s.lat, lng: s.lng };
-    if ((s.title || "").trim()) return { text: s.title.trim() };
+    if (cleanPlaceName(s.title)) return { text: cleanPlaceName(s.title) };
     return null;
   }
 
@@ -3390,6 +3390,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const parts = mapLinksInOrder(
       n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
       g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
+    const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(nFrom, nTo) : "";
+    if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
     return parts.length ? `<span class="seg-links">${parts.join("")}</span>` : "";
   }
 
@@ -3399,6 +3401,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // trip-import, which can also ask Gemini for the usual train route.
   async function legLookup(from, to, opt = {}){
     const prefer = opt.prefer || "auto";
+    const city = ((state.snapshot || {}).meta || {}).destinationLocal || "";
+    const withCity = r => r && r.text && city && !r.text.includes(city) ? { text: `${r.text} ${city}` } : r;
+    from = withCity(from); to = withCity(to);
     if (prefer === "auto" && !destIsJapan()){
       const r = await callAi({ action:"transit", from, to });
       const m = r && String(r.text || "").match(/(\d+)\s*分鐘/);
@@ -3444,14 +3449,65 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // someone pressed 重算. Legs between two real places are now asked for as
   // soon as nobody is mid-edit on that day — once each, so a failure doesn't
   // loop; the button is still there to retry.
+  // Titles carry notes for people — 「永觀堂 (9am - 4pm)」, 「<午餐> 鰻魚飯」,
+  // 「購物：思夢樂」 — which make Google search for the wrong thing or nothing.
+  function cleanPlaceName(t){
+    const raw = plain(t || "").trim();
+    const c = raw.replace(/[<＜][^>＞]*[>＞]/g, " ").replace(/[（(][^）)]*[）)]/g, " ")
+      .replace(/^[^：:]{1,6}[：:]\s*/, "").replace(/\s+/g, " ").trim();
+    return c || raw;
+  }
+  // A stop typed by hand or imported with notes in its name never got a
+  // Google place, so it had no map pin, no hotel leg and legs timed from a
+  // wrong guess. Look each one up once by its cleaned name in this city.
+  const NOT_A_STOP = /自由活動|休息|出發|返酒店|集合|check.?in|check.?out|機場|落機|起飛|降落|寄存/i;
+  async function matchLoosePlaces(day){
+    const city = ((state.snapshot || {}).meta || {}).destinationLocal || "";
+    const units = toUnits(day.items);
+    const todo = units.map((u, i) => i).filter(i => {
+      const st = units[i].stop;
+      return st && !isRealPlace(st) && !st.placeTried && cleanPlaceName(st.title).length >= 2
+        && !HOTEL_ROW.test(plain(st.title) || "") && !NOT_A_STOP.test(plain(st.title) || "");
+    });
+    let got = 0;
+    for (const i of todo){
+      const st = units[i].stop;
+      st.placeTried = true;
+      const q = cleanPlaceName(st.title);
+      try {
+        const r = await callAi({ action:"place-search", query: city && !q.includes(city) ? `${q} ${city}` : q });
+        const p = r && r.places && r.places[0];
+        if (p && p.placeId){
+          st.placeId = p.placeId;
+          if (Number.isFinite(p.lat)){ st.lat = p.lat; st.lng = p.lng; }
+          // the legs into and out of it were timed from a guess
+          if (units[i].seg) units[i].seg = Object.assign({}, units[i].seg, { stale:true });
+          for (let j = i + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
+          got++;
+        }
+      } catch (_){}
+    }
+    if (got){ day.items = fromUnits(units); syncMapPoints(day); }
+    return got;
+  }
+  // Yahoo!乗換案内 searches by name (stations, spots, addresses), so a train
+  // leg in Japan can open there with both ends filled in
+  function yahooTransitUrl(a, b){
+    const n = x => plain(x && x.kr) || cleanPlaceName(x && (x.title || x.name));
+    const f = n(a), t = n(b);
+    return f && t ? `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(f)}&to=${encodeURIComponent(t)}` : "";
+  }
   // Legs saved by older builds that are known to be wrong: an AI-guessed train
   // route, or — in Japan, where Google's API has no trains — a long walk that
   // was only the fallback. Each is looked up again once.
   function segSuspect(seg){
     if (!seg || seg.prefer) return false;
     if (seg.est) return true;
+    if (!destIsJapan() || seg.noTime) return false;
+    // Google's API has no trains in Japan: any timed train leg is from an old build
+    if (/^(metro|bus|other)$/.test(segMode(seg))) return true;
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
-    return destIsJapan() && segMode(seg) === "walk" && !!m && +m[1] > 20;
+    return segMode(seg) === "walk" && !!m && +m[1] > 20;
   }
   const autoTransitTried = new Set();
   let autoTransitBusy = false;
@@ -3460,6 +3516,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if ([...state.open].some(k => String(k).startsWith(day.id + ":"))) return;
     autoTransitBusy = true;
     try {
+      if (await matchLoosePlaces(day)){ if (state.view === day.id) render(); await saveNow("幫地點配返 Google", true); }
       const units = toUnits(day.items), first = firstStopUnit(units);
       const prevOf = i => { for (let j = i - 1; j >= 0; j--) if (units[j].stop) return units[j].stop; return null; };
       const todo = units.map((u, i) => i).filter(i => {
@@ -5337,6 +5394,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
         g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "",
       );
+      const y = destIsJapan() && !/^(walk|taxi)$/.test(mode) ? yahooTransitUrl(from, to) : "";
+      if (y) parts.push(`<a class="maplink" href="${esc(y)}" target="_blank" rel="noopener" aria-label="Yahoo!乗換案内">${icon("map")}Yahoo 乗換</a>`);
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     // a leg that takes longer than the gap between the two planned times
@@ -7821,7 +7880,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const m = String(s.mapUrl || "").match(/\/search\/([^/?#]+)/);
     let naver = "";
     if (m){ try { naver = decodeURIComponent(m[1]).replace(/\+/g, " ").trim(); } catch (_){} }
-    return plain(s.kr) || naver || plain(s.title);
+    return plain(s.kr) || naver || cleanPlaceName(s.title);
   }
 
   function resolveDayMapPoints(day){
