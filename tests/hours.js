@@ -38,8 +38,8 @@ const WEEK = ['星期一: 11:00 – 22:00','星期二: 11:00 – 22:00','星期�
   console.log('\nA. 自己加嘅地點都會補返營業時間');
   ok('每個有 place id 嘅地點都問咗', ['p4','p5','p6'].every(x => asked.includes(x)), asked);
   const text = await p.locator('#app').innerText();
-  ok('卡上面見到全星期時間', /星期一至四 11:00–22:00/.test(text));
-  ok('仲見到嗰日（星期六）嘅時間', /呢日（星期六）：10:00 – 23:00/.test(text), text.match(/呢日[^\n]*/));
+  ok('卡上面見到平時嘅時間（一粒 chip 講晒）', /平時 11:00–22:00/.test(text) && !/星期一至四 11:00–22:00/.test(text));
+  ok('仲見到嗰日（星期六）嘅時間', /呢日 10:00–23:00/.test(text), text.match(/呢日[^\n]*/));
   // upkeep saves are batched; leaving the app (or 60 s) flushes them
   await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true });
     document.dispatchEvent(new Event('visibilitychange')); });

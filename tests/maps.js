@@ -61,7 +61,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('每個地點有 Google 地圖', foot.some(h => /google\.com\/maps/.test(h)));
     ok('每個地點有 Naver 地圖', foot.some(h => /map\.naver\.com\/p\/search/.test(h)));
 
-    const seg = await p.locator('.seg-links a').evaluateAll(els => els.map(e => e.getAttribute('href')));
+    const seg = await p.locator('.seg:not(.hotelleg) .seg-links a').evaluateAll(els => els.map(e => e.getAttribute('href')));
     ok('交通段有路線掣', seg.length >= 2, seg.length);
     const g = seg.find(h => /google/.test(h)) || '';
     ok('Google 路線用 dir API', /\/maps\/dir\/\?api=1/.test(g), g);

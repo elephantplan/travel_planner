@@ -1096,6 +1096,10 @@ img{max-width:100%;}
 .seg-text > .segrefresh{order:2;width:26px;height:26px;margin-left:0;background:none;}
 .seg-text > .rchain,.seg-text > .seg-route,.seg-text > .seg-tight{order:3;}
 .seg-text .rchain{margin-top:0;}
+.stopcard:not(:has(> .stopmain > .thumb)) > .cardtools{flex-direction:row;gap:4px;}
+.stopcard:not(:has(> .stopmain > .thumb)) > .stopmain{padding-right:80px;}
+.hotelleg .seg-text > .hl-from{order:-1;width:100%;display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-faint);}
+.hotelleg .hl-from .i{width:12px;height:12px;}
 .seg.stale .seg-text,.seg.tight .seg-text{padding:6px 10px;border:1px dashed color-mix(in srgb,var(--warn) 45%,transparent);border-radius:12px;margin:4px 0 4px 14px;}
 .seg.tight .seg-text{border-color:color-mix(in srgb,var(--danger) 45%,transparent);}
 
@@ -1530,7 +1534,7 @@ body.readonly .qa-del{display:none;}
 .dockbtn.accent{background:var(--gold);color:#14110A;border-color:var(--gold);font-weight:700;}
 .dockbtn:active{transform:scale(.96);}
 .savestate{
-  position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));
+  position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));
   transform:translateX(-50%);z-index:61;
   font-size:11.5px;font-weight:500;padding:6px 13px;border-radius:999px;
   background:var(--ink);color:var(--paper);box-shadow:var(--shadow-1);
@@ -1898,7 +1902,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-02";
+  const BUILD = "2026-11-10-03";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3279,6 +3283,97 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (stay && Number.isFinite(Number(stay.lat)) && Number.isFinite(Number(stay.lng)))
       return { lat: Number(stay.lat), lng: Number(stay.lng) };
     return null;
+  }
+
+  // ---------- leaving the hotel each morning ----------
+  // Every day but the first starts at last night's hotel, so the trip to the
+  // day's first place is a leg like any other and gets timed like one.
+  function morningStay(day){
+    const snap = state.snapshot, di = dayIndexById(snap, day.id);
+    if (di <= 0) return null;                      // day 1 starts at the airport
+    const st = stayForDay(snap, snap.days[di - 1]);
+    return st && plain(st.name) ? st : null;
+  }
+  function stayPointRef(st){
+    if (st.placeId) return { placeId: st.placeId };
+    const lat = Number(st.lat), lng = Number(st.lng);
+    if (st.lat !== "" && st.lat != null && Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    const t = plain(st.kr) || plain(st.name);
+    return t ? { text: t } : null;
+  }
+  function hotelLegInfo(day){
+    const st = morningStay(day);
+    if (!st) return null;
+    const units = toUnits(day.items), first = firstStopUnit(units);
+    if (first < 0) return null;
+    const s = units[first].stop;
+    // a 「酒店出發」 row already is the hotel; the leg after it covers this
+    if (!isRealPlace(s) || (HOTEL_ROW.test(plain(s.title) || "") && !s.placeId)) return null;
+    if (plain(s.title) === plain(st.name) || (st.placeId && s.placeId === st.placeId)) return null;
+    const from = stayPointRef(st), to = stopRef(s);
+    if (!from || !to) return null;
+    return { st, s, from, to, key: JSON.stringify([from, to]) };
+  }
+  let hotelLegBusy = false;
+  function hotelLegHtml(day){
+    const info = hotelLegInfo(day);
+    if (!info) return "";
+    const leg = day.hotelLeg && day.hotelLeg.key === info.key ? day.hotelLeg : null;
+    const st = info.st;
+    const subj = { title: st.name, kr: st.kr || "", placeId: st.placeId || "", mapUrl: st.mapUrl || "",
+                   lat: st.lat === "" ? NaN : Number(st.lat), lng: st.lng === "" ? NaN : Number(st.lng) };
+    const mode = leg ? segMode(leg) : "metro";
+    // with no place id, Google is given the hotel's name rather than bare
+    // coordinates, which it would label 「已放置圖釘」
+    const g = gmapsDirUrl(subj.placeId ? subj : { title: subj.title, kr: subj.kr }, info.s, mode);
+    const n = destIsKorea() ? naverDirUrl(subj, info.s, mode) : "";
+    const links = mapLinksInOrder(
+      n ? `<a class="maplink" href="${esc(n)}" target="_blank" rel="noopener" aria-label="Naver 路線">${icon("map")}Naver</a>` : "",
+      g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener" aria-label="Google 路線">${icon("map")}Google</a>` : "");
+    const body = leg ? `<span class="seg-head">${segHtmlOf(leg)}</span>` + (leg.route ? routeChainHtml(leg.route) : "")
+      : `<span class="seg-note">${hotelLegBusy ? "計緊由酒店出發要幾耐…" : "由酒店出發"}</span>`;
+    const refresh = leg && !state.readonly ? `<button class="segrefresh" data-hotellegrefresh title="重新計由酒店出發" aria-label="重新計由酒店出發">${icon("refresh")}</button>` : "";
+    return `<div class="seg hotelleg" data-mode="${leg ? mode : "other"}"><div class="seg-rail"></div>
+      <div class="seg-text"><span class="hl-from">${icon("home")}由 ${esc(plain(st.name))} 出發</span>${body}${refresh}${links.length ? `<span class="seg-links">${links.join("")}</span>` : ""}</div></div>`;
+  }
+  // Adding or moving a place used to leave 「次序改咗，交通時間要再確認」 until
+  // someone pressed 重算. Legs between two real places are now asked for as
+  // soon as nobody is mid-edit on that day — once each, so a failure doesn't
+  // loop; the button is still there to retry.
+  const autoTransitTried = new Set();
+  let autoTransitBusy = false;
+  async function autoTransit(day){
+    if (autoTransitBusy || state.readonly || state.offline) return;
+    if ([...state.open].some(k => String(k).startsWith(day.id + ":"))) return;
+    autoTransitBusy = true;
+    try {
+      const units = toUnits(day.items), first = firstStopUnit(units);
+      const prevOf = i => { for (let j = i - 1; j >= 0; j--) if (units[j].stop) return units[j].stop; return null; };
+      const todo = units.map((u, i) => i).filter(i => {
+        const u = units[i];
+        if (i <= first || !u.stop || !u.seg || !u.seg.stale || u.seg.checking || !isRealPlace(u.stop)) return false;
+        const k = day.id + JSON.stringify([stopRef(prevOf(i)), stopRef(u.stop)]);
+        if (autoTransitTried.has(k)) return false;
+        autoTransitTried.add(k);
+        return true;
+      });
+      if (todo.length) await refreshTransit(day, todo);
+      const info = hotelLegInfo(day);
+      const hk = "h" + day.id + (info ? info.key : "");
+      if (info && !(day.hotelLeg && day.hotelLeg.key === info.key) && !autoTransitTried.has(hk)){
+        autoTransitTried.add(hk);
+        hotelLegBusy = true;
+        if (state.view === day.id) render();
+        let got = false;
+        try {
+          const r = await callAi({ action:"transit", from: info.from, to: info.to });
+          if (r && r.ok !== false && r.text){ day.hotelLeg = Object.assign(buildSeg(r.mode || "metro", r.text, r.route), { key: info.key }); got = true; }
+        } catch (_){}
+        hotelLegBusy = false;
+        if (state.view === day.id) render();
+        if (got) await saveNow("計咗由酒店出發嘅交通", true);
+      }
+    } finally { autoTransitBusy = false; }
   }
 
   // After the order changes, the transit note before a stop describes a journey
@@ -5178,7 +5273,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
       .concat(dayHoursChip(s, day))
-      .concat((s.eatMeta||[]).filter(c => !(Number.isFinite(s.rating) && /^⭐/.test(c.text||""))).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
+      .concat((s.eatMeta||[]).filter(c => !(Number.isFinite(s.rating) && /^⭐/.test(c.text||"")))
+        // Google's per-weekday hours are summed up in one chip above; the old
+        // summary chip would only repeat it
+        .filter(c => !(/hours/.test(c.cls || "") && hoursWeek(s) && hoursWeek(s).main)).map(c=>`<span class="${esc(c.cls)}">${esc(c.text)}</span>`))
       .concat((s.accessBadges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`))
       .join("");
 
@@ -5206,6 +5304,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     return `
       <div class="unit" data-i="${i}">
+        ${i === firstStop ? hotelLegHtml(day) : ""}
         ${segHtml}
         <div class="stop">
           <div class="stop-rail">
@@ -5217,7 +5316,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               ${selecting ? `<span class="selbox">${checked ? icon("check") : ""}</span>` : ""}
               ${thumb}
               <div class="stopbody">
-                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
+                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr && !named.includes(plain(s.kr)) ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${descHtml(s, day.id + ":" + i)}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
@@ -5273,6 +5372,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         <div class="field"><label>當地語言名</label><input class="input" data-f="kr" value="${esc(s.kr)}" placeholder="當地語言寫法，方便搵地點"></div>
         <div class="field"><label>描述</label><textarea class="textarea" data-f="desc" placeholder="想記低嘅嘢…">${esc(s.desc)}</textarea></div>
+        <div class="field"><label>提醒 — 喺卡上面黃色格仔顯示，清空就冇</label><input class="input" data-f="tip" value="${esc(plain(s.tip || ""))}" placeholder="例如：已訂位／要早啲排隊／帶現金"></div>
 
         <div class="field">
           <label>相片</label>
@@ -5528,6 +5628,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     wireEditor(day);
     wireNoteEditor(day);
     wireDrag(day, line);
+    document.querySelectorAll("[data-hotellegrefresh]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      delete day.hotelLeg;
+      [...autoTransitTried].filter(k => k.startsWith("h" + day.id)).forEach(k => autoTransitTried.delete(k));
+      autoTransit(day);
+    }));
+    setTimeout(() => { if (state.view === day.id) autoTransit(day); }, 0);
   }
 
   // ---------- insert a place or a note at an exact spot ----------
@@ -6703,7 +6810,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>${h.manual && !h.priceAi ? "自己記低" : "網上搜尋估價"}${h.priceAi ? `（AI 估：${esc(h.priceAi)}）` : ""}</small></div>` : ""}
             ${h.roomSize ? `<div class="sgh-room">${icon("home")}房間 ${esc(h.roomSize)}</div>` : ""}
             ${h.convenience ? `<div class="sgh-conv">${esc(h.convenience)}</div>` : ""}
-            ${(h.highlights || []).length ? `<div class="sgh-hl">${h.highlights.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+            ${(() => { const hl = (h.highlights || []).filter(x => !(h.walk && /步行|行\s*\d|\d\s*分鐘/.test(x))); return hl.length ? `<div class="sgh-hl">${hl.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""; })()}
             ${h.station ? `<div class="staystation">${icon("pin")}最近 <b>${esc(h.station)}</b>${h.walk ? ` · ${esc(h.walk)}` : ""}</div>` : ""}
             <div class="sgh-acts">
               ${(d.stays || []).some(x => (h.placeId && x.placeId === h.placeId) || x.name === h.name)
@@ -8006,7 +8113,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <div class="stopmain">
               ${thumb}
               <div class="stopbody">
-                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
+                <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr && !named.includes(plain(s.kr)) ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${descHtml(s, board.id + ":" + i)}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
@@ -9323,13 +9430,39 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // The weekly summary answers "which days", but standing there you want
   // "what about today" — so the card also shows the line for this day's
   // weekday. A closed day is already flagged by stopClosedOnDay.
+  // A week of 「星期二、星期三…星期日：16:00 – 00:00；星期一：休息」 is
+  // seven lines to say one thing, so it is boiled down to the usual hours
+  // and the exceptions: 「16:00–00:00（星期一休息）」.
+  function hoursWeek(s){
+    if (!Array.isArray(s.weekdayText) || !s.weekdayText.length) return null;
+    const by = {};
+    s.weekdayText.forEach(l => {
+      const m = String(l).match(/^星期([一二三四五六日天])\s*[:：]\s*(.*)$/);
+      if (!m) return;
+      const h = m[2].replace(/\s*[–-]\s*/g, "–").trim();
+      by[m[1] === "天" ? "日" : m[1]] = !h || /休息|公休|closed/i.test(h) ? "" : h;
+    });
+    const days = Object.keys(by);
+    if (!days.length) return null;
+    const count = {};
+    days.forEach(d => { if (by[d]) count[by[d]] = (count[by[d]] || 0) + 1; });
+    const main = Object.keys(count).sort((a, b) => count[b] - count[a])[0] || "";
+    const groups = {};
+    "一二三四五六日".split("").filter(d => d in by && by[d] !== main).forEach(d => { (groups[by[d]] = groups[by[d]] || []).push(d); });
+    const ex = Object.keys(groups).map(h => `星期${groups[h].join("、")}${h ? " " + h : "休息"}`);
+    return { by, main, ex, every: !ex.length && days.length === 7 };
+  }
   function dayHoursChip(s, day){
-    if (!Array.isArray(s.weekdayText) || !day || stopClosedOnDay(s, day)) return [];
+    if (!day || stopClosedOnDay(s, day)) return [];
+    const w = hoursWeek(s);
+    if (!w || !w.main) return [];
     const wd = weekdayCharOfDate(day.date);
-    const line = wd && s.weekdayText.find(l => l.startsWith(`星期${wd}`));
-    if (!line) return [];
-    const hours = line.slice(line.indexOf(":") + 1).trim();
-    return [`<span class="meta-chip hours today">呢日（星期${esc(wd)}）：${esc(hours)}</span>`];
+    const today = wd && (wd in w.by) ? w.by[wd] : null;
+    let txt;
+    if (w.every) txt = `每日 ${w.main}`;
+    else if (today && today !== w.main) txt = `呢日 ${today}（平時 ${w.main}）`;
+    else txt = `${today ? "呢日 " : ""}${w.main}（${w.ex.join("；")}）`;
+    return [`<span class="meta-chip hours today">${icon("clock")}${esc(txt)}</span>`];
   }
   // "You arrive at 19:00 and it shuts at 18:00" — read from Google's own
   // hours for that weekday against the stop's planned time.
