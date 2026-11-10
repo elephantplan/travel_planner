@@ -1274,7 +1274,8 @@ body.readonly [data-moneyitem]{pointer-events:none;}
 /* ---------- 住宿建議 ---------- */
 .aipick{display:inline-block;margin-left:8px;vertical-align:middle;font-size:11px;font-weight:700;color:var(--gold);
   background:color-mix(in srgb,var(--gold) 14%,transparent);padding:2px 8px;border-radius:999px;}
-.staystation{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--ink-soft);}
+.staystation{display:block;margin-top:8px;padding-left:20px;position:relative;font-size:13px;line-height:1.55;color:var(--ink-soft);}
+.staystation > .i{position:absolute;left:0;top:3px;}
 .staystation .i{width:14px;height:14px;color:var(--gold);}
 .sgcta{margin-top:12px;}
 .sgblock{margin-top:12px;}
@@ -1325,7 +1326,9 @@ body.readonly .sechide{display:none;}
 .sgh-x{position:absolute;top:10px;right:10px;z-index:3;width:32px;height:32px;border-radius:50%;border:0;cursor:pointer;
   font-size:20px;line-height:1;color:#fff;background:rgba(10,12,16,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
 .sgh:not(:has(.sgh-photo)) .sgh-x{color:var(--ink-soft);background:var(--stock);}
-.sgh-top{display:flex;align-items:center;gap:8px;padding-right:36px;}
+.sgh-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding-right:36px;}
+.sgh-top .sgd{min-width:0;}
+.sgnew,.sgmine{white-space:nowrap;flex-shrink:0;}
 .sgnew{font-size:11px;font-weight:800;color:#14110A;background:var(--gold);padding:1px 8px;border-radius:999px;}
 .sgchosen{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;color:var(--ok);}
 .sgchosen .i{width:15px;height:15px;}
@@ -1418,6 +1421,7 @@ body.readonly .qa-del{display:none;}
 .sgh-room{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--ink-soft);}
 .sgh-room .i{width:14px;height:14px;color:var(--gold);}
 .sgh-conv{margin-top:6px;font-size:13px;color:var(--ink-soft);line-height:1.55;}
+.sgh-checking{margin-top:8px;font-size:12px;color:var(--ink-soft);opacity:.8;}
 
 /* ---------- day tools ----------
    Six full-width pills stacked under the map read as six equally urgent
@@ -1880,7 +1884,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-09-24";
+  const BUILD = "2026-11-10-01";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6601,6 +6605,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   // a stay is a place like any other — give it a picture once, in the background
   const stayPhotoTried = new Set();
+  const stayCheckTried = new Set(), stayCheckFailed = new Set();
+  let stayCheckBusy = false;
   async function backfillStayPhotos(snap){
     const todo = (snap.stays || []).filter(st => st && st.name && !st.photoUrl && !st.noPhoto && !stayPhotoTried.has(st.name));
     let got = 0;
@@ -6673,6 +6679,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))}${h.area ? " · " + esc(h.area) : ""}</span>${h.manual ? `<span class="sgmine">自己加</span>` : h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
             ${h.local && h.local !== h.name ? `<div class="sgh-local">${esc(h.local)}</div>` : ""}
+            ${!Number.isFinite(h.score) && !h.checked && !stayCheckFailed.has(h.name) && !state.readonly && !state.offline ? `<div class="sgh-checking">AI 分析緊推介指數、房間大細、方唔方便…</div>` : ""}
             ${Number.isFinite(h.score) ? `<div class="sgscore"><b>${h.score}</b><span>/10 推介指數</span>${h.scoreWhy ? `<small>${esc(h.scoreWhy)}</small>` : ""}</div>` : ""}
             ${h.price ? `<div class="sgh-price">${esc(h.price)}<small>${h.manual && !h.priceAi ? "自己記低" : "網上搜尋估價"}${h.priceAi ? `（AI 估：${esc(h.priceAi)}）` : ""}</small></div>` : ""}
             ${h.roomSize ? `<div class="sgh-room">${icon("home")}房間 ${esc(h.roomSize)}</div>` : ""}
@@ -6812,7 +6819,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (!x) return false;
       ["area", "local", "price", "roomSize", "station", "walk", "convenience", "scoreWhy"].forEach(k => { if (!h[k] && x[k]) h[k] = x[k]; });
       if (h.score == null && x.score != null) h.score = x.score;
-      if (x.price && h.price && h.price !== x.price) h.priceAi = x.price;
+      if (h.manual && x.price && h.price && h.price !== x.price) h.priceAi = x.price;
+      h.checked = true;
       h.highlights = [...new Set([...(h.highlights || []), ...(x.highlights || [])])].slice(0, 4);
       if (h.station && h.placeId){
         const t = await callAi({ action: "transit", from: { placeId: h.placeId }, to: { text: h.station } });
@@ -7080,6 +7088,28 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }));
     initStayMap();
     backfillStayPhotos(state.snapshot);
+    backfillStayChecks(state.snapshot);
+  }
+  // Suggestions made before the score existed (and any hotel whose check
+  // failed once) get the same analysis, a few at a time, in the background.
+  async function backfillStayChecks(snap){
+    if (stayCheckBusy || state.readonly || state.offline) return;
+    const sg = snap.staySuggest;
+    const todo = ((sg && sg.hotels) || []).filter(h => h && h.name && !Number.isFinite(h.score) && !h.checked && !stayCheckTried.has(h.name));
+    if (!todo.length) return;
+    stayCheckBusy = true;
+    let got = 0;
+    try {
+      for (let i = 0; i < todo.length; i += 3){
+        const batch = todo.slice(i, i + 3);
+        batch.forEach(h => stayCheckTried.add(h.name));
+        const r = await Promise.all(batch.map(h => checkStayHotel(h)));
+        batch.forEach((h, j) => { if (!r[j]) stayCheckFailed.add(h.name); });
+        got += r.filter(Boolean).length;
+        if (state.snapshot === snap && state.view === "stays") render();
+      }
+    } finally { stayCheckBusy = false; }
+    if (got) await saveNow(`幫 ${got} 間酒店補返推介指數同分析`, true);
   }
   document.addEventListener("click", e => {
     const g = e.target.closest && e.target.closest("[data-go-stays]");
