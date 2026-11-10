@@ -173,6 +173,20 @@ const SUGGEST = { ok: true, stays: {
   ok('房間大細同方唔方便', /約 22㎡/.test(card) && /去京都要轉車/.test(card));
   ok('自己打嘅價錢保留，AI 估價放隔籬', /HK\$1,100/.test(card) && /AI 估：兩間房每晚約 HK\$2,200/.test(card));
   ok('最近車站用 Google 計步行', /なんば駅[\s\S]*步行約 4 分鐘/.test(card));
+  {
+    await p.evaluate(() => document.querySelector('[data-go="stays"]') && document.querySelector('[data-go="stays"]').click());
+    await p.waitForTimeout(400);
+    if (!(await p.locator('[data-stayunpick]').count())){ await p.locator('[data-staypick]').first().click(); await p.waitForTimeout(900); }
+    const pickedName = await p.locator('.stayrow .v').first().innerText();
+    p.once('dialog', d => d.accept());
+    const n0 = await p.locator('.sgh').count();
+    ok('揀咗嘅酒店有「改日子／資料」同「唔揀呢間」', await p.locator('.stayacts [data-editsec="acc"]').count() >= 1 && await p.locator('[data-stayunpick]').count() >= 1);
+    await p.locator('[data-stayunpick="0"]').click();
+    await p.waitForTimeout(1200);
+    const su = [...saved].reverse().find(x => x.snapshot);
+    ok('唔揀之後冇咗喺已揀', su && (su.snapshot.stays || []).length === 0, su && su.snapshot.stays);
+    ok('放返去推薦列表，冇唔見', su && su.snapshot.staySuggest.hotels.some(h => h.name === pickedName) && await p.locator('.sgh').count() >= n0, [pickedName, n0]);
+  }
   ok('分析時傳埋人數同行程', /stay-check/.test(asked.join()) && /行程|days/.test(sentText[sentText.length - 1] || ''));
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();

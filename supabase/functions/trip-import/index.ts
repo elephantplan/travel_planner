@@ -129,32 +129,37 @@ function rideOf(steps: any[]) {
     from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
 }
 const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
-// The nearest railway station to a point, from Places Nearby Search, with a
-// rough walking time (straight line × 1.3 at 80 m a minute).
+// Which station to use at one end of a leg. The very nearest is often a
+// small one on a line going nowhere useful (西梅田 instead of 大阪), so a
+// major station — judged by how many Google reviews it has — wins if it is
+// within about a 15-minute walk. Walking time is the straight line × 1.3 at
+// 80 m a minute, so it is a rough figure.
 async function nearestStation(loc: any, lang: string) {
   const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   if (!key || !loc || !Number.isFinite(loc.lat)) return null;
-  // Google tags most subway stations (蹴上, 心斎橋 …) only as subway_station,
-  // so both kinds are asked for and the closer one wins
   const R = 6371000, toR = (x: number) => x * Math.PI / 180;
   const dist = (g: any) => {
     const a = Math.sin(toR(g.lat - loc.lat) / 2) ** 2 + Math.cos(toR(loc.lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - loc.lng) / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(a));
   };
-  const found = await Promise.all(["train_station", "subway_station"].map(async (type) => {
+  // Google tags most subway stations (蹴上, 心斎橋 …) only as subway_station
+  const lists = await Promise.all(["train_station", "subway_station"].map(async (type) => {
     try {
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${loc.lat},${loc.lng}` +
         `&rankby=distance&type=${type}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
       const data = await (await fetch(url)).json();
-      const r = data?.results?.[0];
-      const g = r?.geometry?.location;
-      return r && g ? { name: String(r.name || ""), m: dist(g) } : null;
-    } catch { return null; }
+      return (data?.results || []).slice(0, 10).filter((r: any) => r?.geometry?.location).map((r: any) => ({
+        name: String(r.name || "").replace(/[（(][^）)]*[）)]/g, "").trim(),
+        m: dist(r.geometry.location), n: Number(r.user_ratings_total) || 0 }));
+    } catch { return []; }
   }));
-  const best = found.filter(Boolean).sort((x: any, y: any) => x.m - y.m)[0] as any;
-  if (!best || best.m > 2500) return null;
-  const name = best.name.replace(/[（(][^）)]*[）)]/g, "").trim();
-  return name ? { name, walk: Math.max(1, Math.round(best.m * 1.3 / 80)) } : null;
+  const all = lists.flat().filter((x: any) => x.name).sort((x: any, y: any) => x.m - y.m);
+  if (!all.length || all[0].m > 2500) return null;
+  // reviews on a log scale, less a penalty per 400 m walked
+  const score = (x: any) => Math.log(x.n + 1) - x.m / 400;
+  const near = all.filter((x: any) => x.m <= 1000);
+  const best = near.length ? near.sort((x: any, y: any) => score(y) - score(x))[0] : all[0];
+  return { name: best.name, walk: Math.max(1, Math.round(best.m * 1.3 / 80)) };
 }
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
