@@ -39,6 +39,7 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
   }
   const lastSnap = saved => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
 
+  let nextLabel = '', earlyHour = false;
   console.log('\nA. 今日模式');
   {
     // make day 2 today, with one stop still ahead later tonight
@@ -48,12 +49,20 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
       c.meta.dateStart = iso(start); c.meta.dateEnd = iso(end);
       c.days.forEach((d, i) => { const x = new Date(start); x.setDate(start.getDate() + i); d.date = label(x); });
       const stops = c.days[1].items.filter(i => i.kind === 'stop');
-      stops.forEach(s => { s.time = '約 00:05'; });
-      stops[stops.length - 1].time = '約 23:58';
+      // times relative to now, so the test means the same at any hour:
+      // the others an hour or more gone, the last one still ahead
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const hm = m => `約 ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      stops.forEach(s => { s.time = hm(Math.max(0, nowMin - 90)); });
+      stops[stops.length - 1].time = hm(Math.min(1439, nowMin + 60));
+      // in the first 40 minutes after midnight nothing can be "long gone",
+      // so the first stop is rightly still the next one
+      earlyHour = nowMin < 40;
+      nextLabel = (earlyHour ? hm(0) : hm(Math.min(1439, nowMin + 60))).replace('約 ', '');
     });
     ok('旅程中一開就喺今日嗰日', /Day\s*2/i.test(await p.locator('.dayhead').innerText()), await p.locator('.dayhead .dno').innerText());
     const nx = await p.locator('.todaynext').innerText();
-    ok('講明下一站', /下一站/.test(nx) && /23:58/.test(nx), nx);
+    ok('講明下一站', /下一站/.test(nx) && nx.includes(nextLabel) && (earlyHour ? /景福宮/ : /韓牛燒肉/).test(nx), nx);
     ok('有導航掣', await p.locator('.todaynext a[href*="google.com/maps/dir"]').count() === 1);
     await p.evaluate(() => document.querySelector('[data-go="overview"]').click());
     await p.waitForTimeout(400);
