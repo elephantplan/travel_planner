@@ -223,21 +223,21 @@ async function placeFacts(placeId: string) {
       reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
   } catch { return null; }
 }
-const BRIEF_PROMPT = (items: string, kind: string) => `下面係一啲 Google 地圖上面嘅地點，有 Google 自己嘅簡介同真實評論（JSON）。
-幫一個香港家庭用廣東話寫：
+const BRIEF_PROMPT = (items: string, kind: string, ask = "") => `下面係一啲 Google 地圖上面嘅地點，有 Google 自己嘅簡介同真實評論（JSON）。
+${ask ? `佢哋嘅要求：${ask}。按幾啱佢哋要求由最啱排到最唔啱，明顯唔啱嘅唔好放入去；每個加 fit：一句講點解啱（最多 30 字）。\n` : ""}幫一個香港家庭用廣東話寫：
 - name_zh：中文名（有通用中文名就用，冇就照抄原名）
 - what：一句介紹佢係咩地方、有咩特色（最多 40 字）
 - mustTry：${kind === "eat" ? "根據評論，大家推介食咩（寫具體菜式，最多 40 字）" : kind === "shop" ? "根據評論，值得買乜或者有咩店（最多 40 字）" : "根據評論，最值得睇乜或者玩乜（最多 40 字）"}
 只可以根據提供嘅簡介同評論寫，評論冇講就留空，唔好作。
 ${items}
-只回覆 JSON：{"places":[{"placeId":"","name_zh":"","what":"","mustTry":""}]}`;
-async function briefs(facts: any[], kind: string) {
+只回覆 JSON：{"places":[{"placeId":"","name_zh":"","what":"","mustTry":""${ask ? `,"fit":""` : ""}}]}`;
+async function briefs(facts: any[], kind: string, ask = "") {
   if (!facts.length || !geminiKeys().length) return {};
   try {
-    const p = parseJson(await callGemini([{ text: BRIEF_PROMPT(JSON.stringify(facts), kind) }]));
+    const p = parseJson(await callGemini([{ text: BRIEF_PROMPT(JSON.stringify(facts), kind, ask) }]));
     const out: Record<string, any> = {};
-    (p?.places || []).forEach((x: any) => { if (x?.placeId) out[x.placeId] = {
-      name_zh: str(x.name_zh, 40), what: str(x.what, 80), mustTry: str(x.mustTry, 80) }; });
+    (p?.places || []).forEach((x: any, i: number) => { if (x?.placeId) out[x.placeId] = {
+      name_zh: str(x.name_zh, 40), what: str(x.what, 80), mustTry: str(x.mustTry, 80), fit: str(x.fit, 60), rank: i }; });
     return out;
   } catch (e) { console.error("brief", String(e)); return {}; }
 }
@@ -259,14 +259,23 @@ async function suggestAdd(body: any) {
   const centres = [...pts];
   if (pts.length === 2 && dist(pts[0], pts[1]) > 1200) centres.push({ lat: (pts[0].lat + pts[1].lat) / 2, lng: (pts[0].lng + pts[1].lng) / 2, name: "" });
   const skip = new Set((Array.isArray(body?.skip) ? body.skip : []).map(String));
+  const want = str(body?.want, 40);
+  const pf = body?.prefs || {};
+  const budget = [1, 2, 3].includes(Number(pf.budget)) ? Number(pf.budget) : 0;
+  const near = pf.near === true;
+  // what they asked for, in words the model can rank by
+  const ask = [want, budget ? ["", "平啲", "中價", "貴少少都得"][budget] : "", near ? "行 5 分鐘內" : "",
+    pf.kids ? "啱小朋友" : "", pf.book ? "可以訂位或者唔使排太耐" : ""].filter(Boolean).join("、");
   const seen = new Map<string, any>();
   await Promise.all(centres.flatMap((c: any) => KIND_TYPE[kind].map(async (type) => {
     try {
+      const radius = near ? (kind === "eat" ? 450 : 700) : (kind === "eat" ? 800 : 1500);
+      const price = kind === "eat" && budget ? `&minprice=${budget === 3 ? 2 : 0}&maxprice=${budget === 1 ? 1 : budget === 2 ? 2 : 4}` : "";
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${c.lat},${c.lng}` +
-        `&radius=${kind === "eat" ? 800 : 1500}&type=${type}&language=zh-TW&key=${key}`;
+        `&radius=${radius}&type=${type}${want ? "&keyword=" + encodeURIComponent(want) : ""}${price}&language=zh-TW&key=${key}`;
       for (const r of (await (await fetch(url)).json())?.results || []) {
         if (!r?.place_id || skip.has(r.place_id) || seen.has(r.place_id) || r.business_status === "CLOSED_PERMANENTLY") continue;
-        if (!(Number(r.rating) >= 4 && Number(r.user_ratings_total) >= (kind === "eat" ? 80 : 150))) continue;
+        if (!(Number(r.rating) >= 4 && Number(r.user_ratings_total) >= (want ? 30 : kind === "eat" ? 80 : 150))) continue;
         seen.set(r.place_id, r);
       }
     } catch { /* one search failing leaves the others */ }
@@ -278,17 +287,21 @@ async function suggestAdd(body: any) {
     const near = d[0] <= (d[1] ?? Infinity) ? 0 : 1;
     return { r, detour, near, walk: Math.max(1, Math.round(Math.min(...d) * 1.3 / 80)),
       score: Number(r.rating) * Math.log(Number(r.user_ratings_total) + 1) - detour / 300 };
-  }).sort((a: any, b: any) => b.score - a.score).slice(0, 6);
+  }).sort((a: any, b: any) => b.score - a.score).slice(0, ask ? 8 : 6);
   const facts = (await Promise.all(cands.map((c: any) => placeFacts(c.r.place_id)))).filter(Boolean) as any[];
-  const b = await briefs(facts, kind);
-  const places = cands.map((c: any) => {
+  const b = await briefs(facts, kind, ask);
+  // with a request, the model's order (and its leaving out) decides
+  const ranked = ask && Object.keys(b).length
+    ? cands.filter((c: any) => b[c.r.place_id]).sort((x: any, y: any) => b[x.r.place_id].rank - b[y.r.place_id].rank)
+    : cands;
+  const places = ranked.slice(0, 6).map((c: any) => {
     const r = c.r, x = b[r.place_id] || {};
     return { name: String(r.name || ""), name_zh: x.name_zh || "", placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
       rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
       types: (r.types || []).slice(0, 5), walk: c.walk, nearName: pts[c.near]?.name || "", onTheWay: pts.length === 2 && c.detour < 600,
-      what: x.what || "", mustTry: x.mustTry || "" };
+      what: x.what || "", mustTry: x.mustTry || "", fit: x.fit || "" };
   });
-  return { ok: true, places };
+  return { ok: true, places, ask };
 }
 async function placeBrief(body: any) {
   const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";

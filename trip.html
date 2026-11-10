@@ -1120,6 +1120,80 @@ img{max-width:100%;}
 .nr-f{font-size:12px;color:var(--ink-soft);line-height:1.45;}
 .nr-a{font-size:11px;color:var(--ink-faint);line-height:1.4;}
 .nearbtns{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;}
+/* add-place sheet: two ways in */
+.instabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:12px 0 14px;border-radius:14px;background:var(--surface-2);}
+.instab{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border:0;border-radius:11px;background:none;
+  color:var(--ink-soft);font:inherit;font-size:14px;font-weight:700;cursor:pointer;}
+.instab .i{width:15px;height:15px;}
+.instab.on{background:var(--stock);color:var(--ink);box-shadow:var(--shadow-1);}
+.instab[data-instab="ai"].on .i{color:var(--gold);}
+.instab:focus-visible,.kindtile:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.ins-lead{margin:0 0 10px;font-size:13px;color:var(--ink-soft);}
+.kindtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.kindtile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px 12px;border-radius:16px;cursor:pointer;
+  border:1.5px solid var(--rule);background:var(--surface);color:var(--ink-soft);font:inherit;}
+.kindtile .i{width:22px;height:22px;}
+.kindtile b{font-size:14px;color:var(--ink);}
+.kindtile.on{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 12%,var(--surface));color:var(--gold);}
+#ins-want{margin:4px 0 10px;}
+.prefchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.pc-g{display:inline-flex;gap:0;border-radius:999px;overflow:hidden;border:1px solid var(--rule);}
+.pc-g .pfchip{border:0;border-radius:0;border-right:1px solid var(--rule);}
+.pc-g .pfchip:last-child{border-right:0;}
+#ins-go{margin-bottom:8px;}
+.sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
+.sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
+/* the elephant */
+.eleload{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;text-align:center;}
+.eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
+.eleload.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
+.eleload.small .ele{width:58px;height:46px;}
+.ele{width:132px;height:104px;overflow:visible;}
+.ele-body,.ele-skull,.ele-leg,.ele-trunk path:first-child{fill:#9FB0C4;}
+.ele-ear{fill:#8DA0B6;}
+.ele-ear-in{fill:#F2BFC9;opacity:.85;}
+.ele-eye{fill:#1E2430;} .ele-glint{fill:#fff;}
+.ele-cheek{fill:#F2A7B6;opacity:.7;}
+.ele-tail,.ele-hair{fill:none;stroke:#8DA0B6;stroke-width:2.4;stroke-linecap:round;}
+.ele-scarf{fill:var(--gold);}
+.ele-shadow{fill:var(--ink);opacity:.12;}
+.ele-lens circle{fill:rgba(220,236,255,.7);stroke:#E9C46A;stroke-width:2.4;}
+.ele-lens path{stroke:#E9C46A;stroke-width:3;stroke-linecap:round;}
+.ele-mapsheet path:first-child{fill:#F4EBD7;stroke:#C9B48A;stroke-width:1.2;}
+.ele-route{fill:none;stroke:#D2564C;stroke-width:1.6;stroke-dasharray:3 2;}
+.ele-puffs circle{fill:#C9D3DF;opacity:.7;}
+.ele-ear,.ele-ear-in{transform-box:fill-box;transform-origin:20% 40%;}
+.ele-trunk{transform-box:fill-box;transform-origin:85% 10%;}
+.ele-head{transform-box:fill-box;transform-origin:70% 80%;}
+.ele-leg{transform-box:fill-box;transform-origin:50% 0;}
+/* sniff: trotting, trunk sweeping a magnifying glass */
+.ele-sniff .ele-all{animation:ele-trot .9s ease-in-out infinite;}
+.ele-sniff .ele-trunk{animation:ele-sweep 1.8s ease-in-out infinite;}
+.ele-sniff .l1,.ele-sniff .l4{animation:ele-step .9s ease-in-out infinite;}
+.ele-sniff .l2,.ele-sniff .l3{animation:ele-step .9s ease-in-out infinite reverse;}
+.ele-sniff .ele-ear.front,.ele-sniff .ele-ear-in{animation:ele-wiggle 1.8s ease-in-out infinite;}
+/* fly: big ears flapping, floating up and down */
+.ele-fly .ele-all{animation:ele-float 1.6s ease-in-out infinite;}
+.ele-fly .ele-ear,.ele-fly .ele-ear-in{animation:ele-flap .32s ease-in-out infinite alternate;}
+.ele-fly .ele-shadow{animation:ele-shrink 1.6s ease-in-out infinite;}
+.ele-fly .ele-puffs{animation:ele-puff 1.6s ease-out infinite;}
+/* map: head tilting over a map, trunk tracing the route */
+.ele-map .ele-head{animation:ele-tilt 2.4s ease-in-out infinite;}
+.ele-map .ele-trunk{animation:ele-trace 2.4s ease-in-out infinite;}
+.ele-map .ele-route{animation:ele-dash 1.2s linear infinite;}
+@keyframes ele-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes ele-step{0%,100%{transform:rotate(9deg)}50%{transform:rotate(-9deg)}}
+@keyframes ele-sweep{0%,100%{transform:rotate(-10deg)}50%{transform:rotate(14deg)}}
+@keyframes ele-wiggle{0%,80%,100%{transform:rotate(0)}88%{transform:rotate(-8deg)}94%{transform:rotate(5deg)}}
+@keyframes ele-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes ele-flap{from{transform:rotate(-6deg) scaleY(1)}to{transform:rotate(-30deg) scaleY(.8)}}
+@keyframes ele-shrink{0%,100%{transform:scaleX(1);opacity:.12}50%{transform:scaleX(.7);opacity:.05}}
+@keyframes ele-puff{0%{opacity:0;transform:translate(0,0)}30%{opacity:.7}100%{opacity:0;transform:translate(10px,-6px)}}
+@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-9deg)}60%{transform:rotate(4deg)}}
+@keyframes ele-trace{0%,100%{transform:rotate(0)}40%{transform:rotate(18deg)}70%{transform:rotate(8deg)}}
+@keyframes ele-dash{to{stroke-dashoffset:-10}}
+.ele-shadow{transform-box:fill-box;transform-origin:center;}
+@media (prefers-reduced-motion:reduce){.ele *{animation:none !important;}}
 .aiadd{margin:4px 0 8px;background:color-mix(in srgb,var(--gold) 12%,transparent);border-color:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--ink);font-weight:700;}
 .aiadd .i{color:var(--gold);}
 .sugcard{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column;gap:4px;}
@@ -1989,7 +2063,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-16";
+  const BUILD = "2026-11-10-17";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2097,6 +2171,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     shirt:     '<path d="M8.8 3.8 12 6l3.2-2.2 4.4 2.4-1.8 4-2 -.6v11H8.2v-11l-2 .6-1.8-4z"/>',
     leaf:      '<path d="M5.2 18.8C3.6 12.4 8 5.2 19.2 4.8c.8 8.8-4.4 14.4-11.6 13.2"/><path d="M8 16c2.4-3.6 5.6-6 9.2-7.6"/>',
     bag:       '<path d="M4.6 8.2h14.8l-1 11.6H5.6z"/><path d="M9 8.2V6a3 3 0 0 1 6 0v2.2"/>',
+    eat:       '<path d="M7 3v7a2 2 0 0 0 2 2v9"/><path d="M5 3v5M9 3v5"/><path d="M17 21V3c-2 1.5-3 4-3 7 0 1.5 1 2.5 3 2.5"/>',
     chevron:   '<path d="m9 5.6 6.4 6.4L9 18.4"/>',
     up:        '<path d="M12 19V5.6"/><path d="m5.8 11.4 6.2-6 6.2 6"/>',
     copy:      '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
@@ -5680,6 +5755,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr && !named.includes(plain(s.kr)) ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${descHtml(s, day.id + ":" + i)}
+                ${briefLoading.has(s) ? elephantHtml("搵緊呢度嘅介紹同大家推介咩…", true) : ""}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
             </div>
@@ -6014,7 +6090,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const cur = legOf(day, key).seg;
       if (cur && cur.advice){ openAdviceSheet(day, key, cur.advice); return; }
       if (state.readonly) return;
-      b.disabled = true; b.innerHTML = `<span class="spin"></span>AI 查緊…`;
+      b.disabled = true; b.outerHTML = elephantHtml("查緊點去、使唔使買定飛…", true);
       const a = await askAdvice(day, key);
       render();
       if (a) openAdviceSheet(day, key, a);
@@ -6101,15 +6177,52 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${p.address || p.area ? `<span class="nr-a">${esc(p.address || p.area)}</span>` : ""}</span>
       <button type="button" class="nr-add" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""} aria-label="加「${esc(p.name)}」入行程">${icon("plus")}</button></div>`;
   }
+  // ---------- the little elephant who goes looking ----------
+  // Something is being fetched — a suggestion, a place's intro, a route.
+  // An original round elephant with big ears does one of three things while
+  // it waits: sniffs along with a magnifying glass, flaps its ears and
+  // floats, or tilts its head over a map. Picked at random each time.
+  const ELE_MOVES = ["sniff", "fly", "map"];
+  function elephantSvg(move){
+    const m = move || ELE_MOVES[Math.floor(Math.random() * ELE_MOVES.length)];
+    return `<svg class="ele ele-${m}" viewBox="0 0 132 104" aria-hidden="true">
+      <ellipse class="ele-shadow" cx="66" cy="98" rx="34" ry="4"/>
+      <g class="ele-all">
+        <path class="ele-tail" d="M96 58 q10 2 9 12"/>
+        <rect class="ele-leg l1" x="52" y="74" width="10" height="16" rx="5"/>
+        <rect class="ele-leg l2" x="82" y="74" width="10" height="16" rx="5"/>
+        <ellipse class="ele-body" cx="72" cy="62" rx="28" ry="21"/>
+        <rect class="ele-leg l3" x="60" y="76" width="10" height="16" rx="5"/>
+        <rect class="ele-leg l4" x="88" y="76" width="10" height="16" rx="5"/>
+        <path class="ele-scarf" d="M38 58 q10 9 24 0 l-2 6 q-10 6 -20 0z"/>
+        <g class="ele-head">
+          <ellipse class="ele-ear back" cx="62" cy="38" rx="16" ry="19"/>
+          <circle class="ele-skull" cx="44" cy="42" r="19"/>
+          <g class="ele-trunk"><path d="M30 48 q-8 8 -6 20 q1 5 5 4 q3 -1 2 -5 q-2 -9 5 -14z"/>
+            ${m === "sniff" ? `<g class="ele-lens"><circle cx="22" cy="78" r="7"/><path d="M27 83 l6 6"/></g>` : ""}</g>
+          <ellipse class="ele-ear front" cx="56" cy="40" rx="17" ry="20"/>
+          <ellipse class="ele-ear-in" cx="57" cy="41" rx="10" ry="13"/>
+          <circle class="ele-eye" cx="38" cy="38" r="2.6"/><circle class="ele-glint" cx="38.9" cy="37.1" r="0.9"/>
+          <circle class="ele-cheek" cx="33" cy="46" r="3.4"/>
+          <path class="ele-hair" d="M44 23 q2 -6 6 -5 M47 24 q4 -4 7 -1"/>
+        </g>
+        ${m === "map" ? `<g class="ele-mapsheet"><path d="M14 66 l12 -4 l12 4 l12 -4 v20 l-12 4 l-12 -4 l-12 4z"/><path class="ele-route" d="M18 76 q8 -8 14 -2 t14 -4"/></g>` : ""}
+      </g>
+      ${m === "fly" ? `<g class="ele-puffs"><circle cx="104" cy="88" r="3"/><circle cx="112" cy="84" r="2"/></g>` : ""}
+    </svg>`;
+  }
+  function elephantHtml(text, small){
+    return `<div class="eleload${small ? " small" : ""}" role="status">${elephantSvg()}<span>${esc(text)}</span></div>`;
+  }
   const SUG_KIND = { see: "景點", shop: "購物地方", eat: "餐廳" };
   const MUST_LABEL = { see: "必睇", shop: "必買", eat: "必食" };
   const sugCache = new Map();
-  async function suggestFor(anchors, kind, skip){
-    const k = kind + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|");
+  async function suggestFor(anchors, kind, skip, want = "", prefs = {}){
+    const k = kind + ":" + want + ":" + JSON.stringify(prefs) + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|");
     if (sugCache.has(k)) return sugCache.get(k);
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "suggest-add", kind, skip, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 60000, null);
+        body: JSON.stringify({ mode: "suggest-add", kind, skip, want, prefs, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 60000, null);
       const r = res ? await res.json() : null;
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       if (list.length) sugCache.set(k, list);
@@ -6129,6 +6242,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
       <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
+      ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
       ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : ""}
       ${p.mustTry ? `<p class="sc-must"><i>${MUST_LABEL[kind] || "推介"}</i>${esc(p.mustTry)}</p>` : ""}
       ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}Google 睇相同評論</a>` : ""}
@@ -6156,6 +6270,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return true;
   }
   const briefTried = new Set();
+  const briefLoading = new Set();      // stops whose intro is being written right now
   let briefBusy = false;
   async function backfillBriefs(day){
     if (briefBusy || state.readonly || state.offline) return;
@@ -6164,14 +6279,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     briefBusy = true;
     let got = 0;
     try {
+      todo.forEach(st => briefLoading.add(st));
+      if (state.view === day.id) render();
       await Promise.all(todo.map(async st => {
         briefTried.add(st.placeId);
         const b = await fetchBrief(st);
         st.briefTried = true;
+        briefLoading.delete(st);
         if (applyBrief(st, b)) got++;
       }));
+      todo.forEach(st => briefLoading.delete(st));
     } finally { briefBusy = false; }
-    if (got && state.view === day.id) render();
+    if (state.view === day.id) render();
     if (got) await saveNow(`幫 ${got} 個地點寫咗簡介`, true);
   }
   function openInsertSheet(day, pos){
@@ -6193,18 +6312,37 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     openSheet(`
       <h3>加地點</h3>
       <p class="sec-sub">${esc(where)}</p>
-      <input class="input" id="ins-q" placeholder="搵地點，例如：一蘭拉麵 道頓堀" autocomplete="off">
-      <div id="ins-res"></div>
-      ${anchors.length ? `<div id="ins-near">
-        <button type="button" class="btn wide aiadd" id="ins-ai">${icon("sparkle")}唔知加咩？AI 建議順路或者附近嘅地方</button>
-        <div class="kindpick" id="ins-kinds" hidden>
-          <p class="picker-label">想加啲咩？</p>
-          <div class="nearbtns"><button type="button" class="btn" data-sugkind="see">景點</button><button type="button" class="btn" data-sugkind="shop">購物</button><button type="button" class="btn" data-sugkind="eat">餐廳</button></div>
+      <div class="instabs" role="tablist">
+        <button type="button" class="instab on" data-instab="find" role="tab">${icon("search")}自己搵</button>
+        ${anchors.length ? `<button type="button" class="instab" data-instab="ai" role="tab">${icon("sparkle")}AI 建議</button>` : ""}
+      </div>
+      <div class="inspane" data-pane="find">
+        <input class="input" id="ins-q" placeholder="打地方名，例如：一蘭拉麵 道頓堀" autocomplete="off">
+        <div id="ins-res"></div>
+      </div>
+      ${anchors.length ? `<div class="inspane" data-pane="ai" hidden>
+        <p class="ins-lead">${anchors.length > 1 ? `喺「${esc(anchors[0].name)}」同「${esc(anchors[1].name)}」之間，揀順路嘅` : `喺「${esc(anchors[0].name)}」附近揀`}</p>
+        <div class="kindtiles" role="radiogroup">
+          <button type="button" class="kindtile" data-sugkind="see" role="radio">${icon("pin")}<b>景點</b></button>
+          <button type="button" class="kindtile" data-sugkind="shop" role="radio">${icon("bag")}<b>購物</b></button>
+          <button type="button" class="kindtile on" data-sugkind="eat" role="radio">${icon("eat")}<b>餐廳</b></button>
         </div>
-        <div id="ins-nearres"></div></div>` : ""}
+        <label class="picker-label" for="ins-want">有冇咩特別想要？</label>
+        <input class="input" id="ins-want" placeholder="例如：壽司、拉麵、有兒童椅" autocomplete="off" maxlength="40">
+        <div class="prefchips">
+          <span class="pc-g" data-pf="budget">
+            <button type="button" class="pfchip" data-v="1">平啲</button><button type="button" class="pfchip" data-v="2">中價</button><button type="button" class="pfchip" data-v="3">貴啲都得</button>
+          </span>
+          <button type="button" class="pfchip" data-pft="near">行 5 分鐘內</button>
+          <button type="button" class="pfchip" data-pft="kids">啱小朋友</button>
+          <button type="button" class="pfchip" data-pft="book" data-only="eat">唔使排太耐</button>
+        </div>
+        <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
+        <div id="ins-nearres"></div>
+      </div>` : ""}
       <div class="ins-more">
         <button class="btn" id="ins-note">${icon("note")}加一段 note</button>
-        <button class="btn" id="ins-blank">${icon("pencil")}自己打名</button>
+        <button class="btn" id="ins-blank">${icon("pencil")}唔搵，自己打名</button>
       </div>
     `, sheet => {
       sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
@@ -6232,22 +6370,51 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }, 350);
       });
       setTimeout(() => q.focus(), 50);
-      // AI suggestions — one button, then what kind
-      const aiBtn = sheet.querySelector("#ins-ai");
-      if (aiBtn) aiBtn.addEventListener("click", () => { aiBtn.hidden = true; sheet.querySelector("#ins-kinds").hidden = false; });
-      sheet.querySelectorAll("[data-sugkind]").forEach(btn => btn.addEventListener("click", async () => {
-        const kind = btn.dataset.sugkind;
-        sheet.querySelectorAll("[data-sugkind]").forEach(x => x.classList.toggle("on", x === btn));
+      // tabs
+      sheet.querySelectorAll("[data-instab]").forEach(t => t.addEventListener("click", () => {
+        sheet.querySelectorAll("[data-instab]").forEach(x => x.classList.toggle("on", x === t));
+        sheet.querySelectorAll("[data-pane]").forEach(pn => { pn.hidden = pn.dataset.pane !== t.dataset.instab; });
+        const f = sheet.querySelector(t.dataset.instab === "ai" ? "#ins-want" : "#ins-q"); if (f) setTimeout(() => f.focus(), 30);
+      }));
+      // AI: kind, what they fancy, a few options
+      let kind = "eat";
+      const prefs = { budget: 0, near: false, kids: false, book: false };
+      const want = sheet.querySelector("#ins-want");
+      const PH = { eat: "例如：壽司、拉麵、有兒童椅", see: "例如：影相靚、室內、免費", shop: "例如：藥妝、手信、波鞋" };
+      const syncKind = () => {
+        sheet.querySelectorAll("[data-sugkind]").forEach(x => { const on = x.dataset.sugkind === kind; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
+        if (want) want.placeholder = PH[kind];
+        sheet.querySelectorAll("[data-only]").forEach(x => { x.hidden = x.dataset.only !== kind; });
+        sheet.querySelectorAll('[data-pf="budget"]').forEach(x => { x.hidden = kind !== "eat"; });
+      };
+      syncKind();
+      sheet.querySelectorAll("[data-sugkind]").forEach(btn => btn.addEventListener("click", () => { kind = btn.dataset.sugkind; syncKind(); }));
+      sheet.querySelectorAll('[data-pf="budget"] .pfchip').forEach(c => c.addEventListener("click", () => {
+        prefs.budget = prefs.budget === +c.dataset.v ? 0 : +c.dataset.v;
+        sheet.querySelectorAll('[data-pf="budget"] .pfchip').forEach(x => x.classList.toggle("on", +x.dataset.v === prefs.budget));
+      }));
+      sheet.querySelectorAll("[data-pft]").forEach(c => c.addEventListener("click", () => {
+        prefs[c.dataset.pft] = !prefs[c.dataset.pft]; c.classList.toggle("on", prefs[c.dataset.pft]);
+      }));
+      const go = sheet.querySelector("#ins-go");
+      const run = async () => {
         const out = sheet.querySelector("#ins-nearres");
-        out.innerHTML = `<p class="hint"><span class="spin"></span>AI 揀緊${anchors.length > 1 ? `「${esc(anchors[0].name)}」同「${esc(anchors[1].name)}」之間順路` : `「${esc(anchors[0].name)}」附近`}嘅${SUG_KIND[kind]}，睇緊 Google 評論，大約 10 秒…</p>`;
-        const list = await suggestFor(anchors, kind, [...onDay]);
+        const w = (want && want.value.trim()) || "";
+        const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
+        out.innerHTML = elephantHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}，睇緊 Google 評論…`);
+        go.disabled = true;
+        const list = await suggestFor(anchors, kind, [...onDay], w, p2);
+        go.disabled = false;
         if (!out.isConnected) return;
         out.innerHTML = list.length
           ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
              <p class="hint">由 Google 上面評分 4 分以上嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。</p>`
-          : `<p class="hint">附近冇搵到評分高嘅${SUG_KIND[kind]}，試吓另一類，或者喺上面自己搵。</p>`;
+          : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
         wirePicks(out);
-      }));
+        out.scrollIntoView({ block: "start", behavior: "smooth" });
+      };
+      if (go) go.addEventListener("click", run);
+      if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });
     });
   }
   // A place picked from search or 「附近」 arrives with its Google id, so it
@@ -6274,10 +6441,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       state.transitProblem = "";
       refreshTransit(day, [k, nx].filter(x => x > 0));
     }
+    if (!plain(st.desc)) briefLoading.add(st);
+    if (state.view === day.id) render();
     try { await Promise.all([enrichHours(st), enrichPhoto(st, p.name), enrichLocalName(st),
       plain(st.desc) ? null : fetchBrief(st, kind).then(b => applyBrief(st, b, kind))]); } catch (_){}
+    briefLoading.delete(st);
     if (state.view === day.id) render();
-    await saveNow(`補返「${p.name}」嘅相同資料`, true);
+    await saveNow(`補返「${p.name}」嘅相同介紹`);
   }
 
   function wireNoteEditor(day){

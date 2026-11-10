@@ -24,7 +24,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
       edited_by: 'x', source: 'seed', summary: 's', snapshot: cur, has_snapshot: true }]) });
   });
   await p.route('**/rest/v1/ai_notes**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await p.route('**/functions/v1/**', r => {
+  await p.route('**/functions/v1/**', async r => {
     const body = JSON.parse(r.request().postData() || '{}');
     if (body.mode === 'suggest-add'){ near.push(body);
       const list = body.kind === 'eat'
@@ -33,6 +33,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
         : [{ name: '國立古宮博物館', placeId: 'pN2', lat: 37.577, lng: 126.975, rating: 4.6, ratingCount: 3000, walk: 4, nearName: '景福宮', types: ['museum'], what: '朝鮮王室文物', mustTry: '御寶同王室馬車' }];
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, places: list }) }); }
     if (body.mode === 'place-brief'){ briefs.push(body);
+      await new Promise(res => setTimeout(res, 700));
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, brief: { what: '首爾有名嘅手工餃子店', mustTry: '餃子、刀削麵', food: true, rating: 4.3, ratingCount: 9000 } }) }); }
     if (body.action === 'place-search') return r.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify({ places: [{ name: body.query + ' 本店', placeId: 'pQ', lat: 37.58, lng: 126.98, address: '首爾', rating: 4.2 }] }) });
@@ -55,21 +56,29 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-insert="2"]').click();
   await p.waitForTimeout(800);
   const sh = p.locator('.sheet');
-  ok('一打開就有搜尋格', await sh.locator('#ins-q').count() === 1);
-  ok('得一粒 AI 建議掣，唔會一開就搵', near.length === 0 && await sh.locator('#ins-ai').count() === 1 && await sh.locator('[data-sugkind]:visible').count() === 0);
-  await sh.locator('#ins-ai').click();
+  ok('一打開就有搜尋格', await sh.locator('#ins-q:visible').count() === 1);
+  ok('有「自己搵」同「AI 建議」兩頁，唔會一開就搵', near.length === 0 && await sh.locator('[data-instab]').count() === 2 && await sh.locator('[data-sugkind]:visible').count() === 0);
+  await sh.locator('[data-instab="ai"]').click();
   await p.waitForTimeout(200);
-  ok('撳咗先揀景點／購物／餐廳', (await sh.locator('[data-sugkind]:visible').allInnerTexts()).join() === '景點,購物,餐廳');
+  ok('AI 頁唔再有搵地點名嘅格', await sh.locator('#ins-q:visible').count() === 0);
+  ok('揀景點／購物／餐廳', (await sh.locator('[data-sugkind]:visible').allInnerTexts()).map(x => x.trim()).join() === '景點,購物,餐廳');
+  ok('問有冇咩特別想要', await sh.locator('#ins-want:visible').count() === 1);
   await sh.locator('[data-sugkind="eat"]').click();
+  await p.fill('#ins-want', '參雞湯');
+  await sh.locator('[data-pf="budget"] [data-v="2"]').click();
+  await sh.locator('[data-pft="kids"]').click();
+  await sh.locator('#ins-go').click();
   await p.waitForTimeout(800);
   const q0 = near[0] || {};
   ok('用前後兩個地點搵順路', q0.kind === 'eat' && (q0.points || []).length === 2 && q0.skip.includes('p4'), q0);
+  ok('想要嘅嘢同選項都傳埋過去', q0.want === '參雞湯' && q0.prefs && q0.prefs.budget === 2 && q0.prefs.kids === true, q0);
   const st2 = await sh.innerText();
   ok('有中文名、Google 評分同幾多人評', /土俗村參雞湯/.test(st2) && /4\.4（21,000 人評）/.test(st2), st2.slice(0, 300));
   ok('講明順路同行幾耐', /順路/.test(st2) && /離「景福宮」行 6 分鐘/.test(st2));
   ok('有介紹同必食', /人氣參雞湯老店/.test(st2) && /必食/.test(st2) && /原隻人參雞湯/.test(st2));
   ok('可以撳去 Google 睇相同評論', await sh.locator('.sugcard a[href*="google.com/maps"]').count() >= 1);
   await sh.locator('.sugcard', { hasText: '土俗村參雞湯' }).first().locator('.nr-add').click();
+  await p.waitForTimeout(200);
   await p.waitForTimeout(1500);
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
   const added = (last() || { days: [{}, { items: [] }] }).days[1].items.find(i => i.placeId === 'pN1');
@@ -84,7 +93,10 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.fill('#ins-q', '明洞餃子');
   await p.waitForTimeout(900);
   await p.locator('#ins-res .nr-add').first().click();
+  await p.waitForTimeout(300);
+  ok('寫緊介紹嗰陣張卡有大象動畫', await p.locator('.stopcard .eleload .ele').count() >= 1);
   await p.waitForTimeout(1200);
+  ok('寫完大象就走', await p.locator('.stopcard .eleload').count() === 0);
   ok('搜尋結果都係一撳就加', ((last() || {}).days || [])[1].items.some(i => i.placeId === 'pQ'));
   await p.waitForTimeout(1200);
   const q = ((last() || {}).days || [])[1].items.find(i => i.placeId === 'pQ') || {};
