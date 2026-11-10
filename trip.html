@@ -1120,6 +1120,23 @@ img{max-width:100%;}
 .nr-f{font-size:12px;color:var(--ink-soft);line-height:1.45;}
 .nr-a{font-size:11px;color:var(--ink-faint);line-height:1.4;}
 .nearbtns{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px;}
+.aiadd{margin:4px 0 8px;background:color-mix(in srgb,var(--gold) 12%,transparent);border-color:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--ink);font-weight:700;}
+.aiadd .i{color:var(--gold);}
+.sugcard{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column;gap:4px;}
+.sc-top{display:flex;gap:10px;align-items:flex-start;}
+.sc-n{flex:1 1 auto;min-width:0;font-size:15px;font-weight:800;color:var(--ink);text-decoration:none;line-height:1.35;}
+.sc-n small{display:block;font-size:11.5px;font-weight:500;color:var(--ink-faint);}
+.sc-facts{font-size:12.5px;color:var(--ink-soft);}
+.sc-facts b{color:var(--ink);}
+.sc-facts .i{width:12px;height:12px;color:var(--gold);vertical-align:-1px;}
+.sc-where{font-size:12px;color:var(--ink-soft);display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.sc-way{font-size:11px;font-weight:800;color:#14110A;background:var(--gold);padding:1px 8px;border-radius:999px;}
+.sc-what{margin:4px 0 0;font-size:13px;color:var(--ink);line-height:1.55;}
+.sc-must{margin:2px 0 0;font-size:13px;color:var(--ink);line-height:1.55;}
+.sc-must i{font-style:normal;font-size:11px;font-weight:800;color:var(--gold);margin-right:6px;}
+.sc-g{font-size:12px;color:var(--ink-soft);display:inline-flex;gap:4px;align-items:center;margin-top:2px;}
+.sc-g .i{width:12px;height:12px;}
+.stopdesc{white-space:pre-line;}
 .nearbtns .btn{flex:1 1 45%;font-size:13px;}
 .nearbtns .btn.on{border-color:var(--gold);color:var(--gold);}
 .nr-f .i{width:11px;height:11px;color:var(--gold);vertical-align:-1px;margin-right:2px;}
@@ -1972,7 +1989,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-10-15";
+  const BUILD = "2026-11-10-16";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6025,6 +6042,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       });
     }));
     setTimeout(() => { if (state.view === day.id) autoTransit(day); }, 0);
+    setTimeout(() => { if (state.view === day.id) backfillBriefs(day); }, 1500);
   }
 
   // ---------- insert a place or a note at an exact spot ----------
@@ -6083,6 +6101,79 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${p.address || p.area ? `<span class="nr-a">${esc(p.address || p.area)}</span>` : ""}</span>
       <button type="button" class="nr-add" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""} aria-label="加「${esc(p.name)}」入行程">${icon("plus")}</button></div>`;
   }
+  const SUG_KIND = { see: "景點", shop: "購物地方", eat: "餐廳" };
+  const MUST_LABEL = { see: "必睇", shop: "必買", eat: "必食" };
+  const sugCache = new Map();
+  async function suggestFor(anchors, kind, skip){
+    const k = kind + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|");
+    if (sugCache.has(k)) return sugCache.get(k);
+    try {
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "suggest-add", kind, skip, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 60000, null);
+      const r = res ? await res.json() : null;
+      const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
+      if (list.length) sugCache.set(k, list);
+      return list;
+    } catch (_){ return []; }
+  }
+  function suggestRowHtml(p, k, kind){
+    const label = (p.types || []).map(t => PLACE_KIND[t]).find(Boolean) || SUG_KIND[kind] || "";
+    const g = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId }) : "";
+    const title = p.name_zh || p.name;
+    return `<div class="sugcard">
+      <div class="sc-top">
+        <a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(title)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a>
+        <button type="button" class="nr-add" data-pick="${esc(k)}" data-kind="${kind}" aria-label="加「${esc(title)}」入行程">${icon("plus")}</button>
+      </div>
+      <div class="sc-facts">${[label ? esc(label) : "",
+        Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
+        Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
+      <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
+      ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : ""}
+      ${p.mustTry ? `<p class="sc-must"><i>${MUST_LABEL[kind] || "推介"}</i>${esc(p.mustTry)}</p>` : ""}
+      ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}Google 睇相同評論</a>` : ""}
+    </div>`;
+  }
+  // a line on what a place is (and, for food, what to order), from its own
+  // Google reviews — for places added by hand or already on the day
+  async function fetchBrief(st, kind){
+    if (!st.placeId) return null;
+    try {
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "place-brief", placeId: st.placeId, kind: kind || (st.type === "eat" ? "eat" : "see") }) }), 45000, null);
+      const r = res ? await res.json() : null;
+      return r && r.ok !== false && r.brief ? r.brief : null;
+    } catch (_){ return null; }
+  }
+  function applyBrief(st, b, kind){
+    if (!b) return false;
+    const label = MUST_LABEL[b.food ? "eat" : kind] || "推介";
+    const text = [b.what, b.mustTry ? `${label}：${b.mustTry}` : ""].filter(Boolean).join("\n");
+    if (!text || plain(st.desc)) return false;
+    st.desc = text;
+    if (b.food && st.type !== "eat") st.type = "eat";
+    if (Number.isFinite(b.rating) && !Number.isFinite(st.rating)){ st.rating = b.rating; st.ratingCount = b.ratingCount; }
+    return true;
+  }
+  const briefTried = new Set();
+  let briefBusy = false;
+  async function backfillBriefs(day){
+    if (briefBusy || state.readonly || state.offline) return;
+    const todo = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && !plain(st.desc) && !st.briefTried && !briefTried.has(st.placeId)).slice(0, 4);
+    if (!todo.length) return;
+    briefBusy = true;
+    let got = 0;
+    try {
+      await Promise.all(todo.map(async st => {
+        briefTried.add(st.placeId);
+        const b = await fetchBrief(st);
+        st.briefTried = true;
+        if (applyBrief(st, b)) got++;
+      }));
+    } finally { briefBusy = false; }
+    if (got && state.view === day.id) render();
+    if (got) await saveNow(`幫 ${got} 個地點寫咗簡介`, true);
+  }
   function openInsertSheet(day, pos){
     const units = toUnits(day.items);
     // the stops either side — for the sentence and for 「附近」
@@ -6105,10 +6196,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <input class="input" id="ins-q" placeholder="搵地點，例如：一蘭拉麵 道頓堀" autocomplete="off">
       <div id="ins-res"></div>
       ${anchors.length ? `<div id="ins-near">
-        <p class="picker-label">唔知加咩？幫你搵附近</p>
-        <div class="nearbtns">${anchors.map((a, ai) => `
-          <button type="button" class="btn" data-nearask="eat${ai}">${icon("sparkle")}「${esc(a.name)}」附近有咩食</button>
-          <button type="button" class="btn" data-nearask="see${ai}">${icon("sparkle")}「${esc(a.name)}」附近有咩去</button>`).join("")}</div>
+        <button type="button" class="btn wide aiadd" id="ins-ai">${icon("sparkle")}唔知加咩？AI 建議順路或者附近嘅地方</button>
+        <div class="kindpick" id="ins-kinds" hidden>
+          <p class="picker-label">想加啲咩？</p>
+          <div class="nearbtns"><button type="button" class="btn" data-sugkind="see">景點</button><button type="button" class="btn" data-sugkind="shop">購物</button><button type="button" class="btn" data-sugkind="eat">餐廳</button></div>
+        </div>
         <div id="ins-nearres"></div></div>` : ""}
       <div class="ins-more">
         <button class="btn" id="ins-note">${icon("note")}加一段 note</button>
@@ -6140,18 +6232,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }, 350);
       });
       setTimeout(() => q.focus(), 50);
-      // nearby — only when asked for
-      sheet.querySelectorAll("[data-nearask]").forEach(btn => btn.addEventListener("click", async () => {
-        const kind = btn.dataset.nearask.slice(0, 3), a = anchors[+btn.dataset.nearask.slice(3)];
+      // AI suggestions — one button, then what kind
+      const aiBtn = sheet.querySelector("#ins-ai");
+      if (aiBtn) aiBtn.addEventListener("click", () => { aiBtn.hidden = true; sheet.querySelector("#ins-kinds").hidden = false; });
+      sheet.querySelectorAll("[data-sugkind]").forEach(btn => btn.addEventListener("click", async () => {
+        const kind = btn.dataset.sugkind;
+        sheet.querySelectorAll("[data-sugkind]").forEach(x => x.classList.toggle("on", x === btn));
         const out = sheet.querySelector("#ins-nearres");
-        sheet.querySelectorAll("[data-nearask]").forEach(x => x.classList.toggle("on", x === btn));
-        out.innerHTML = `<p class="hint">搵緊「${esc(a.name)}」附近${kind === "eat" ? "值得食" : "值得去"}嘅地方…</p>`;
-        const list = (await nearbyFor(a, kind, [...onDay])).filter(p => !onDay.has(p.placeId)).slice(0, 6);
+        out.innerHTML = `<p class="hint"><span class="spin"></span>AI 揀緊${anchors.length > 1 ? `「${esc(anchors[0].name)}」同「${esc(anchors[1].name)}」之間順路` : `「${esc(anchors[0].name)}」附近`}嘅${SUG_KIND[kind]}，睇緊 Google 評論，大約 10 秒…</p>`;
+        const list = await suggestFor(anchors, kind, [...onDay]);
         if (!out.isConnected) return;
         out.innerHTML = list.length
-          ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return placeRowHtml(p, id, kind); }).join("")}</div>
-             <p class="hint">Google 上面評分 4 分以上、${kind === "eat" ? "行 10 分鐘內" : "行 20 分鐘內"}嘅地方。撳名睇 Google 相同評論，撳 ＋ 加入行程。</p>`
-          : `<p class="hint">附近冇搵到評分高嘅${kind === "eat" ? "食肆" : "景點"}。</p>`;
+          ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
+             <p class="hint">由 Google 上面評分 4 分以上嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。</p>`
+          : `<p class="hint">附近冇搵到評分高嘅${SUG_KIND[kind]}，試吓另一類，或者喺上面自己搵。</p>`;
         wirePicks(out);
       }));
     });
@@ -6165,6 +6259,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const st = Object.assign(blankStop(), { title: p.name, placeId: p.placeId || "", type: kind === "eat" ? "eat" : "normal",
       lat: Number.isFinite(p.lat) ? p.lat : null, lng: Number.isFinite(p.lng) ? p.lng : null });
     if (Number.isFinite(p.rating)){ st.rating = p.rating; st.ratingCount = p.ratingCount; }
+    if (p.name_zh && p.name_zh !== p.name){ st.title = p.name_zh; st.kr = p.name; }
+    if (p.what || p.mustTry) st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n");
     units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
     for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
     day.items = fromUnits(units);
@@ -6178,7 +6274,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       state.transitProblem = "";
       refreshTransit(day, [k, nx].filter(x => x > 0));
     }
-    try { await Promise.all([enrichHours(st), enrichPhoto(st, p.name), enrichLocalName(st)]); } catch (_){}
+    try { await Promise.all([enrichHours(st), enrichPhoto(st, p.name), enrichLocalName(st),
+      plain(st.desc) ? null : fetchBrief(st, kind).then(b => applyBrief(st, b, kind))]); } catch (_){}
     if (state.view === day.id) render();
     await saveNow(`補返「${p.name}」嘅相同資料`, true);
   }

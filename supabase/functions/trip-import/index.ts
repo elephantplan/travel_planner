@@ -205,6 +205,101 @@ async function nearbyPlaces(body: any) {
   } catch (e) { return { ok: false, message: String(e) }; }
 }
 
+// ---------- what a place is, from Google, in a sentence ----------
+// Google's own summary and a few real reviews go to the model, which writes
+// a line on what the place is and — for food — what people say to order.
+// Grounded in the reviews, so it describes this place, not a generic one.
+async function placeFacts(placeId: string) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key || !placeId) return null;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
+      `&fields=name,types,rating,user_ratings_total,price_level,editorial_summary,reviews&reviews_sort=most_relevant&language=zh-TW&key=${key}`;
+    const r = (await (await fetch(url)).json())?.result;
+    if (!r) return null;
+    return { placeId, name: String(r.name || ""), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
+      ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
+      summary: String(r.editorial_summary?.overview || "").slice(0, 200),
+      reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
+  } catch { return null; }
+}
+const BRIEF_PROMPT = (items: string, kind: string) => `下面係一啲 Google 地圖上面嘅地點，有 Google 自己嘅簡介同真實評論（JSON）。
+幫一個香港家庭用廣東話寫：
+- name_zh：中文名（有通用中文名就用，冇就照抄原名）
+- what：一句介紹佢係咩地方、有咩特色（最多 40 字）
+- mustTry：${kind === "eat" ? "根據評論，大家推介食咩（寫具體菜式，最多 40 字）" : kind === "shop" ? "根據評論，值得買乜或者有咩店（最多 40 字）" : "根據評論，最值得睇乜或者玩乜（最多 40 字）"}
+只可以根據提供嘅簡介同評論寫，評論冇講就留空，唔好作。
+${items}
+只回覆 JSON：{"places":[{"placeId":"","name_zh":"","what":"","mustTry":""}]}`;
+async function briefs(facts: any[], kind: string) {
+  if (!facts.length || !geminiKeys().length) return {};
+  try {
+    const p = parseJson(await callGemini([{ text: BRIEF_PROMPT(JSON.stringify(facts), kind) }]));
+    const out: Record<string, any> = {};
+    (p?.places || []).forEach((x: any) => { if (x?.placeId) out[x.placeId] = {
+      name_zh: str(x.name_zh, 40), what: str(x.what, 80), mustTry: str(x.mustTry, 80) }; });
+    return out;
+  } catch (e) { console.error("brief", String(e)); return {}; }
+}
+const KIND_TYPE: Record<string, string[]> = { eat: ["restaurant"], see: ["tourist_attraction"], shop: ["shopping_mall", "department_store"] };
+// Places worth adding between two stops: candidates from Google around both
+// (and the middle), ranked by rating, how many rated it and how far off the
+// way it is; then the best few are described from their reviews.
+async function suggestAdd(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
+  const pts = (Array.isArray(body?.points) ? body.points : []).map((x: any) => ({ lat: Number(x?.lat), lng: Number(x?.lng), name: str(x?.name, 40) }))
+    .filter((x: any) => Number.isFinite(x.lat) && Number.isFinite(x.lng)).slice(0, 2);
+  if (!key || !pts.length) return { ok: false, message: "冇位置資料，搵唔到附近。" };
+  const R = 6371000, toR = (x: number) => x * Math.PI / 180;
+  const dist = (a: any, b: any) => {
+    const h = Math.sin(toR(b.lat - a.lat) / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(toR(b.lng - a.lng) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  const centres = [...pts];
+  if (pts.length === 2 && dist(pts[0], pts[1]) > 1200) centres.push({ lat: (pts[0].lat + pts[1].lat) / 2, lng: (pts[0].lng + pts[1].lng) / 2, name: "" });
+  const skip = new Set((Array.isArray(body?.skip) ? body.skip : []).map(String));
+  const seen = new Map<string, any>();
+  await Promise.all(centres.flatMap((c: any) => KIND_TYPE[kind].map(async (type) => {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${c.lat},${c.lng}` +
+        `&radius=${kind === "eat" ? 800 : 1500}&type=${type}&language=zh-TW&key=${key}`;
+      for (const r of (await (await fetch(url)).json())?.results || []) {
+        if (!r?.place_id || skip.has(r.place_id) || seen.has(r.place_id) || r.business_status === "CLOSED_PERMANENTLY") continue;
+        if (!(Number(r.rating) >= 4 && Number(r.user_ratings_total) >= (kind === "eat" ? 80 : 150))) continue;
+        seen.set(r.place_id, r);
+      }
+    } catch { /* one search failing leaves the others */ }
+  })));
+  const direct = pts.length === 2 ? dist(pts[0], pts[1]) : 0;
+  const cands = [...seen.values()].map((r: any) => {
+    const g = r.geometry.location, d = pts.map((p: any) => dist(p, g));
+    const detour = pts.length === 2 ? d[0] + d[1] - direct : d[0];
+    const near = d[0] <= (d[1] ?? Infinity) ? 0 : 1;
+    return { r, detour, near, walk: Math.max(1, Math.round(Math.min(...d) * 1.3 / 80)),
+      score: Number(r.rating) * Math.log(Number(r.user_ratings_total) + 1) - detour / 300 };
+  }).sort((a: any, b: any) => b.score - a.score).slice(0, 6);
+  const facts = (await Promise.all(cands.map((c: any) => placeFacts(c.r.place_id)))).filter(Boolean) as any[];
+  const b = await briefs(facts, kind);
+  const places = cands.map((c: any) => {
+    const r = c.r, x = b[r.place_id] || {};
+    return { name: String(r.name || ""), name_zh: x.name_zh || "", placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
+      rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
+      types: (r.types || []).slice(0, 5), walk: c.walk, nearName: pts[c.near]?.name || "", onTheWay: pts.length === 2 && c.detour < 600,
+      what: x.what || "", mustTry: x.mustTry || "" };
+  });
+  return { ok: true, places };
+}
+async function placeBrief(body: any) {
+  const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
+  const f = await placeFacts(str(body?.placeId, 200));
+  if (!f) return { ok: false, message: "搵唔到呢個地點嘅資料。" };
+  const isFood = kind === "eat" || (f.types || []).some((t: string) => /restaurant|food|cafe|bakery|bar|meal/.test(t));
+  const x = (await briefs([f], isFood ? "eat" : kind))[f.placeId] || {};
+  return { ok: true, brief: { name_zh: x.name_zh || "", what: x.what || "", mustTry: x.mustTry || "", food: isFood,
+    rating: f.rating, ratingCount: f.ratingCount, price: f.price } };
+}
+
 // A long leg — another city, an airport — asked the way a travel agent
 // would answer: which train, whether to buy ahead and how, how often it
 // runs, when to set off for the next stop, and whether the plan is too tight.
@@ -368,6 +463,8 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ ok: false, message: "bad json" }, 400); }
   if (body?.mode === "leg") return json(await legBetween(body));
   if (body?.mode === "nearby") return json(await nearbyPlaces(body));
+  if (body?.mode === "suggest-add") return json(await suggestAdd(body));
+  if (body?.mode === "place-brief") return json(await placeBrief(body));
   if (!geminiKeys().length) return json({ ok: false, message: "AI 功能未設定（冇 GEMINI_API_KEY）。" });
 
   const text = str(body?.text, 60000);
