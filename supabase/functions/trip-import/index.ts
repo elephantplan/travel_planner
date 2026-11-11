@@ -184,7 +184,7 @@ async function nearSearch(body: any) {
     return Math.round(2 * R * Math.asin(Math.sqrt(a)));
   };
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}` +
-    `&location=${lat},${lng}&radius=3000&key=${key}`;
+    `&location=${lat},${lng}&radius=3000&language=${encodeURIComponent(str(body?.lang, 8) || "zh-TW")}&key=${key}`;
   try {
     const data = await (await fetch(url)).json();
     const places = (data?.results || [])
