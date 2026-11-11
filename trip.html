@@ -1148,18 +1148,17 @@ img{max-width:100%;}
 #ins-go{margin-bottom:8px;}
 .sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
 .sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
-/* the elephant — a block-built sprite in clay, printed slightly off-register */
+/* the elephant — a grey block-built calf, printed slightly off-register */
 .eleload{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px 12px;text-align:center;}
 .eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
 .eleload.small{flex-direction:row;padding:6px 0;gap:12px;text-align:left;}
-.eleload.small .ele{width:62px;height:42px;flex:none;}
-.ele{width:110px;height:75px;overflow:visible;--clay:#D0785A;--clay-deep:#A9553B;}
+.eleload.small .ele{width:62px;height:40px;flex:none;}
+.ele{width:110px;height:70px;overflow:visible;--clay:#A4ADB8;--clay-deep:#838D99;}
 .ele-clay rect{fill:var(--clay);}
 .ele-ear rect{fill:var(--clay-deep);}
 .ele-print rect{fill:var(--gold);}
 .ele-offset{transform:translate(.45px,.45px);opacity:.55;mix-blend-mode:multiply;}
-.ele-eye{fill:#2A1D18;}
-.ele-tusk{fill:#FBF3E4;}
+.ele-eye{fill:#262B33;}
 .ele-ground{stroke:var(--ink-faint);stroke-width:.35;stroke-linecap:round;fill:none;stroke-dasharray:2.2 1.2;}
 .ele-sparks rect{fill:var(--gold);}
 /* walk: legs take turns, body bobs a pixel, the path slides by */
@@ -2053,7 +2052,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-11-1";
+  const BUILD = "2026-11-11-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6190,7 +6189,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // it waits: sniffs along with a magnifying glass, flaps its ears and
   // floats, or tilts its head over a map. Picked at random each time.
   // A small block-built elephant, drawn like a sprite in a picture book:
-  // one clay colour, square pixels with a slightly hand-cut edge, and a gold
+  // a grey calf — big head, short body, no tusks — in square pixels with a slightly hand-cut edge, and a gold
   // print sitting a touch off-register behind it. It moves in steps, not
   // glides — walking along a dashed path, sniffing with its trunk up, or
   // hopping so its big ear lifts. Picked at random each time.
@@ -6198,25 +6197,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const MOVES = ["walk", "sniff", "hop"];      // inside, so it works before this line has run
     const m = move || MOVES[Math.floor(Math.random() * MOVES.length)];
     const R = (list, cls) => list.map(([x, y, w, h]) => `<rect${cls ? ` class="${cls}"` : ""} x="${x}" y="${y}" width="${w}" height="${h}"/>`).join("");
-    const body  = [[6,3,10,6],[7,2,8,1],[1,3,5,4],[2,2,3,1]];
-    const trunk = [[0,6,2,3],[1,9,2,1]];
-    const ear   = [[5,1,4,1],[4,2,6,4],[5,6,4,1]];
-    const legsA = [[6,9,2,2],[12,9,2,2]], legsB = [[9,9,2,2],[14,9,2,2]];
-    const tail  = [[16,4,1,1],[17,5,1,2]];
+    const body  = [[7,3,8,5],[8,2,6,1],[1,1,6,5],[2,0,4,1],[3,-1,1,1]];   // a calf: big head, short body
+    const trunk = [[0,3,1,4],[0,7,2,1],[2,6,1,1]];   // hangs down and curls up
+    const ear   = [[4,1,3,1],[3,2,5,4],[4,6,3,1]];
+    const legsA = [[7,8,2,2],[13,8,2,2]], legsB = [[10,8,2,2]];
+    const tail  = [[15,4,1,1],[16,5,1,1]];
     const shape = cls => `<g class="${cls}">${R(body)}<g class="ele-trunk">${R(trunk)}</g><g class="ele-legs-a">${R(legsA)}</g><g class="ele-legs-b">${R(legsB)}</g>${R(tail)}</g>`;
-    return `<svg class="ele ele-${m}" viewBox="-2 -2 22 15" aria-hidden="true" shape-rendering="crispEdges">
+    return `<svg class="ele ele-${m}" viewBox="-4 -2 22 14" aria-hidden="true" shape-rendering="crispEdges">
       <defs><filter id="ele-cut" x="-10%" y="-10%" width="120%" height="120%">
         <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="7"/>
         <feDisplacementMap in="SourceGraphic" scale="0.35"/></filter></defs>
-      <path class="ele-ground" d="M-1.5 11.4 h21"/>
+      <path class="ele-ground" d="M-1.5 10.4 h21"/>
       <g class="ele-all" filter="url(#ele-cut)">
         <g class="ele-offset">${shape("ele-print")}</g>
         ${shape("ele-clay")}
         <g class="ele-ear">${R(ear)}</g>
-        <rect class="ele-eye" x="2" y="4" width="1" height="1"/>
-        <rect class="ele-tusk" x="2" y="6" width="1" height="1"/>
+        <rect class="ele-eye" x="2" y="2" width="1" height="1"/>
       </g>
-      ${m === "sniff" ? `<g class="ele-sparks">${R([[-1,4,1,1],[-2,2,1,1],[1,0,1,1]])}</g>` : ""}
+      ${m === "sniff" ? `<g class="ele-sparks">${R([[-2,2,1,1],[-1,0,1,1],[-3,4,1,1]])}</g>` : ""}
     </svg>`;
   }
   function elephantHtml(text, small){
