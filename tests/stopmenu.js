@@ -52,11 +52,19 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(300);
   await p.locator('[data-today="day1"]').click();
   await p.waitForTimeout(300);
-  const rows = await p.locator('.mvlist .mvrow .mvn').allInnerTexts();
+  const rows = await p.locator('.mvlist .mvrow:not(.moving) .mvn').allInnerTexts();
   ok('揀咗日子就見到嗰日嘅行程', rows.join('|') === '仁川機場 T1|明洞酒店 Check-in|明洞餃子', rows);
-  ok('每兩個地點中間有位揀', await p.locator('[data-mvat]').count() === rows.length + 1);
-  const moving = (await p.locator('.sheet .sec-sub').innerText()).match(/「(.+?)」/)[1];
-  await p.locator('[data-mvat="1"]').click();
+  ok('要搬嘅地點係一張可以拉嘅卡，一開始喺最尾', await p.locator('#mvme').count() === 1 && await p.evaluate(() => document.querySelector('#mvlist').lastElementChild.id === 'mvme'));
+  const moving = (await p.locator('#mvme .mvn').innerText()).trim();
+  // drag it up between the first and second stops
+  const tgt = await p.locator('.mvlist .mvrow:not(.moving)').nth(1).boundingBox();
+  const src = await p.locator('#mvme .mvn').boundingBox();
+  await p.mouse.move(src.x + 10, src.y + src.height / 2); await p.mouse.down();
+  await p.mouse.move(src.x + 10, tgt.y + 4, { steps: 8 }); await p.mouse.up();
+  ok('拉得上去', await p.evaluate(() => [...document.querySelectorAll('#mvlist > .mvrow')].findIndex(el => el.id === 'mvme')) === 1);
+  await p.locator('#mvme [data-nudge="1"]').click(); await p.locator('#mvme [data-nudge="-1"]').click();
+  ok('撳 ↑↓ 都郁得', await p.evaluate(() => [...document.querySelectorAll('#mvlist > .mvrow')].findIndex(el => el.id === 'mvme')) === 1);
+  await p.locator('#mv-go').click();
   await p.waitForTimeout(800);
   sn = last();
   const d1 = sn.days[0].items.filter(i => i.title && i.kind !== 'connector' && i.kind !== 'note').map(i => i.title);

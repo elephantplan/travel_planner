@@ -854,17 +854,20 @@ img{max-width:100%;}
 .menulabel{font-size:12px;font-weight:600;color:var(--ink-soft);margin:6px 2px 8px;}
 .menumove{margin-top:16px;}
 .menudel{margin-top:10px;}
-.mvlist{display:flex;flex-direction:column;margin:4px 0 16px;}
+.mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
 .mvrow{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--rule);}
 .mvrow.note{background:transparent;border-style:dashed;color:var(--ink-soft);}
 .mvrow .mvt{font-size:12px;color:var(--ink-faint);min-width:40px;font-variant-numeric:tabular-nums;}
 .mvrow .mvt:empty{display:none;}
 .mvrow .mvt .i{width:13px;height:13px;}
 .mvrow .mvn{font-size:14.5px;font-weight:600;}
-.mvslot{display:flex;align-items:center;gap:6px;margin:4px 0;padding:7px 12px;border:1px dashed color-mix(in srgb,var(--lc) 55%,transparent);border-radius:var(--r-sm);
-  background:transparent;color:var(--lc);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;}
-.mvslot .i{width:14px;height:14px;}
-.mvslot:hover,.mvslot:focus-visible{background:color-mix(in srgb,var(--lc) 12%,transparent);border-style:solid;}
+.mvrow.moving{align-items:center;border:2px solid var(--lc);background:color-mix(in srgb,var(--lc) 14%,var(--surface));
+  cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:6px 6px 6px 10px;}
+.mvrow.moving.lifted{cursor:grabbing;box-shadow:var(--shadow-2);transform:scale(1.02);}
+.mvrow.moving:focus-visible{outline:2px solid var(--lc);outline-offset:2px;}
+.mvgrip{color:var(--lc);display:grid;place-items:center;} .mvgrip .i{width:16px;height:16px;}
+.mvrow.moving .mvn{flex:1;min-width:0;}
+.mvbtns{display:flex;gap:4px;} .mvbtns .iconbtn{width:36px;height:36px;}
 .editbtn:hover{color:var(--ink);background:var(--surface-2);}
 .editbtn:active,.stopcard.open .editbtn{background:var(--lc);color:var(--paper);}
 .draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
@@ -2048,7 +2051,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-7";
+  const BUILD = "2026-11-12-8";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6893,26 +6896,54 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </button>
       </div>
     `, sheet => {
-      // step 2: that day's stops in order, with a slot between each, so the
-      // stop lands exactly where it should rather than tacked on at the end
+      // step 2: that day's stops in order with the moving stop dropped in as
+      // a highlighted card — drag it (or nudge it with ↑↓) to where it goes,
+      // then confirm. Starts at the end of the day.
       sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", () => {
         const target = dayById(b.dataset.today);
         const tu = toUnits(target.items);
-        const slot = (pos, label) => `<button type="button" class="mvslot" data-mvat="${pos}">${icon("plus")}<span>${label}</span></button>`;
-        const rows = tu.map((u, j) => {
-          const row = u.stop
-            ? `<div class="mvrow"><span class="mvt">${esc(plain(u.stop.time) || "")}</span><span class="mvn">${esc(cleanPlaceName(plain(u.stop.title)) || "未改名嘅地點")}</span></div>`
-            : u.note ? `<div class="mvrow note"><span class="mvt">${icon("note")}</span><span class="mvn">${esc(plain(u.note.text || u.note.title || "") || "note")}</span></div>` : "";
-          return row + slot(j + 1, j === tu.length - 1 ? "放喺最尾" : "放喺呢度");
-        }).join("");
+        const rowOf = (u, j) => u.stop
+          ? `<div class="mvrow" data-u="${j}"><span class="mvt">${esc(plain(u.stop.time) || "")}</span><span class="mvn">${esc(cleanPlaceName(plain(u.stop.title)) || "未改名嘅地點")}</span></div>`
+          : u.note ? `<div class="mvrow note" data-u="${j}"><span class="mvt">${icon("note")}</span><span class="mvn">${esc(plain(u.note.text || u.note.title || "") || "note")}</span></div>` : "";
         sheet.querySelector("#mv-body").innerHTML = `
           <h3>放喺 Day ${target.id.replace("day", "")} 邊度？</h3>
-          <p class="sec-sub">${esc(target.title || "")}：揀「${esc(name)}」排喺邊兩個地點中間。</p>
-          <div class="mvlist" style="--lc:${dayColorVar(target.id)}">${slot(0, tu.length ? "放喺最前面" : "放入呢日")}${rows}</div>
-          <button type="button" class="btn wide" id="mv-back">${icon("up")}揀返第二日</button>`;
+          <p class="sec-sub">${esc(target.title || "")}：拉「${esc(name)}」上落，或者撳 ↑↓，揀好就撳「放喺呢度」。</p>
+          <div class="mvlist" id="mvlist" style="--lc:${dayColorVar(target.id)}">${tu.map(rowOf).join("")}
+            <div class="mvrow moving" id="mvme" tabindex="0" aria-label="「${esc(name)}」：用上下鍵搬位">
+              <span class="mvgrip">${icon("grip")}</span><span class="mvn">${esc(cleanPlaceName(name) || name)}</span>
+              <span class="mvbtns"><button type="button" class="iconbtn" data-nudge="-1" aria-label="向上">${icon("up")}</button><button type="button" class="iconbtn" data-nudge="1" aria-label="向下">${icon("down")}</button></span>
+            </div></div>
+          <button type="button" class="btn primary wide" id="mv-go">${icon("check")}放喺呢度</button>
+          <button type="button" class="btn wide" id="mv-back" style="margin-top:8px;">揀返第二日</button>`;
+        const box = sheet.querySelector("#mvlist"), me = sheet.querySelector("#mvme");
+        const others = () => [...box.children].filter(el => el !== me);
+        const nudge = d => {
+          const sib = d < 0 ? me.previousElementSibling : me.nextElementSibling;
+          if (!sib) return;
+          if (d < 0) box.insertBefore(me, sib); else box.insertBefore(sib, me);
+          me.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        };
+        me.querySelectorAll("[data-nudge]").forEach(x => x.addEventListener("click", e => { e.stopPropagation(); nudge(+x.dataset.nudge); }));
+        me.addEventListener("keydown", e => { if (e.key === "ArrowUp"){ e.preventDefault(); nudge(-1); } if (e.key === "ArrowDown"){ e.preventDefault(); nudge(1); } });
+        // drag: wherever the finger is, the card sits before the first row whose middle is below it
+        me.addEventListener("pointerdown", e => {
+          if (e.target.closest("[data-nudge]")) return;
+          e.preventDefault();
+          // listened for on the document: moving the card in the DOM drops pointer capture
+          me.classList.add("lifted");
+          const move = ev => {
+            const y = ev.clientY;
+            const before = others().find(el => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2; });
+            if (before){ if (me.nextElementSibling !== before) box.insertBefore(me, before); }
+            else if (box.lastElementChild !== me) box.appendChild(me);
+          };
+          const up = () => { me.classList.remove("lifted"); document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); document.removeEventListener("pointercancel", up); };
+          document.addEventListener("pointermove", move); document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
+        });
+        setTimeout(() => me.scrollIntoView({ block: "nearest" }), 30);
         sheet.querySelector("#mv-back").addEventListener("click", () => { closeLayer(); openMovePicker(source); });
-        sheet.querySelectorAll("[data-mvat]").forEach(x => x.addEventListener("click", async () => {
-          const at = +x.dataset.mvat;
+        sheet.querySelector("#mv-go").addEventListener("click", async () => {
+          const nx = me.nextElementSibling, at = nx && nx.dataset.u != null ? +nx.dataset.u : tu.length;
           const movingStop = detach();
           movingStop.kind = "stop";
           const tUnits = toUnits(target.items);
@@ -6927,7 +6958,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           await saveNow(`「${name}」搬咗去 ${target.title}`);
           afterDetach();
           refreshTransit(target, [at, at + 1]);
-        }));
+        });
       }));
 
       sheet.querySelectorAll("[data-toboard]").forEach(b => b.addEventListener("click", async () => {
@@ -10826,6 +10857,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
             ${hiddenCount || showTrivial
               ? `<button class="btn" id="toggletrivial">${showTrivial ? "淨係顯示重要更新" : `顯示埋自動更新（${hiddenCount}）`}</button>`
               : ""}
+            ${rows.length > 1 && !state.readonly ? `<button class="btn danger" id="prunehist">${icon("trash")}刪走舊紀錄，只留最新</button>` : ""}
           </div>
           ${vRows.map((r, idx) => `
             <label class="vrow">
@@ -10844,6 +10876,27 @@ ${stayBlock}${dayBlocks}${secBlocks}
                 </span>
               </span>
             </label>`).join("")}`;
+
+        // clear the history down to the version the trip is on now; the
+        // database refuses to delete that one, whatever is sent
+        const prune = list.querySelector("#prunehist");
+        if (prune) prune.addEventListener("click", async e => {
+          e.preventDefault();
+          const keep = rows.find(r => r.has_snapshot !== false) || rows[0];
+          const n = rows.filter(r => r.id !== keep.id).length;
+          if (!confirm(`刪走 ${n} 個舊紀錄，淨係留低而家呢個版本？刪咗就還原唔到。`)) return;
+          prune.disabled = true; prune.textContent = "刪緊…";
+          let gone = 0;
+          try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&id=neq.${keep.id}`,
+              { method: "DELETE", headers: sbHeaders({ "Prefer": "return=representation" }) });
+            if (res.ok) gone = ((await res.json()) || []).length;
+          } catch (_){}
+          try { rows = await fetchAllVersions(); } catch (_){}
+          paint();
+          flash(gone ? `刪咗 ${gone} 個舊紀錄，淨係留低最新嗰個。`
+                     : "刪唔到：數據庫未開「刪舊紀錄」權限，要喺 Supabase 加一條設定。");
+        });
 
         const toggle = list.querySelector("#toggletrivial");
         if (toggle) toggle.addEventListener("click", e => { e.preventDefault(); showTrivial = !showTrivial; paint(); });
