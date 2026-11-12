@@ -16,7 +16,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const cur = JSON.parse(JSON.stringify(snap));
   // a leg saved half-way through a calculation
   cur.days[1].items.splice(3, 0, { kind: 'connector', html: '', stale: true, checking: true });
-  const saved = [], nearQ = [], near = [], transit = [], briefs = [];
+  const saved = [], many = [], nearQ = [], near = [], transit = [], briefs = [];
   await p.route('**/rest/v1/itinerary_versions**', r => {
     if (r.request().method() === 'POST'){ try { saved.push(JSON.parse(r.request().postData())); } catch (_){}
       return r.fulfill({ status: 201, contentType: 'application/json', body: '[]' }); }
@@ -29,9 +29,11 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     if (body.mode === 'suggest-add'){ near.push(body);
       const list = body.kind === 'eat'
         ? [{ name: '토속촌 삼계탕', name_zh: '土俗村參雞湯', placeId: 'pN1', lat: 37.578, lng: 126.971, rating: 4.4, ratingCount: 21000, walk: 6,
-            nearName: '景福宮', onTheWay: true, types: ['restaurant'], what: '景福宮附近人氣參雞湯老店', mustTry: '原隻人參雞湯、烏雞參雞湯' }]
+            nearName: '景福宮', onTheWay: true, types: ['restaurant'] }]
         : [{ name: '國立古宮博物館', placeId: 'pN2', lat: 37.577, lng: 126.975, rating: 4.6, ratingCount: 3000, walk: 4, nearName: '景福宮', types: ['museum'], what: '朝鮮王室文物', mustTry: '御寶同王室馬車' }];
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, places: list }) }); }
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, places: list, ask: body.want }) }); }
+    if (body.mode === 'brief-many'){ many.push(body);
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, briefs: { pN1: { what: '景福宮附近人氣參雞湯老店', mustTry: '原隻人參雞湯、烏雞參雞湯', fit: '主打參雞湯', rank: 0 } } }) }); }
     if (body.mode === 'place-brief'){ briefs.push(body);
       await new Promise(res => setTimeout(res, 700));
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, brief: { what: '首爾有名嘅手工餃子店', mustTry: '餃子、刀削麵', food: true, rating: 4.3, ratingCount: 9000 } }) }); }
@@ -76,6 +78,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(800);
   const q0 = near[0] || {};
   ok('用前後兩個地點搵順路', q0.kind === 'eat' && (q0.points || []).length === 2 && q0.skip.includes('p4'), q0);
+  ok('先攞 Google 名單，介紹之後先寫', q0.brief === false && many.length === 1 && many[0].placeIds.includes('pN1') && /參雞湯/.test(many[0].ask || ''), many);
   ok('想要嘅嘢同選項都傳埋過去', q0.want === '參雞湯' && q0.prefs && q0.prefs.budget === 2 && q0.prefs.kids === true, q0);
   const st2 = await sh.innerText();
   ok('有中文名、Google 評分同幾多人評', /土俗村參雞湯/.test(st2) && /4\.4（21,000 人評）/.test(st2), st2.slice(0, 300));

@@ -1156,6 +1156,8 @@ img{max-width:100%;}
 .ldrbox.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
 .ldr{width:96px;height:44px;overflow:visible;}
 .ldrbox.small .ldr{width:52px;height:24px;flex:none;}
+.sc-wait{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-faint);margin:6px 0 0;}
+.sc-wait .ldr{width:40px;height:18px;flex:none;}
 .ldr-track{fill:none;stroke:var(--rule);stroke-width:2;stroke-linecap:round;stroke-dasharray:2 4;}
 .ldr-route{fill:none;stroke:var(--gold);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;animation:ldr-draw 1.8s cubic-bezier(.5,0,.3,1) infinite;}
 .ldr-start{fill:var(--gold);}
@@ -2034,7 +2036,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-4";
+  const BUILD = "2026-11-12-5";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6242,12 +6244,29 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (sugCache.has(k)) return sugCache.get(k);
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "suggest-add", kind, skip, want, prefs, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 60000, null);
+        body: JSON.stringify({ mode: "suggest-add", brief: false, kind, skip, want, prefs, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 25000, null);
       const r = res ? await res.json() : null;
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
+      list.ask = (r && r.ask) || "";
       if (list.length) sugCache.set(k, list);
       return list;
     } catch (_){ return []; }
+  }
+  // the intros for a list already on screen, written from each place's
+  // Google reviews; with a request, the order says which fit best
+  async function briefsFor(list, kind){
+    const todo = list.filter(p => p.placeId && !p.briefed);
+    if (!todo.length) return false;
+    try {
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "brief-many", kind, ask: list.ask || "", placeIds: todo.map(p => p.placeId) }) }), 45000, null);
+      const r = res ? await res.json() : null;
+      const b = (r && r.briefs) || {};
+      todo.forEach(p => { const x = b[p.placeId]; p.briefed = true;
+        if (x){ p.name_zh = p.name_zh || x.name_zh || ""; p.what = x.what || ""; p.mustTry = x.mustTry || ""; p.fit = x.fit || ""; p.rank = x.rank; } });
+      if (list.ask) list.sort((a, c) => (Number.isFinite(a.rank) ? a.rank : 99) - (Number.isFinite(c.rank) ? c.rank : 99));
+      return true;
+    } catch (_){ todo.forEach(p => { p.briefed = true; }); return false; }
   }
   function suggestRowHtml(p, k, kind){
     const label = (p.types || []).map(t => PLACE_KIND[t]).find(Boolean) || SUG_KIND[kind] || "";
@@ -6263,7 +6282,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
       <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
       ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
-      ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : ""}
+      ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊 Google 評論，寫緊介紹…</span></p>`}
       ${p.mustTry ? `<p class="sc-must"><i>${MUST_LABEL[kind] || "推介"}</i>${esc(p.mustTry)}</p>` : ""}
       ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}Google 睇相同評論</a>` : ""}
     </div>`;
@@ -6444,17 +6463,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const out = sheet.querySelector("#ins-nearres");
         const w = (want && want.value.trim()) || "";
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
-        out.innerHTML = loaderHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}，睇緊 Google 評論…`);
+        out.innerHTML = loaderHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}…`);
         go.disabled = true;
+        const runId = (run.n = (run.n || 0) + 1);
         const list = await suggestFor(anchors, kind, [...onDay], w, p2);
         go.disabled = false;
-        if (!out.isConnected) return;
-        out.innerHTML = list.length
-          ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
-             <p class="hint">由 Google 上面評分 4 分以上嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。</p>`
-          : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
-        wirePicks(out);
+        if (!out.isConnected || runId !== run.n) return;
+        const paint = () => {
+          out.innerHTML = list.length
+            ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
+               <p class="hint">由 Google 上面評分高嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。</p>`
+            : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
+          wirePicks(out);
+        };
+        paint();                                   // Google's list first, straight away
         out.scrollIntoView({ block: "start", behavior: "smooth" });
+        if (list.length && await briefsFor(list, kind) !== null && out.isConnected && runId === run.n) paint();
       };
       if (go) go.addEventListener("click", run);
       if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });

@@ -272,7 +272,8 @@ async function briefs(facts: any[], kind: string, ask = "") {
     return out;
   } catch (e) { console.error("brief", String(e)); return {}; }
 }
-const KIND_TYPE: Record<string, string[]> = { eat: ["restaurant"], see: ["tourist_attraction"], shop: ["shopping_mall", "department_store"] };
+// Shops on a shopping street are mostly small "store"s, not malls, so all three count.
+const KIND_TYPE: Record<string, string[]> = { eat: ["restaurant"], see: ["tourist_attraction"], shop: ["store", "shopping_mall", "department_store"] };
 // Places worth adding between two stops: candidates from Google around both
 // (and the middle), ranked by rating, how many rated it and how far off the
 // way it is; then the best few are described from their reviews.
@@ -298,6 +299,14 @@ async function suggestAdd(body: any) {
   const ask = [want, budget ? ["", "平啲", "中價", "貴少少都得"][budget] : "", near ? "行 5 分鐘內" : "",
     pf.kids ? "啱小朋友" : "", pf.book ? "可以訂位或者唔使排太耐" : ""].filter(Boolean).join("、");
   const seen = new Map<string, any>();
+  const raw = new Map<string, any>();      // everything Google returned, for the looser second look
+  const minCount = want ? 30 : kind === "eat" ? 80 : kind === "shop" ? 40 : 150;
+  // convenience stores and supermarkets are "stores" too, but not what 購物 means
+  const notShopping = (r: any) => kind === "shop" && !want &&
+    (r.types || []).some((t: string) => /^(convenience_store|supermarket|grocery_or_supermarket|gas_station|car_|atm|bank)/.test(t));
+  const keep = (r: any, rating: number, count: number) =>
+    r?.place_id && !skip.has(r.place_id) && r.business_status !== "CLOSED_PERMANENTLY" && !notShopping(r)
+    && Number(r.rating) >= rating && Number(r.user_ratings_total) >= count;
   await Promise.all(centres.flatMap((c: any) => KIND_TYPE[kind].map(async (type) => {
     try {
       const radius = near ? (kind === "eat" ? 450 : 700) : (kind === "eat" ? 800 : 1500);
@@ -305,12 +314,13 @@ async function suggestAdd(body: any) {
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${c.lat},${c.lng}` +
         `&radius=${radius}&type=${type}${want ? "&keyword=" + encodeURIComponent(want) : ""}${price}&language=zh-TW&key=${key}`;
       for (const r of (await (await fetch(url)).json())?.results || []) {
-        if (!r?.place_id || skip.has(r.place_id) || seen.has(r.place_id) || r.business_status === "CLOSED_PERMANENTLY") continue;
-        if (!(Number(r.rating) >= 4 && Number(r.user_ratings_total) >= (want ? 30 : kind === "eat" ? 80 : 150))) continue;
-        seen.set(r.place_id, r);
+        if (r?.place_id && !raw.has(r.place_id)) raw.set(r.place_id, r);
+        if (!seen.has(r?.place_id) && keep(r, 4, minCount)) seen.set(r.place_id, r);
       }
     } catch { /* one search failing leaves the others */ }
   })));
+  // too few? take what Google has with a lower bar rather than say "nothing nearby"
+  if (seen.size < 3) for (const r of raw.values()) if (!seen.has(r.place_id) && keep(r, 3.7, 10)) seen.set(r.place_id, r);
   const direct = pts.length === 2 ? dist(pts[0], pts[1]) : 0;
   const cands = [...seen.values()].map((r: any) => {
     const g = r.geometry.location, d = pts.map((p: any) => dist(p, g));
@@ -319,13 +329,15 @@ async function suggestAdd(body: any) {
     return { r, detour, near, walk: Math.max(1, Math.round(Math.min(...d) * 1.3 / 80)),
       score: Number(r.rating) * Math.log(Number(r.user_ratings_total) + 1) - detour / 300 };
   }).sort((a: any, b: any) => b.score - a.score).slice(0, ask ? 8 : 6);
-  const facts = (await Promise.all(cands.map((c: any) => placeFacts(c.r.place_id)))).filter(Boolean) as any[];
-  const b = await briefs(facts, kind, ask);
+  // fast: Google's list straight away; the intros come from brief-many after
+  const fast = body?.brief === false;
+  const facts = fast ? [] : (await Promise.all(cands.map((c: any) => placeFacts(c.r.place_id)))).filter(Boolean) as any[];
+  const b: Record<string, any> = fast ? {} : await briefs(facts, kind, ask);
   // with a request, the model's order (and its leaving out) decides
   const ranked = ask && Object.keys(b).length
     ? cands.filter((c: any) => b[c.r.place_id]).sort((x: any, y: any) => b[x.r.place_id].rank - b[y.r.place_id].rank)
     : cands;
-  const places = ranked.slice(0, 6).map((c: any) => {
+  const places = ranked.slice(0, fast ? 8 : 6).map((c: any) => {
     const r = c.r, x = b[r.place_id] || {};
     return { name: String(r.name || ""), name_zh: x.name_zh || "", placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
       rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
@@ -333,6 +345,16 @@ async function suggestAdd(body: any) {
       what: x.what || "", mustTry: x.mustTry || "", fit: x.fit || "" };
   });
   return { ok: true, places, ask };
+}
+// Intros for a list already on screen: facts and reviews for each place,
+// then one model call. With a request (ask) the order the model gives back,
+// and which it leaves out, says which fit best.
+async function briefMany(body: any) {
+  const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
+  const ids = (Array.isArray(body?.placeIds) ? body.placeIds : []).map((x: unknown) => str(x, 200)).filter(Boolean).slice(0, 8);
+  if (!ids.length) return { ok: false, briefs: {} };
+  const facts = (await Promise.all(ids.map((id: string) => placeFacts(id)))).filter(Boolean) as any[];
+  return { ok: true, briefs: await briefs(facts, kind, str(body?.ask, 120)) };
 }
 async function placeBrief(body: any) {
   const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
@@ -510,6 +532,7 @@ Deno.serve(async (req) => {
   if (body?.mode === "near-search") return json(await nearSearch(body));
   if (body?.mode === "suggest-add") return json(await suggestAdd(body));
   if (body?.mode === "place-brief") return json(await placeBrief(body));
+  if (body?.mode === "brief-many") return json(await briefMany(body));
   if (!geminiKeys().length) return json({ ok: false, message: "AI 功能未設定（冇 GEMINI_API_KEY）。" });
 
   const text = str(body?.text, 60000);
