@@ -852,7 +852,19 @@ img{max-width:100%;}
 .editbtn .i,.draghandle .i{width:16px;height:16px;}
 .editbtn{cursor:pointer;}
 .menulabel{font-size:12px;font-weight:600;color:var(--ink-soft);margin:6px 2px 8px;}
-.menudel{margin-top:16px;}
+.menumove{margin-top:16px;}
+.menudel{margin-top:10px;}
+.mvlist{display:flex;flex-direction:column;margin:4px 0 16px;}
+.mvrow{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--rule);}
+.mvrow.note{background:transparent;border-style:dashed;color:var(--ink-soft);}
+.mvrow .mvt{font-size:12px;color:var(--ink-faint);min-width:40px;font-variant-numeric:tabular-nums;}
+.mvrow .mvt:empty{display:none;}
+.mvrow .mvt .i{width:13px;height:13px;}
+.mvrow .mvn{font-size:14.5px;font-weight:600;}
+.mvslot{display:flex;align-items:center;gap:6px;margin:4px 0;padding:7px 12px;border:1px dashed color-mix(in srgb,var(--lc) 55%,transparent);border-radius:var(--r-sm);
+  background:transparent;color:var(--lc);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;}
+.mvslot .i{width:14px;height:14px;}
+.mvslot:hover,.mvslot:focus-visible{background:color-mix(in srgb,var(--lc) 12%,transparent);border-style:solid;}
 .editbtn:hover{color:var(--ink);background:var(--surface-2);}
 .editbtn:active,.stopcard.open .editbtn{background:var(--lc);color:var(--paper);}
 .draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
@@ -2036,7 +2048,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-5";
+  const BUILD = "2026-11-12-6";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3290,8 +3302,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <span class="foldt">${esc(plain(x.u.stop.time) || (x.j < ui ? "前面" : "後面"))}</span>
           <span class="foldn">${esc(cleanPlaceName(plain(x.u.stop.title)) || "未改名嘅地點")}</span>
         </button>`).join("")}</div>` : `<p class="hint">呢日冇第二個站，做唔到後備。</p>`}
+      <button class="btn wide menumove" id="stopmove">${icon("map")}搬去第二日／心水清單</button>
       <button class="btn danger wide menudel" id="stopdel">${icon("trash")}刪走「${esc(name)}」</button>
     `, sheet => {
+      sheet.querySelector("#stopmove").addEventListener("click", () => { closeLayer(); openMovePicker({ kind: "day", day, index: ui }); });
       sheet.querySelectorAll("[data-backupof]").forEach(b => b.addEventListener("click", async () => {
         const r = foldIntoAlts(day, +b.dataset.backupof, ui);
         closeLayer();
@@ -6778,7 +6792,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <button data-newboard style="--lc:var(--bookmark)">
           <span class="bullet"></span><span class="dcode">＋</span><span>開個新清單</span>
         </button>
-      </div>
+      </div></div>
     `, sheet => {
       sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", async () => {
         const target = dayById(b.dataset.today);
@@ -6850,7 +6864,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (source.kind === "day"){ syncMapPoints(source.day); refreshTransit(source.day, [source.index]); }
     }
 
-    openSheet(`
+    openSheet(`<div id="mv-body">
       <h3>搬去邊度？</h3>
       <p class="sec-sub">「${esc(name)}」揀個新位置，之後隨時都可以再搬。</p>
       ${days.length ? `
@@ -6879,22 +6893,41 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </button>
       </div>
     `, sheet => {
-      sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", async () => {
+      // step 2: that day's stops in order, with a slot between each, so the
+      // stop lands exactly where it should rather than tacked on at the end
+      sheet.querySelectorAll("[data-today]").forEach(b => b.addEventListener("click", () => {
         const target = dayById(b.dataset.today);
-        const movingStop = detach();
-        movingStop.kind = "stop";
-        const tUnits = toUnits(target.items);
-        tUnits.push({ seg: null, stop: movingStop });
-        target.items = fromUnits(tUnits);
-        syncMapPoints(target);
-        const landedAt = tUnits.length - 1;
-        closeLayer();
-        state.open.clear();
-        state.view = target.id;
-        render();
-        await saveNow(`「${name}」搬咗去 ${target.title}`);
-        afterDetach();
-        refreshTransit(target, [landedAt]);
+        const tu = toUnits(target.items);
+        const slot = (pos, label) => `<button type="button" class="mvslot" data-mvat="${pos}">${icon("plus")}<span>${label}</span></button>`;
+        const rows = tu.map((u, j) => {
+          const row = u.stop
+            ? `<div class="mvrow"><span class="mvt">${esc(plain(u.stop.time) || "")}</span><span class="mvn">${esc(cleanPlaceName(plain(u.stop.title)) || "未改名嘅地點")}</span></div>`
+            : u.note ? `<div class="mvrow note"><span class="mvt">${icon("note")}</span><span class="mvn">${esc(plain(u.note.text || u.note.title || "") || "note")}</span></div>` : "";
+          return row + slot(j + 1, j === tu.length - 1 ? "放喺最尾" : "放喺呢度");
+        }).join("");
+        sheet.querySelector("#mv-body").innerHTML = `
+          <h3>放喺 Day ${target.id.replace("day", "")} 邊度？</h3>
+          <p class="sec-sub">${esc(target.title || "")}：揀「${esc(name)}」排喺邊兩個地點中間。</p>
+          <div class="mvlist" style="--lc:${dayColorVar(target.id)}">${slot(0, tu.length ? "放喺最前面" : "放入呢日")}${rows}</div>
+          <button type="button" class="btn wide" id="mv-back">${icon("up")}揀返第二日</button>`;
+        sheet.querySelector("#mv-back").addEventListener("click", () => { closeLayer(); openMovePicker(source); });
+        sheet.querySelectorAll("[data-mvat]").forEach(x => x.addEventListener("click", async () => {
+          const at = +x.dataset.mvat;
+          const movingStop = detach();
+          movingStop.kind = "stop";
+          const tUnits = toUnits(target.items);
+          tUnits.splice(at, 0, { seg: { kind: "connector", html: "", stale: true }, stop: movingStop });
+          for (let j = at + 1; j < tUnits.length; j++) if (tUnits[j].stop){ if (tUnits[j].seg) tUnits[j].seg = Object.assign({}, tUnits[j].seg, { stale: true }); break; }
+          target.items = fromUnits(tUnits);
+          syncMapPoints(target);
+          closeLayer();
+          state.open.clear();
+          state.view = target.id;
+          render();
+          await saveNow(`「${name}」搬咗去 ${target.title}`);
+          afterDetach();
+          refreshTransit(target, [at, at + 1]);
+        }));
       }));
 
       sheet.querySelectorAll("[data-toboard]").forEach(b => b.addEventListener("click", async () => {

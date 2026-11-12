@@ -44,13 +44,34 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('做咗後備：行程少咗一個站', after.length === before.length - 1, after.map(s => s.title));
   ok('摺咗喺揀嗰個站下面', after.some(s => (s.alts || []).some(a => a.title === before[1])), after.map(s => [s.title, (s.alts || []).map(a => a.title)]));
 
+  // move the first stop of day 2 into day 1, between its first and second stops
+  await p.locator('[data-stopmenu]').first().click();
+  await p.waitForTimeout(300);
+  ok('選單有「搬去第二日」', await p.locator('#stopmove').count() === 1);
+  await p.locator('#stopmove').click();
+  await p.waitForTimeout(300);
+  await p.locator('[data-today="day1"]').click();
+  await p.waitForTimeout(300);
+  const rows = await p.locator('.mvlist .mvrow .mvn').allInnerTexts();
+  ok('揀咗日子就見到嗰日嘅行程', rows.join('|') === '仁川機場 T1|明洞酒店 Check-in|明洞餃子', rows);
+  ok('每兩個地點中間有位揀', await p.locator('[data-mvat]').count() === rows.length + 1);
+  const moving = (await p.locator('.sheet .sec-sub').innerText()).match(/「(.+?)」/)[1];
+  await p.locator('[data-mvat="1"]').click();
+  await p.waitForTimeout(800);
+  sn = last();
+  const d1 = sn.days[0].items.filter(i => i.title && i.kind !== 'connector' && i.kind !== 'note').map(i => i.title);
+  ok('放咗喺揀嘅位置', d1[1] === moving && d1.length === 4, d1);
+  ok('搬完跳去嗰日', /明洞餃子/.test(await p.locator('#app').innerText()));
+  await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
+  await p.waitForTimeout(800);
+
   const n0 = await p.locator('[data-stopmenu]').count();
   await p.locator('[data-stopmenu]').first().click();
   await p.waitForTimeout(300);
   await p.locator('#stopdel').click();
   await p.waitForTimeout(800);
   sn = last();
-  ok('刪走咗', await p.locator('[data-stopmenu]').count() === n0 - 1 && stops(sn).length === before.length - 2, sn && stops(sn).map(s => s.title));
+  ok('刪走咗', await p.locator('[data-stopmenu]').count() === n0 - 1 && stops(sn).length === before.length - 3, sn && stops(sn).map(s => s.title));
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
