@@ -858,7 +858,17 @@ img{max-width:100%;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
 .ovupdate{margin:14px 0 4px;}
 .sgask .input{margin-bottom:10px;}
-.sgh.fresh{scroll-margin-top:110px;} [data-sgask] .ldr{width:40px;height:18px;margin-right:6px;}
+.sgh.fresh{scroll-margin-top:110px;}
+.sgloading{margin:14px 0;padding:8px;border:1px dashed color-mix(in srgb,var(--gold) 55%,transparent);border-radius:var(--r-md, 12px);background:color-mix(in srgb,var(--gold) 7%,transparent);}
+.hl{width:124px;height:60px;overflow:visible;}
+.hl-ground{stroke:var(--rule);stroke-width:2;stroke-linecap:round;}
+.hl-b > rect:first-child{fill:var(--surface-2);stroke:var(--ink-faint);stroke-width:1.4;}
+.hl-w{fill:var(--ink-faint);opacity:.5;}
+.hl-pin path{fill:var(--gold);} .hl-pin circle{fill:var(--paper, #fff);}
+.hl-pin{animation:hl-hop 2.7s ease-in-out infinite;}
+@keyframes hl-hop{0%,22%{transform:translate(0,0)}11%{transform:translate(0,-6px)}27%{transform:translate(20px,-18px)}33%,55%{transform:translate(39px,-10px)}44%{transform:translate(39px,-16px)}
+  60%{transform:translate(58px,-14px)}66%,88%{transform:translate(78px,4px)}77%{transform:translate(78px,-2px)}94%{transform:translate(40px,-16px)}100%{transform:translate(0,0)}}
+@media (prefers-reduced-motion:reduce){.hl-pin{animation:none;}} [data-sgask] .ldr{width:40px;height:18px;margin-right:6px;}
 .updrop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px;border:1.5px dashed var(--rule);border-radius:var(--r-lg, 14px);cursor:pointer;text-align:center;}
 .updrop input{display:none;} .updrop .i{width:22px;height:22px;color:var(--gold);} .updrop small{color:var(--ink-faint);font-size:12px;}
 .updfiles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
@@ -2081,7 +2091,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-13";
+  const BUILD = "2026-11-12-14";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6285,6 +6295,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <g class="ldr-pin"><path d="M78 4 c-5.5 0 -9 4 -9 8.6 c0 6 9 13.4 9 13.4 s9 -7.4 9 -13.4 c0 -4.6 -3.5 -8.6 -9 -8.6 z"/><circle cx="78" cy="12.6" r="3"/></g>
     </svg>`;
   }
+  // Looking for a place to stay: three little hotels on a street, and the
+  // gold pin hops from one to the next, stopping to look at each.
+  function hotelLoaderHtml(text){
+    const bld = (x, h, w) => `<g class="hl-b"><rect x="${x}" y="${50 - h}" width="${w}" height="${h}" rx="2"/>${
+      [0, 1, 2].map(r => [0, 1].map(c => (50 - h + 6 + r * 9) < 44 ? `<rect class="hl-w" x="${x + 5 + c * (w - 15)}" y="${50 - h + 6 + r * 9}" width="5" height="5" rx="1"/>` : "").join("")).join("")}</g>`;
+    return `<div class="ldrbox hotel" role="status"><svg class="hl" viewBox="0 0 124 60" aria-hidden="true">
+      <path class="hl-ground" d="M4 50.5 H120"/>${bld(10, 30, 26)}${bld(49, 40, 26)}${bld(88, 26, 26)}
+      <g class="hl-pin"><path d="M23 2 c-4.4 0 -7.2 3.2 -7.2 6.9 c0 4.8 7.2 10.7 7.2 10.7 s7.2 -5.9 7.2 -10.7 c0 -3.7 -2.8 -6.9 -7.2 -6.9 z"/><circle cx="23" cy="8.9" r="2.4"/></g>
+    </svg><span>${esc(text)}</span></div>`;
+  }
   function loaderHtml(text, small){
     return `<div class="ldrbox${small ? " small" : ""}" role="status">${loaderSvg()}<span>${esc(text)}</span></div>`;
   }
@@ -7687,7 +7707,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const sg = d.staySuggest;
     const days = d.days || [];
     const dLab = (a, b) => `Day ${a}${b && b !== a ? "–" + b : ""}`;
+    const loading = state.stayLoading ? `<div class="sgloading">${hotelLoaderHtml("AI 搵緊適合你哋嘅住宿區同酒店…")}</div>` : "";
     if (!sg || !(sg.hotels || []).length){
+      if (loading) return loading;
       return `<div class="sgcta">
         <button class="btn${(d.stays || []).length ? "" : " primary"}" data-stayprefs>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 推薦其他酒店" : "叫 AI 推薦邊幾晚住邊區"}</button>
         <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>`;
@@ -7705,6 +7727,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
         (pf2 ? `&adults=${pf2.adults + (pf2.kids || 0)}&rooms=${pf2.rooms}` : "");
     };
+    // Booking.com takes the dates, guests and rooms straight from the link
+    // (Google Hotels often ignores them and opens on tonight)
+    const nights = h => {
+      const a = days[h.fromDay - 1], b = days[Math.min(h.toDay, days.length) - 1];
+      return { ci: a ? dayIso(a) : "", co: b ? dayIso(b) : "" };
+    };
+    const bkBooking = h => {
+      const { ci, co } = nights(h), pf2 = d.stayPrefs, dest = (d.meta || {}).destinationLocal || "";
+      const q = [h.name, dest && !String(h.name).includes(dest) ? dest : ""].filter(Boolean).join(" ");
+      return `https://www.booking.com/searchresults.zh-tw.html?ss=${encodeURIComponent(q)}` +
+        (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
+        (pf2 ? `&group_adults=${pf2.adults}&group_children=${pf2.kids || 0}&no_rooms=${pf2.rooms}` : "") + "&selected_currency=HKD";
+    };
+    const nightsLabel = h => { const { ci, co } = nights(h); const f = x => x ? `${+x.slice(5, 7)}/${+x.slice(8, 10)}` : ""; return ci ? `${f(ci)}${co && co !== ci ? "–" + f(co) : ""}` : ""; };
     return `<div class="hsblock sgblock">
       <h3>住宿推薦</h3>
       <div class="sgprefs">${pf ? `你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 會自己揀"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
@@ -7717,6 +7753,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <div class="sgmore-row"><button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
         <span class="hint">按上面嘅要求搵；之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
       </div>
+      ${loading}
       ${(sg.areas || []).length ? `<p class="picker-label">可以住邊區</p>
       <div class="sgareas">${sg.areas.map(a => { const n = sg.hotels.filter(h => h.area === a.area).length; return `
         <button type="button" class="sgarea${state.stayArea === a.area ? " on" : ""}${a.best ? " best" : ""}" data-stayarea="${esc(a.area)}">
@@ -7752,7 +7789,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 ? `<span class="sgchosen">${icon("check")}已揀</span>`
                 : `<button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>`}
               ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.local || h.name, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
-              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 睇價</a>
+              <a class="maplink" href="${esc(bkBooking(h))}" target="_blank" rel="noopener">${icon("link")}Booking 睇價${nightsLabel(h) ? `（${nightsLabel(h)}）` : ""}</a>
+              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 比價</a>
             </div>
           </div>
         </div>`; }).join("")}</div>
@@ -8030,9 +8068,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         stops: (d.items || []).filter(x => x.kind === "stop").map(x => plain(x.title)).filter(Boolean) })),
     });
     onProgress && onProgress("AI 諗緊邊幾晚住邊區…");
-    const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-      body: JSON.stringify({ mode: "stay-suggest", text: trip, today: localIso(new Date()) }) });
-    const r = await res.json().catch(() => ({ ok: false, message: "伺服器冇回覆" }));
+    state.stayLoading = true;
+    if (state.view === "overview" || state.view === "stays"){ render(); requestAnimationFrame(() => { const el = document.querySelector(".sgloading"); if (el) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); }
+    let r;
+    try {
+      // quick: names and areas first (no web search), the price, room and
+      // station for each hotel are looked up after, one card at a time
+      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "stay-suggest", quick: true, text: trip, today: localIso(new Date()) }) });
+      r = await res.json().catch(() => ({ ok: false, message: "伺服器冇回覆" }));
+    } finally { state.stayLoading = false; }
     if (!r || r.ok === false || !r.stays) throw new Error((r && r.message) || "建議唔到");
     const sg = r.stays;
     // show the AI's list straight away; the Google checks (place, rating,
@@ -8111,7 +8156,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       e.preventDefault();
       // the saved requirements are used as they are; the box only adds to them
       const inp = document.getElementById("sg-extra"), extra = inp ? inp.value.trim() : "";
-      ask.disabled = true; ask.innerHTML = `${loaderSvg()}AI 搵緊酒店同價錢（大約半分鐘）…`;
+      ask.disabled = true; ask.innerHTML = `${icon("sparkle")}搵緊…`;
       try {
         const n = await suggestStays(null, extra);
         await saveNow(extra ? `按「${extra}」再搵住宿` : "AI 再推介多幾間住宿");
@@ -8195,13 +8240,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     stayCheckBusy = true;
     let got = 0;
     try {
-      for (let i = 0; i < todo.length; i += 3){
-        const batch = todo.slice(i, i + 3);
+      for (let i = 0; i < todo.length; i += 4){
+        const batch = todo.slice(i, i + 4);
         batch.forEach(h => stayCheckTried.add(h.name));
         const r = await Promise.all(batch.map(h => checkStayHotel(h)));
         batch.forEach((h, j) => { if (!r[j]) stayCheckFailed.add(h.name); });
         got += r.filter(Boolean).length;
-        if (state.snapshot === snap && state.view === "stays") render();
+        if (state.snapshot === snap && (state.view === "stays" || state.view === "overview")) render();
       }
     } finally { stayCheckBusy = false; }
     if (got) await saveNow(`幫 ${got} 間酒店補返推介指數同分析`, true);
@@ -11260,15 +11305,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return { src, day, kept, added, dropped, changed: added.length || dropped.length || (src.title && src.title !== day.title) || kept.some((st, k) => old.indexOf(st) !== k) };
     });
   }
-  function dayIso(d){
-    const m = String(d.isoDate || d.dateIso || "").match(/^\d{4}-\d{2}-\d{2}$/);
-    if (m) return m[0];
-    const meta = state.snapshot.meta || {}, start = meta.dateStart;
-    const n = Number(String(d.id).replace("day", ""));
-    if (!start || !n) return "";
-    const x = new Date(start + "T00:00:00"); x.setDate(x.getDate() + n - 1);
-    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-  }
+
   function openUpdateFromSource(){
     let files = [];
     openSheet(`<div id="upd-body">

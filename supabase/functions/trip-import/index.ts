@@ -543,8 +543,13 @@ Deno.serve(async (req) => {
   const today = iso(body?.today) || new Date().toISOString().slice(0, 10);
 
   if (body?.mode === "stay-suggest") {
+    // quick: names, areas and nights only, from the model's own knowledge —
+    // a few seconds instead of a web search; the app then checks each hotel
+    // on Google and asks stay-check for its price, room and station
+    const quick = body?.quick === true;
+    const QUICK = "\n【快速模式】唔使上網搜尋。price、station、walk、roomSize、scoreWhy 留空字串，score 用 null。只寫你肯定真實存在、仲營業緊嘅酒店，唔肯定就唔好寫。";
     let raw = "";
-    try { raw = await callGemini([{ text: STAY_PROMPT(str(text, 12000), today) }], true); }
+    try { raw = await callGemini([{ text: STAY_PROMPT(str(text, 12000), today) + (quick ? QUICK : "") }], !quick); }
     catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
     const out = cleanStays(parseJson(raw));
     if (!out.hotels.length) return json({ ok: false, message: "AI 今次冇建議到酒店，再試一次。" });

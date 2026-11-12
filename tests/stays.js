@@ -9,6 +9,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   else { fail++; console.log('  FAIL ' + n + (x !== undefined ? '  → ' + JSON.stringify(x) : '')); } };
 
+const quickFlags = [];
 const SUGGEST = { ok: true, stays: {
   areas: [{ area: '明洞', best: true, pros: '三日都喺市中心，唔使搬酒店', cons: '晚上人多', goodFor: '第一次去' },
           { area: '弘大', best: false, pros: '後生熱鬧', cons: '去景福宮要轉車', goodFor: '鍾意夜生活' }],
@@ -42,7 +43,8 @@ const SUGGEST = { ok: true, stays: {
         station: 'なんば駅', walk: '步行約 5 分鐘', highlights: ['近道頓堀'], convenience: '去京都要轉車，但食嘢行街好方便',
         score: 7, scoreWhy: '行街方便，但離梅田景點遠少少' } }) });
     }
-    if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); suggestText.push(body.text || ''); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) }); }
+    if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); suggestText.push(body.text || ''); quickFlags.push(body.quick === true);
+      return new Promise(res => setTimeout(res, 600)).then(() => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) })); }
     if (/place-photo-store/.test(url)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'http://localhost:8799/icons/icon-v2.svg' }) });
     if (body.action === 'place-search') return r.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify({ places: [{ name: body.query, placeId: 'pid-' + body.query.length, lat: 37.56, lng: 126.98, rating: 4.4, ratingCount: 900 }] }) });
@@ -94,8 +96,13 @@ const SUGGEST = { ok: true, stays: {
   ok('有好處', /乙支路入口站直達/.test(t));
   ok('最近車站同自己計嘅步行時間', /最近\s*을지로입구역\s*·\s*步行約 4 分鐘/.test(t), (t.match(/最近[\s\S]{0,30}/) || [])[0]);
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
-  const bk = await acc.locator('a', { hasText: 'Google 睇價' }).first().getAttribute('href');
-  ok('有 Google 睇價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
+  const bk = await acc.locator('a', { hasText: 'Google 比價' }).first().getAttribute('href');
+  ok('有 Google 比價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
+  // Day 1 to Day 3 of a trip starting 2026-10-23: in on the 23rd, out on the 25th
+  const bb = acc.locator('a', { hasText: 'Booking 睇價' }).first();
+  const bh = await bb.getAttribute('href');
+  ok('Booking 連結帶啱嘅入住同退房日子', /booking\.com/.test(bh) && bh.includes('checkin=2026-10-23') && bh.includes('checkout=2026-10-25') && bh.includes('group_adults=6') && bh.includes('group_children=1') && bh.includes('no_rooms=2'), bh);
+  ok('掣上面寫明日子', /10\/23–10\/25/.test(await bb.innerText()));
   ok('建議講明跟咗咩要求', /你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one
@@ -131,7 +138,11 @@ const SUGGEST = { ok: true, stays: {
   // no extra wish needed: the button searches with the saved requirements
   const n0 = sentText.length;
   await accQ.locator('[data-sgask]').click();
+  await p.waitForTimeout(250);
+  ok('搵緊嘅時候喺結果位置有酒店動畫', await p.locator('.sgloading .hl-pin').count() === 1);
   await p.waitForTimeout(2500);
+  ok('先攞酒店名（快速模式），詳情之後逐間補', quickFlags.length > 0 && quickFlags.every(Boolean), quickFlags);
+  ok('搵完動畫就走', await p.locator('.sgloading').count() === 0);
   ok('唔使打字都撳得「AI 推介」', sentText.length === n0 + 1 && !/今次額外要求/.test(sentText[sentText.length - 1] || ''));
   ok('要求擺喺掣上面', await p.evaluate(() => { const a = document.querySelector('.sgprefs'), b = document.querySelector('[data-sgask]'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   // searching again keeps what was found and asks for different ones
