@@ -1148,46 +1148,44 @@ img{max-width:100%;}
 #ins-go{margin-bottom:8px;}
 .sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
 .sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
-/* the elephant — a flat grey calf with a thin ink line, like a picture book */
+/* the elephant — an original grey calf sitting up, drawn like a picture book */
 .eleload{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;text-align:center;}
 .eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
 .eleload.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
-.eleload.small .ele{width:58px;height:46px;flex:none;}
-.ele{width:120px;height:96px;overflow:visible;--ele-line:#3E454E;}
-.ele-body,.ele-skull,.ele-leg{fill:#B9C0C8;stroke:var(--ele-line);stroke-width:1.6;}
-.ele-leg.back{fill:#A3ABB4;}
-.ele-ear{fill:#A3ABB4;stroke:var(--ele-line);stroke-width:1.6;stroke-linejoin:round;}
-.ele-trunk-line{fill:none;stroke:var(--ele-line);stroke-width:11.2;stroke-linecap:round;}
-.ele-trunk-fill{fill:none;stroke:#B9C0C8;stroke-width:8;stroke-linecap:round;}
-.ele-eye{fill:var(--ele-line);}
-.ele-brow,.ele-tail{fill:none;stroke:var(--ele-line);stroke-width:1.6;stroke-linecap:round;}
-.ele-ground{fill:none;stroke:var(--ink-faint);stroke-width:1.4;stroke-linecap:round;}
-.ele-lens circle{fill:#FFFFFF;fill-opacity:.55;stroke:var(--ele-line);stroke-width:1.8;}
-.ele-lens path{stroke:var(--ele-line);stroke-width:3;stroke-linecap:round;}
-.ele-mapsheet path:first-child{fill:#F4EBD7;stroke:var(--ele-line);stroke-width:1.4;stroke-linejoin:round;}
-.ele-route{fill:none;stroke:#D2564C;stroke-width:1.6;stroke-dasharray:3 2;}
-.ele-ear{transform-box:fill-box;transform-origin:15% 30%;}
-.ele-trunk{transform-box:fill-box;transform-origin:70% 0;}
-.ele-head{transform-box:fill-box;transform-origin:70% 85%;}
-.ele-leg{transform-box:fill-box;transform-origin:50% 0;}
-/* sniff: trotting, trunk sweeping a magnifying glass */
-.ele-sniff .ele-all{animation:ele-trot .9s ease-in-out infinite;}
-.ele-sniff .ele-trunk{animation:ele-sweep 1.8s ease-in-out infinite;}
-.ele-sniff .l1,.ele-sniff .l2{animation:ele-step .9s ease-in-out infinite;}
-.ele-sniff .l3,.ele-sniff .l4{animation:ele-step .9s ease-in-out infinite reverse;}
-/* fly: ears flapping, floating up and down */
-.ele-fly .ele-all{animation:ele-float 1.6s ease-in-out infinite;}
-.ele-fly .ele-ear{animation:ele-flap .32s ease-in-out infinite alternate;}
-/* map: head tilting over a map, the route drawing itself */
-.ele-map .ele-head{animation:ele-tilt 2.4s ease-in-out infinite;}
-.ele-map .ele-route{animation:ele-dash 1.2s linear infinite;}
-@keyframes ele-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
-@keyframes ele-step{0%,100%{transform:rotate(8deg)}50%{transform:rotate(-8deg)}}
-@keyframes ele-sweep{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(12deg)}}
-@keyframes ele-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-@keyframes ele-flap{from{transform:rotate(0deg)}to{transform:rotate(-22deg)}}
-@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-8deg)}60%{transform:rotate(4deg)}}
-@keyframes ele-dash{to{stroke-dashoffset:-10}}
+.eleload.small .ele{width:52px;height:52px;flex:none;}
+.ele{width:104px;height:104px;overflow:visible;--ele-line:#4A4F57;--ele-skin:#C9CDD3;}
+.ele-skin{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1.5;stroke-linejoin:round;}
+.ele-belly{fill:none;stroke:var(--ele-line);stroke-width:1.1;stroke-linecap:round;opacity:.35;}
+.ele-pad{fill:#E6E8EB;stroke:var(--ele-line);stroke-width:1.1;}
+.ele-ear-in{fill:#F1B8BF;}
+.ele-trunk-line{fill:none;stroke:var(--ele-line);stroke-width:11;stroke-linecap:round;}
+.ele-trunk-fill{fill:none;stroke:var(--ele-skin);stroke-width:8;stroke-linecap:round;}
+.ele-trunk-tip{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1.5;stroke-linejoin:round;}
+.ele-eye{fill:#2B2F36;} .ele-glint{fill:#fff;}
+.ele-brow,.ele-mouth{fill:none;stroke:var(--ele-line);stroke-width:1.4;stroke-linecap:round;}
+.ele-cheek{fill:#F1B8BF;opacity:.6;}
+.ele-puffs circle{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1;}
+.ele-trunk{transform-box:fill-box;transform-origin:70% 100%;}
+.ele-ear{transform-box:fill-box;transform-origin:10% 20%;}
+.ele-head{transform-box:fill-box;transform-origin:50% 90%;}
+.ele-all{transform-box:fill-box;transform-origin:50% 100%;}
+.ele-eye{transform-box:fill-box;transform-origin:center;}
+/* wave: the trunk sways up and puffs a little */
+.ele-wave .ele-trunk{animation:ele-sway 1.4s ease-in-out infinite;}
+.ele-wave .ele-puffs{animation:ele-puff 1.4s ease-out infinite;}
+.ele-wave .ele-eye{animation:ele-blink 3s infinite;}
+/* flap: the ear flaps and the calf bounces on the spot */
+.ele-flap .ele-ear{animation:ele-flapear .35s ease-in-out infinite alternate;}
+.ele-flap .ele-all{animation:ele-bounce .7s ease-in-out infinite;}
+/* tilt: head tilting side to side, blinking */
+.ele-tilt .ele-head{animation:ele-tilt 2.2s ease-in-out infinite;}
+.ele-tilt .ele-eye{animation:ele-blink 2.2s infinite;}
+@keyframes ele-sway{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(10deg)}}
+@keyframes ele-puff{0%{opacity:0;transform:translate(0,0)}30%{opacity:.9}100%{opacity:0;transform:translate(-6px,-6px)}}
+@keyframes ele-flapear{from{transform:rotate(0)}to{transform:rotate(14deg)}}
+@keyframes ele-bounce{0%,100%{transform:translateY(0) scaleY(1)}40%{transform:translateY(-6px) scaleY(1.02)}80%{transform:translateY(0) scaleY(.97)}}
+@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-7deg)}65%{transform:rotate(6deg)}}
+@keyframes ele-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
 @media (prefers-reduced-motion:reduce){.ele *{animation:none !important;}}
 .aiadd{margin:4px 0 8px;background:color-mix(in srgb,var(--gold) 12%,transparent);border-color:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--ink);font-weight:700;}
 .aiadd .i{color:var(--gold);}
@@ -2059,7 +2057,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-1";
+  const BUILD = "2026-11-12-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6195,34 +6193,36 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // An original round elephant with big ears does one of three things while
   // it waits: sniffs along with a magnifying glass, flaps its ears and
   // floats, or tilts its head over a map. Picked at random each time.
-  // A grey elephant calf drawn flat, like a picture-book illustration:
-  // plain fills with a thin ink line, no shading. Big head, short body, a
-  // trunk that curls. While something loads it does one of three things —
-  // sniffs along with a magnifying glass, flaps its ears and floats, or reads
-  // a map. Picked at random each time.
+  // An original elephant calf, sitting up with its trunk raised — soft grey,
+  // a thin ink line, pink inside the ear, pale pads on its round feet, the
+  // way a children's picture book would draw one. While something loads it
+  // waves its trunk about, flaps its ear and bounces, or tilts its head and
+  // blinks. Picked at random each time.
   function elephantSvg(move){
-    const MOVES = ["sniff", "fly", "map"];       // inside, so it works before this line has run
+    const MOVES = ["wave", "flap", "tilt"];       // inside, so it works before this line has run
     const m = move || MOVES[Math.floor(Math.random() * MOVES.length)];
-    const trunk = "M24 52 C14 58 12 70 18 76 C21 79 25 77 24 73";
-    return `<svg class="ele ele-${m}" viewBox="0 0 120 96" aria-hidden="true">
-      <path class="ele-ground" d="M14 90 H108"/>
+    const trunk = "M47 50 C40 42 36 30 39 17";
+    return `<svg class="ele ele-${m}" viewBox="0 0 120 120" aria-hidden="true">
       <g class="ele-all">
-        <path class="ele-tail" d="M92 58 q9 1 9 10"/>
-        <rect class="ele-leg back l2" x="80" y="68" width="10" height="18" rx="4"/>
-        <rect class="ele-leg back l3" x="58" y="68" width="10" height="18" rx="4"/>
-        <ellipse class="ele-body" cx="72" cy="60" rx="24" ry="18"/>
-        <rect class="ele-leg l1" x="52" y="70" width="11" height="18" rx="4"/>
-        <rect class="ele-leg l4" x="74" y="70" width="11" height="18" rx="4"/>
+        <path class="ele-skin" d="M52 58 C36 62 30 88 38 102 C46 113 78 114 88 102 C96 90 90 64 74 58 Z"/>
+        <path class="ele-belly" d="M54 70 C46 78 46 96 56 104 C66 108 76 104 80 96"/>
+        <ellipse class="ele-skin" cx="52" cy="80" rx="6" ry="8.5" transform="rotate(-25 52 80)"/>
+        <ellipse class="ele-skin" cx="80" cy="81" rx="6" ry="8.5" transform="rotate(25 80 81)"/>
+        <g class="ele-foot"><ellipse class="ele-skin" cx="42" cy="104" rx="11" ry="9"/><ellipse class="ele-pad" cx="40" cy="105" rx="6.5" ry="5.5"/></g>
+        <g class="ele-foot"><ellipse class="ele-skin" cx="88" cy="105" rx="11" ry="9"/><ellipse class="ele-pad" cx="90" cy="106" rx="6.5" ry="5.5"/></g>
         <g class="ele-head">
+          <g class="ele-ear"><path class="ele-skin" d="M68 28 C88 22 98 44 90 62 C86 70 76 70 72 62 C68 52 64 38 68 28 Z"/>
+            <path class="ele-ear-in" d="M72 34 C84 32 90 46 85 57 C82 62 77 61 75 56 C72 48 70 40 72 34 Z"/></g>
+          <circle class="ele-skin" cx="58" cy="44" r="18"/>
           <g class="ele-trunk"><path class="ele-trunk-line" d="${trunk}"/><path class="ele-trunk-fill" d="${trunk}"/>
-            ${m === "sniff" ? `<g class="ele-lens"><path d="M27 80 l7 6"/><circle cx="22" cy="76" r="7"/></g>` : ""}</g>
-          <circle class="ele-skull" cx="40" cy="42" r="21"/>
-          <path class="ele-ear" d="M50 26 C66 20 74 36 70 50 C67 60 56 62 50 56 C46 46 44 34 50 26 Z"/>
-          <circle class="ele-eye" cx="31" cy="40" r="2.4"/>
-          <path class="ele-brow" d="M27 33 q4 -3 8 0"/>
+            <path class="ele-trunk-tip" d="M35 17 C36 12 43 12 44 17"/></g>
+          <ellipse class="ele-eye" cx="54" cy="38" rx="2.3" ry="3"/><circle class="ele-glint" cx="54.8" cy="36.8" r="0.8"/>
+          <path class="ele-brow" d="M50 31 q4 -3 8 0"/>
+          <path class="ele-mouth" d="M50 53 q4 5 9 1"/>
+          <ellipse class="ele-cheek" cx="63" cy="50" rx="3.4" ry="2.2"/>
         </g>
-        ${m === "map" ? `<g class="ele-mapsheet"><path d="M8 62 l12 -4 l12 4 l12 -4 v20 l-12 4 l-12 -4 l-12 4z"/><path class="ele-route" d="M12 72 q8 -8 14 -2 t14 -4"/></g>` : ""}
       </g>
+      ${m === "wave" ? `<g class="ele-puffs"><circle cx="32" cy="8" r="2.4"/><circle cx="26" cy="13" r="1.6"/></g>` : ""}
     </svg>`;
   }
   function elephantHtml(text, small){
