@@ -1148,39 +1148,46 @@ img{max-width:100%;}
 #ins-go{margin-bottom:8px;}
 .sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
 .sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
-/* the elephant — a grey block-built calf, printed slightly off-register */
-.eleload{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px 12px;text-align:center;}
+/* the elephant — a flat grey calf with a thin ink line, like a picture book */
+.eleload{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;text-align:center;}
 .eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
-.eleload.small{flex-direction:row;padding:6px 0;gap:12px;text-align:left;}
-.eleload.small .ele{width:62px;height:40px;flex:none;}
-.ele{width:110px;height:70px;overflow:visible;--clay:#A4ADB8;--clay-deep:#838D99;}
-.ele-clay rect{fill:var(--clay);}
-.ele-ear rect{fill:var(--clay-deep);}
-.ele-print rect{fill:var(--gold);}
-.ele-offset{transform:translate(.45px,.45px);opacity:.55;mix-blend-mode:multiply;}
-.ele-eye{fill:#262B33;}
-.ele-ground{stroke:var(--ink-faint);stroke-width:.35;stroke-linecap:round;fill:none;stroke-dasharray:2.2 1.2;}
-.ele-sparks rect{fill:var(--gold);}
-/* walk: legs take turns, body bobs a pixel, the path slides by */
-.ele-walk .ele-all{animation:ele-bob .5s steps(1) infinite;}
-.ele-walk .ele-legs-a{animation:ele-lift .5s steps(1) infinite;}
-.ele-walk .ele-legs-b{animation:ele-lift .5s steps(1) infinite .25s;}
-.ele-walk .ele-ground{animation:ele-path .5s steps(2) infinite;}
-/* sniff: trunk up, head dips, little sparks blink where it sniffs */
-.ele-sniff .ele-trunk{animation:ele-trunk 1.2s steps(1) infinite;}
-.ele-sniff .ele-ear{animation:ele-earflick 1.2s steps(1) infinite;}
-.ele-sniff .ele-sparks{animation:ele-blink .6s steps(1) infinite;}
-/* hop: a three-frame jump, the big ear lifting at the top */
-.ele-hop .ele-all{animation:ele-jump .9s steps(1) infinite;}
-.ele-hop .ele-ear{animation:ele-earup .9s steps(1) infinite;}
-@keyframes ele-bob{0%{transform:translateY(0)}50%{transform:translateY(-.5px)}}
-@keyframes ele-lift{0%{transform:translateY(0)}50%{transform:translateY(-1px)}}
-@keyframes ele-path{to{stroke-dashoffset:3.4}}
-@keyframes ele-trunk{0%{transform:translate(0,0)}35%{transform:translate(-1px,-2px)}70%{transform:translate(-1px,-1px)}}
-@keyframes ele-earflick{0%,60%{transform:translate(0,0)}80%{transform:translate(1px,0)}}
-@keyframes ele-blink{0%{opacity:1}50%{opacity:0}}
-@keyframes ele-jump{0%,70%{transform:translateY(0)}20%{transform:translateY(-2px)}40%{transform:translateY(-3px)}55%{transform:translateY(-1px)}}
-@keyframes ele-earup{0%,70%{transform:translateY(0)}20%,55%{transform:translateY(-1px)}}
+.eleload.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
+.eleload.small .ele{width:58px;height:46px;flex:none;}
+.ele{width:120px;height:96px;overflow:visible;--ele-line:#3E454E;}
+.ele-body,.ele-skull,.ele-leg{fill:#B9C0C8;stroke:var(--ele-line);stroke-width:1.6;}
+.ele-leg.back{fill:#A3ABB4;}
+.ele-ear{fill:#A3ABB4;stroke:var(--ele-line);stroke-width:1.6;stroke-linejoin:round;}
+.ele-trunk-line{fill:none;stroke:var(--ele-line);stroke-width:11.2;stroke-linecap:round;}
+.ele-trunk-fill{fill:none;stroke:#B9C0C8;stroke-width:8;stroke-linecap:round;}
+.ele-eye{fill:var(--ele-line);}
+.ele-brow,.ele-tail{fill:none;stroke:var(--ele-line);stroke-width:1.6;stroke-linecap:round;}
+.ele-ground{fill:none;stroke:var(--ink-faint);stroke-width:1.4;stroke-linecap:round;}
+.ele-lens circle{fill:#FFFFFF;fill-opacity:.55;stroke:var(--ele-line);stroke-width:1.8;}
+.ele-lens path{stroke:var(--ele-line);stroke-width:3;stroke-linecap:round;}
+.ele-mapsheet path:first-child{fill:#F4EBD7;stroke:var(--ele-line);stroke-width:1.4;stroke-linejoin:round;}
+.ele-route{fill:none;stroke:#D2564C;stroke-width:1.6;stroke-dasharray:3 2;}
+.ele-ear{transform-box:fill-box;transform-origin:15% 30%;}
+.ele-trunk{transform-box:fill-box;transform-origin:70% 0;}
+.ele-head{transform-box:fill-box;transform-origin:70% 85%;}
+.ele-leg{transform-box:fill-box;transform-origin:50% 0;}
+/* sniff: trotting, trunk sweeping a magnifying glass */
+.ele-sniff .ele-all{animation:ele-trot .9s ease-in-out infinite;}
+.ele-sniff .ele-trunk{animation:ele-sweep 1.8s ease-in-out infinite;}
+.ele-sniff .l1,.ele-sniff .l2{animation:ele-step .9s ease-in-out infinite;}
+.ele-sniff .l3,.ele-sniff .l4{animation:ele-step .9s ease-in-out infinite reverse;}
+/* fly: ears flapping, floating up and down */
+.ele-fly .ele-all{animation:ele-float 1.6s ease-in-out infinite;}
+.ele-fly .ele-ear{animation:ele-flap .32s ease-in-out infinite alternate;}
+/* map: head tilting over a map, the route drawing itself */
+.ele-map .ele-head{animation:ele-tilt 2.4s ease-in-out infinite;}
+.ele-map .ele-route{animation:ele-dash 1.2s linear infinite;}
+@keyframes ele-trot{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes ele-step{0%,100%{transform:rotate(8deg)}50%{transform:rotate(-8deg)}}
+@keyframes ele-sweep{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(12deg)}}
+@keyframes ele-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes ele-flap{from{transform:rotate(0deg)}to{transform:rotate(-22deg)}}
+@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-8deg)}60%{transform:rotate(4deg)}}
+@keyframes ele-dash{to{stroke-dashoffset:-10}}
 @media (prefers-reduced-motion:reduce){.ele *{animation:none !important;}}
 .aiadd{margin:4px 0 8px;background:color-mix(in srgb,var(--gold) 12%,transparent);border-color:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--ink);font-weight:700;}
 .aiadd .i{color:var(--gold);}
@@ -2052,7 +2059,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-11-2";
+  const BUILD = "2026-11-12-1";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6188,33 +6195,34 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // An original round elephant with big ears does one of three things while
   // it waits: sniffs along with a magnifying glass, flaps its ears and
   // floats, or tilts its head over a map. Picked at random each time.
-  // A small block-built elephant, drawn like a sprite in a picture book:
-  // a grey calf — big head, short body, no tusks — in square pixels with a slightly hand-cut edge, and a gold
-  // print sitting a touch off-register behind it. It moves in steps, not
-  // glides — walking along a dashed path, sniffing with its trunk up, or
-  // hopping so its big ear lifts. Picked at random each time.
+  // A grey elephant calf drawn flat, like a picture-book illustration:
+  // plain fills with a thin ink line, no shading. Big head, short body, a
+  // trunk that curls. While something loads it does one of three things —
+  // sniffs along with a magnifying glass, flaps its ears and floats, or reads
+  // a map. Picked at random each time.
   function elephantSvg(move){
-    const MOVES = ["walk", "sniff", "hop"];      // inside, so it works before this line has run
+    const MOVES = ["sniff", "fly", "map"];       // inside, so it works before this line has run
     const m = move || MOVES[Math.floor(Math.random() * MOVES.length)];
-    const R = (list, cls) => list.map(([x, y, w, h]) => `<rect${cls ? ` class="${cls}"` : ""} x="${x}" y="${y}" width="${w}" height="${h}"/>`).join("");
-    const body  = [[7,3,8,5],[8,2,6,1],[1,1,6,5],[2,0,4,1],[3,-1,1,1]];   // a calf: big head, short body
-    const trunk = [[0,3,1,4],[0,7,2,1],[2,6,1,1]];   // hangs down and curls up
-    const ear   = [[4,1,3,1],[3,2,5,4],[4,6,3,1]];
-    const legsA = [[7,8,2,2],[13,8,2,2]], legsB = [[10,8,2,2]];
-    const tail  = [[15,4,1,1],[16,5,1,1]];
-    const shape = cls => `<g class="${cls}">${R(body)}<g class="ele-trunk">${R(trunk)}</g><g class="ele-legs-a">${R(legsA)}</g><g class="ele-legs-b">${R(legsB)}</g>${R(tail)}</g>`;
-    return `<svg class="ele ele-${m}" viewBox="-4 -2 22 14" aria-hidden="true" shape-rendering="crispEdges">
-      <defs><filter id="ele-cut" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="7"/>
-        <feDisplacementMap in="SourceGraphic" scale="0.35"/></filter></defs>
-      <path class="ele-ground" d="M-1.5 10.4 h21"/>
-      <g class="ele-all" filter="url(#ele-cut)">
-        <g class="ele-offset">${shape("ele-print")}</g>
-        ${shape("ele-clay")}
-        <g class="ele-ear">${R(ear)}</g>
-        <rect class="ele-eye" x="2" y="2" width="1" height="1"/>
+    const trunk = "M24 52 C14 58 12 70 18 76 C21 79 25 77 24 73";
+    return `<svg class="ele ele-${m}" viewBox="0 0 120 96" aria-hidden="true">
+      <path class="ele-ground" d="M14 90 H108"/>
+      <g class="ele-all">
+        <path class="ele-tail" d="M92 58 q9 1 9 10"/>
+        <rect class="ele-leg back l2" x="80" y="68" width="10" height="18" rx="4"/>
+        <rect class="ele-leg back l3" x="58" y="68" width="10" height="18" rx="4"/>
+        <ellipse class="ele-body" cx="72" cy="60" rx="24" ry="18"/>
+        <rect class="ele-leg l1" x="52" y="70" width="11" height="18" rx="4"/>
+        <rect class="ele-leg l4" x="74" y="70" width="11" height="18" rx="4"/>
+        <g class="ele-head">
+          <g class="ele-trunk"><path class="ele-trunk-line" d="${trunk}"/><path class="ele-trunk-fill" d="${trunk}"/>
+            ${m === "sniff" ? `<g class="ele-lens"><path d="M27 80 l7 6"/><circle cx="22" cy="76" r="7"/></g>` : ""}</g>
+          <circle class="ele-skull" cx="40" cy="42" r="21"/>
+          <path class="ele-ear" d="M50 26 C66 20 74 36 70 50 C67 60 56 62 50 56 C46 46 44 34 50 26 Z"/>
+          <circle class="ele-eye" cx="31" cy="40" r="2.4"/>
+          <path class="ele-brow" d="M27 33 q4 -3 8 0"/>
+        </g>
+        ${m === "map" ? `<g class="ele-mapsheet"><path d="M8 62 l12 -4 l12 4 l12 -4 v20 l-12 4 l-12 -4 l-12 4z"/><path class="ele-route" d="M12 72 q8 -8 14 -2 t14 -4"/></g>` : ""}
       </g>
-      ${m === "sniff" ? `<g class="ele-sparks">${R([[-2,2,1,1],[-1,0,1,1],[-3,4,1,1]])}</g>` : ""}
     </svg>`;
   }
   function elephantHtml(text, small){
@@ -9415,7 +9423,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // taken from the place and the season. Only the facts a poster needs go
   // in: day, date, theme, place names. Times appear only where something is
   // booked, because a 「時間未定」 on every row is what made the old one dull.
-  function exportAiPrompt(snap){
+  function exportAiPrompt(snap, chars){
     const m = snap.meta || {};
     const title = plain(m.title) || "行程";
     const days = snap.days || [];
@@ -9431,7 +9439,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("【風格】");
     L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${season ? `，${season}` : ""}。四周用當地地標、季節元素（例如樹葉、花）做花邊，色調溫暖、飽滿。`);
     L.push("2. 最頂有一個大大嘅手繪標題（用下面嘅行程名），下面一粒小牌寫日期同目的地。");
-    L.push("3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。一定要係原創角色，唔好用任何卡通片、動畫或者遊戲入面已經有嘅角色。");
+    const who = plain(chars || "");
+    L.push(who
+      ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同日子之間出現，用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。`
+      : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。");
     L.push("4. 一日一直欄，由左至右排，每欄頂有圓形「Day N」標記、日期同星期、當日主題。");
     L.push("5. 每個地點左邊畫一個細細嘅彩色插圖（食物就畫嗰款食物，景點畫建築或者風景，購物畫店舖或者袋，酒店畫屋仔，交通畫車或者飛機），右邊寫地點名，下面細字寫當地語言名。");
     L.push("6. 唔好寫時間，唔好寫交通。只有我標咗「已訂」嘅地點先寫時間，用紅色細字。");
@@ -9692,7 +9703,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
       <div class="exgroup">
         <div class="exgroup-label">畀 AI 畫圖</div>
-        <button class="btn wide primary" id="ex-prompt">${icon("sparkle")}行程圖（逐日去邊度）</button>
+        <label class="picker-label" for="ex-chars">圖入面想加咩卡通、公仔或者人物？（可以唔填）</label>
+        <input class="input" id="ex-chars" maxlength="80" autocomplete="off" placeholder="例如：我哋一家四口、柴犬、小松鼠">
+        <button class="btn wide primary" id="ex-prompt" style="margin-top:10px;">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令會叫佢畫成可愛插畫風海報：一日一欄、每個地點配個小插圖、配合當地季節；淨係已訂位嘅地方先寫時間，唔准自己作地點。</p>
         <button class="btn wide" id="ex-prep">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
         <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同樣唔准 AI 自己作。</p>
@@ -9749,8 +9762,14 @@ ${stayBlock}${dayBlocks}${secBlocks}
         }
         copyInto("#ex-share-ro", url, "複製咗唯讀連結");
       });
-      sheet.querySelector("#ex-prompt").addEventListener("click", () =>
-        copyInto("#ex-prompt", exportAiPrompt(snap), "複製咗，貼落 AI 度"));
+      // who should be in the picture — remembered on this phone, per trip
+      const charsKey = "trip_poster_chars_" + (state.tripId || "");
+      const charsIn = sheet.querySelector("#ex-chars");
+      try { charsIn.value = localStorage.getItem(charsKey) || ""; } catch (_){}
+      sheet.querySelector("#ex-prompt").addEventListener("click", () => {
+        try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
+        copyInto("#ex-prompt", exportAiPrompt(snap, charsIn.value), "複製咗，貼落 AI 度");
+      });
       sheet.querySelector("#ex-prep").addEventListener("click", () =>
         copyInto("#ex-prep", exportPrepPrompt(snap), "複製咗，貼落 AI 度"));
       sheet.querySelector("#ex-copy").addEventListener("click", () =>
