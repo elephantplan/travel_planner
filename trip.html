@@ -2051,7 +2051,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-9";
+  const BUILD = "2026-11-12-10";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -9517,26 +9517,41 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // taken from the place and the season. Only the facts a poster needs go
   // in: day, date, theme, place names. Times appear only where something is
   // booked, because a 「時間未定」 on every row is what made the old one dull.
-  // Season of the trip, for the two posters: what the season looks like,
-  // a full-bleed background colour, and the flowers actually out then.
-  function posterTheme(m){
+  // The look of the two posters follows what the trip is FOR first — a
+  // 紅葉／銀杏 trip in early December is an autumn-leaves poster, not a
+  // Christmas one — and only falls back to the month when the trip says
+  // nothing. Backgrounds are always light: the content sits on paper cards
+  // and a dark ground made the whole thing heavy.
+  function posterTheme(m, snap){
     const mon = Number(String((m && m.dateStart) || "").slice(5, 7));
-    if (!mon) return { season: "", bg: "溫暖嘅淺米黃色", flowers: "當地當季嘅花" };
-    if (mon === 12 || mon <= 2) return { season: "冬天（雪、聖誕燈飾、暖笠笠）",
-      bg: "暖暖嘅深酒紅或者墨綠色，配少少雪花點", flowers: mon === 2 ? "梅花、山茶花" : "山茶花、聖誕紅（一品紅）、冬青果" };
-    if (mon <= 5) return { season: "春天（櫻花、嫩綠）",
-      bg: "淺粉紅或者嫩綠色", flowers: mon === 5 ? "紫藤、杜鵑花、芝櫻" : "櫻花、油菜花、鬱金香" };
-    if (mon <= 8) return { season: "夏天（藍天、海、祭典）",
-      bg: "清爽嘅天藍或者薄荷綠色", flowers: mon === 6 ? "繡球花（紫陽花）、薰衣草" : "向日葵、牽牛花、薰衣草" };
-    return { season: "秋天（紅葉、銀杏、金黃色）",
-      bg: "暖橙同米黃色漸變，好似秋天午後", flowers: "大波斯菊（秋櫻）、菊花，配紅葉同銀杏葉" };
+    const said = [m && m.title, ...((snap && snap.days) || []).map(d => d && d.title), snap && snap.foliageNote]
+      .map(x => plain(x || "")).join(" ");
+    const monthFlower = !mon ? "" : mon === 12 || mon <= 1 ? "山茶花" : mon === 2 ? "梅花" : mon <= 4 ? "油菜花、鬱金香"
+      : mon === 5 ? "紫藤、杜鵑花" : mon === 6 ? "繡球花（紫陽花）" : mon <= 8 ? "向日葵、牽牛花" : "大波斯菊（秋櫻）、菊花";
+    if (/紅葉|楓|銀杏|秋葉|賞葉/.test(said)){
+      const both = /銀杏/.test(said) && /紅葉|楓/.test(said);
+      return { season: `賞${both ? "紅葉同銀杏" : /銀杏/.test(said) ? "銀杏" : "紅葉"}（主題係${both ? "火紅楓葉同金黃銀杏" : /銀杏/.test(said) ? "金黃銀杏" : "火紅楓葉"}）`,
+        bg: "淺米黃、淡杏色同淺橙色嘅柔和漸變，好似秋天陽光，唔好用深色",
+        flowers: `${both ? "紅葉（楓葉）同銀杏葉" : /銀杏/.test(said) ? "銀杏葉" : "紅葉（楓葉）"}係主角，滿滿咁飄落喺四周同欄與欄之間；${monthFlower ? `再點綴少少當季嘅${monthFlower}` : "再點綴少少當季小花"}` };
+    }
+    if (/櫻|花見|sakura/i.test(said))
+      return { season: "賞櫻（粉紅櫻花）", bg: "淺粉紅同奶白色嘅柔和漸變，唔好用深色", flowers: "櫻花係主角，花瓣飄滿四周；再點綴少少油菜花" };
+    if (/聖誕|christmas/i.test(said))
+      return { season: "聖誕（燈飾、禮物）", bg: "淺奶油色配淡紅淡綠點綴，唔好用深色", flowers: "聖誕紅（一品紅）、冬青果、松枝" };
+    if (/雪|滑雪|ski/i.test(said))
+      return { season: "雪景（雪花、暖笠笠）", bg: "淺天藍同奶白色，唔好用深色", flowers: "山茶花、雪花" };
+    if (!mon) return { season: "", bg: "溫暖嘅淺米黃色，唔好用深色", flowers: "當地當季嘅花" };
+    if (mon === 12 || mon <= 2) return { season: "冬天（暖笠笠）", bg: "淺奶油色同淡藍色，唔好用深色", flowers: monthFlower };
+    if (mon <= 5) return { season: "春天（嫩綠）", bg: "淺粉紅或者嫩綠色，唔好用深色", flowers: mon <= 4 ? "櫻花、" + monthFlower : monthFlower };
+    if (mon <= 8) return { season: "夏天（藍天、祭典）", bg: "清爽嘅淺天藍或者薄荷綠色，唔好用深色", flowers: monthFlower };
+    return { season: "秋天（紅葉、銀杏）", bg: "淺米黃同淡橙色嘅柔和漸變，唔好用深色", flowers: "紅葉同銀杏葉，配" + monthFlower };
   }
   function exportAiPrompt(snap, chars){
     const m = snap.meta || {};
     const title = plain(m.title) || "行程";
     const days = snap.days || [];
     const dest = plain(m.destinationLocal) || plain(m.destination) || "";
-    const th = posterTheme(m);
+    const th = posterTheme(m, snap);
     const booked = t => /已\s*(訂|預約|book|reserv)/i.test(t) && !/未\s*(訂|預約|book)/i.test(t);
     const L = [];
 
@@ -9545,7 +9560,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("【風格】");
     L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${th.season ? `，${th.season}` : ""}。四周用當地地標同季節元素做花邊。`);
     L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容格用淺色紙卡浮喺背景上面，字先睇得清。`);
-    L.push(`1c. 一定要畫當季嘅花：${th.flowers}，喺花邊、角落同欄與欄之間點綴，唔好畫錯季節嘅花。`);
+    L.push(`1c. 季節元素：${th.flowers}。唔好畫其他季節嘅花或者裝飾。`);
     L.push("2. 最頂有一個大大嘅手繪標題（用下面嘅行程名），下面一粒小牌寫日期同目的地。");
     const who = plain(chars || "");
     L.push(who
@@ -9605,7 +9620,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const m = snap.meta || {};
     const L = [];
     const dest = plain(m.destinationLocal) || plain(m.destination) || "";
-    const th = posterTheme(m);
+    const th = posterTheme(m, snap);
     const who = plain(chars || "");
 
     L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」海報，似繪本或者旅遊雜誌嘅手繪海報咁，同我嘅行程海報係一套，一家大細睇到都會開心。");
@@ -9613,7 +9628,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("【風格】");
     L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${th.season ? `，${th.season}` : ""}。四周用當地地標同季節元素做花邊。`);
     L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容格用淺色紙卡浮喺背景上面，字先睇得清。`);
-    L.push(`1c. 一定要畫當季嘅花：${th.flowers}，喺花邊、角落同欄與欄之間點綴，唔好畫錯季節嘅花。`);
+    L.push(`1c. 季節元素：${th.flowers}。唔好畫其他季節嘅花或者裝飾。`);
     L.push("2. 最頂有一個大大嘅手繪標題「出發前必讀」，下面一粒小牌寫行程名、日期同目的地。");
     L.push(who
       ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同區塊之間出現，用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
