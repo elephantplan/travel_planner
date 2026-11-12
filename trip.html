@@ -857,7 +857,8 @@ img{max-width:100%;}
 .menudel{margin-top:10px;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
 .ovupdate{margin:14px 0 4px;}
-.sgask .input{margin-bottom:10px;} [data-sgask] .ldr{width:40px;height:18px;margin-right:6px;}
+.sgask .input{margin-bottom:10px;}
+.sgh.fresh{scroll-margin-top:110px;} [data-sgask] .ldr{width:40px;height:18px;margin-right:6px;}
 .updrop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px;border:1.5px dashed var(--rule);border-radius:var(--r-lg, 14px);cursor:pointer;text-align:center;}
 .updrop input{display:none;} .updrop .i{width:22px;height:22px;color:var(--gold);} .updrop small{color:var(--ink-faint);font-size:12px;}
 .updfiles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
@@ -1149,6 +1150,14 @@ img{max-width:100%;}
 .advice .advmore .i{width:14px;height:14px;transform:rotate(-90deg);}
 .adv-warn{padding-left:20px;font-size:11px;color:var(--ink-faint);}
 .seg-text > .advbtn{order:5;}
+.advbtn{flex:1 1 100%;display:flex;align-items:center;gap:10px;width:100%;margin:8px 0 2px;padding:10px 12px;text-align:left;cursor:pointer;
+  font:inherit;color:var(--ink);background:color-mix(in srgb,var(--gold) 16%,var(--surface));border:1.5px solid var(--gold);border-radius:var(--r-md, 12px);}
+.advbtn:hover,.advbtn:focus-visible{background:color-mix(in srgb,var(--gold) 26%,var(--surface));}
+.advbtn-i{width:30px;height:30px;flex:none;border-radius:999px;background:var(--gold);color:#14110A;display:grid;place-items:center;}
+.advbtn-i .i{width:16px;height:16px;}
+.advbtn-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.advbtn-t b{font-size:14px;font-weight:700;} .advbtn-t small{font-size:12px;color:var(--ink-soft);line-height:1.4;}
+.advbtn-go .i{width:14px;height:14px;color:var(--gold);}
 .nearlist{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;}
 .nearrow{display:flex;gap:10px;align-items:center;text-align:left;padding:10px 12px;border-radius:12px;
   border:1px solid var(--rule);background:var(--surface);color:var(--ink);width:100%;}
@@ -2072,7 +2081,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-12";
+  const BUILD = "2026-11-12-13";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3709,7 +3718,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>`;
     }
     if (!seg.long || state.readonly || state.offline) return "";
-    return `<button type="button" class="maplink advbtn" data-advice="${esc(key)}">${icon("sparkle")}長途：AI 建議點去、使唔使買定飛</button>`;
+    return `<button type="button" class="advbtn" data-advice="${esc(key)}">
+      <span class="advbtn-i">${icon("sparkle")}</span>
+      <span class="advbtn-t"><b>長途車程：問 AI 點去最好</b><small>搭咩車、使唔使買定飛、點買、幾點出發</small></span>
+      <span class="advbtn-go">${icon("chevron")}</span></button>`;
   }
   function adviceContext(day, key){
     const snap = state.snapshot, units = toUnits(day.items), pf = snap.stayPrefs;
@@ -7721,7 +7733,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${(sg.areas || []).length > 1 ? `<div class="sgsort sgfilter">${[["", "全部區"]].concat(sg.areas.map(a => [a.area, a.area])).map(([k, l]) =>
         `<button type="button" class="pfchip${(state.stayArea || "") === k ? " on" : ""}" data-stayarea="${esc(k)}">${esc(l)}</button>`).join("")}</div>` : ""}
       <div class="sghotels">${sortedStayIdx(sg.hotels).filter(k => !state.stayArea || sg.hotels[k].area === state.stayArea).map(k => { const h = sg.hotels[k]; return `
-        <div class="sgh">
+        <div class="sgh${h.fresh ? " fresh" : ""}">
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
           <div class="sgh-body">
@@ -8006,6 +8018,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const trip = JSON.stringify({
       destination: (snap.meta || {}).destinationLocal, brief: briefForAi(snap),
       ...(extra ? { "今次額外要求（一定要跟）": extra } : {}),
+      // a second search only needs a few new hotels, which is much quicker to write
+      ...(((snap.staySuggest || {}).hotels || []).length ? { "今次只要": "4–6 間新酒店就夠；areas 只寫有新酒店嘅區，plan 可以留空" } : {}),
       ...(((snap.staySuggest || {}).hotels || []).length ? { "已經建議過（唔好再推介呢啲，要揀其他）": snap.staySuggest.hotels.map(h => h.name) } : {}),
       ...((snap.stays || []).length ? { "已經訂咗／揀咗": snap.stays.map(x => x.name) } : {}),
       ...(pf ? { "住宿要求（一定要跟，highlights 要講返點樣符合）": {
@@ -8021,40 +8035,50 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const r = await res.json().catch(() => ({ ok: false, message: "伺服器冇回覆" }));
     if (!r || r.ok === false || !r.stays) throw new Error((r && r.message) || "建議唔到");
     const sg = r.stays;
-    onProgress && onProgress(`喺 Google 地圖核實緊 ${sg.hotels.length} 間酒店…`);
-    await runBounded(sg.hotels, 3, async h => {
-      try {
-        const q = [h.local || h.name, h.area].filter(Boolean).join(" ");
-        const pr = await callAi({ action: "place-search", query: q });
-        const p = pr && pr.places && pr.places[0];
-        if (p){
-          h.placeId = p.placeId;
-          if (Number.isFinite(p.lat)){ h.lat = p.lat; h.lng = p.lng; }
-          if (Number.isFinite(p.rating)){ h.rating = p.rating; h.ratingCount = p.ratingCount; }
-          const ph = await fetchStoredPhoto({ placeId: p.placeId, title: h.name });
-          if (ph && ph.url) h.photoUrl = ph.url;
-          // time the walk to the station ourselves rather than trust a guess
-          if (h.station){
-            const t = await callAi({ action: "transit", from: { placeId: p.placeId }, to: { text: h.station } });
-            if (t && t.ok !== false && t.text) h.walk = t.text;
-          }
-        }
-      } catch (_){}
-    });
-    // new ones go on top, marked; earlier ones stay unless the family
-    // removed them. The same hotel twice (by Google place or name) is kept once.
+    // show the AI's list straight away; the Google checks (place, rating,
+    // photo, the walk to the station) fill in behind it, several at once
     const old = ((snap.staySuggest || {}).hotels || []).map(h => Object.assign(h, { fresh: false }));
-    const key = h => h.placeId || plain(h.local || h.name);
-    const seen = new Set(old.map(key));
-    const added = sg.hotels.filter(h => !seen.has(key(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
+    const nameKey = h => plain(h.local || h.name).toLowerCase();
+    const seenName = new Set(old.map(nameKey));
+    const added = sg.hotels.filter(h => !seenName.has(nameKey(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
     // areas: the latest description of each wins, areas seen before stay
     const areas = new Map(((snap.staySuggest || {}).areas || []).map(a => [a.area, a]));
     if ((sg.areas || []).some(a => a.best)) areas.forEach(a => { a.best = false; });
     (sg.areas || []).forEach(a => areas.set(a.area, a));
     snap.staySuggest = { at: new Date().toISOString(), plan: (sg.plan || []).length ? sg.plan : ((snap.staySuggest || {}).plan || []),
       areas: [...areas.values()], hotels: [...added, ...old] };
+    state.stayArea = "";
     render();
+    scrollToFreshStay();
+    onProgress && onProgress(`喺 Google 地圖核實緊 ${added.length} 間酒店…`);
+    await runBounded(added, 6, async h => {
+      try {
+        const q = [h.local || h.name, h.area].filter(Boolean).join(" ");
+        const pr = await callAi({ action: "place-search", query: q });
+        const p = pr && pr.places && pr.places[0];
+        if (!p) return;
+        h.placeId = p.placeId;
+        if (Number.isFinite(p.lat)){ h.lat = p.lat; h.lng = p.lng; }
+        if (Number.isFinite(p.rating)){ h.rating = p.rating; h.ratingCount = p.ratingCount; }
+        await Promise.all([
+          fetchStoredPhoto({ placeId: p.placeId, title: h.name }).then(ph => { if (ph && ph.url) h.photoUrl = ph.url; }).catch(() => {}),
+          // time the walk to the station ourselves rather than trust a guess
+          h.station ? callAi({ action: "transit", from: { placeId: p.placeId }, to: { text: h.station } })
+            .then(t => { if (t && t.ok !== false && t.text) h.walk = t.text; }).catch(() => {}) : null,
+        ]);
+      } catch (_){}
+    });
+    // the same hotel twice (now that Google has named it) is kept once
+    const byPlace = new Map();
+    snap.staySuggest.hotels = snap.staySuggest.hotels.filter(h => { if (!h.placeId) return true; if (byPlace.has(h.placeId)) return false; byPlace.set(h.placeId, 1); return true; });
+    if (state.view === "overview" || state.view === "stays") render();
     return added.length;
+  }
+  function scrollToFreshStay(){
+    requestAnimationFrame(() => {
+      const el = document.querySelector(".sgh.fresh") || document.querySelector(".sghotels");
+      if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
   }
   async function pickSuggestedStay(k){
     const snap = state.snapshot, days = snap.days || [];
@@ -8087,7 +8111,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       e.preventDefault();
       // the saved requirements are used as they are; the box only adds to them
       const inp = document.getElementById("sg-extra"), extra = inp ? inp.value.trim() : "";
-      ask.disabled = true; ask.innerHTML = `${loaderSvg()}搵緊…`;
+      ask.disabled = true; ask.innerHTML = `${loaderSvg()}AI 搵緊酒店同價錢（大約半分鐘）…`;
       try {
         const n = await suggestStays(null, extra);
         await saveNow(extra ? `按「${extra}」再搵住宿` : "AI 再推介多幾間住宿");
