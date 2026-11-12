@@ -2048,7 +2048,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-6";
+  const BUILD = "2026-11-12-7";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -9551,107 +9551,66 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   //
   // Same discipline as the itinerary prompt: hand over the facts, forbid
   // invention, and say plainly what would make the picture cluttered.
+  // The second poster, a companion to the itinerary one: same illustrated
+  // style, same characters, but only what to know before leaving — the
+  // weather, what to wear, and the pre-trip checklist (plus any section the
+  // family filed under 行前準備). Hotels, transport cards and access marks
+  // are left out: they made the card a wall of text.
   function exportPrepPrompt(snap, chars){
     const m = snap.meta || {};
     const L = [];
-    const line = (x) => { const t = plain(x); if (t) L.push(t); };
-
+    const dest = plain(m.destinationLocal) || plain(m.destination) || "";
+    const mon = Number(String(m.dateStart || "").slice(5, 7));
+    const season = !mon ? "" : mon <= 2 || mon === 12 ? "冬天（雪、聖誕燈飾、暖笠笠）" : mon <= 5 ? "春天（櫻花、嫩綠）"
+      : mon <= 8 ? "夏天（藍天、海、祭典）" : "秋天（紅葉、銀杏、金黃色）";
     const who = plain(chars || "");
-    L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」資料卡，風格似繪本或者旅遊雜誌嘅手繪海報，同我嘅行程圖係一套。");
+
+    L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」海報，似繪本或者旅遊雜誌嘅手繪海報咁，同我嘅行程海報係一套，一家大細睇到都會開心。");
     L.push("");
-    L.push("【要求】");
-    L.push("1. 唔係行程表，唔好畫逐日去邊度。呢張係出發前要記住嘅嘢。");
-    L.push("2. 分開幾個清楚區塊，每區一個標題：天氣、點著衫、住宿、交通、無障礙，同埋我下面有俾你嘅其他項目。冇資料嘅區塊就唔好畫。");
-    L.push("3. 天氣要做一行一日：日期、日間最高、早晚最低、概況。溫差係重點，要一眼睇得出。");
-    L.push("4. 點著衫同其他列點，一點一行，唔好寫成一大段。");
-    L.push("5. 無障礙標記要用返綠、黃、紅三隻色，順序同我下面寫嘅一樣。");
-    L.push("6. 只可以用下面俾你嘅資料。唔好自己加建議、加數字、加地點，亦都唔好自己作天氣。");
-    L.push("7. 每個區塊配一個細細嘅彩色插圖（例如天氣畫太陽或者雲、著衫畫外套、住宿畫屋仔、交通畫車），主題配合目的地同季節。留白要夠，字要大，手機睇得清楚。");
+    L.push("【風格】");
+    L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${season ? `，${season}` : ""}。四周用當地地標、季節元素（例如樹葉、花）做花邊，色調溫暖、飽滿。`);
+    L.push("2. 最頂有一個大大嘅手繪標題「出發前必讀」，下面一粒小牌寫行程名、日期同目的地。");
     L.push(who
-      ? `7b. 圖入面要有呢啲角色：${who}。畫成同資料卡一樣嘅可愛插畫風格，喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
-      : "7b. 自己設計一兩隻原創嘅可愛吉祥物，喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
-    L.push("8. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案）。");
+      ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同區塊之間出現，用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
+      : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
+    L.push("4. 只有三個區塊，每個區塊一個手繪標題同一個細細嘅彩色插圖：");
+    L.push("   ・天氣：一日一格，每格畫一個天氣小圖（太陽、雲、雨），寫日期、日間最高、早晚最低。溫差要一眼睇得出。");
+    L.push("   ・點著衫：每點配一個小插圖（外套、頸巾、波鞋、雨遮之類），一點一行。");
+    L.push("   ・出發前準備：做成可以剔嘅清單，每項前面一個空白剔格同一個小插圖（護照、充電器、藥之類）。");
+    L.push("5. 只可以用下面俾你嘅資料，唔好自己加建議、加數字，亦唔好自己作天氣；冇資料嘅區塊就唔好畫。");
+    L.push("6. 字要清楚易讀，中文唔好錯字。直向（例如 3:4），手機放大睇得清。");
     L.push("");
     L.push("【資料】");
     L.push(`行程名：${plain(m.title) || "我嘅行程"}`);
     if (m.dateStart && m.dateEnd) L.push(`日期：${m.dateStart} 至 ${m.dateEnd}`);
-    if (plain(m.destinationLocal)) L.push(`目的地：${plain(m.destinationLocal)}`);
+    if (dest) L.push(`目的地：${dest}`);
     L.push("");
 
     const rows = snap.weatherRows || [];
     if (rows.length && !isSectionHidden(snap, "weather")){
-      L.push(`## ${plain(weatherHeadingLabel(m)) || "天氣"}`);
-      L.push("（歷年同期平均）");
-      rows.forEach(r => L.push(`${plain(r.date)}｜日高 ${plain(r.hi)}｜晨低 ${plain(r.lo)}｜${plain(r.note)}`));
+      L.push("## 天氣（歷年同期平均）");
+      rows.forEach(r => L.push(`${plain(r.date)}｜日高 ${plain(r.hi)}｜早晚最低 ${plain(r.lo)}｜${plain(r.note)}`));
       L.push("");
     }
-
-    const wear = snap.clothing || [];
+    const wear = (snap.clothing || []).map(c => plain(c.html)).filter(Boolean);
     if (wear.length && !isSectionHidden(snap, "clothing")){
       L.push("## 點著衫");
-      wear.forEach(c => line("・" + plain(c.html)));
+      wear.forEach(t => L.push("・" + t));
       L.push("");
     }
-
-    const stays = snap.stays || [];
-    if (stays.length && !isSectionHidden(snap, "acc")){
-      L.push("## 住宿");
-      stays.forEach(st => {
-        L.push(`${plain(stayRangeLabel(snap, st))}｜${plain(st.name) || "未填"}`);
-        line("  " + plain(st.desc));
-        line("  " + plain(st.hoursChip));
-        line("  " + plain(st.warning));
-      });
+    const prep = [];
+    if (!isSectionHidden(snap, "checklist"))
+      (Array.isArray(snap.checklist) ? snap.checklist : defaultChecklist()).forEach(c => { const t = plain(c && (c.t || c)); if (t) prep.push(t); });
+    (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep")
+      .forEach(sec => (sec.lines || []).forEach(x => { const t = plain(x); if (t) prep.push(t); }));
+    if (prep.length){
+      L.push("## 出發前準備");
+      prep.forEach(t => L.push("・" + t));
       L.push("");
     }
-
-    const t = snap.transitInfo;
-    if (t){
-      L.push("## 交通");
-      (t.cards || []).forEach(c => L.push(
-        `${plain(c.name)}${c.kr ? `（${plain(c.kr)}）` : ""}｜${plain(c.price)}${c.pick ? "｜建議" : ""}` +
-        (plain(c.good) ? `｜好處：${plain(c.good)}` : "") +
-        (plain(c.bad) ? `｜要注意：${plain(c.bad)}` : "")));
-      (t.fares || []).forEach(f => L.push(`${plain(f.what)}｜${plain(f.cost)}${plain(f.note) ? `｜${plain(f.note)}` : ""}`));
-      if (t.arrival){
-        line(`抵埗：${plain(t.arrival.title)}`);
-        line(`  ${plain(t.arrival.body)}`);
-      }
-      L.push("");
-    }
-
-    const legend = snap.accessLegend || [];
-    if (legend.length && !isSectionHidden(snap, "access")){
-      L.push("## 無障礙標記");
-      L.push(`綠：${plain(legend[0])}`);
-      L.push(`黃：${plain(legend[1])}`);
-      L.push(`紅：${plain(legend[2])}`);
-      line(plain(snap.elevatorTip));
-      L.push("");
-    }
-
-    if (plain(snap.foliageNote) && !isSectionHidden(snap, "foliage")){
-      L.push("## 季節提示");
-      L.push(plain(snap.foliageNote));
-      L.push("");
-    }
-    if (plain(snap.scheduleSwapNote)){
-      L.push("## 日程調動");
-      L.push(plain(snap.scheduleSwapNote));
-      L.push("");
-    }
-
-    (snap.sections || []).forEach(sec => {
-      const title = plain(sec.title);
-      if (!title) return;
-      L.push(`## ${title}`);
-      (sec.lines || []).forEach(x => line("・" + plain(x)));
-      (sec.links || []).forEach(x => line(`・${plain(x.name)}：${x.url}`));
-      L.push("");
-    });
-
     return L.join("\n");
   }
+
 
   // a standalone page that prints properly — the app itself only ever shows
   // one day at a time, so printing the app would print one day
@@ -9777,8 +9736,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <input class="input" id="ex-chars" maxlength="80" autocomplete="off" placeholder="例如：我哋一家四口、柴犬、小松鼠">
         <button class="btn wide primary" id="ex-prompt" style="margin-top:10px;">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令會叫佢畫成可愛插畫風海報：一日一欄、每個地點配個小插圖、配合當地季節；淨係已訂位嘅地方先寫時間，唔准自己作地點。</p>
-        <button class="btn wide primary" id="ex-prep" style="margin-top:14px;">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
-        <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同行程圖一樣係插畫風，會用埋上面填嘅角色；同樣唔准 AI 自己作。</p>
+        <button class="btn wide primary" id="ex-prep" style="margin-top:14px;">${icon("sparkle")}出發前必讀（天氣・著衫・準備）</button>
+        <p class="exhint">同行程圖一套嘅插畫風海報，淨係畫天氣、點著衫同出發前準備清單，會用埋上面填嘅角色；同樣唔准 AI 自己作。</p>
       </div>
 
       <div class="exgroup">
