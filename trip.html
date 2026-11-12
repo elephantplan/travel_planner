@@ -2034,7 +2034,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-3";
+  const BUILD = "2026-11-12-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -9494,12 +9494,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   //
   // Same discipline as the itinerary prompt: hand over the facts, forbid
   // invention, and say plainly what would make the picture cluttered.
-  function exportPrepPrompt(snap){
+  function exportPrepPrompt(snap, chars){
     const m = snap.meta || {};
     const L = [];
     const line = (x) => { const t = plain(x); if (t) L.push(t); };
 
-    L.push("你係一個資訊圖表設計師。下面係我一個旅行行程嘅「出發前必讀」資料，請幫我整一張清楚易睇嘅資料卡。");
+    const who = plain(chars || "");
+    L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」資料卡，風格似繪本或者旅遊雜誌嘅手繪海報，同我嘅行程圖係一套。");
     L.push("");
     L.push("【要求】");
     L.push("1. 唔係行程表，唔好畫逐日去邊度。呢張係出發前要記住嘅嘢。");
@@ -9508,7 +9509,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("4. 點著衫同其他列點，一點一行，唔好寫成一大段。");
     L.push("5. 無障礙標記要用返綠、黃、紅三隻色，順序同我下面寫嘅一樣。");
     L.push("6. 只可以用下面俾你嘅資料。唔好自己加建議、加數字、加地點，亦都唔好自己作天氣。");
-    L.push("7. 用色克制，留白要夠，字要大，手機睇得清楚。寧願疏啲都唔好逼到密密麻麻。");
+    L.push("7. 每個區塊配一個細細嘅彩色插圖（例如天氣畫太陽或者雲、著衫畫外套、住宿畫屋仔、交通畫車），主題配合目的地同季節。留白要夠，字要大，手機睇得清楚。");
+    L.push(who
+      ? `7b. 圖入面要有呢啲角色：${who}。畫成同資料卡一樣嘅可愛插畫風格，喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
+      : "7b. 自己設計一兩隻原創嘅可愛吉祥物，喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
     L.push("8. 如果你識得直接生成圖片，就出一張圖；如果唔識，就出一個完整嘅單檔 HTML（inline CSS，唔使外部檔案）。");
     L.push("");
     L.push("【資料】");
@@ -9712,12 +9716,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
       <div class="exgroup">
         <div class="exgroup-label">畀 AI 畫圖</div>
-        <label class="picker-label" for="ex-chars">圖入面想加咩卡通、公仔或者人物？（可以唔填）</label>
+        <label class="picker-label" for="ex-chars">圖入面想加咩卡通、公仔或者人物？兩張圖都會用（可以唔填）</label>
         <input class="input" id="ex-chars" maxlength="80" autocomplete="off" placeholder="例如：我哋一家四口、柴犬、小松鼠">
         <button class="btn wide primary" id="ex-prompt" style="margin-top:10px;">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令會叫佢畫成可愛插畫風海報：一日一欄、每個地點配個小插圖、配合當地季節；淨係已訂位嘅地方先寫時間，唔准自己作地點。</p>
-        <button class="btn wide" id="ex-prep">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
-        <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同樣唔准 AI 自己作。</p>
+        <button class="btn wide primary" id="ex-prep" style="margin-top:14px;">${icon("sparkle")}出發前必讀（天氣・衫・住宿・交通）</button>
+        <p class="exhint">主頁「行前準備」嗰啲資料嘅另一張圖：天氣溫差、點著衫、住宿、交通卡、無障礙標記。同行程圖一樣係插畫風，會用埋上面填嘅角色；同樣唔准 AI 自己作。</p>
       </div>
 
       <div class="exgroup">
@@ -9779,8 +9783,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
         try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
         copyInto("#ex-prompt", exportAiPrompt(snap, charsIn.value), "複製咗，貼落 AI 度");
       });
-      sheet.querySelector("#ex-prep").addEventListener("click", () =>
-        copyInto("#ex-prep", exportPrepPrompt(snap), "複製咗，貼落 AI 度"));
+      sheet.querySelector("#ex-prep").addEventListener("click", () => {
+        try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
+        copyInto("#ex-prep", exportPrepPrompt(snap, charsIn.value), "複製咗，貼落 AI 度");
+      });
       sheet.querySelector("#ex-copy").addEventListener("click", () =>
         copyInto("#ex-copy", exportText(snap), "複製咗"));
       sheet.querySelector("#ex-txt").addEventListener("click", () =>
