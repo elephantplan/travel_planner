@@ -851,6 +851,8 @@ img{max-width:100%;}
 }
 .editbtn .i,.draghandle .i{width:16px;height:16px;}
 .editbtn{cursor:pointer;}
+.menulabel{font-size:12px;font-weight:600;color:var(--ink-soft);margin:6px 2px 8px;}
+.menudel{margin-top:16px;}
 .editbtn:hover{color:var(--ink);background:var(--surface-2);}
 .editbtn:active,.stopcard.open .editbtn{background:var(--lc);color:var(--paper);}
 .draghandle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;}
@@ -1148,45 +1150,20 @@ img{max-width:100%;}
 #ins-go{margin-bottom:8px;}
 .sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
 .sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
-/* the elephant — an original grey calf sitting up, drawn like a picture book */
-.eleload{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px 10px;text-align:center;}
-.eleload > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
-.eleload.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
-.eleload.small .ele{width:52px;height:52px;flex:none;}
-.ele{width:104px;height:104px;overflow:visible;--ele-line:#4A4F57;--ele-skin:#C9CDD3;}
-.ele-skin{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1.5;stroke-linejoin:round;}
-.ele-belly{fill:none;stroke:var(--ele-line);stroke-width:1.1;stroke-linecap:round;opacity:.35;}
-.ele-pad{fill:#E6E8EB;stroke:var(--ele-line);stroke-width:1.1;}
-.ele-ear-in{fill:#F1B8BF;}
-.ele-trunk-line{fill:none;stroke:var(--ele-line);stroke-width:11;stroke-linecap:round;}
-.ele-trunk-fill{fill:none;stroke:var(--ele-skin);stroke-width:8;stroke-linecap:round;}
-.ele-trunk-tip{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1.5;stroke-linejoin:round;}
-.ele-eye{fill:#2B2F36;} .ele-glint{fill:#fff;}
-.ele-brow,.ele-mouth{fill:none;stroke:var(--ele-line);stroke-width:1.4;stroke-linecap:round;}
-.ele-cheek{fill:#F1B8BF;opacity:.6;}
-.ele-puffs circle{fill:var(--ele-skin);stroke:var(--ele-line);stroke-width:1;}
-.ele-trunk{transform-box:fill-box;transform-origin:70% 100%;}
-.ele-ear{transform-box:fill-box;transform-origin:10% 20%;}
-.ele-head{transform-box:fill-box;transform-origin:50% 90%;}
-.ele-all{transform-box:fill-box;transform-origin:50% 100%;}
-.ele-eye{transform-box:fill-box;transform-origin:center;}
-/* wave: the trunk sways up and puffs a little */
-.ele-wave .ele-trunk{animation:ele-sway 1.4s ease-in-out infinite;}
-.ele-wave .ele-puffs{animation:ele-puff 1.4s ease-out infinite;}
-.ele-wave .ele-eye{animation:ele-blink 3s infinite;}
-/* flap: the ear flaps and the calf bounces on the spot */
-.ele-flap .ele-ear{animation:ele-flapear .35s ease-in-out infinite alternate;}
-.ele-flap .ele-all{animation:ele-bounce .7s ease-in-out infinite;}
-/* tilt: head tilting side to side, blinking */
-.ele-tilt .ele-head{animation:ele-tilt 2.2s ease-in-out infinite;}
-.ele-tilt .ele-eye{animation:ele-blink 2.2s infinite;}
-@keyframes ele-sway{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(10deg)}}
-@keyframes ele-puff{0%{opacity:0;transform:translate(0,0)}30%{opacity:.9}100%{opacity:0;transform:translate(-6px,-6px)}}
-@keyframes ele-flapear{from{transform:rotate(0)}to{transform:rotate(14deg)}}
-@keyframes ele-bounce{0%,100%{transform:translateY(0) scaleY(1)}40%{transform:translateY(-6px) scaleY(1.02)}80%{transform:translateY(0) scaleY(.97)}}
-@keyframes ele-tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-7deg)}65%{transform:rotate(6deg)}}
-@keyframes ele-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
-@media (prefers-reduced-motion:reduce){.ele *{animation:none !important;}}
+/* loading — a route drawing itself to a pin */
+.ldrbox{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px 12px;text-align:center;}
+.ldrbox > span{font-size:13px;color:var(--ink-soft);line-height:1.5;}
+.ldrbox.small{flex-direction:row;padding:6px 0;gap:10px;text-align:left;}
+.ldr{width:96px;height:44px;overflow:visible;}
+.ldrbox.small .ldr{width:52px;height:24px;flex:none;}
+.ldr-track{fill:none;stroke:var(--rule);stroke-width:2;stroke-linecap:round;stroke-dasharray:2 4;}
+.ldr-route{fill:none;stroke:var(--gold);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:100;stroke-dashoffset:100;animation:ldr-draw 1.8s cubic-bezier(.5,0,.3,1) infinite;}
+.ldr-start{fill:var(--gold);}
+.ldr-pin path{fill:var(--gold);} .ldr-pin circle{fill:var(--paper, #fff);}
+.ldr-pin{transform-box:fill-box;transform-origin:50% 100%;animation:ldr-hop 1.8s ease-out infinite;}
+@keyframes ldr-draw{0%{stroke-dashoffset:100}55%{stroke-dashoffset:0}80%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
+@keyframes ldr-hop{0%,50%{transform:translateY(0) scale(1)}60%{transform:translateY(-6px) scale(1.06)}70%{transform:translateY(0) scale(.96,1.04)}78%,100%{transform:translateY(0) scale(1)}}
+@media (prefers-reduced-motion:reduce){.ldr *{animation:none !important;}.ldr-route{stroke-dashoffset:0;}}
 .aiadd{margin:4px 0 8px;background:color-mix(in srgb,var(--gold) 12%,transparent);border-color:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--ink);font-weight:700;}
 .aiadd .i{color:var(--gold);}
 .sugcard{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column;gap:4px;}
@@ -2057,7 +2034,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-2";
+  const BUILD = "2026-11-12-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2123,9 +2100,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // screen; what is stored is left alone.
   const EMOJI_RE = /(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{231A}-\u{23FF}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{1F3FB}-\u{1F3FF}]?\u{200D}?)+[ \u3000]?/gu;
   function noEmoji(s){ return String(s).replace(EMOJI_RE, "").replace(/\u{FE0F}/gu, ""); }
-  // the first thing on screen while the trip loads is the little elephant
+  // the first thing on screen while the trip loads is the route loader
   try { const a0 = document.getElementById("app");
-    if (a0 && a0.querySelector(".loading")) a0.innerHTML = `<div class="loadwrap">${elephantHtml("載入緊行程…")}</div>`; } catch (_){}
+    if (a0 && a0.querySelector(".loading")) a0.innerHTML = `<div class="loadwrap">${loaderHtml("載入緊行程…")}</div>`; } catch (_){}
   function esc(s){
     return noEmoji(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
@@ -2144,6 +2121,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     clock:     '<circle cx="12" cy="12" r="8.2"/><path d="M12 7.4V12l3 1.8"/>',
     sparkle:   '<path d="M12 3.6 13.7 9 19 10.7 13.7 12.4 12 17.8 10.3 12.4 5 10.7 10.3 9z"/><path d="M18 16.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
     pencil:    '<path d="M4.5 19.5h3.2L18.4 8.8a1.6 1.6 0 0 0 0-2.3l-.9-.9a1.6 1.6 0 0 0-2.3 0L4.5 16.3z"/>',
+    more:      '<path d="M6.4 12h.01M12 12h.01M17.6 12h.01"/>',
     trash:     '<path d="M4.8 6.8h14.4"/><path d="M9.3 6.8V4.9h5.4v1.9"/><path d="M6.6 6.8 7.5 20h9l.9-13.2"/>',
     plus:      '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
     check:     '<path d="m5 12.6 4.6 4.4L19 6.8"/>',
@@ -3289,6 +3267,54 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // Choose which existing row to tuck under this one. Listing the whole day
   // (rather than just nearby times) on purpose: "the same meal" is a judgement
   // about the family's plan, not something a clock can decide.
+  // One tap from the card to the two things that used to be buried at the
+  // bottom of the editor: turn this stop into a backup of another one (it
+  // leaves the timeline and folds under that stop, one tap to bring back),
+  // or delete it.
+  function openStopMenu(day, ui){
+    const units = toUnits(day.items);
+    const me = units[ui] && units[ui].stop;
+    if (!me) return;
+    const name = cleanPlaceName(plain(me.title)) || "呢個地點";
+    const others = units.map((u, j) => ({ u, j })).filter(x => x.u.stop && x.j !== ui);
+    // the stops either side first — a backup is usually for the meal or sight next to it
+    others.sort((a, b) => Math.abs(a.j - ui) - Math.abs(b.j - ui) || a.j - b.j);
+    openSheet(`
+      <h3>${esc(name)}</h3>
+      <p class="sec-sub">做後備：佢會由行程收起，摺喺你揀嗰個站下面，想用嗰陣撳「改用呢間」就得。</p>
+      ${others.length ? `<div class="menulabel">做邊個站嘅後備？</div>
+      <div class="foldlist">${others.map(x => `
+        <button class="foldopt" data-backupof="${x.j}">
+          <span class="foldt">${esc(plain(x.u.stop.time) || (x.j < ui ? "前面" : "後面"))}</span>
+          <span class="foldn">${esc(cleanPlaceName(plain(x.u.stop.title)) || "未改名嘅地點")}</span>
+        </button>`).join("")}</div>` : `<p class="hint">呢日冇第二個站，做唔到後備。</p>`}
+      <button class="btn danger wide menudel" id="stopdel">${icon("trash")}刪走「${esc(name)}」</button>
+    `, sheet => {
+      sheet.querySelectorAll("[data-backupof]").forEach(b => b.addEventListener("click", async () => {
+        const r = foldIntoAlts(day, +b.dataset.backupof, ui);
+        closeLayer();
+        if (!r) return;
+        state.open.clear();
+        state.altsOpen.add(day.id + ":" + r.targetIdx);
+        render();
+        await saveNow(`將「${r.name}」摺咗做後備`);
+        refreshTransit(day, [r.targetIdx, r.targetIdx + 1]);
+      }));
+      sheet.querySelector("#stopdel").addEventListener("click", async () => {
+        if (!confirm(`刪走「${name}」？刪咗都可以喺改動紀錄還原。`)) return;
+        closeLayer();
+        const us = toUnits(day.items);
+        if (us[ui] && us[ui].stop === me) us.splice(ui, 1); else return;
+        day.items = fromUnits(us);
+        syncMapPoints(day);
+        state.open.clear();
+        render();
+        await saveNow(`刪走咗「${name}」`);
+        refreshTransit(day, [ui]);
+      });
+    });
+  }
+
   function openFoldPicker(day, ui){
     const units = toUnits(day.items);
     const me = units[ui] && units[ui].stop;
@@ -4217,7 +4243,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     renderBrandmark();
     renderLines();
     const app = $("#app");
-    if (!state.snapshot){ app.innerHTML = `<div class="loadwrap">${elephantHtml("載入緊行程…")}</div>`; return; }
+    if (!state.snapshot){ app.innerHTML = `<div class="loadwrap">${loaderHtml("載入緊行程…")}</div>`; return; }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
     if (state.view === "stays"){ app.innerHTML = staysPageHtml(state.snapshot); wireStaysPage(); rememberPlace(); return; }
     const board = boardById(state.view);
@@ -5423,7 +5449,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       scan.addEventListener("change", async () => {
         const files = [...scan.files].slice(0, 4);
         if (!files.length) return;
-        msg.innerHTML = elephantHtml("AI 讀緊機票…", true);
+        msg.innerHTML = loaderHtml("AI 讀緊機票…", true);
         try {
           const images = [];
           for (const f of files) images.push(await imageFileToPart(f));
@@ -5752,13 +5778,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <div class="stopbody">
                 <div class="stopname ${named ? "" : "unnamed"}">${named ? esc(named) : "未改名嘅地點"}${s.kr && !named.includes(plain(s.kr)) ? `<span class="kr">${esc(plain(s.kr))}</span>` : ""}</div>
                 ${descHtml(s, day.id + ":" + i)}
-                ${briefLoading.has(s) && !plain(s.desc) ? elephantHtml("搵緊呢度嘅介紹同大家推介咩…", true) : ""}
+                ${briefLoading.has(s) && !plain(s.desc) ? loaderHtml("搵緊呢度嘅介紹同大家推介咩…", true) : ""}
                 ${chips ? `<div class="chiprow">${chips}</div>` : ""}
               </div>
             </div>
             ${selecting ? "" : `
             <div class="cardtools">
               <button class="editbtn" data-open="${key}" title="${open ? "完成編輯" : "編輯"}" aria-label="${open ? "完成編輯" : "編輯"}">${open ? icon("check") : icon("pencil")}</button>
+              <button class="editbtn" data-stopmenu="${i}" title="做後備／刪走" aria-label="「${esc(plain(s.title) || "呢個地點")}」：做後備或者刪走">${icon("more")}</button>
               <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">${icon("grip")}</div>
             </div>`}
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
@@ -5879,6 +5906,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     autoGeocodeDay(day);          // fire-and-forget; it re-renders as it fills in
 
     wireOpenToggles();
+    document.querySelectorAll("[data-stopmenu]").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation(); openStopMenu(day, +b.dataset.stopmenu);
+    }));
 
     const dayEdit = $("#dayedit");
     if (dayEdit) dayEdit.addEventListener("click", e => { e.stopPropagation(); openDayInfoEditSheet(day); });
@@ -6087,7 +6117,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const cur = legOf(day, key).seg;
       if (cur && cur.advice){ openAdviceSheet(day, key, cur.advice); return; }
       if (state.readonly) return;
-      b.disabled = true; b.outerHTML = elephantHtml("查緊點去、使唔使買定飛…", true);
+      b.disabled = true; b.outerHTML = loaderHtml("查緊點去、使唔使買定飛…", true);
       const a = await askAdvice(day, key);
       render();
       if (a) openAdviceSheet(day, key, a);
@@ -6188,46 +6218,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${p.address || p.area ? `<span class="nr-a">${esc(p.address || p.area)}</span>` : ""}</span>
       <button type="button" class="nr-add" data-pick="${esc(k)}"${tag ? ` data-kind="${tag}"` : ""} aria-label="加「${esc(p.name)}」入行程">${icon("plus")}</button></div>`;
   }
-  // ---------- the little elephant who goes looking ----------
-  // Something is being fetched — a suggestion, a place's intro, a route.
-  // An original round elephant with big ears does one of three things while
-  // it waits: sniffs along with a magnifying glass, flaps its ears and
-  // floats, or tilts its head over a map. Picked at random each time.
-  // An original elephant calf, sitting up with its trunk raised — soft grey,
-  // a thin ink line, pink inside the ear, pale pads on its round feet, the
-  // way a children's picture book would draw one. While something loads it
-  // waves its trunk about, flaps its ear and bounces, or tilts its head and
-  // blinks. Picked at random each time.
-  function elephantSvg(move){
-    const MOVES = ["wave", "flap", "tilt"];       // inside, so it works before this line has run
-    const m = move || MOVES[Math.floor(Math.random() * MOVES.length)];
-    const trunk = "M47 50 C40 42 36 30 39 17";
-    return `<svg class="ele ele-${m}" viewBox="0 0 120 120" aria-hidden="true">
-      <g class="ele-all">
-        <path class="ele-skin" d="M52 58 C36 62 30 88 38 102 C46 113 78 114 88 102 C96 90 90 64 74 58 Z"/>
-        <path class="ele-belly" d="M54 70 C46 78 46 96 56 104 C66 108 76 104 80 96"/>
-        <ellipse class="ele-skin" cx="52" cy="80" rx="6" ry="8.5" transform="rotate(-25 52 80)"/>
-        <ellipse class="ele-skin" cx="80" cy="81" rx="6" ry="8.5" transform="rotate(25 80 81)"/>
-        <g class="ele-foot"><ellipse class="ele-skin" cx="42" cy="104" rx="11" ry="9"/><ellipse class="ele-pad" cx="40" cy="105" rx="6.5" ry="5.5"/></g>
-        <g class="ele-foot"><ellipse class="ele-skin" cx="88" cy="105" rx="11" ry="9"/><ellipse class="ele-pad" cx="90" cy="106" rx="6.5" ry="5.5"/></g>
-        <g class="ele-head">
-          <g class="ele-ear"><path class="ele-skin" d="M68 28 C88 22 98 44 90 62 C86 70 76 70 72 62 C68 52 64 38 68 28 Z"/>
-            <path class="ele-ear-in" d="M72 34 C84 32 90 46 85 57 C82 62 77 61 75 56 C72 48 70 40 72 34 Z"/></g>
-          <circle class="ele-skin" cx="58" cy="44" r="18"/>
-          <g class="ele-trunk"><path class="ele-trunk-line" d="${trunk}"/><path class="ele-trunk-fill" d="${trunk}"/>
-            <path class="ele-trunk-tip" d="M35 17 C36 12 43 12 44 17"/></g>
-          <ellipse class="ele-eye" cx="54" cy="38" rx="2.3" ry="3"/><circle class="ele-glint" cx="54.8" cy="36.8" r="0.8"/>
-          <path class="ele-brow" d="M50 31 q4 -3 8 0"/>
-          <path class="ele-mouth" d="M50 53 q4 5 9 1"/>
-          <ellipse class="ele-cheek" cx="63" cy="50" rx="3.4" ry="2.2"/>
-        </g>
-      </g>
-      ${m === "wave" ? `<g class="ele-puffs"><circle cx="32" cy="8" r="2.4"/><circle cx="26" cy="13" r="1.6"/></g>` : ""}
+  // ---------- loading ----------
+  // Loading: a little route draws itself from a start dot towards a map pin,
+  // which hops when the line reaches it — then it all goes again. It is the
+  // app's one gesture (getting from here to there) in the app's own gold.
+  function loaderSvg(){
+    return `<svg class="ldr" viewBox="0 0 96 44" aria-hidden="true">
+      <path class="ldr-track" d="M10 34 C28 8 56 40 78 18"/>
+      <path class="ldr-route" pathLength="100" d="M10 34 C28 8 56 40 78 18"/>
+      <circle class="ldr-start" cx="10" cy="34" r="3.2"/>
+      <g class="ldr-pin"><path d="M78 4 c-5.5 0 -9 4 -9 8.6 c0 6 9 13.4 9 13.4 s9 -7.4 9 -13.4 c0 -4.6 -3.5 -8.6 -9 -8.6 z"/><circle cx="78" cy="12.6" r="3"/></g>
     </svg>`;
   }
-  function elephantHtml(text, small){
-    return `<div class="eleload${small ? " small" : ""}" role="status">${elephantSvg()}<span>${esc(text)}</span></div>`;
+  function loaderHtml(text, small){
+    return `<div class="ldrbox${small ? " small" : ""}" role="status">${loaderSvg()}<span>${esc(text)}</span></div>`;
   }
+
   const SUG_KIND = { see: "景點", shop: "購物地方", eat: "餐廳" };
   const MUST_LABEL = { see: "必睇", shop: "必買", eat: "必食" };
   const sugCache = new Map();
@@ -6381,7 +6387,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const v = q.value.trim();
         if (v.length < 2){ res.innerHTML = ""; return; }
         t = setTimeout(async () => {
-          res.innerHTML = elephantHtml("搵緊…", true);
+          res.innerHTML = loaderHtml("搵緊…", true);
           try {
             // branches of a chain near the stop before (or after) come first,
             // each with how far it is from that stop
@@ -6438,7 +6444,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const out = sheet.querySelector("#ins-nearres");
         const w = (want && want.value.trim()) || "";
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
-        out.innerHTML = elephantHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}，睇緊 Google 評論…`);
+        out.innerHTML = loaderHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}，睇緊 Google 評論…`);
         go.disabled = true;
         const list = await suggestFor(anchors, kind, [...onDay], w, p2);
         go.disabled = false;
@@ -6556,7 +6562,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const q = titleInput.value.trim();
       if (q.length < 2){ sugBox.innerHTML = ""; return; }
       sugTimer = setTimeout(async () => {
-        sugBox.innerHTML = elephantHtml("搵緊…", true);
+        sugBox.innerHTML = loaderHtml("搵緊…", true);
         try {
           const r = await callAi({ action:"place-search", query:q });
           if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -6578,7 +6584,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = elephantHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
+            sugBox.innerHTML = loaderHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
             // the local name is fetched at the moment of choosing — search
             // results only carry Google's English name
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name), enrichLocalName(s)]);
@@ -6602,7 +6608,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const q = altQ.value.trim();
         if (q.length < 2){ altSug.innerHTML = ""; return; }
         altTimer = setTimeout(async () => {
-          altSug.innerHTML = elephantHtml("搵緊…", true);
+          altSug.innerHTML = loaderHtml("搵緊…", true);
           try {
             const r = await callAi({ action:"place-search", query:q });
             if (r.ok === false){ altSug.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -7697,7 +7703,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (term.length < 2){ res.innerHTML = ""; return; }
         timer = setTimeout(async () => {
           const my = ++seq;
-          res.innerHTML = elephantHtml("搵緊…", true);
+          res.innerHTML = loaderHtml("搵緊…", true);
           let r = null;
           try { r = await callAi({ action: "place-search", query: term }); } catch (_){}
           if (my !== seq) return;
@@ -9114,7 +9120,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const q = titleInput.value.trim();
       if (q.length < 2){ sugBox.innerHTML = ""; return; }
       sugTimer = setTimeout(async () => {
-        sugBox.innerHTML = elephantHtml("搵緊…", true);
+        sugBox.innerHTML = loaderHtml("搵緊…", true);
         try {
           const r = await callAi({ action:"place-search", query:q });
           if (r.ok === false){ sugBox.innerHTML = `<p class="hint">${esc(r.message)}</p>`; return; }
@@ -9136,7 +9142,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
             s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
             titleInput.value = p.name;
-            sugBox.innerHTML = elephantHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
+            sugBox.innerHTML = loaderHtml(`已揀「${p.name}」，搵緊相同營業時間…`, true);
             // the local name is fetched at the moment of choosing — search
             // results only carry Google's English name
             await Promise.all([enrichHours(s), enrichPhoto(s, p.name), enrichLocalName(s)]);
@@ -9446,7 +9452,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("4. 一日一直欄，由左至右排，每欄頂有圓形「Day N」標記、日期同星期、當日主題。");
     L.push("5. 每個地點左邊畫一個細細嘅彩色插圖（食物就畫嗰款食物，景點畫建築或者風景，購物畫店舖或者袋，酒店畫屋仔，交通畫車或者飛機），右邊寫地點名，下面細字寫當地語言名。");
     L.push("6. 唔好寫時間，唔好寫交通。只有我標咗「已訂」嘅地點先寫時間，用紅色細字。");
-    L.push("7. 唔好加介紹、評分、地址；地名要一字不改咁抄，唔好自己加地點。");
+    L.push("7. 唔好加介紹、評分、地址，亦唔好加後備地點；地名要一字不改咁抄，唔好自己加地點。");
     L.push("8. 字要清楚易讀，中文唔好錯字。橫向（例如 4:3），手機放大睇得清。");
     L.push("");
     L.push("【行程資料】");
@@ -9459,7 +9465,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const n = String(day.id).replace("day", "");
       L.push(`## Day ${n}｜${plain(day.date)}｜${plain(day.title) || "未定主題"}`);
       const units = toUnits(day.items);
-      const stops = units.filter(u => u.stop);
+      // backups stay off the poster: folded ones (altsOf) are never listed,
+      // and a stop written down as a backup (「後備」「backup」) is skipped too
+      const isBackup = st => /後備|備選|backup|plan\s*b/i.test(`${plain(st.title)} ${plain(st.tip || "")}`);
+      const stops = units.filter(u => u.stop && !isBackup(u.stop));
       if (!stops.length){ L.push("（呢日未排嘢）"); L.push(""); return; }
       stops.forEach(u => {
         const s = u.stop;
@@ -10080,7 +10089,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <h2 class="sec-title">問過啲咩</h2>
         <p class="sec-sub">全家人問過 AI 嘅嘢都喺呢度，最新喺上面。撳一下睇返完整答案。</p>
         <div class="chiprow" id="note-filter"></div>
-        <div id="note-list">${elephantHtml("載入緊…", true)}</div>
+        <div id="note-list">${loaderHtml("載入緊…", true)}</div>
       </section>`;
   }
 
@@ -10772,7 +10781,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   $("#btn-history").addEventListener("click", async () => {
     openSheet(`<h3>改動紀錄</h3><p class="sec-sub">最頂（標「而家」）係最新版本。撳「同而家比較」睇邊日有咩改咗；或者剔兩個版本再撳「比較揀咗嘅兩個」。</p>
       <div class="whoami">呢部機用緊嘅名：<b>${esc(state.editedBy || "家人（未設定）")}</b><button class="btn" id="setname">${icon("pencil")}改名</button></div>
-      <div class="vlist" id="vlist">${elephantHtml("載入緊改動紀錄…", true)}</div>`, async layer => {
+      <div class="vlist" id="vlist">${loaderHtml("載入緊改動紀錄…", true)}</div>`, async layer => {
       const sn = layer.querySelector("#setname");
       if (sn) sn.addEventListener("click", () => openNameSheet());
       const list = layer.querySelector("#vlist");
@@ -10849,7 +10858,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           e.preventDefault();
           const holder = document.createElement("div");
           holder.className = "diffwrap";
-          holder.innerHTML = elephantHtml("比較緊…", true);
+          holder.innerHTML = loaderHtml("比較緊…", true);
           list.prepend(holder);
           try {
             const old = await fetchVersionSnapshot(b.dataset.cmpnow);
@@ -10867,7 +10876,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           if (picked.length !== 2){ alert("揀啱兩個版本先可以比較。"); return; }
           const holder = document.createElement("div");
           holder.className = "diffwrap";
-          holder.innerHTML = elephantHtml("比較緊…", true);
+          holder.innerHTML = loaderHtml("比較緊…", true);
           list.prepend(holder);
           try {
             const [older, newer] = await Promise.all([fetchVersionSnapshot(picked[1]), fetchVersionSnapshot(picked[0])]);
@@ -11296,7 +11305,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <div style="margin-top:10px;"><button class="btn" id="retryboot">再試一次</button>
         <a class="btn" href="index.html">返去主頁</a></div></div></div>`;
       $("#retryboot").addEventListener("click", () => {
-        $("#app").innerHTML = `<div class="loadwrap">${elephantHtml("載入緊…")}</div>`;
+        $("#app").innerHTML = `<div class="loadwrap">${loaderHtml("載入緊…")}</div>`;
         boot();
       });
       return;

@@ -102,9 +102,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('顯示距離同最近', /最近・離「.+」約 300 米・行 5 分鐘/.test(rows[0] || '') && /約 2\.4 公里/.test(rows[2] || '') && /按離「/.test(await p.locator('#ins-res').innerText()), rows);
   await p.locator('#ins-res .nr-add').first().click();
   await p.waitForTimeout(300);
-  ok('寫緊介紹嗰陣張卡有大象動畫', await p.locator('.stopcard .eleload .ele').count() >= 1);
+  ok('寫緊介紹嗰陣張卡有載入動畫', await p.locator('.stopcard .ldrbox .ldr').count() >= 1);
   await p.waitForTimeout(1200);
-  ok('寫完大象就走', await p.locator('.stopcard .eleload').count() === 0);
+  ok('寫完動畫就走', await p.locator('.stopcard .ldrbox').count() === 0);
   ok('搜尋結果都係一撳就加', ((last() || {}).days || [])[1].items.some(i => i.placeId === 'pQ'));
   await p.waitForTimeout(1200);
   const q = ((last() || {}).days || [])[1].items.find(i => i.placeId === 'pQ') || {};
