@@ -855,6 +855,25 @@ img{max-width:100%;}
 .menumove{margin-top:16px;}
 .menudel{margin-top:10px;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
+.ovupdate{margin:14px 0 4px;}
+.updrop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px;border:1.5px dashed var(--rule);border-radius:var(--r-lg, 14px);cursor:pointer;text-align:center;}
+.updrop input{display:none;} .updrop .i{width:22px;height:22px;color:var(--gold);} .updrop small{color:var(--ink-faint);font-size:12px;}
+.updfiles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+.updfile{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;background:var(--surface-2);font-size:12px;}
+.updfile .i{width:13px;height:13px;} .updfile button{border:0;background:none;color:var(--ink-faint);padding:2px;cursor:pointer;}
+#upd-read{margin-top:12px;} #upd-read .ldr{width:40px;height:18px;margin-right:6px;}
+.updday{border:1px solid var(--rule);border-left:3px solid var(--lc);border-radius:var(--r-sm);padding:10px 12px;margin:8px 0;background:var(--surface);}
+.updday-h{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.updday-n{width:22px;height:22px;border-radius:999px;background:var(--lc);color:var(--paper);display:grid;place-items:center;font-size:12px;font-weight:700;}
+.updday ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;}
+.updday li{display:flex;align-items:center;gap:6px;font-size:13.5px;}
+.updday li .i{width:14px;height:14px;flex:none;}
+.updday li em{font-style:normal;font-size:11px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:auto;}
+.updday li.keep{color:var(--ink-soft);} .updday li.keep .i{color:var(--ink-faint);}
+.updday li.add .i,.updday li.add em{color:var(--gold);} .updday li.add em{background:color-mix(in srgb,var(--gold) 15%,transparent);}
+.updday li.drop{color:var(--ink-faint);} .updday li.drop span{text-decoration:line-through;} .updday li.drop em{color:#c0392b;background:color-mix(in srgb,#c0392b 12%,transparent);}
+.updopt{display:flex;gap:8px;align-items:center;font-size:13px;margin:10px 2px;}
+#upd-go{margin-top:12px;}
 .mvrow{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--rule);}
 .mvrow.note{background:transparent;border-style:dashed;color:var(--ink-soft);}
 .mvrow .mvt{font-size:12px;color:var(--ink-faint);min-width:40px;font-variant-numeric:tabular-nums;}
@@ -2051,7 +2070,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-10";
+  const BUILD = "2026-11-12-11";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4794,6 +4813,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>
+      ${state.readonly ? "" : `<button type="button" class="btn wide ovupdate" id="ov-update">${icon("camera")}用相或者文字更新行程</button>`}
 
       ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
@@ -5510,6 +5530,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
 
   function wireOverview(){
+    const upd = document.getElementById("ov-update");
+    if (upd) upd.addEventListener("click", openUpdateFromSource);
     document.querySelectorAll("[data-flightedit]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); openFlightSheet(); }));
     document.querySelectorAll(".dayline[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
@@ -11148,6 +11170,216 @@ ${stayBlock}${dayBlocks}${secBlocks}
       genBanner("生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「AI 諗行程」補返）", { done:true });
     }
     history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
+    setTimeout(() => genBanner(null), 6000);
+  }
+
+  // ==================================================================
+  // UPDATE FROM A PICTURE OR TEXT
+  // ==================================================================
+  // The plan changed somewhere else — a new screenshot from the group chat,
+  // an edited spreadsheet, a few lines typed out. Read it the same way an
+  // import is read (trip-import only transcribes, never invents), then
+  // fold it into THIS trip day by day: a place already on the day is kept
+  // as it is (photo, hours, intro, backups), new names are added and found
+  // on Google, names no longer there are dropped. Days the source does not
+  // mention are left alone. Nothing is saved until the family has seen
+  // what will change.
+  function updLoadScript(src){
+    return new Promise((ok, bad) => { const el = document.createElement("script");
+      el.src = src; el.onload = ok; el.onerror = () => bad(new Error("載入唔到讀 Excel 嘅工具，檢查吓網絡。"));
+      document.head.appendChild(el); });
+  }
+  async function updSheetText(file){
+    if (/\.(csv|txt|tsv)$/i.test(file.name)) return await file.text();
+    if (!window.XLSX) await updLoadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+    const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    return wb.SheetNames.map(n => { const csv = window.XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false, dateNF: "yyyy-mm-dd" });
+      return csv.trim() ? `# 工作表：${n}\n${csv}` : ""; }).filter(Boolean).join("\n\n");
+  }
+  async function updImagePart(file){
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error(`開唔到「${file.name}」呢張圖。`)); i.src = url; });
+      const MAX = 1800, k = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return { mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const updIsImage = f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name);
+  const updIsSheet = f => /\.(xlsx|xlsm|xls|csv|tsv|txt|numbers)$/i.test(f.name);
+  const updKey = t => cleanPlaceName(plain(t || "")).toLowerCase().replace(/[\s（）()「」・·\-–—_/]/g, "");
+  function updSame(st, x){
+    const a = [updKey(st.title), updKey(st.kr)].filter(k => k.length >= 2);
+    const b = [updKey(x.title), updKey(x.kr)].filter(k => k.length >= 2);
+    return a.some(p => b.some(q => p === q || (Math.min(p.length, q.length) >= 3 && (p.includes(q) || q.includes(p)))));
+  }
+  // which of this trip's days each day in the source is about: by date when
+  // the source has dates, otherwise in order
+  function updPlan(t){
+    const days = state.snapshot.days || [];
+    const used = new Set();
+    return t.days.map((src, i) => {
+      let day = null;
+      if (src.date){ const iso = src.date; day = days.find(d => !used.has(d.id) && dayIso(d) === iso) || null; }
+      if (!day) day = days.find((d, j) => !used.has(d.id) && j === i) || null;
+      if (!day) return { src, day: null };
+      used.add(day.id);
+      const old = toUnits(day.items).filter(u => u.stop).map(u => u.stop);
+      const incoming = src.items.filter(x => x.kind !== "note");
+      const kept = [], added = [];
+      incoming.forEach(x => { const hit = old.find(st => !kept.includes(st) && updSame(st, x)); if (hit) kept.push(hit); else added.push(x); });
+      const dropped = old.filter(st => !kept.includes(st));
+      return { src, day, kept, added, dropped, changed: added.length || dropped.length || (src.title && src.title !== day.title) || kept.some((st, k) => old.indexOf(st) !== k) };
+    });
+  }
+  function dayIso(d){
+    const m = String(d.isoDate || d.dateIso || "").match(/^\d{4}-\d{2}-\d{2}$/);
+    if (m) return m[0];
+    const meta = state.snapshot.meta || {}, start = meta.dateStart;
+    const n = Number(String(d.id).replace("day", ""));
+    if (!start || !n) return "";
+    const x = new Date(start + "T00:00:00"); x.setDate(x.getDate() + n - 1);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  }
+  function openUpdateFromSource(){
+    let files = [];
+    openSheet(`<div id="upd-body">
+      <h3>用相或者文字更新行程</h3>
+      <p class="sec-sub">揀新嘅截圖、相、Excel，或者直接貼文字。AI 會照抄，對返每一日：已經有嘅地點保留（相、介紹、後備都唔郁），新嘅加入去，冇咗嘅拎走；冇提到嘅日子唔會改。更新之前會俾你睇清楚改咩。</p>
+      <label class="updrop">
+        <input type="file" id="upd-file" multiple accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,image/*">
+        ${icon("camera")}<b>影相／揀截圖或者 Excel</b><small>最多 8 張圖</small>
+      </label>
+      <div class="updfiles" id="upd-files"></div>
+      <label class="picker-label" for="upd-text">或者直接貼文字</label>
+      <textarea class="input" id="upd-text" rows="4" placeholder="例如：Day 2 早上去大阪城，中午食一蘭，下晝行天神橋筋商店街"></textarea>
+      <div id="upd-err"></div>
+      <button type="button" class="btn primary wide" id="upd-read" disabled>${icon("sparkle")}讀取</button>
+    </div>`, sheet => {
+      const fileIn = sheet.querySelector("#upd-file"), textIn = sheet.querySelector("#upd-text");
+      const readBtn = sheet.querySelector("#upd-read"), err = sheet.querySelector("#upd-err");
+      const refresh = () => {
+        sheet.querySelector("#upd-files").innerHTML = files.map((f, i) =>
+          `<span class="updfile">${icon(updIsImage(f) ? "image" : "list")}<span>${esc(f.name)}</span><button type="button" data-rm="${i}" aria-label="拎走">${icon("close")}</button></span>`).join("");
+        sheet.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); files.splice(+b.dataset.rm, 1); refresh(); }));
+        readBtn.disabled = !files.length && !textIn.value.trim();
+      };
+      fileIn.addEventListener("change", () => {
+        files = files.concat([...fileIn.files].filter(f => updIsImage(f) || updIsSheet(f))).slice(0, 10);
+        fileIn.value = ""; refresh();
+      });
+      textIn.addEventListener("input", refresh);
+      readBtn.addEventListener("click", async () => {
+        readBtn.disabled = true; err.innerHTML = "";
+        readBtn.innerHTML = `${loaderSvg()}AI 讀緊（大約半分鐘）…`;
+        try {
+          const texts = [], images = [];
+          if (textIn.value.trim()) texts.push(textIn.value.trim());
+          for (const f of files){
+            if (updIsImage(f)){ if (images.length < 8) images.push(await updImagePart(f)); }
+            else texts.push(`# 檔案：${f.name}\n` + await updSheetText(f));
+          }
+          // the trip as it is now goes along, so "Day 2" and dates line up
+          const days = state.snapshot.days || [];
+          texts.unshift("【而家嘅行程，只供對照日子用，唔好抄入去】\n" + days.map(d => `Day ${String(d.id).replace("day", "")}｜${dayIso(d)}｜${plain(d.title)}`).join("\n"));
+          const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+            body: JSON.stringify({ text: texts.join("\n\n").slice(0, 60000), images, today: localIso(new Date()) }) }), 90000, null);
+          const r = res ? await res.json().catch(() => null) : null;
+          if (!r || r.ok === false || !r.trip) throw new Error((r && r.message) || "讀唔到，試多次或者揀清楚啲嘅圖。");
+          if (!r.trip.days.some(d => d.items.length)) throw new Error("入面搵唔到任何行程。試吓揀清楚啲嘅截圖，或者直接貼文字。");
+          updPreview(sheet, r.trip);
+        } catch (e){
+          err.innerHTML = `<p class="hint" style="color:var(--danger, #c0392b)">${esc(e.message || "出咗問題")}</p>`;
+          readBtn.disabled = false; readBtn.innerHTML = `${icon("sparkle")}再試一次`;
+        }
+      });
+    }, { tall: true });
+  }
+  function updPreview(sheet, t){
+    const plan = updPlan(t);
+    const live = plan.filter(p => p.day && p.changed);
+    const lost = plan.filter(p => !p.day);
+    const name = st => esc(cleanPlaceName(plain(st.title)) || "未改名嘅地點");
+    sheet.querySelector("#upd-body").innerHTML = `
+      <h3>${live.length ? `會改 ${live.length} 日` : "冇嘢要改"}</h3>
+      <p class="sec-sub">${live.length ? "睇清楚啱唔啱。已經有嘅地點唔會郁；撳「更新」先會改，改完都可以喺改動紀錄還原。" : "讀到嘅內容同而家個行程一樣。"}</p>
+      ${t.notes ? `<p class="hint">${esc(t.notes)}</p>` : ""}
+      ${live.map(p => `<div class="updday" style="--lc:${dayColorVar(p.day.id)}">
+        <div class="updday-h"><span class="updday-n">${String(p.day.id).replace("day", "")}</span><b>${esc(p.src.title || p.day.title || "")}</b></div>
+        <ul>${p.src.items.filter(x => x.kind !== "note").map(x => {
+          const hit = p.kept.find(st => updSame(st, x));
+          return `<li class="${hit ? "keep" : "add"}">${hit ? icon("check") : icon("plus")}<span>${hit ? name(hit) : esc(x.title)}</span>${hit ? "" : `<em>新</em>`}</li>`;
+        }).join("")}
+        ${p.dropped.map(st => `<li class="drop">${icon("trash")}<span>${name(st)}</span><em>拎走</em></li>`).join("")}</ul>
+      </div>`).join("")}
+      ${lost.length ? `<p class="hint">有 ${lost.length} 日對唔到呢個行程嘅日子，略過咗。</p>` : ""}
+      ${(t.flights || []).length ? `<label class="updopt"><input type="checkbox" id="upd-fl" checked> 順便更新航班（${t.flights.map(f => esc(f.no)).join("、")}）</label>` : ""}
+      ${(t.stays || []).length ? `<label class="updopt"><input type="checkbox" id="upd-st"> 用新讀到嘅住宿取代（${t.stays.map(x => esc(x.name)).join("、")}）</label>` : ""}
+      ${live.length || (t.flights || []).length ? `<button type="button" class="btn primary wide" id="upd-go">${icon("check")}更新行程</button>` : ""}
+      <button type="button" class="btn wide" id="upd-again" style="margin-top:8px;">再揀過</button>`;
+    sheet.querySelector("#upd-again").addEventListener("click", () => { closeLayer(); openUpdateFromSource(); });
+    const go = sheet.querySelector("#upd-go");
+    if (go) go.addEventListener("click", async () => {
+      const withFlights = sheet.querySelector("#upd-fl") && sheet.querySelector("#upd-fl").checked;
+      const withStays = sheet.querySelector("#upd-st") && sheet.querySelector("#upd-st").checked;
+      closeLayer();
+      await applyUpdate(t, live, withFlights, withStays);
+    });
+  }
+  async function applyUpdate(t, live, withFlights, withStays){
+    const d = state.snapshot;
+    const fresh = [];
+    live.forEach(p => {
+      const day = p.day, units = toUnits(day.items);
+      const segOf = st => { const u = units.find(x => x.stop === st); return u && u.seg ? Object.assign({}, u.seg, { stale: true }) : { kind: "connector", html: "", stale: true }; };
+      const out = [];
+      p.src.items.forEach(x => {
+        if (x.kind === "note"){ out.push({ seg: null, note: { kind: "note", text: x.title + (x.desc ? "：" + x.desc : "") } }); return; }
+        const hit = p.kept.find(st => updSame(st, x));
+        if (hit){
+          if (plain(x.time) && !plain(hit.time)) hit.time = x.time;
+          if (plain(x.tip) && !plain(hit.tip)) hit.tip = x.tip;
+          out.push({ seg: segOf(hit), stop: hit });
+        } else {
+          const st = Object.assign(blankStop(), { type: x.type === "eat" ? "eat" : "normal", time: x.time || "", title: x.title, kr: x.kr || "", desc: x.desc || "", tip: x.tip || "" });
+          fresh.push({ day, st });
+          out.push({ seg: { kind: "connector", html: "", stale: true }, stop: st });
+        }
+      });
+      if (out[0]) out[0].seg = null;
+      day.items = fromUnits(out);
+      if (p.src.title) day.title = p.src.title;
+      syncMapPoints(day);
+    });
+    if (withFlights && (t.flights || []).length) d.flights = t.flights;
+    if (withStays && (t.stays || []).length){
+      const days = d.days || [];
+      d.stays = t.stays.map(s => ({ name: s.name, kr: s.kr || "", desc: "", hoursChip: "", warning: "",
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.kr || s.name)}`,
+        from: (days[Math.min(s.fromDay, days.length) - 1] || days[0]).id, to: (days[Math.min(s.toDay, days.length) - 1] || days[days.length - 1]).id }));
+    }
+    state.open.clear();
+    render();
+    await saveNow(`用相／文字更新咗 ${live.length} 日行程`);
+    // the new places: find each on Google, then time the legs of the days that changed
+    try {
+      if (fresh.length){
+        genBanner(`搵緊 ${fresh.length} 個新地點嘅地圖同相…`);
+        await runBounded(fresh, 4, async ({ st }) => { await enrichStop(st); await enrichLocalName(st).catch(() => {}); });
+        render();
+      }
+      for (const p of live){
+        const units = toUnits(p.day.items);
+        const idxs = units.map((u, i) => i).filter(i => units[i].stop);
+        if (idxs.length > 1){ genBanner(`計緊 Day ${String(p.day.id).replace("day", "")} 嘅交通…`); await refreshTransit(p.day, idxs); }
+      }
+      await saveNow("更新完：配好新地點同交通", true);
+      genBanner("更新完成。新地點已經配好地圖同相。", { done: true });
+    } catch (e){
+      genBanner("配新地點中途出咗問題：" + e.message + "（已經更新嘅已經存低）", { done: true });
+    }
     setTimeout(() => genBanner(null), 6000);
   }
 
