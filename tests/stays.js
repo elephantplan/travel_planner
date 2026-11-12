@@ -102,6 +102,8 @@ const SUGGEST = { ok: true, stays: {
   const bb = acc.locator('a', { hasText: 'Booking 睇價' }).first();
   const bh = await bb.getAttribute('href');
   ok('Booking 連結帶啱嘅入住同退房日子', /booking\.com/.test(bh) && bh.includes('checkin=2026-10-23') && bh.includes('checkout=2026-10-25') && bh.includes('group_adults=6') && bh.includes('group_children=1') && bh.includes('no_rooms=2'), bh);
+  const ss = new URL(bh).searchParams.get('ss') || '';
+  ok('Booking 用 Google 嘅酒店名去搵（唔係中文名）', /[가-힯]/.test(ss) && !/^明洞/.test(ss), ss);
   ok('掣上面寫明日子', /10\/23–10\/25/.test(await bb.innerText()));
   ok('建議講明跟咗咩要求', /你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 

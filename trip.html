@@ -2091,7 +2091,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-14";
+  const BUILD = "2026-11-12-15";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7734,9 +7734,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return { ci: a ? dayIso(a) : "", co: b ? dayIso(b) : "" };
     };
     const bkBooking = h => {
-      const { ci, co } = nights(h), pf2 = d.stayPrefs, dest = (d.meta || {}).destinationLocal || "";
-      const q = [h.name, dest && !String(h.name).includes(dest) ? dest : ""].filter(Boolean).join(" ");
-      return `https://www.booking.com/searchresults.zh-tw.html?ss=${encodeURIComponent(q)}` +
+      // Booking's search finds a hotel by its English (Google) name; the
+      // Chinese name alone often comes back with nothing
+      const { ci, co } = nights(h), pf2 = d.stayPrefs;
+      const q = h.gName || h.local || h.name;
+      return `https://www.booking.com/searchresults.zh-tw.html?ss=${encodeURIComponent(q)}&ssne=${encodeURIComponent(q)}&ssne_untouched=${encodeURIComponent(q)}` +
         (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
         (pf2 ? `&group_adults=${pf2.adults}&group_children=${pf2.kids || 0}&no_rooms=${pf2.rooms}` : "") + "&selected_currency=HKD";
     };
@@ -8103,6 +8105,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const p = pr && pr.places && pr.places[0];
         if (!p) return;
         h.placeId = p.placeId;
+        if (p.name) h.gName = p.name;          // Google's name — what booking sites search by
         if (Number.isFinite(p.lat)){ h.lat = p.lat; h.lng = p.lng; }
         if (Number.isFinite(p.rating)){ h.rating = p.rating; h.ratingCount = p.ratingCount; }
         await Promise.all([
@@ -8229,6 +8232,25 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     initStayMap();
     backfillStayPhotos(state.snapshot);
     backfillStayChecks(state.snapshot);
+    backfillStayNames(state.snapshot);
+  }
+  // Hotels suggested before Google's name was kept: look it up once, so the
+  // Booking link can find them.
+  const stayNameTried = new Set();
+  async function backfillStayNames(snap){
+    if (state.readonly || state.offline) return;
+    const todo = (((snap.staySuggest || {}).hotels) || []).filter(h => h && h.name && !h.gName && !stayNameTried.has(h.name));
+    if (!todo.length) return;
+    let got = 0;
+    await runBounded(todo, 4, async h => {
+      stayNameTried.add(h.name);
+      try {
+        const pr = await callAi({ action: "place-search", query: [h.local || h.name, h.area].filter(Boolean).join(" ") });
+        const p = pr && pr.places && pr.places[0];
+        if (p && p.name && (!h.placeId || p.placeId === h.placeId)){ h.gName = p.name; got++; }
+      } catch (_){}
+    });
+    if (got){ if (state.snapshot === snap && (state.view === "stays" || state.view === "overview")) render(); await saveNow(`補返 ${got} 間酒店嘅英文名`, true); }
   }
   // Suggestions made before the score existed (and any hotel whose check
   // failed once) get the same analysis, a few at a time, in the background.
