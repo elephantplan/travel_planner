@@ -96,7 +96,7 @@ const SUGGEST = { ok: true, stays: {
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
   const bk = await acc.locator('a', { hasText: 'Google 睇價' }).first().getAttribute('href');
   ok('有 Google 睇價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
-  ok('建議講明跟咗咩要求', /按你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
+  ok('建議講明跟咗咩要求', /你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one
   await acc.locator('[data-staysort="cheap"]').click();
@@ -128,6 +128,12 @@ const SUGGEST = { ok: true, stays: {
   await accQ.locator('[data-sgask]').click();
   await p.waitForTimeout(2500);
   ok('「仲有冇要啲咩」直接傳畀 AI', /今次額外要求/.test(sentText[sentText.length - 1] || '') && /停車場/.test(sentText[sentText.length - 1] || ''));
+  // no extra wish needed: the button searches with the saved requirements
+  const n0 = sentText.length;
+  await accQ.locator('[data-sgask]').click();
+  await p.waitForTimeout(2500);
+  ok('唔使打字都撳得「AI 推介」', sentText.length === n0 + 1 && !/今次額外要求/.test(sentText[sentText.length - 1] || ''));
+  ok('要求擺喺掣上面', await p.evaluate(() => { const a = document.querySelector('.sgprefs'), b = document.querySelector('[data-sgask]'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   // searching again keeps what was found and asks for different ones
   // the questions can be saved without starting a search
   const before = asked.length;

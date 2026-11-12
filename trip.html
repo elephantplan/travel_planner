@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#0E1211" media="(prefers-color-scheme: dark)">
 <title>DumboFly</title>
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icons/icon-v2.svg" type="image/svg+xml">
 <link rel="icon" href="/icons/icon-32-v2.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon-v2.png">
@@ -856,6 +857,7 @@ img{max-width:100%;}
 .menudel{margin-top:10px;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
 .ovupdate{margin:14px 0 4px;}
+.sgask .input{margin-bottom:10px;} [data-sgask] .ldr{width:40px;height:18px;margin-right:6px;}
 .updrop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px;border:1.5px dashed var(--rule);border-radius:var(--r-lg, 14px);cursor:pointer;text-align:center;}
 .updrop input{display:none;} .updrop .i{width:22px;height:22px;color:var(--gold);} .updrop small{color:var(--ink-faint);font-size:12px;}
 .updfiles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
@@ -2070,7 +2072,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-11";
+  const BUILD = "2026-11-12-12";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7693,16 +7695,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     };
     return `<div class="hsblock sgblock">
       <h3>住宿推薦</h3>
+      <div class="sgprefs">${pf ? `你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 會自己揀"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       <div class="sgask">
-        <label class="picker-label" for="sg-extra">仲有冇要啲咩？</label>
-        <div class="sgask-row"><input class="input" id="sg-extra" placeholder="例如：近難波、要有停車場、再平啲、想睇京都住一晚"><button class="btn primary" data-sgask>${icon("sparkle")}搵</button></div>
+        <label class="picker-label" for="sg-extra">今次有冇咩特別要求？（可以唔填）</label>
+        <input class="input" id="sg-extra" placeholder="例如：近難波、要有停車場、再平啲、想睇京都住一晚">
+        <button class="btn primary wide" data-sgask>${icon("sparkle")}AI 推介多幾間</button>
       </div>
       <div class="sgmore">
-        <div class="sgmore-row"><button class="btn" data-stayprefs>${icon("sparkle")}改要求再搵</button>
-          <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
-        <span class="hint">之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
+        <div class="sgmore-row"><button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>
+        <span class="hint">按上面嘅要求搵；之前搵到嘅會保留，唔會重複推介。唔要嘅撳 × 刪走。</span>
       </div>
-      <div class="sgprefs">${pf ? `按你嘅要求：<b>${esc(stayPrefsLine(pf))}</b>` : "未講要求，AI 自己揀咗"}<button class="secedit wordy" data-stayprefs>${icon("pencil")}${pf ? "改要求" : "講要求"}</button></div>
       ${(sg.areas || []).length ? `<p class="picker-label">可以住邊區</p>
       <div class="sgareas">${sg.areas.map(a => { const n = sg.hotels.filter(h => h.area === a.area).length; return `
         <button type="button" class="sgarea${state.stayArea === a.area ? " on" : ""}${a.best ? " best" : ""}" data-stayarea="${esc(a.area)}">
@@ -8083,12 +8085,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const ask = e.target.closest && e.target.closest("[data-sgask]");
     if (ask){
       e.preventDefault();
+      // the saved requirements are used as they are; the box only adds to them
       const inp = document.getElementById("sg-extra"), extra = inp ? inp.value.trim() : "";
-      if (!extra){ if (inp) inp.focus(); return; }
-      ask.disabled = true; ask.innerHTML = `<span class="spin"></span>搵緊…`;
+      ask.disabled = true; ask.innerHTML = `${loaderSvg()}搵緊…`;
       try {
         const n = await suggestStays(null, extra);
-        await saveNow(`按「${extra}」再搵住宿`);
+        await saveNow(extra ? `按「${extra}」再搵住宿` : "AI 再推介多幾間住宿");
         flash(n ? `搵到 ${n} 間新嘅，放咗喺最頂` : "今次冇搵到新嘅酒店，試吓講多少少");
       } catch (err){ flash(err.message || "搵唔到"); render(); }
       return;
