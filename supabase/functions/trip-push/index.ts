@@ -43,13 +43,17 @@ async function vapid() {
     const again = await (await db("push_keys?id=eq.1&select=public_key,private_jwk")).json();
     keys = { publicKey: again[0].public_key, privateKey: again[0].private_jwk.privateKey };
   }
-  webpush.setVapidDetails("mailto:trip-planner@example.invalid", keys.publicKey, keys.privateKey);
+  // Apple refuses a signature whose contact is a made-up address (403
+  // BadJwtToken), so it is the app's own site
+  webpush.setVapidDetails(Deno.env.get("PUSH_CONTACT") || "https://timely-truffle-6514b7.netlify.app", keys.publicKey, keys.privateKey);
   return keys;
 }
 
+let lastError = "";
 async function sendTo(subs: any[], payload: unknown) {
   await vapid();
   let sent = 0;
+  lastError = "";
   await Promise.all(subs.map(async (s) => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -59,7 +63,7 @@ async function sendTo(subs: any[], payload: unknown) {
       // the phone turned notifications off or the app was removed
       if (e?.statusCode === 404 || e?.statusCode === 410)
         await db("push_subs?endpoint=eq." + encodeURIComponent(s.endpoint), { method: "DELETE" });
-      else console.error("push", e?.statusCode, String(e?.body || e).slice(0, 200));
+      else { lastError = `${e?.statusCode || ""} ${String(e?.body || e).slice(0, 120)}`.trim(); console.error("push", lastError); }
     }
   }));
   return sent;
@@ -93,7 +97,7 @@ Deno.serve(async (req) => {
       const subs = await (await db("push_subs?endpoint=eq." + encodeURIComponent(endpoint) + "&select=endpoint,p256dh,auth")).json();
       if (!Array.isArray(subs) || !subs.length) return json({ ok: false, message: "呢部機未開通知" });
       const sent = await sendTo(subs, { title: "旅行 App 通知測試", body: "收到呢個，即係通知開好咗。有人改行程就會通知你。", url: str(body.url, 300) });
-      return json({ ok: sent > 0, sent });
+      return json({ ok: sent > 0, sent, message: sent ? "" : "發唔到：" + (lastError || "呢部機嘅通知登記過期咗，熄咗再開過") });
     }
 
     if (body.mode === "notify") {
