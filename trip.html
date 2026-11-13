@@ -2091,7 +2091,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-12-15";
+  const BUILD = "2026-11-13-1";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7727,20 +7727,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
         (pf2 ? `&adults=${pf2.adults + (pf2.kids || 0)}&rooms=${pf2.rooms}` : "");
     };
-    // Booking.com takes the dates, guests and rooms straight from the link
-    // (Google Hotels often ignores them and opens on tonight)
+    // Agoda takes the hotel name, the check-in date, the number of nights,
+    // rooms and guests straight from the link (Booking dropped the name;
+    // Google Hotels often ignores the dates and opens on tonight)
     const nights = h => {
       const a = days[h.fromDay - 1], b = days[Math.min(h.toDay, days.length) - 1];
       return { ci: a ? dayIso(a) : "", co: b ? dayIso(b) : "" };
     };
-    const bkBooking = h => {
-      // Booking's search finds a hotel by its English (Google) name; the
-      // Chinese name alone often comes back with nothing
+    const bkAgoda = h => {
       const { ci, co } = nights(h), pf2 = d.stayPrefs;
       const q = h.gName || h.local || h.name;
-      return `https://www.booking.com/searchresults.zh-tw.html?ss=${encodeURIComponent(q)}&ssne=${encodeURIComponent(q)}&ssne_untouched=${encodeURIComponent(q)}` +
-        (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
-        (pf2 ? `&group_adults=${pf2.adults}&group_children=${pf2.kids || 0}&no_rooms=${pf2.rooms}` : "") + "&selected_currency=HKD";
+      const los = ci && co ? Math.max(1, Math.round((new Date(co + "T00:00:00") - new Date(ci + "T00:00:00")) / 864e5)) : 1;
+      return `https://www.agoda.com/zh-hk/search?textToSearch=${encodeURIComponent(q)}` +
+        (ci ? `&checkIn=${ci}&los=${los}` : "") +
+        (pf2 ? `&rooms=${pf2.rooms}&adults=${pf2.adults}&children=${pf2.kids || 0}` : "") + "&currency=HKD&locale=zh-hk";
     };
     const nightsLabel = h => { const { ci, co } = nights(h); const f = x => x ? `${+x.slice(5, 7)}/${+x.slice(8, 10)}` : ""; return ci ? `${f(ci)}${co && co !== ci ? "–" + f(co) : ""}` : ""; };
     return `<div class="hsblock sgblock">
@@ -7791,7 +7791,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 ? `<span class="sgchosen">${icon("check")}已揀</span>`
                 : `<button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>`}
               ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.local || h.name, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
-              <a class="maplink" href="${esc(bkBooking(h))}" target="_blank" rel="noopener">${icon("link")}Booking 睇價${nightsLabel(h) ? `（${nightsLabel(h)}）` : ""}</a>
+              <a class="maplink" href="${esc(bkAgoda(h))}" target="_blank" rel="noopener">${icon("link")}Agoda 睇價${nightsLabel(h) ? `（${nightsLabel(h)}）` : ""}</a>
               <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 比價</a>
             </div>
           </div>
