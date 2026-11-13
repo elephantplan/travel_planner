@@ -107,7 +107,7 @@ const BUILD = (SRC.match(/const BUILD = "([^"]+)"/) || [])[1];
   {
     const sw = fs.readFileSync(__dirname + '/../sw.js', 'utf8');
     ok('navigate 會同 server 對一對', /cache: "no-cache"/.test(sw));
-    ok('shell cache 版本有 bump', /const VERSION = "v3"/.test(sw));
+    ok('shell cache 版本有 bump', (Number((sw.match(/const VERSION = "v(\d+)"/) || [])[1]) >= 3));
     ok('Supabase 資料照樣唔准 cache', /isSupabaseData\(url\)\) return;/.test(sw));
   }
 

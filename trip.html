@@ -856,7 +856,13 @@ img{max-width:100%;}
 .menumove{margin-top:16px;}
 .menudel{margin-top:10px;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
-.ovupdate{margin:14px 0 4px;}
+.ovtools{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
+.ovtools .ovupdate{flex:1 1 220px;} .ovtools .ovpush{flex:0 0 auto;}
+.ovpush.on{border-color:var(--gold);color:var(--gold);}
+.pushhow{border:1px solid var(--rule);border-radius:var(--r-sm);padding:10px 12px;margin:0 0 12px;font-size:13px;line-height:1.6;}
+.pushhow ol{margin:6px 0 0 18px;padding:0;}
+.pushstate{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:4px 0 12px;color:var(--ink-soft);}
+.pushstate .i{width:16px;height:16px;} .pushstate.on{color:var(--gold);}
 .sgask .input{margin-bottom:10px;}
 .sgh.fresh{scroll-margin-top:110px;}
 .sgh-when{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:8px;font-size:12.5px;font-weight:600;color:var(--ink);}
@@ -2093,7 +2099,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-3";
+  const BUILD = "2026-11-13-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2653,6 +2659,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       for (let attempt = 0; attempt < 3; attempt++){
         try {
           await saveVersion(state.snapshot, "manual", summary, trivial);
+          if (!trivial) pushQueue(summary);
           saver.lastPersistedJson = json;
           clearMirror();
           flash("已儲存");
@@ -4839,7 +4846,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>
-      ${state.readonly ? "" : `<button type="button" class="btn wide ovupdate" id="ov-update">${icon("camera")}用相或者文字更新行程</button>`}
+      ${state.readonly ? "" : `<div class="ovtools"><button type="button" class="btn ovupdate" id="ov-update">${icon("camera")}用相或者文字更新行程</button>
+        <button type="button" class="btn ovpush${pushOn() ? " on" : ""}" id="ov-push">${icon(pushOn() ? "check" : "clock")}${pushOn() ? "通知已開" : "開通知"}</button></div>`}
 
       ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
@@ -5558,6 +5566,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function wireOverview(){
     const upd = document.getElementById("ov-update");
     if (upd) upd.addEventListener("click", openUpdateFromSource);
+    const pb = document.getElementById("ov-push");
+    if (pb) pb.addEventListener("click", openPushSheet);
     document.querySelectorAll("[data-flightedit]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); openFlightSheet(); }));
     document.querySelectorAll(".dayline[data-go]").forEach(b => b.addEventListener("click", () => {
       state.view = b.dataset.go;
@@ -11464,6 +11474,112 @@ ${stayBlock}${dayBlocks}${secBlocks}
       genBanner("配新地點中途出咗問題：" + e.message + "（已經更新嘅已經存低）", { done: true });
     }
     setTimeout(() => genBanner(null), 6000);
+  }
+
+  // ==================================================================
+  // PUSH — tell the others when the trip changes
+  // ==================================================================
+  // Each phone chooses for itself (stored per trip on that phone). When
+  // someone saves a real change, the other phones that switched it on get
+  // one notification; several edits in a row become one notification, sent
+  // a minute after the last edit or as soon as the editor leaves the app.
+  // iPhone only allows this inside the app added to the Home Screen.
+  const PUSH_URL = SUPABASE_URL + "/functions/v1/trip-push";
+  const pushKey = () => "trip_push_on_" + (state.tripId || "");
+  function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
+  function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
+  function pushOn(){ try { return localStorage.getItem(pushKey()) === "1"; } catch (_){ return false; } }
+  function b64ToBytes(b64){
+    const pad = "=".repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, c => c.charCodeAt(0));
+  }
+  async function pushCall(body, keepalive){
+    const res = await fetch(PUSH_URL, { method: "POST", headers: sbHeaders(), body: JSON.stringify(body), keepalive: !!keepalive });
+    return res.json().catch(() => ({ ok: false }));
+  }
+  async function mySub(){
+    if (!pushSupported()) return null;
+    const reg = await navigator.serviceWorker.ready;
+    return reg.pushManager.getSubscription();
+  }
+  async function enablePush(){
+    if (!pushSupported()) throw new Error(isIOS() ? "iPhone 要先「加入主畫面」，再由主畫面個 icon 開，先開到通知。" : "呢個瀏覽器唔支援通知。");
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") throw new Error("冇俾通知權限。可以喺 iPhone 設定 → 通知 度開返。");
+    const k = await pushCall({ mode: "key" });
+    if (!k || !k.key) throw new Error("攞唔到通知設定，遲啲再試。");
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.key) });
+    const r = await pushCall({ mode: "subscribe", trip_id: Number(state.tripId), sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.userAgentData && navigator.userAgentData.platform) || "", editor: getEditedBy() });
+    if (!r || !r.ok) throw new Error("登記唔到，遲啲再試。");
+    try { localStorage.setItem(pushKey(), "1"); } catch (_){}
+    return sub;
+  }
+  async function disablePush(){
+    const sub = await mySub().catch(() => null);
+    if (sub){ await pushCall({ mode: "unsubscribe", endpoint: sub.endpoint }).catch(() => {}); }
+    try { localStorage.removeItem(pushKey()); } catch (_){}
+  }
+  const pushPending = [];
+  let pushTimer = null;
+  function pushQueue(summary){
+    if (!state.tripId || state.readonly) return;
+    pushPending.push(plain(summary || "").slice(0, 60));
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => pushFlush(false), 60000);
+  }
+  async function pushFlush(leaving){
+    clearTimeout(pushTimer); pushTimer = null;
+    if (!pushPending.length) return;
+    const items = [...new Set(pushPending.splice(0).filter(Boolean))];
+    let except = "";
+    try { const sub = await mySub(); except = sub ? sub.endpoint : ""; } catch (_){}
+    const who = getEditedBy(), title = plain((state.snapshot.meta || {}).title) || "行程";
+    pushCall({ mode: "notify", trip_id: Number(state.tripId), except,
+      title: `${who} 改咗「${title}」`,
+      body: items.length > 1 ? `${items.slice(0, 3).join("；")}${items.length > 3 ? ` 等 ${items.length} 項` : ""}` : items[0],
+      url: location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString() }, leaving).catch(() => {});
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") pushFlush(true); });
+  function openPushSheet(){
+    const on = pushOn(), sup = pushSupported();
+    const needHome = !sup && isIOS();
+    openSheet(`
+      <h3>通知</h3>
+      <p class="sec-sub">開咗之後，屋企其他人改呢個行程，你部手機會收到通知（自己改嘅唔會通知自己）。每部手機自己揀。</p>
+      ${needHome ? `<div class="pushhow"><b>iPhone 要先咁做：</b><ol><li>喺 Safari 撳下面「分享」掣</li><li>揀「加入主畫面」</li><li>由主畫面個 app icon 開返呢個行程</li><li>再撳呢度開通知</li></ol></div>` : ""}
+      <div class="pushstate ${on ? "on" : ""}">${icon(on ? "check" : "clock")}<span>${on ? "呢部機已經開咗通知" : "呢部機未開通知"}</span></div>
+      <div id="push-msg"></div>
+      ${on
+        ? `<button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
+           <button class="btn wide" id="push-off" style="margin-top:8px;">熄通知</button>`
+        : `<button class="btn primary wide" id="push-on"${needHome ? " disabled" : ""}>${icon("check")}開通知</button>`}
+    `, sheet => {
+      const msg = t => { sheet.querySelector("#push-msg").innerHTML = `<p class="hint">${esc(t)}</p>`; };
+      const onBtn = sheet.querySelector("#push-on");
+      if (onBtn) onBtn.addEventListener("click", async () => {
+        onBtn.disabled = true; onBtn.textContent = "開緊…";
+        try {
+          const sub = await enablePush();
+          await pushCall({ mode: "test", endpoint: sub.endpoint, url: location.pathname + location.search });
+          closeLayer(); render(); flash("開咗通知，應該收到一個測試通知");
+        } catch (e){ msg(e.message || "開唔到"); onBtn.disabled = false; onBtn.innerHTML = `${icon("check")}再試一次`; }
+      });
+      const test = sheet.querySelector("#push-test");
+      if (test) test.addEventListener("click", async () => {
+        test.disabled = true;
+        try {
+          let sub = await mySub();
+          if (!sub) sub = await enablePush();
+          const r = await pushCall({ mode: "test", endpoint: sub.endpoint, url: location.pathname + location.search });
+          msg(r && r.ok ? "發咗，幾秒內應該收到。" : (r && r.message) || "發唔到，試吓熄咗再開過。");
+        } catch (e){ msg(e.message || "發唔到"); }
+        test.disabled = false;
+      });
+      const off = sheet.querySelector("#push-off");
+      if (off) off.addEventListener("click", async () => { await disablePush(); closeLayer(); flash("熄咗通知"); render(); });
+    });
   }
 
   // An imported trip arrives as names and times only. Find each place on

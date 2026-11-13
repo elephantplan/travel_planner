@@ -18,7 +18,8 @@
 // Bumped when the cached shell changes — v2 carried the redrawn app icon.
 // v3: navigations revalidate instead of trusting the HTTP cache, so a deploy
 // reaches an installed app without it being reinstalled.
-const VERSION = "v3";
+// v4: push notifications.
+const VERSION = "v4";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
 const PHOTOS = `dumbofly-photos-${VERSION}`;
@@ -131,4 +132,36 @@ self.addEventListener("fetch", (e) => {
   if (isStoredPhoto(url)) return e.respondWith(cacheFirst(req, PHOTOS));
   if (isFontOrLib(url)) return e.respondWith(staleWhileRevalidate(req, ASSETS));
   if (url.origin === self.location.origin) return e.respondWith(staleWhileRevalidate(req, ASSETS));
+});
+
+// ---------- push ----------
+// A change to the trip, sent by the trip-push function. On iPhone this only
+// arrives once the app has been added to the Home Screen and the family
+// member has switched notifications on.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "行程更新咗", {
+    body: d.body || "",
+    icon: "/icons/icon-192-v2.png",
+    badge: "/icons/icon-192-v2.png",
+    data: { url: d.url || "/" },
+    tag: d.url || "trip",
+  }));
+});
+
+// Tapping it opens (or brings forward) the trip it is about.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url === url && "focus" in c) return c.focus();
+    }
+    for (const c of all) {
+      if ("navigate" in c) { await c.navigate(url); return c.focus(); }
+    }
+    return self.clients.openWindow(url);
+  })());
 });
