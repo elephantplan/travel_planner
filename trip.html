@@ -859,6 +859,8 @@ img{max-width:100%;}
 .ovupdate{margin:14px 0 4px;}
 .sgask .input{margin-bottom:10px;}
 .sgh.fresh{scroll-margin-top:110px;}
+.sgh-when{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:8px;font-size:12.5px;font-weight:600;color:var(--ink);}
+.sgh-when .i{width:13px;height:13px;color:var(--ink-faint);} .sgh-when span{flex-basis:100%;font-weight:400;font-size:11.5px;color:var(--ink-faint);}
 .sgloading{margin:14px 0;padding:8px;border:1px dashed color-mix(in srgb,var(--gold) 55%,transparent);border-radius:var(--r-md, 12px);background:color-mix(in srgb,var(--gold) 7%,transparent);}
 .hl{width:124px;height:60px;overflow:visible;}
 .hl-ground{stroke:var(--rule);stroke-width:2;stroke-linecap:round;}
@@ -2091,7 +2093,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-1";
+  const BUILD = "2026-11-13-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7727,21 +7729,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
         (pf2 ? `&adults=${pf2.adults + (pf2.kids || 0)}&rooms=${pf2.rooms}` : "");
     };
-    // Agoda takes the hotel name, the check-in date, the number of nights,
-    // rooms and guests straight from the link (Booking dropped the name;
-    // Google Hotels often ignores the dates and opens on tonight)
+    // Booking and Agoda only accept their own hotel ids in a link — a name
+    // and dates are thrown away (both tried). Google Hotels finds the hotel
+    // by name and lists every site's price; its date may need setting by
+    // hand, so the stay's dates and headcount are written beside the link.
     const nights = h => {
       const a = days[h.fromDay - 1], b = days[Math.min(h.toDay, days.length) - 1];
       return { ci: a ? dayIso(a) : "", co: b ? dayIso(b) : "" };
     };
-    const bkAgoda = h => {
-      const { ci, co } = nights(h), pf2 = d.stayPrefs;
-      const q = h.gName || h.local || h.name;
-      const los = ci && co ? Math.max(1, Math.round((new Date(co + "T00:00:00") - new Date(ci + "T00:00:00")) / 864e5)) : 1;
-      return `https://www.agoda.com/zh-hk/search?textToSearch=${encodeURIComponent(q)}` +
-        (ci ? `&checkIn=${ci}&los=${los}` : "") +
-        (pf2 ? `&rooms=${pf2.rooms}&adults=${pf2.adults}&children=${pf2.kids || 0}` : "") + "&currency=HKD&locale=zh-hk";
-    };
+    const whoLabel = () => { const p = d.stayPrefs; return p ? `${p.adults} 大${p.kids ? ` ${p.kids} 小` : ""}・${p.rooms} 間房` : ""; };
     const nightsLabel = h => { const { ci, co } = nights(h); const f = x => x ? `${+x.slice(5, 7)}/${+x.slice(8, 10)}` : ""; return ci ? `${f(ci)}${co && co !== ci ? "–" + f(co) : ""}` : ""; };
     return `<div class="hsblock sgblock">
       <h3>住宿推薦</h3>
@@ -7791,8 +7787,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                 ? `<span class="sgchosen">${icon("check")}已揀</span>`
                 : `<button class="btn primary" data-staypick="${k}">揀呢間（${esc(dLab(h.fromDay, h.toDay))}）</button>`}
               ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.local || h.name, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
-              <a class="maplink" href="${esc(bkAgoda(h))}" target="_blank" rel="noopener">${icon("link")}Agoda 睇價${nightsLabel(h) ? `（${nightsLabel(h)}）` : ""}</a>
-              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 比價</a>
+              <a class="maplink" href="${esc(bk(h))}" target="_blank" rel="noopener">${icon("link")}Google 睇價</a>
+            </div>
+            <div class="sgh-when">${icon("clock")}${nightsLabel(h) ? `入住 ${esc(nightsLabel(h).replace("–", " ・退房 "))}` : ""}${whoLabel() ? `・${esc(whoLabel())}` : ""}<span>Google 開咗如果日子唔啱，揀返呢個日子</span>
             </div>
           </div>
         </div>`; }).join("")}</div>

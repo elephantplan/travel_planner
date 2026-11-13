@@ -96,15 +96,12 @@ const SUGGEST = { ok: true, stays: {
   ok('有好處', /乙支路入口站直達/.test(t));
   ok('最近車站同自己計嘅步行時間', /最近\s*을지로입구역\s*·\s*步行約 4 分鐘/.test(t), (t.match(/最近[\s\S]{0,30}/) || [])[0]);
   ok('有 Google 評分同相', await acc.locator('.sgh .thumb-rate').count() === 2 && await acc.locator('.sgh-photo img').count() === 2);
-  const bk = await acc.locator('a', { hasText: 'Google 比價' }).first().getAttribute('href');
-  ok('有 Google 比價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
+  const bk = await acc.locator('a', { hasText: 'Google 睇價' }).first().getAttribute('href');
+  ok('有 Google 睇價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
   // Day 1 to Day 3 of a trip starting 2026-10-23: in on the 23rd, out on the 25th
-  const bb = acc.locator('a', { hasText: 'Agoda 睇價' }).first();
-  const bh = await bb.getAttribute('href');
-  ok('Agoda 連結帶啱入住日子、晚數、人數同房數', /agoda\.com/.test(bh) && bh.includes('checkIn=2026-10-23') && bh.includes('los=2') && bh.includes('adults=6') && bh.includes('children=1') && bh.includes('rooms=2'), bh);
-  const ss = new URL(bh).searchParams.get('textToSearch') || '';
-  ok('Agoda 用 Google 嘅酒店名去搵（唔係中文名）', /[가-힯]/.test(ss) && !/^明洞/.test(ss), ss);
-  ok('掣上面寫明日子', /10\/23–10\/25/.test(await bb.innerText()));
+  ok('冇再估訂房網連結', await acc.locator('a[href*="agoda"], a[href*="booking.com"]').count() === 0);
+  const when = await acc.locator('.sgh-when').first().innerText();
+  ok('寫明入住、退房日子同人數', /入住 10\/23\s*・退房 10\/25/.test(when) && /6 大 1 小・2 間房/.test(when), when);
   ok('建議講明跟咗咩要求', /你嘅要求：[\s\S]*住心齋橋・6 大 1 小・2 間房・每晚 HK\$800–1,500[\s\S]*有浴缸/.test(await acc.innerText()));
 
   // sorting: cheapest first puts the HK$800 one on top, dearest first the HK$1,500 one
