@@ -99,6 +99,7 @@ const SUGGEST = { ok: true, stays: {
   const bk = await acc.locator('a', { hasText: 'Google 睇價' }).first().getAttribute('href');
   ok('有 Google 睇價連結（帶酒店名、日子、人數、房數）', /google\.com\/travel\/search/.test(bk) && bk.includes('checkin=') && bk.includes('adults=7') && bk.includes('rooms=2') && /curr=HKD/.test(bk), bk);
   // Day 1 to Day 3 of a trip starting 2026-10-23: in on the 23rd, out on the 25th
+  ok('Google 用英文（Google）名去搵', /[가-힯]/.test(new URL(bk).searchParams.get('q') || '') && !/明洞樂天/.test(new URL(bk).searchParams.get('q') || ''), bk);
   ok('冇再估訂房網連結', await acc.locator('a[href*="agoda"], a[href*="booking.com"]').count() === 0);
   const when = await acc.locator('.sgh-when').first().innerText();
   ok('寫明入住、退房日子同人數', /入住 10\/23\s*・退房 10\/25/.test(when) && /6 大 1 小・2 間房/.test(when), when);

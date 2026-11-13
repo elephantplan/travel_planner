@@ -2093,7 +2093,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-2";
+  const BUILD = "2026-11-13-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7724,7 +7724,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       // Google Hotels compares every booking site at once and finds the
       // hotel by name; Booking's own search often came back empty
       const dest = (d.meta || {}).destinationLocal || "";
-      const q = [h.name, dest && !String(h.name).includes(dest) ? dest : ""].filter(Boolean).join(" ");
+      // Google's own (English) name finds the hotel; the Chinese name often doesn't
+      const q = h.gName || [h.local || h.name, dest && !String(h.local || h.name).includes(dest) ? dest : ""].filter(Boolean).join(" ");
       return `https://www.google.com/travel/search?q=${encodeURIComponent(q)}&hl=zh-HK&gl=hk&curr=HKD` +
         (ci ? "&checkin=" + ci : "") + (co && co !== ci ? "&checkout=" + co : "") +
         (pf2 ? `&adults=${pf2.adults + (pf2.kids || 0)}&rooms=${pf2.rooms}` : "");
