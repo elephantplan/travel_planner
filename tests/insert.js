@@ -113,6 +113,19 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const q = ((last() || {}).days || [])[1].items.find(i => i.placeId === 'pQ') || {};
   ok('自己加嘅地點都有介紹同必食（由 Google 評論整理）', briefs.some(x => x.placeId === 'pQ') && /手工餃子店/.test(q.desc || '') && /必食：餃子/.test(q.desc || ''), q.desc);
   ok('卡上面見到介紹', /手工餃子店/.test(await p.locator('#app').innerText()));
+  // one tap adds the hotel booked for the day, already placed on the map
+  await p.locator('[data-insert]').first().click();
+  await p.waitForTimeout(400);
+  const hb = p.locator('[data-inshotel]');
+  ok('加地點有「加酒店」掣，寫埋酒店名', await hb.count() === 1 && /明洞 L7 酒店/.test(await hb.innerText()));
+  await hb.click();
+  await p.waitForTimeout(1500);
+  const h = ((last() || {}).days || [])[1].items.find(i => i.title === '明洞 L7 酒店');
+  ok('一撳就加咗酒店，有埋位置', h && h.lat === 37.5636 && h.lng === 126.9827, h);
+  await p.locator('[data-insert]').first().click();
+  await p.waitForTimeout(400);
+  ok('已經加咗就唔再出', await p.locator('[data-inshotel]').count() === 0);
+  await p.keyboard.press('Escape');
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

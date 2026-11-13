@@ -859,6 +859,10 @@ img{max-width:100%;}
 .countdown{display:inline-flex;align-items:baseline;gap:4px;margin:6px 0 2px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;
   background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--ink);}
 .countdown b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums;}
+.ins-hotels{display:flex;flex-direction:column;gap:6px;margin:14px 0 0;}
+.inshotel{justify-content:flex-start;text-align:left;border-color:color-mix(in srgb,var(--gold) 55%,var(--rule));}
+.inshotel .i{color:var(--gold);flex:none;} .inshotel span{display:flex;flex-direction:column;min-width:0;}
+.inshotel b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ovtools{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
 .ovtools .ovupdate{flex:1 1 220px;} .ovtools .ovpush{flex:0 0 auto;}
 .ovpush.on{border-color:var(--gold);color:var(--gold);}
@@ -2102,7 +2106,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-6";
+  const BUILD = "2026-11-13-7";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6445,6 +6449,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const anchors = [pt(prevS), pt(nextS)].filter(Boolean).filter((a, k, arr) => !k || Math.abs(a.lat - arr[0].lat) + Math.abs(a.lng - arr[0].lng) > 0.004);
     const onDay = new Set(units.filter(u => u.stop && u.stop.placeId).map(u => u.stop.placeId));
     const ref = pt(prevS) || pt(nextS);   // distances in 「自己搵」 are from here
+    const di = dayIndexById(state.snapshot, day.id);
+    const hotels = (state.snapshot.stays || []).filter(s => {
+      const a = dayIndexById(state.snapshot, s.from), b = dayIndexById(state.snapshot, s.to);
+      return plain(s.name) && a >= 0 && b >= 0 && di >= Math.min(a, b) && di <= Math.max(a, b);
+    }).filter(s => !units.some(u => u.stop && ((s.placeId && u.stop.placeId === s.placeId) || cleanPlaceName(plain(u.stop.title)) === cleanPlaceName(plain(s.name)))));
     const found = {};
     openSheet(`
       <h3>加地點</h3>
@@ -6477,11 +6486,21 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
         <div id="ins-nearres"></div>
       </div>` : ""}
+      ${hotels.length ? `<div class="ins-hotels">${hotels.map((h, k) =>
+        `<button class="btn inshotel" data-inshotel="${k}">${icon("bed")}<span>加酒店<b>${esc(plain(h.name))}</b></span></button>`).join("")}</div>` : ""}
       <div class="ins-more">
         <button class="btn" id="ins-note">${icon("note")}加一段 note</button>
         <button class="btn" id="ins-blank">${icon("pencil")}唔搵，自己打名</button>
       </div>
     `, sheet => {
+      // the hotel(s) booked for this day — on a moving day both the one being
+      // left and the one checked into — added in one tap, already on the map
+      sheet.querySelectorAll("[data-inshotel]").forEach(b => b.addEventListener("click", () => {
+        const h = hotels[+b.dataset.inshotel]; if (!h) return;
+        pick({ name: plain(h.kr) || plain(h.name), name_zh: plain(h.kr) ? plain(h.name) : "", placeId: h.placeId || "",
+          lat: Number.isFinite(Number(h.lat)) && h.lat !== "" && h.lat != null ? Number(h.lat) : undefined,
+          lng: Number.isFinite(Number(h.lng)) && h.lng !== "" && h.lng != null ? Number(h.lng) : undefined }, "");
+      }));
       sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
       sheet.querySelector("#ins-blank").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
       const pick = async (p, kind) => { closeLayer(); await insertPlaceAt(day, pos, p, kind); };
