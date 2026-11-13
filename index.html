@@ -1177,6 +1177,14 @@ section.triplist{margin-bottom:36px;}
     const upcoming = trips.filter(t => (t.date_end || t.date_start) >= today)
       .sort((a, b) => String(a.date_start || "").localeCompare(String(b.date_start || "")));
     const past = trips.filter(t => (t.date_end || t.date_start) < today);
+    // the number on the Home Screen icon: days until the next trip
+    try {
+      const nx = upcoming.find(t => t.date_start > today);
+      if ("setAppBadge" in navigator){
+        if (nx) navigator.setAppBadge(Math.round((new Date(nx.date_start + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5)).catch(() => {});
+        else navigator.clearAppBadge().catch(() => {});
+      }
+    } catch (_){}
     $("#upcount").textContent = upcoming.length ? upcoming.length + " 個" : "";
     $("#pastcount").textContent = past.length ? past.length + " 個" : "";
     upEl.innerHTML = upcoming.length ? upcoming.map(tripCardHtml).join("") : `<div class="empty">重未有未去嘅行程，上面開一個啦。</div>`;

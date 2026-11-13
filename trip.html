@@ -856,6 +856,9 @@ img{max-width:100%;}
 .menumove{margin-top:16px;}
 .menudel{margin-top:10px;}
 .mvlist{display:flex;flex-direction:column;margin:4px 0 16px;gap:6px;}
+.countdown{display:inline-flex;align-items:baseline;gap:4px;margin:6px 0 2px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;
+  background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--ink);}
+.countdown b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums;}
 .ovtools{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
 .ovtools .ovupdate{flex:1 1 220px;} .ovtools .ovpush{flex:0 0 auto;}
 .ovpush.on{border-color:var(--gold);color:var(--gold);}
@@ -2099,7 +2102,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-4";
+  const BUILD = "2026-11-13-5";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4320,6 +4323,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const board = boardById(state.view);
     if (board){ app.innerHTML = boardHtml(board); wireBoard(board); markClampedDescs(); return; }
     app.innerHTML = state.view === "overview" ? overviewHtml() : dayHtml(dayById(state.view));
+    updateAppBadge();
     if (state.view === "overview") wireOverview(); else wireDay(dayById(state.view));
     markClampedDescs();
     if (state.view !== "overview") backfillHoursFor(dayById(state.view));
@@ -4834,6 +4838,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${passRouteHtml(d)}
         <div class="eyebrow">${esc(m.eyebrow || defaultEyebrow(d))}${secEditBtn("hero")}</div>
         <h1>${esc(m.title || "我嘅行程")}</h1>
+        ${countdownChip(d)}
         <div class="hero-meta">
           ${(m.facts && m.facts.length ? m.facts : defaultFacts(d))
             .map(f => `<span>${esc(f)}</span>`).join("<span>·</span>")}
@@ -11476,6 +11481,33 @@ ${stayBlock}${dayBlocks}${secBlocks}
     setTimeout(() => genBanner(null), 6000);
   }
 
+  // ---------- countdown ----------
+  // Days to go until the trip, on the trip page and as the number on the
+  // Home Screen icon (iPhone shows it once notifications are allowed).
+  function daysToGo(snap){
+    const st = ((snap && snap.meta) || {}).dateStart, en = ((snap && snap.meta) || {}).dateEnd || st;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(st || ""))) return null;
+    const t = new Date(localIso(new Date()) + "T00:00:00"), a = new Date(st + "T00:00:00"), b = new Date(en + "T00:00:00");
+    const toGo = Math.round((a - t) / 864e5);
+    if (toGo > 0) return { toGo };
+    if (t <= b) return { dayNo: Math.round((t - a) / 864e5) + 1 };
+    return { past: true };
+  }
+  function countdownChip(snap){
+    const c = daysToGo(snap);
+    if (!c || c.past) return "";
+    return `<span class="countdown">${c.toGo ? `仲有 <b>${c.toGo}</b> 日出發` : `旅程第 <b>${c.dayNo}</b> 日`}</span>`;
+  }
+  function updateAppBadge(){
+    try {
+      if (!("setAppBadge" in navigator) || !state.snapshot) return;
+      const c = daysToGo(state.snapshot);
+      if (c && c.toGo) navigator.setAppBadge(c.toGo).catch(() => {});
+      else navigator.clearAppBadge().catch(() => {});
+    } catch (_){}
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") updateAppBadge(); });
+
   // ==================================================================
   // PUSH — tell the others when the trip changes
   // ==================================================================
@@ -11534,7 +11566,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!pushPending.length) return;
     const items = [...new Set(pushPending.splice(0).filter(Boolean))];
     let except = "";
-    try { const sub = await mySub(); except = sub ? sub.endpoint : ""; } catch (_){}
+    // normally the phone that made the change is left out; 「自己改都通知埋我」 includes it
+    let me = false; try { me = localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){}
+    if (!me){ try { const sub = await mySub(); except = sub ? sub.endpoint : ""; } catch (_){} }
     const who = getEditedBy(), title = plain((state.snapshot.meta || {}).title) || "行程";
     pushCall({ mode: "notify", trip_id: Number(state.tripId), except,
       title: `${who} 改咗「${title}」`,
@@ -11547,12 +11581,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const needHome = !sup && isIOS();
     openSheet(`
       <h3>通知</h3>
-      <p class="sec-sub">開咗之後，屋企其他人改呢個行程，你部手機會收到通知（自己改嘅唔會通知自己）。每部手機自己揀。</p>
+      <p class="sec-sub">開咗之後，屋企其他人改呢個行程，你部手機會收到通知。自己改嘅預設唔會通知自己；改完大約一分鐘、或者你離開 app 先會發。每部手機自己揀。</p>
       ${needHome ? `<div class="pushhow"><b>iPhone 要先咁做：</b><ol><li>喺 Safari 撳下面「分享」掣</li><li>揀「加入主畫面」</li><li>由主畫面個 app icon 開返呢個行程</li><li>再撳呢度開通知</li></ol></div>` : ""}
       <div class="pushstate ${on ? "on" : ""}">${icon(on ? "check" : "clock")}<span>${on ? "呢部機已經開咗通知" : "呢部機未開通知"}</span></div>
       <div id="push-msg"></div>
       ${on
-        ? `<button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
+        ? `<label class="updopt"><input type="checkbox" id="push-me"${(() => { try { return localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){ return false; } })() ? " checked" : ""}> 自己改都通知埋我（自己一個試用）</label>
+           <button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
            <button class="btn wide" id="push-off" style="margin-top:8px;">熄通知</button>`
         : `<button class="btn primary wide" id="push-on"${needHome ? " disabled" : ""}>${icon("check")}開通知</button>`}
     `, sheet => {
@@ -11577,6 +11612,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
         } catch (e){ msg(e.message || "發唔到"); }
         test.disabled = false;
       });
+      const meBox = sheet.querySelector("#push-me");
+      if (meBox) meBox.addEventListener("change", () => { try { if (meBox.checked) localStorage.setItem(pushKey() + "_me", "1"); else localStorage.removeItem(pushKey() + "_me"); } catch (_){} });
       const off = sheet.querySelector("#push-off");
       if (off) off.addEventListener("click", async () => { await disablePush(); closeLayer(); flash("熄咗通知"); render(); });
     });

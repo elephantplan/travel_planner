@@ -68,6 +68,17 @@ async function setup(b, opts){
     ok('離開 app 就通知其他人', n && n.trip_id === 1 && /阿媽 改咗/.test(n.title) && /刪走咗/.test(n.body), n);
     ok('唔會通知返自己', n && n.except === 'https://push.example/me');
     ok('撳通知會開返呢個行程', n && /trip\.html\?trip=1/.test(n.url), n && n.url);
+    // 「自己改都通知埋我」 includes this phone
+    await p.evaluate(() => document.querySelector('[data-go="overview"], [data-go="ov"]') ? 0 : 0);
+    await p.evaluate(() => localStorage.setItem('trip_push_on_1_me', '1'));
+    await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); });
+    await p.locator('[data-stopmenu]').first().click(); await p.waitForTimeout(200);
+    p.once('dialog', d => d.accept());
+    await p.locator('#stopdel').click(); await p.waitForTimeout(1500);
+    await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await p.waitForTimeout(500);
+    const n2 = calls.filter(c => c.mode === 'notify')[1];
+    ok('揀咗「通知埋我」就唔會跳過自己', n2 && n2.except === '', n2);
     ok('冇 JS 錯誤', errs.length === 0, errs);
   }
   {
@@ -80,6 +91,25 @@ async function setup(b, opts){
     const t = await p.locator('.sheet').innerText();
     ok('iPhone 未加主畫面就教點加', /加入主畫面/.test(t) && await p.locator('#push-on').isDisabled());
     ok('冇 JS 錯誤（iPhone）', errs.length === 0, errs);
+  }
+  {
+    // a trip 20 days away: a countdown on the page and the number on the icon
+    const future = JSON.parse(JSON.stringify(snap));
+    const d0 = new Date(); d0.setDate(d0.getDate() + 20);
+    const iso = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    future.meta.dateStart = iso(d0); const d1 = new Date(d0); d1.setDate(d1.getDate() + 2); future.meta.dateEnd = iso(d1);
+    const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 } });
+    const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+    await p.addInitScript(() => { window.__badge = null; navigator.setAppBadge = async n => { window.__badge = n; }; navigator.clearAppBadge = async () => { window.__badge = 0; }; });
+    await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await p.route('**/rest/v1/itinerary_versions**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, created_at: '2026-09-20T00:00:00Z', edited_by: 'x', source: 'seed', summary: 's', snapshot: future, has_snapshot: true }]) }));
+    await p.route('**/functions/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }));
+    await p.route('**tile**', r => r.abort());
+    await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(1500);
+    ok('行程頁有倒數', /仲有\s*20\s*日出發/.test(await p.locator('.countdown').innerText().catch(() => '')));
+    ok('app icon 上面顯示 20', await p.evaluate(() => window.__badge) === 20);
+    ok('冇 JS 錯誤（倒數）', errs.length === 0, errs);
   }
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
