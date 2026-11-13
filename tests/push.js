@@ -55,6 +55,13 @@ async function setup(b, opts){
     ok('一開就發測試通知', calls.some(c => c.mode === 'test' && c.endpoint === 'https://push.example/me'));
     ok('用伺服器嘅 key 登記', await p.evaluate(() => window.__subOpts && window.__subOpts.userVisibleOnly === true && window.__subOpts.applicationServerKey instanceof Uint8Array));
     ok('掣變咗「通知已開」', /通知已開/.test(await p.locator('#ov-push').innerText()));
+    ok('預設收每日倒數', sub && sub.countdown === true, sub);
+    await p.click('#ov-push'); await p.waitForTimeout(300);
+    ok('可以剔收唔收倒數', await p.locator('#push-cd').isChecked());
+    await p.locator('#push-cd').uncheck(); await p.waitForTimeout(400);
+    const pr = calls.find(c => c.mode === 'prefs');
+    ok('剔走就話伺服器唔好再發', pr && pr.endpoint === 'https://push.example/me' && pr.countdown === false, pr);
+    await p.click('.sheet-close'); await p.waitForTimeout(200);
     // a real change, then leave the app: the others get one notification
     await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
     await p.waitForTimeout(800);

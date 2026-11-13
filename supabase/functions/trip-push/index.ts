@@ -12,6 +12,8 @@
 // POST { mode: "unsubscribe", endpoint }                 → { ok }
 // POST { mode: "test", endpoint }                        → { ok, sent }
 // POST { mode: "notify", trip_id, title, body, url, except } → { ok, sent }
+// POST { mode: "prefs", endpoint, countdown }            → { ok }
+// POST { mode: "daily" }  (9am Hong Kong, from the Netlify schedule) → { ok, sent }
 import webpush from "npm:web-push@3.6.7";
 
 const CORS = {
@@ -82,8 +84,41 @@ Deno.serve(async (req) => {
       const endpoint = str(s.endpoint, 1000), p256dh = str(s.keys?.p256dh, 200), auth = str(s.keys?.auth, 100);
       if (!trip || !/^https:\/\//.test(endpoint) || !p256dh || !auth) return json({ ok: false, message: "未有齊資料" }, 400);
       const r = await db("push_subs?on_conflict=endpoint", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" },
-        body: JSON.stringify({ trip_id: trip, endpoint, p256dh, auth, device: str(body.device, 80), editor: str(body.editor, 40) }) });
+        body: JSON.stringify({ trip_id: trip, endpoint, p256dh, auth, device: str(body.device, 80), editor: str(body.editor, 40),
+          ...(typeof body.countdown === "boolean" ? { countdown: body.countdown } : {}) }) });
       return json({ ok: r.ok });
+    }
+
+    if (body.mode === "prefs") {
+      const endpoint = str(body.endpoint, 1000);
+      if (!endpoint) return json({ ok: false }, 400);
+      const r = await db("push_subs?endpoint=eq." + encodeURIComponent(endpoint), { method: "PATCH",
+        body: JSON.stringify({ countdown: body.countdown === true }) });
+      return json({ ok: r.ok });
+    }
+
+    // Every morning: the nearest trip that starts within 20 days (or today),
+    // to every phone that ticked the countdown and has not had it today.
+    // Safe to call more than once a day.
+    if (body.mode === "daily") {
+      const hk = new Date(Date.now() + 8 * 3600e3), today = hk.toISOString().slice(0, 10);
+      const until = new Date(hk.getTime() + 20 * 864e5).toISOString().slice(0, 10);
+      const trips = await (await db(`trips?select=id,name,destination_local,date_start&date_start=gte.${today}&date_start=lte.${until}&order=date_start.asc&limit=1`)).json();
+      const t = Array.isArray(trips) && trips[0];
+      if (!t) return json({ ok: true, sent: 0, note: "冇 20 日內出發嘅行程" });
+      const subs = await (await db(`push_subs?countdown=eq.true&or=(last_countdown.is.null,last_countdown.lt.${today})&select=endpoint,p256dh,auth`)).json();
+      if (!Array.isArray(subs) || !subs.length) return json({ ok: true, sent: 0 });
+      const n = Math.round((new Date(t.date_start + "T00:00:00Z").getTime() - new Date(today + "T00:00:00Z").getTime()) / 864e5);
+      const where = str(t.destination_local, 20) || str(t.name, 30);
+      const md = `${+t.date_start.slice(5, 7)}/${+t.date_start.slice(8, 10)}`;
+      const sent = await sendTo(subs, {
+        title: n === 0 ? `今日出發去${where}！` : `仲有 ${n} 日去${where}`,
+        body: n === 0 ? `「${str(t.name, 40)}」今日開始，一路順風！` : n === 1 ? `聽日出發！「${str(t.name, 40)}」，記得執埋行李。` : `「${str(t.name, 40)}」${md} 出發。`,
+        url: "/trip.html?trip=" + t.id,
+      });
+      // marked even if one phone failed, so the schedule never repeats itself
+      await db(`push_subs?countdown=eq.true&or=(last_countdown.is.null,last_countdown.lt.${today})`, { method: "PATCH", body: JSON.stringify({ last_countdown: today }) });
+      return json({ ok: true, sent, trip: t.id, days: n });
     }
 
     if (body.mode === "unsubscribe") {

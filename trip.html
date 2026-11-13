@@ -2102,7 +2102,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-5";
+  const BUILD = "2026-11-13-6";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -11521,6 +11521,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
   function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
   function pushOn(){ try { return localStorage.getItem(pushKey()) === "1"; } catch (_){ return false; } }
+  // the 9am countdown is about the next trip, whichever it is, so it is one
+  // choice per phone (on unless switched off)
+  function countdownWanted(){ try { return localStorage.getItem("trip_push_countdown") !== "0"; } catch (_){ return true; } }
   function b64ToBytes(b64){
     const pad = "=".repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
     return Uint8Array.from(raw, c => c.charCodeAt(0));
@@ -11543,7 +11546,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.key) });
-    const r = await pushCall({ mode: "subscribe", trip_id: Number(state.tripId), sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.userAgentData && navigator.userAgentData.platform) || "", editor: getEditedBy() });
+    const r = await pushCall({ mode: "subscribe", trip_id: Number(state.tripId), sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.userAgentData && navigator.userAgentData.platform) || "", editor: getEditedBy(), countdown: countdownWanted() });
     if (!r || !r.ok) throw new Error("登記唔到，遲啲再試。");
     try { localStorage.setItem(pushKey(), "1"); } catch (_){}
     return sub;
@@ -11586,7 +11589,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <div class="pushstate ${on ? "on" : ""}">${icon(on ? "check" : "clock")}<span>${on ? "呢部機已經開咗通知" : "呢部機未開通知"}</span></div>
       <div id="push-msg"></div>
       ${on
-        ? `<label class="updopt"><input type="checkbox" id="push-me"${(() => { try { return localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){ return false; } })() ? " checked" : ""}> 自己改都通知埋我（自己一個試用）</label>
+        ? `<label class="updopt"><input type="checkbox" id="push-cd"${countdownWanted() ? " checked" : ""}> 每日朝早 9 點提我仲有幾多日出發（出發前 20 日開始）</label>
+           <label class="updopt"><input type="checkbox" id="push-me"${(() => { try { return localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){ return false; } })() ? " checked" : ""}> 自己改都通知埋我（自己一個試用）</label>
            <button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
            <button class="btn wide" id="push-off" style="margin-top:8px;">熄通知</button>`
         : `<button class="btn primary wide" id="push-on"${needHome ? " disabled" : ""}>${icon("check")}開通知</button>`}
@@ -11611,6 +11615,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
           msg(r && r.ok ? "發咗，幾秒內應該收到。" : (r && r.message) || "發唔到，試吓熄咗再開過。");
         } catch (e){ msg(e.message || "發唔到"); }
         test.disabled = false;
+      });
+      const cd = sheet.querySelector("#push-cd");
+      if (cd) cd.addEventListener("change", async () => {
+        try { localStorage.setItem("trip_push_countdown", cd.checked ? "1" : "0"); } catch (_){}
+        try { const sub = await mySub(); if (sub) await pushCall({ mode: "prefs", endpoint: sub.endpoint, countdown: cd.checked }); } catch (_){}
+        flash(cd.checked ? "會每朝 9 點提你倒數" : "唔再發倒數通知");
       });
       const meBox = sheet.querySelector("#push-me");
       if (meBox) meBox.addEventListener("change", () => { try { if (meBox.checked) localStorage.setItem(pushKey() + "_me", "1"); else localStorage.removeItem(pushKey() + "_me"); } catch (_){} });
