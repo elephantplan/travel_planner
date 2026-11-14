@@ -31,7 +31,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
       return j({ ok: true, notes: '', changes: ['甲', '乙', '丙'].map((n, k) => ({ op: 'add', dayId: 'day2', stop: { title: '餐廳' + n, time: '約 19:00', type: 'eat' }, reason: `選擇${k + 1}：好食` })) }); }
     if (body.action === 'ask'){ asked.push(body.question);
       return j({ ok: true, aiSummary: '可以試吓呢兩間：\n【推介】喫茶丁｜喫茶ティー｜老派咖啡店｜Day 2｜景福宮\n【推介】麵包戊｜パン戊｜早餐好｜Day 2｜最前\n記得早啲去。' }); }
-    if (body.mode === 'near-search') return j({ ok: true, places: [] });
+    if (body.mode === 'near-search') return j({ ok: true, places: body.query === '喫茶ティー' ? [{ placeId: 'pKISSA', name: '喫茶ティー', lat: 37.58, lng: 126.98, meters: 320, rating: 4.4, ratingCount: 2180 }] : [] });
     return j({ ok: true });
   });
   await p.route('**tile**', r => r.abort());
@@ -69,6 +69,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('問嘢會叫 AI 標住推介地點', asked.some(q => /咖啡店？/.test(q) && /【推介】/.test(q)), asked);
   ok('每個推介地點都有「加去」', await p.locator('#ai-out [data-askadd]').count() === 2, await p.locator('#ai-out').innerText());
   ok('講明建議加去邊日邊個位', /加去 D2・「景福宮」之後/.test(await p.locator('#ai-out').innerText()), await p.locator('#ai-out').innerText());
+  await p.waitForTimeout(800);
+  ok('推介有 Google 評分、幾多人評同地圖連結', /4\.4\s*（2,180 個評價）/.test(await p.locator("#ai-out").innerText()) && await p.locator('#ai-out .rec-facts a[href*="google"]').count() >= 1, await p.locator('#ai-out').innerText());
   await p.locator('#ai-out [data-askadd]').first().click();
   await p.waitForTimeout(300);
   ok('加完個 AI 助手唔會關', await p.locator('#ai-out').isVisible() && /已加去 D2/.test(await p.locator('#ai-out').innerText()));
@@ -81,7 +83,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const sn = last();
   const r2 = sn.days[1].items.filter(i => i.kind === 'stop').map(i => i.title);
   const r1 = sn.days[0].items.filter(i => i.kind === 'stop').map(i => i.title);
-  ok('第一個跟 AI 建議：Day 2 景福宮之後，連當地名', r2[1] === '喫茶丁' && sn.days[1].items.find(i => i.title === '喫茶丁').kr === '喫茶ティー', r2);
+  ok('第一個跟 AI 建議：Day 2 景福宮之後，連當地名', r2[1] === '喫茶丁' && sn.days[1].items.find(i => i.title === '喫茶丁').kr === '喫茶ティー' && sn.days[1].items.find(i => i.title === '喫茶丁').placeId === 'pKISSA', r2);
   ok('第二個改咗位：Day 1 第一個站之後', r1[1] === '麵包戊', r1);
   ok('冇 JS error', !errs.length, errs);
   await b.close();

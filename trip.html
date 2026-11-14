@@ -1686,6 +1686,11 @@ body.readonly .sechide{display:none;}
 .qa-rec .qa-rec-d{flex-basis:100%;font-size:13px;color:var(--ink-soft);line-height:1.55;}
 .qa-rec .usec-add,.qa-rec .usec-inday{margin:6px 0 0;}
 .qa-rec .usec-add.added{background:var(--ok, #2e8b57);color:#fff;border-color:transparent;}
+.rec-facts{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:13px;color:var(--ink-soft);margin-top:4px;}
+.rec-facts a{display:inline-flex;align-items:center;gap:4px;color:var(--ink);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--ink) 30%,transparent);}
+.rec-facts .i{width:13px;height:13px;}
+.rec-facts a .i:first-child{fill:var(--gold);stroke:var(--gold);}
+.rec-facts .ldr{width:40px;height:18px;}
 .rec-move{margin:6px 0 0 8px;background:none;border:0;color:var(--ink-soft);text-decoration:underline;font-size:12.5px;cursor:pointer;padding:4px;}
 .rec-where{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
 .rec-where[hidden]{display:none;}
@@ -2197,7 +2202,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-14";
+  const BUILD = "2026-11-14-15";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5233,6 +5238,29 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     out.querySelectorAll("[data-askadd]").forEach(btn => {
       const x = sgs[+btn.dataset.askadd];
       if (!x) return;
+      // the place on Google, looked up near where it would go: its score, how
+      // many rated it, and a link to it — the same facts a 加地點 card shows
+      const facts = document.createElement("span");
+      facts.className = "rec-facts";
+      facts.innerHTML = `${loaderSvg()}<span>搵緊 Google 評分…</span>`;
+      btn.parentNode.insertBefore(facts, btn);
+      (async () => {
+        const sp0 = recSpot(x);
+        let ref = null;
+        if (sp0){
+          const us = toUnits(sp0.day.items).filter(u => u.stop && Number.isFinite(Number(u.stop.lat)) && u.stop.lat !== "");
+          const a = sp0.afterIdx >= 0 && toUnits(sp0.day.items)[sp0.afterIdx];
+          const o = a && a.stop && Number.isFinite(Number(a.stop.lat)) && a.stop.lat !== "" ? a.stop : (us[0] && us[0].stop);
+          if (o) ref = { lat: Number(o.lat), lng: Number(o.lng) };
+        }
+        const g = await findPlaceNear(null, x.kr || x.name, x.name, ref).catch(() => null);
+        if (!facts.isConnected) return;
+        if (!g){ facts.innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.kr || x.name)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖搵</a>`; return; }
+        x.place = g;
+        const url = googlePlaceUrl({ title: g.name, placeId: g.placeId });
+        const n = Number(g.ratingCount);
+        facts.innerHTML = `<a href="${esc(url)}" target="_blank" rel="noopener">${Number.isFinite(g.rating) ? `${icon("star")}<b>${g.rating.toFixed(1)}</b>${n > 0 ? `（${n.toLocaleString("en-US")} 個評價）` : ""}・` : ""}${icon("pin")}Google 地圖</a>${Number.isFinite(g.meters) ? `<span>離建議位置約 ${g.meters < 1000 ? Math.round(g.meters / 10) * 10 + " 米" : (g.meters / 1000).toFixed(1) + " 公里"}</span>` : ""}`;
+      })();
       // 改位置: day and 「放喺邊個之後」 pickers, under the button
       const mv = document.createElement("button");
       mv.type = "button"; mv.className = "rec-move"; mv.textContent = "改位置";
@@ -10874,6 +10902,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const at = Math.max(0, Math.min(afterIdx + 1, units.length));
     const st = Object.assign(blankStop(), { title: x.name, kr: x.kr || "", desc: x.body || "",
       mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.kr || x.name)}` });
+    // already found on Google for the card: same place, no second search
+    const g = x.place;
+    if (g && g.placeId){ Object.assign(st, { placeId: g.placeId, lat: g.lat, lng: g.lng });
+      if (Number.isFinite(g.rating)){ st.rating = g.rating; st.ratingCount = g.ratingCount; } }
     units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
     for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
     day.items = fromUnits(units);
@@ -11023,8 +11055,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // on a day trip from Osaka came back as a same-named shop in Osaka, an hour
   // away. Only when nothing is found near the day does it fall back to that,
   // and even then takes whichever result is closest to the day.
-  async function findPlaceNear(s, query, plainQuery){
-    const ref = stopAnchor(s);
+  async function findPlaceNear(s, query, plainQuery, refAt){
+    const ref = refAt || stopAnchor(s);
     if (ref){
       const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
         body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
