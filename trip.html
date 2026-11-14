@@ -2182,7 +2182,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-11";
+  const BUILD = "2026-11-14-12";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4446,6 +4446,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }, true);
 
   function render(){
+    // a card is being dragged: redrawing now would leave it floating where
+    // the finger let go (the photo or transit that finished loading can wait)
+    if (state.dragBusy){ state.renderLater = true; return; }
     renderBrandmark();
     renderLines();
     const app = $("#app");
@@ -8805,6 +8808,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           units,
           rects: units.map(u => { const r = u.getBoundingClientRect(); return { top: r.top + sy, height: r.height }; }),
           active: false,
+          // iPhone sometimes never sends the pointerup to the handle (the
+          // capture is lost when the page scrolls under the finger), which
+          // left the card stuck mid-air; the page itself hears it either way
+          off: listenWhileDragging(e => onMove(e), () => finish()),
           timer: setTimeout(() => {
             if (!drag) return;
             drag.active = true;
@@ -8813,10 +8820,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (!raf) raf = requestAnimationFrame(tick);
           }, 260)
         };
-        handle.setPointerCapture(e.pointerId);
+        state.dragBusy = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (_){}
       });
 
-      handle.addEventListener("pointermove", e => {
+      const onMove = e => {
         if (!drag) return;
         if (!drag.active){
           // Moving before the hold timer fires used to CANCEL the drag, on the
@@ -8837,15 +8845,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         e.preventDefault();
         drag.clientY = e.clientY;
         paint();
-      });
+      };
+      handle.addEventListener("pointermove", onMove);
 
       const finish = () => {
         if (!drag) return;
         clearTimeout(drag.timer);
         if (raf){ cancelAnimationFrame(raf); raf = null; }
         const d = drag; drag = null;
+        d.off();
+        state.dragBusy = false;
         d.units.forEach(u => { u.style.transform = ""; u.classList.remove("shifting","lifted"); });
-        if (!d.active || d.to === d.from) return;
+        if (!d.active || d.to === d.from){ if (state.renderLater){ state.renderLater = false; render(); } return; }
+        state.renderLater = false;
         const units = toUnits(day.items);
         const [moved] = units.splice(d.from, 1);
         units.splice(d.to, 0, moved);
@@ -8869,6 +8881,26 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // instead of only itinerary stops. onDrop(from, to) does the actual array
   // move + render + save; this only handles the pointer gesture and the
   // visual shuffle while dragging.
+  // While a card is held, the page listens too, so the drag ends wherever
+  // the finger lifts (or the touch is cancelled) even if the handle lost it.
+  function listenWhileDragging(onMove, onEnd){
+    const end = () => onEnd();
+    const move = e => onMove(e);
+    document.addEventListener("pointermove", move, { passive: false });
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+    document.addEventListener("touchend", end);
+    document.addEventListener("touchcancel", end);
+    window.addEventListener("blur", end);
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
+      document.removeEventListener("touchend", end);
+      document.removeEventListener("touchcancel", end);
+      window.removeEventListener("blur", end);
+    };
+  }
   function wireSimpleDrag(container, itemSelector, handleSelector, onDrop){
     if (!container) return;
     let drag = null;
@@ -8927,6 +8959,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           items,
           rects: items.map(u => { const r = u.getBoundingClientRect(); return { top: r.top + sy, height: r.height }; }),
           active: false,
+          off: listenWhileDragging(e => onMove(e), () => finish()),
           timer: setTimeout(() => {
             if (!drag) return;
             drag.active = true;
@@ -8935,9 +8968,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (!raf) raf = requestAnimationFrame(tick);
           }, 260)
         };
-        handle.setPointerCapture(e.pointerId);
+        state.dragBusy = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (_){}
       });
-      handle.addEventListener("pointermove", e => {
+      const onMove = e => {
         if (!drag) return;
         if (!drag.active){
           if (Math.abs((e.clientY + window.scrollY) - drag.startPageY) > 6){
@@ -8950,14 +8984,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         e.preventDefault();
         drag.clientY = e.clientY;
         paint();
-      });
+      };
+      handle.addEventListener("pointermove", onMove);
       const finish = () => {
         if (!drag) return;
         clearTimeout(drag.timer);
         if (raf){ cancelAnimationFrame(raf); raf = null; }
         const d = drag; drag = null;
+        d.off();
+        state.dragBusy = false;
         d.items.forEach(u => { u.style.transform = ""; u.classList.remove("shifting","lifted"); });
-        if (!d.active || d.to === d.from) return;
+        if (!d.active || d.to === d.from){ if (state.renderLater){ state.renderLater = false; render(); } return; }
+        state.renderLater = false;
         onDrop(d.from, d.to);
       };
       handle.addEventListener("pointerup", finish);
@@ -12416,7 +12454,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     try {
       const res = await fetch(location.pathname, { cache: "reload" });
       if (!res || !res.ok) return false;
-      const m = (await res.text()).match(/const BUILD = "([^"]+)"/);
+      const m = (await res.text()).match(/const BUILD = "2026-11-14-12"]+)"/);
       if (!m || m[1] === BUILD) return false;
       updateReady = true;
       showUpdateBar();
