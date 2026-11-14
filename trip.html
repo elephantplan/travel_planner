@@ -1685,6 +1685,12 @@ body.readonly .sechide{display:none;}
 .qa-rec .kr{font-size:12px;color:var(--ink-faint);}
 .qa-rec .qa-rec-d{flex-basis:100%;font-size:13px;color:var(--ink-soft);line-height:1.55;}
 .qa-rec .usec-add,.qa-rec .usec-inday{margin:6px 0 0;}
+.qa-rec .usec-add.added{background:var(--ok, #2e8b57);color:#fff;border-color:transparent;}
+.rec-move{margin:6px 0 0 8px;background:none;border:0;color:var(--ink-soft);text-decoration:underline;font-size:12.5px;cursor:pointer;padding:4px;}
+.rec-where{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.rec-where[hidden]{display:none;}
+.rec-where select{flex:1 1 140px;min-height:36px;font-size:13px;padding:6px 8px;}
+.rec-where .btn{min-height:36px;padding:0 14px;}
 .daypick button.suggested{outline:2px solid var(--gold);outline-offset:1px;}
 body.readonly .qa-del{display:none;}
 
@@ -1733,6 +1739,14 @@ body.readonly .qa-del{display:none;}
 }
 .stopcard.checked .selbox{background:var(--lc,var(--ink));border-color:transparent;}
 .selbox .i{width:13px;height:13px;}
+/* in select mode the box sits over the photo, big enough to see at a glance */
+.stopcard.selecting{position:relative;}
+.stopcard.selecting .selbox{position:absolute;top:12px;left:12px;z-index:3;width:34px;height:34px;border-radius:10px;margin:0;
+  background:rgba(0,0,0,.45);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);}
+.stopcard.selecting .selbox .i{width:20px;height:20px;stroke-width:3;}
+.stopcard.selecting.checked .selbox{background:var(--ok, #2e8b57);border-color:#fff;}
+.stopcard.selecting.checked{border-width:2px;border-color:var(--ok, #2e8b57);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok, #2e8b57) 30%,transparent);}
+.stopcard.selecting:not(:has(.thumb)) .stopbody{padding-left:40px;}
 .selectbar{
   position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));z-index:40;
   margin-top:14px;padding:11px 14px;border-radius:var(--r-lg);
@@ -2183,7 +2197,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-13";
+  const BUILD = "2026-11-14-14";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5201,6 +5215,53 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!line) return;
     const { head, body } = splitLine(line);
     openAddPlaceSheetFor(Object.assign(placeFromHead(head), { body }));
+  }
+  // AI 助手's recommendations: each goes straight to the day and spot the AI
+  // suggested, the sheet stays open for more, and 改位置 picks another day
+  // and spot right there.
+  function wireRecButtons(out, answer){
+    const sgs = qaSuggestions(answer);
+    let chain = Promise.resolve();
+    const add = (btn, x, day, afterIdx) => {
+      btn.disabled = true; btn.classList.add("added");
+      btn.innerHTML = `${icon("check")}已加去 D${esc(day.id.replace("day", ""))}`;
+      const w = btn.parentNode.querySelector(".rec-move"); if (w) w.hidden = true;
+      const pk = btn.parentNode.querySelector(".rec-where"); if (pk) pk.hidden = true;
+      flash(`加咗「${x.name}」，可以繼續加`);
+      chain = chain.then(() => insertRecAt(x, day, afterIdx)).catch(() => {});
+    };
+    out.querySelectorAll("[data-askadd]").forEach(btn => {
+      const x = sgs[+btn.dataset.askadd];
+      if (!x) return;
+      // 改位置: day and 「放喺邊個之後」 pickers, under the button
+      const mv = document.createElement("button");
+      mv.type = "button"; mv.className = "rec-move"; mv.textContent = "改位置";
+      const pick = document.createElement("span");
+      pick.className = "rec-where"; pick.hidden = true;
+      const days = state.snapshot.days || [];
+      const sp = recSpot(x);
+      pick.innerHTML = `<select class="input rw-day">${days.map(d => `<option value="${d.id}"${sp && sp.day === d ? " selected" : ""}>Day ${d.id.replace("day", "")}・${esc(d.title)}</option>`).join("")}</select>
+        <select class="input rw-after"></select><button type="button" class="btn primary rw-go">${icon("plus")}加</button>`;
+      const fill = () => {
+        const d = dayById(pick.querySelector(".rw-day").value), us = toUnits(d.items);
+        const cur = sp && sp.day === d ? sp.afterIdx : null;
+        let last = -1; us.forEach((u, j) => { if (u.stop) last = j; });
+        pick.querySelector(".rw-after").innerHTML = `<option value="-1"${cur === -1 ? " selected" : ""}>放喺最前</option>` +
+          us.map((u, j) => u.stop ? `<option value="${j}"${(cur != null ? cur === j : j === last) ? " selected" : ""}>放喺「${esc(cleanPlaceName(plain(u.stop.title)) || "未改名")}」之後</option>` : "").join("");
+      };
+      fill();
+      pick.querySelector(".rw-day").addEventListener("change", fill);
+      pick.querySelector(".rw-go").addEventListener("click", () =>
+        add(btn, x, dayById(pick.querySelector(".rw-day").value), +pick.querySelector(".rw-after").value));
+      mv.addEventListener("click", e => { e.stopPropagation(); pick.hidden = !pick.hidden; });
+      btn.after(mv, pick);
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const s2 = recSpot(x);
+        if (s2) add(btn, x, s2.day, s2.afterIdx);
+        else { pick.hidden = false; }            // no day suggested: choose one here
+      });
+    });
   }
   function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr }){
     const snap = state.snapshot;
@@ -10726,11 +10787,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
             const a = r.aiSummary || r.message || "冇回覆";
             const rec = { answer: a };
             out.innerHTML = `<div class="ai-msg qa-a">${qaAnswerHtml(rec, 0, k => `data-askadd="${k}"`)}</div>`;
-            out.querySelectorAll("[data-askadd]").forEach(btn => btn.addEventListener("click", e => {
-              e.stopPropagation();
-              const sg = qaSuggestions(a)[+btn.dataset.askadd];
-              if (sg) openAddPlaceSheetFor(sg);
-            }));
+            wireRecButtons(out, a);
             if (r.aiSummary) saveAiNote("ask", question, a);
           } else if (act === "suggest"){
             const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
@@ -10765,7 +10822,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // the trip (on that day, at that time), or says where it already is.
   // AI 助手 answers mark each place they recommend on its own line, so every
   // one can get a 「加去行程」 button: 【推介】名稱｜當地名｜一句介紹
-  const REC_HINT = "\n（如果你推介具體地點、餐廳或者店舖：每個獨立一行，格式係「【推介】中文名｜當地語言名｜一句介紹」，其他解釋照寫。）";
+  const REC_HINT = "\n（如果你推介具體地點、餐廳或者店舖：每個獨立一行，格式係「【推介】中文名｜當地語言名｜一句介紹｜Day 幾｜放喺邊個地點之後」。睇住行程揀最順路嘅一日同位置，「放喺邊個地點之後」要照抄行程入面嗰個地點嘅名，放喺第一個就寫「最前」。其他解釋照寫。）";
   const REC_LINE = /^\s*[-•*]?\s*【\s*推介\s*】\s*(.+?)\s*$/;
   const QA_LINE = /^【\s*Day\s*(\d+)\s*[・·]\s*(加|改)\s*】\s*(.+?)\s*(?:[（(]\s*約?\s*(\d{1,2}[:：]\d{2})\s*[)）])?\s*$/;
   function qaSuggestions(answer){
@@ -10773,9 +10830,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
     lines.forEach((l, i) => {
       const rm = l.match(REC_LINE);
       if (rm){
-        const [nm, local, desc] = rm[1].split(/\s*[｜|]\s*/);
+        const [nm, local, desc, dayTxt, afterTxt] = rm[1].split(/\s*[｜|]\s*/);
         const name = plain(nm || "").replace(/\*\*/g, "").trim();
-        if (name) out.push({ line: i, kind: "推介", name, kr: plain(local || ""), region: "", time: "", body: plain(desc || ""), day: "" });
+        const dn = +(String(dayTxt || "").match(/\d+/) || [0])[0];
+        const days = state.snapshot.days || [];
+        const after = plain(afterTxt || "").replace(/^放喺|之後$|後面$/g, "").replace(/[「」]/g, "").trim();
+        if (name) out.push({ line: i, kind: "推介", name, kr: plain(local || ""), region: "", time: "", body: plain(desc || ""),
+          day: (days[dn - 1] || {}).id || "", after });
         return;
       }
       const m = l.trim().match(QA_LINE);
@@ -10788,6 +10849,43 @@ ${stayBlock}${dayBlocks}${secBlocks}
     });
     return out;
   }
+  // where a recommendation would go: the day the AI picked, after the stop
+  // it named (matched loosely), else at the end of that day
+  function recSpot(x){
+    const day = x.day && dayById(x.day);
+    if (!day) return null;
+    const units = toUnits(day.items);
+    if (/^最前|^第一/.test(x.after || "")) return { day, afterIdx: -1, afterName: "" };
+    const want = loose(x.after || "");
+    let idx = -1;
+    if (want) idx = units.findIndex(u => u.stop && [loose(u.stop.title), loose(u.stop.kr)].some(t => t && (t === want || t.includes(want) || want.includes(t))));
+    if (idx < 0){ for (let j = units.length - 1; j >= 0; j--) if (units[j].stop){ idx = j; break; } }
+    return { day, afterIdx: idx, afterName: idx >= 0 ? cleanPlaceName(plain(units[idx].stop.title)) : "" };
+  }
+  function recLabel(x){
+    if (x.kind !== "推介") return `加去${x.day ? " D" + esc(x.day.replace("day", "")) : "行程"}`;
+    const sp = recSpot(x);
+    if (!sp) return "加去行程";
+    return `加去 D${esc(sp.day.id.replace("day", ""))}${sp.afterIdx < 0 ? "・最前" : sp.afterName ? `・「${esc(sp.afterName)}」之後` : ""}`;
+  }
+  // put a recommended place into a day after a given stop (-1 = first)
+  async function insertRecAt(x, day, afterIdx){
+    const units = toUnits(day.items);
+    const at = Math.max(0, Math.min(afterIdx + 1, units.length));
+    const st = Object.assign(blankStop(), { title: x.name, kr: x.kr || "", desc: x.body || "",
+      mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.kr || x.name)}` });
+    units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
+    for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
+    day.items = fromUnits(units);
+    render();
+    await enrichStop(st);
+    syncMapPoints(day);
+    render();
+    await saveNow(`加咗 AI 推介「${x.name}」去 ${day.title}`);
+    const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
+    let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
+    refreshTransit(day, [k, nx].filter(v => v > 0));
+  }
   function qaAnswerHtml(r, ri, attrOf){
     const sgs = qaSuggestions(r.answer);
     if (!sgs.length) return esc(r.answer);
@@ -10798,7 +10896,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const inDay = findInItinerary(state.snapshot, { title: x.name, kr: x.kr || "" });
       const tool = inDay
         ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
-        : `<button type="button" class="usec-add" ${attrOf ? attrOf(k) : `data-noteadd="${ri}|${k}"`}>${icon("plus")}加去${x.day ? " D" + esc(x.day.replace("day", "")) : "行程"}</button>`;
+        : `<button type="button" class="usec-add" ${attrOf ? attrOf(k) : `data-noteadd="${ri}|${k}"`}>${icon("plus")}${recLabel(x)}</button>`;
       if (x.kind === "推介")
         return `<span class="qa-sg qa-rec"><b>${esc(x.name)}</b>${x.kr && x.kr !== x.name ? `<span class="kr">${esc(x.kr)}</span>` : ""}${x.body ? `<span class="qa-rec-d">${esc(x.body)}</span>` : ""}${tool}</span>`;
       return `<span class="qa-sg">${esc(l)}${tool}</span>`;
