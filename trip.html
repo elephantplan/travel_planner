@@ -1138,6 +1138,7 @@ img{max-width:100%;}
 .thumb-rate{position:absolute;left:12px;bottom:10px;z-index:1;display:inline-flex;align-items:center;gap:4px;
   padding:4px 9px;border-radius:999px;font-family:'Archivo',var(--f-mono);font-stretch:85%;font-weight:800;font-size:13px;
   color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+.thumb-rate small{font-size:11px;font-weight:500;opacity:.85;margin-left:4px;padding-left:6px;border-left:1px solid rgba(255,255,255,.35);}
 .thumb-rate .i{width:13px;height:13px;fill:var(--gold);stroke:var(--gold);}
 .stopcard:has(.thumb-rate) .meta-chip.rating{display:none;}
 .stopcard:has(> .stopmain > .thumb) > .cardtools{top:10px;right:10px;flex-direction:row;gap:6px;}
@@ -1923,6 +1924,9 @@ body.readonly .qa-del{display:none;}
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
 .ins-past{margin-top:8px;}
+.ins-multi{margin:8px 2px 0;font-size:12px;}
+.ins-done{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));margin-top:12px;z-index:3;box-shadow:0 6px 20px rgba(0,0,0,.25);}
+.nr-add.added{background:var(--ok, #2e8b57);border-color:var(--ok, #2e8b57);color:#fff;}
 .pastsug{margin:10px 0;border:1px solid var(--rule);border-radius:14px;background:var(--surface);}
 .pastsug > summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;flex-direction:column;gap:2px;}
 .pastsug > summary::-webkit-details-marker{display:none;}
@@ -2178,7 +2182,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-10";
+  const BUILD = "2026-11-14-11";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3560,7 +3564,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return `<div class="altrow">
         <div><span class="altn">${esc(altName(a))}</span>${
           a.kr ? `<span class="altkr">${esc(plain(a.kr))}</span>` : ""}${
-          Number.isFinite(a.rating) ? `<span class="altrate">${icon("star")}${a.rating.toFixed(1)}</span>` : ""}</div>
+          Number.isFinite(a.rating) ? `<span class="altrate">${icon("star")}${a.rating.toFixed(1)}${Number(a.ratingCount) > 0 ? `（${Number(a.ratingCount).toLocaleString("en-US")}）` : ""}</span>` : ""}</div>
         <div class="altlinks">${links.join("")}</div>
       </div>`;
     }).join("");
@@ -5935,7 +5939,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // a photo is now a link in the footer row, and the box only exists once
     // there is a picture to put in it.
     const thumb = s.photoUrl
-      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy" data-photoimg="${i}">${Number.isFinite(s.rating) ? `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}</span>` : ""}</div>`
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy" data-photoimg="${i}">${rateBadge(s)}</div>`
       : "";
 
     const closedToday = stopClosedOnDay(s, day);
@@ -6409,6 +6413,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }));
     setTimeout(() => { if (state.view === day.id) autoTransit(day); }, 0);
     setTimeout(() => { if (state.view === day.id) backfillBriefs(day); }, 1500);
+    setTimeout(() => { if (state.view === day.id) backfillCounts(day); }, 2500);
   }
 
   // ---------- insert a place or a note at an exact spot ----------
@@ -6585,6 +6590,28 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (Number.isFinite(b.rating) && !Number.isFinite(st.rating)){ st.rating = b.rating; st.ratingCount = b.ratingCount; }
     return true;
   }
+  // Places saved before the number of reviews was kept show a score with no
+  // idea how many people gave it; ask Google once for each.
+  const countTried = new Set();
+  let countBusy = false;
+  async function backfillCounts(day){
+    if (countBusy || state.readonly || state.offline) return;
+    const todo = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && Number.isFinite(st.rating)
+      && !(Number(st.ratingCount) > 0) && !countTried.has(st.placeId)).slice(0, 8);
+    if (!todo.length) return;
+    countBusy = true;
+    let got = 0;
+    try {
+      for (const st of todo){
+        countTried.add(st.placeId);
+        try {
+          const r = await withTimeout(callAi({ action:"place-rating", placeId: st.placeId }), 15000, null);
+          if (r && Number(r.ratingCount) > 0){ st.ratingCount = Number(r.ratingCount); if (Number.isFinite(r.rating)) st.rating = r.rating; got++; }
+        } catch (_){}
+      }
+    } finally { countBusy = false; }
+    if (got){ if (state.view === day.id) render(); await saveNow(`補返 ${got} 個地點嘅評價數目`, true); }
+  }
   const briefTried = new Set();
   const briefLoading = new Set();      // stops whose intro is being written right now
   let briefBusy = false;
@@ -6662,7 +6689,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
         <button type="button" class="btn wide ins-past" id="ins-past">${icon("clock")}睇返之前 AI 建議過嘅</button>
+        <p class="hint ins-multi">可以揀幾間，每撳一個 ＋ 就加一個，揀完撳「完成」。</p>
         <div id="ins-nearres"></div>
+        <button type="button" class="btn primary wide ins-done" id="ins-done" hidden>${icon("check")}完成（已加 <b>0</b> 個）</button>
       </div>` : ""}
       ${hotels.length ? `<div class="ins-hotels">${hotels.map((h, k) =>
         `<button class="btn inshotel" data-inshotel="${k}">${icon("bed")}<span>加酒店<b>${esc(plain(h.name))}</b></span></button>`).join("")}</div>` : ""}
@@ -6682,9 +6711,25 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
       sheet.querySelector("#ins-blank").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
       const pick = async (p, kind) => { closeLayer(); await insertPlaceAt(day, pos, p, kind); };
+      // From the AI lists several can be wanted, so the sheet stays open:
+      // each one goes in after the last one picked, and its + turns into a
+      // tick. One at a time, so two saves never race.
+      let added = 0, chain = Promise.resolve();
+      const done = sheet.querySelector("#ins-done");
+      const pickMore = (p, kind, b) => {
+        b.disabled = true; b.classList.add("added"); b.innerHTML = icon("check");
+        b.setAttribute("aria-label", `已加「${p.name_zh || p.name}」`);
+        const at = pos + added; added++;
+        if (done){ done.hidden = false; done.querySelector("b").textContent = added; }
+        flash(`加咗「${p.name_zh || p.name}」，可以繼續揀`);
+        chain = chain.then(() => insertPlaceAt(day, at, p, kind)).catch(() => {});
+      };
       const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => {
-        const p = found[b.dataset.pick]; if (p) pick(p, b.dataset.kind || "");
+        const p = found[b.dataset.pick]; if (!p) return;
+        if (b.dataset.kind && b.closest("[data-pane=ai]")) pickMore(p, b.dataset.kind, b);
+        else pick(p, b.dataset.kind || "");
       }));
+      if (done) done.addEventListener("click", () => closeLayer());
       // search
       const q = sheet.querySelector("#ins-q"), res = sheet.querySelector("#ins-res");
       let t = null;
@@ -8021,7 +8066,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <div class="sghotels">${sortedStayIdx(sg.hotels).filter(k => !state.stayArea || sg.hotels[k].area === state.stayArea).map(k => { const h = sg.hotels[k]; return `
         <div class="sgh${h.fresh ? " fresh" : ""}">
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
-          ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${Number.isFinite(h.rating) ? `<span class="thumb-rate">${icon("star")}${h.rating.toFixed(1)}</span>` : ""}</div>` : ""}
+          ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${rateBadge(h)}</div>` : ""}
           <div class="sgh-body">
             <div class="sgh-top">${Number.isFinite(h.lat) ? `<span class="sgpin">${stayLetter(k)}</span>` : ""}<span class="sgd">${esc(dLab(h.fromDay, h.toDay))}${h.area ? " · " + esc(h.area) : ""}</span>${h.manual ? `<span class="sgmine">自己加</span>` : h.fresh ? `<span class="sgnew">新</span>` : ""}</div>
             <div class="sgh-name">${esc(h.name)}</div>
@@ -9360,7 +9405,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const named = plain(s.title);
     const fetchable = !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl);
     const thumb = s.photoUrl
-      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy">${Number.isFinite(s.rating) ? `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}</span>` : ""}</div>`
+      ? `<div class="thumb"><img src="${esc(s.photoUrl)}" alt="" loading="lazy">${rateBadge(s)}</div>`
       : "";
     // only the newest AI batch is badged — otherwise every place the AI ever
     // found stays marked and the badge stops meaning "this is what just landed"
@@ -10946,6 +10991,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
 
   // Google's own numbers, not something we wrote
+  // the badge on a photo: the score and how many people gave one
+  function rateBadge(s){
+    if (!Number.isFinite(s.rating)) return "";
+    const n = Number(s.ratingCount);
+    return `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}${Number.isFinite(n) && n > 0 ? `<small>${n.toLocaleString("en-US")} 個評價</small>` : ""}</span>`;
+  }
   function ratingChip(s){
     if (!Number.isFinite(s.rating)) return "";
     const count = Number.isFinite(s.ratingCount) ? `（${s.ratingCount.toLocaleString("en-US")}）` : "";
