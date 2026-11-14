@@ -1893,6 +1893,8 @@ body.readonly .qa-del{display:none;}
 }
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
+.ai-change .why.sub{font-size:11.5px;margin-top:4px;opacity:.85;}
+.ai-change .editor-tools{flex-wrap:wrap;gap:8px;}
 .idea-dayhint{font-size:12px;color:var(--ink-faint);margin-top:6px;}
 
 .ideasec-title{
@@ -2134,7 +2136,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-3";
+  const BUILD = "2026-11-14-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -10089,19 +10091,36 @@ ${stayBlock}${dayBlocks}${secBlocks}
           <div class="ttl">${esc(name)}</div>
           ${c.stop && c.stop.transitBefore ? `<div class="why">${esc(c.stop.transitBefore)}</div>` : ""}
           <div class="why">${esc(c.reason||"")}</div>
-          <div class="editor-tools"><button class="btn primary" data-apply="${i}">套用</button></div>
+          <div class="editor-tools">${swapsPlace(c)
+            ? `<button class="btn primary" data-apply="${i}" data-mode="add">${icon("plus")}加落去</button>
+               <button class="btn" data-apply="${i}" data-mode="replace">取代「${esc(cleanPlaceName(plain(c.matchTitle)))}」</button>`
+            : `<button class="btn primary" data-apply="${i}">套用</button>`}</div>
+          ${swapsPlace(c) ? `<div class="why sub">「加落去」會保留原本嘅「${esc(cleanPlaceName(plain(c.matchTitle)))}」</div>` : ""}
         </div>`;
       }).join("");
+  }
+  // An "edit" that puts a different place where another one was. The family
+  // usually wants to keep what they already planned, so it is offered as an
+  // addition first and only replaces the old place when they say so.
+  function swapsPlace(c){
+    return !!(c && c.op === "edit" && c.stop && c.matchTitle && plain(c.stop.title) &&
+      cleanPlaceName(plain(c.stop.title)) !== cleanPlaceName(plain(c.matchTitle)));
   }
   function wireApplyButtons(out, changes, onAll){
     // one change → one awaited apply, so "apply all" can reuse it
     async function applyOne(ab){
-      const c = changes[+ab.dataset.apply];
-      ab.textContent = "套用緊…"; ab.disabled = true;
+      let c = changes[+ab.dataset.apply];
+      // "加落去": the suggested place goes in beside the old one, which stays
+      if (ab.dataset.mode === "add") c = Object.assign({}, c, { op:"add" });
+      const label = ab.textContent;
+      const sibs = [...ab.parentNode.querySelectorAll("[data-apply]")];
+      sibs.forEach(b => b.disabled = true);
+      ab.textContent = "套用緊…";
       // inserts by time, then fills in photo and transit; "" means it worked
       const why = await applyAiChange(c);
-      if (why){ ab.textContent = why; ab.disabled = false; return false; }
-      ab.textContent = "已套用";
+      if (why){ ab.textContent = why; sibs.forEach(b => b.disabled = false); setTimeout(() => { ab.innerHTML = label; }, 2500); return false; }
+      ab.textContent = ab.dataset.mode === "add" ? "已加落去" : ab.dataset.mode === "replace" ? "已取代" : "已套用";
+      sibs.forEach(b => { if (b !== ab) b.hidden = true; });
       return true;
     }
     out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => applyOne(ab)));
@@ -10112,7 +10131,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       // Awaited one at a time. This used to fire each button 60ms apart
       // WITHOUT awaiting, so several applies mutated (and saved) the same
       // snapshot concurrently and could lose each other's edits.
-      for (const btn of out.querySelectorAll("[data-apply]")){
+      // a swap goes in as an addition; replacing is only ever done by hand
+      for (const btn of out.querySelectorAll('[data-apply]:not([data-mode="replace"])')){
         if (btn.disabled) continue;
         if (await applyOne(btn)) n++;
       }
@@ -10229,7 +10249,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           return;
         }
         out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) +
-          (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個）</button>` : "") +
+          (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個${changes.some(swapsPlace) ? "，原本地點會保留" : ""}）</button>` : "") +
           titleCards;
         wireApplyButtons(out, changes);
         wireDayTitleButtons(out, dayTitles);
