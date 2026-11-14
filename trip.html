@@ -859,6 +859,19 @@ img{max-width:100%;}
 .countdown{display:inline-flex;align-items:baseline;gap:4px;margin:6px 0 2px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;
   background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--ink);}
 .countdown b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums;}
+.maplink.tabelog{color:#E8833A;}
+.hyday{border-left:3px solid var(--lc);padding:2px 0 2px 12px;margin:14px 0;}
+.hyday-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.hyday-n{width:22px;height:22px;border-radius:999px;background:var(--lc);color:var(--paper);display:grid;place-items:center;font-size:12px;font-weight:700;}
+.hycard{border:1px solid var(--rule);border-radius:var(--r-md, 12px);padding:12px;margin:8px 0;background:var(--surface);}
+.hy-top{display:flex;flex-direction:column;gap:2px;} .hy-name{font-size:15px;font-weight:700;} .hy-top small{font-size:12px;color:var(--ink-faint);}
+.hy-facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:12px;color:var(--ink-soft);}
+.hy-facts span{padding:2px 8px;border-radius:999px;background:var(--surface-2);}
+.hy-award{display:inline-flex;align-items:center;gap:3px;color:#E8833A !important;background:color-mix(in srgb,#E8833A 14%,transparent) !important;font-weight:700;}
+.hy-award .i{width:12px;height:12px;}
+.hy-near{display:flex;align-items:center;gap:4px;margin-top:6px;font-size:12.5px;font-weight:600;} .hy-near .i{width:12px;height:12px;color:var(--ink-faint);}
+.hy-why{font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;line-height:1.55;}
+.hy-acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;}
 .ins-hotels{display:flex;flex-direction:column;gap:6px;margin:14px 0 0;}
 .inshotel{justify-content:flex-start;text-align:left;border-color:color-mix(in srgb,var(--gold) 55%,var(--rule));}
 .inshotel .i{color:var(--gold);flex:none;} .inshotel span{display:flex;flex-direction:column;min-width:0;}
@@ -2106,7 +2119,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-13-7";
+  const BUILD = "2026-11-14-1";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4861,6 +4874,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${flightFoldHtml(d)}
       ${stayFoldHtml(d)}
       ${foldHtml("map", "全程地圖", `${d.days.length} 日路線`, mapPanel)}
+      ${destIsJapan() ? foldHtml("hyaku", "Tabelog 百名店", (d.hyakumeiten && (d.hyakumeiten.items || []).length) ? `${d.hyakumeiten.items.length} 間近行程` : "跟住行程搵", hyakuHtml(d)) : ""}
       ${isSectionHidden(d, "prep") ? "" : foldHtml("prep", groupTitle(d, "prep"), groupHint(d, "prep"), prep)}
       ${userGroups(d).map(g => groupFoldHtml(d, g)).join("")}
       ${isSectionHidden(d, "extra") ? "" : foldHtml("extra", groupTitle(d, "extra"), groupHint(d, "extra"), customSectionsHtml(d))}
@@ -5844,6 +5858,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
+    { const tb = s.type === "eat" ? tabelogUrl(s) : "";
+      if (tb) links.push(`<a class="maplink tabelog" href="${esc(tb)}" target="_blank" rel="noopener">${icon("star")}Tabelog</a>`); }
     { const c = copyBtnHtml(subj || s); if (c) links.push(c); }
     { const tx = taxiBtnHtml((subj || s).kr, (subj || s).title); if (tx) links.push(tx); }
     if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
@@ -11499,6 +11515,106 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     setTimeout(() => genBanner(null), 6000);
   }
+
+  // ---------- Tabelog ----------
+  // In Japan people choose restaurants on Tabelog, not Google. The link
+  // searches Tabelog by the Japanese name when there is one.
+  function tabelogUrl(st){
+    if (!destIsJapan()) return "";
+    const q = plain(st.kr) || cleanPlaceName(plain(st.title));
+    return q ? `https://tabelog.com/rstLst/?vs=1&sk=${encodeURIComponent(q)}` : "";
+  }
+  // 百名店 near the plan: the AI searches the web for Tabelog's 百名店
+  // lists around each day's places; every one is then found on Google Maps
+  // (so it is real and has a location) and matched to the day and the stop
+  // it is closest to. Kept in the trip so it is only searched when asked.
+  function hyakuHtml(d){
+    const hy = d.hyakumeiten, days = d.days || [];
+    if (state.hyakuLoading) return loaderHtml("AI 搵緊行程附近嘅 Tabelog 百名店…");
+    if (!hy || !(hy.items || []).length) return `
+      <p class="sec-sub">跟住每日去嘅地方，搵附近嘅 Tabelog 百名店（食べログ 每年按類別選出嘅名店），再對返係邊日、近邊個景點。</p>
+      ${hy && hy.empty ? `<p class="hint">上次搵唔到附近嘅百名店，可以再試。</p>` : ""}
+      ${state.readonly ? "" : `<button class="btn primary wide" data-hyakufind>${icon("sparkle")}搵行程附近嘅百名店</button>`}`;
+    const byDay = new Map();
+    hy.items.forEach((h, k) => { const key = h.dayId || ""; if (!byDay.has(key)) byDay.set(key, []); byDay.get(key).push([h, k]); });
+    const dayIds = [...byDay.keys()].sort((a, b) => dayIndexById(d, a) - dayIndexById(d, b));
+    const onDay = id => new Set(((dayById(id) || {}).items || []).filter(i => i.placeId).map(i => i.placeId));
+    return `<p class="sec-sub">按日分好，近嘅排先。百名店資料係 AI 喺網上搵，撳 Tabelog 確認返先好訂。</p>
+      ${dayIds.map(id => { const day = dayById(id), n = day ? String(day.id).replace("day", "") : "";
+        const here = onDay(id);
+        return `<div class="hyday" style="--lc:${day ? dayColorVar(day.id) : "var(--ink-faint)"}">
+          <div class="hyday-h">${day ? `<span class="hyday-n">${esc(n)}</span><b>${esc(day.title || "")}</b>` : "<b>其他</b>"}</div>
+          ${byDay.get(id).sort((a, b) => (a[0].meters || 1e9) - (b[0].meters || 1e9)).map(([h, k]) => `
+            <div class="hycard">
+              <div class="hy-top"><span class="hy-name">${esc(h.name_zh || h.name_jp)}</span>${h.name_zh && h.name_jp && h.name_zh !== h.name_jp ? `<small>${esc(h.name_jp)}</small>` : ""}</div>
+              <div class="hy-facts">${h.award ? `<span class="hy-award">${icon("star")}${esc(h.award)}</span>` : ""}${h.genre ? `<span>${esc(h.genre)}</span>` : ""}${Number.isFinite(h.rating) ? `<span>Google ${h.rating.toFixed(1)}</span>` : ""}</div>
+              ${h.near ? `<div class="hy-near">${icon("pin")}${esc(distLabel(h.meters, h.near))}</div>` : ""}
+              ${h.why ? `<p class="hy-why">${esc(h.why)}</p>` : ""}
+              <div class="hy-acts">
+                ${here.has(h.placeId) ? `<span class="sgchosen">${icon("check")}已經喺 Day ${esc(n)}</span>`
+                  : !state.readonly && day ? `<button class="btn primary" data-hyakuadd="${k}">${icon("plus")}加入 Day ${esc(n)}</button>` : ""}
+                <a class="maplink tabelog" href="${esc(`https://tabelog.com/rstLst/?vs=1&sk=${encodeURIComponent(h.name_jp || h.name_zh)}`)}" target="_blank" rel="noopener">${icon("star")}Tabelog</a>
+                ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.name_jp, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
+              </div>
+            </div>`).join("")}
+        </div>`; }).join("")}
+      ${state.readonly ? "" : `<button class="btn wide" data-hyakufind>${icon("refresh")}再搵過</button>`}`;
+  }
+  async function findHyakumeiten(){
+    const snap = state.snapshot, days = snap.days || [];
+    state.hyakuLoading = true; state.foldOpen.add("hyaku"); render();
+    try {
+      const text = JSON.stringify({ destination: (snap.meta || {}).destinationLocal || "",
+        days: days.map((d, i) => ({ day: i + 1, title: plain(d.title), stops: (d.items || []).filter(x => x.kind === "stop" && plain(x.title)).map(x => plain(x.kr) || cleanPlaceName(plain(x.title))) })) });
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "hyakumeiten", text, today: localIso(new Date()) }) }), 120000, null);
+      const r = res ? await res.json().catch(() => null) : null;
+      if (!r || r.ok === false) throw new Error((r && r.message) || "搵唔到，遲啲再試。");
+      const items = [];
+      await runBounded(r.places || [], 5, async h => {
+        try {
+          const pr = await callAi({ action: "place-search", query: [h.name_jp || h.name_zh, h.area].filter(Boolean).join(" ") });
+          const p = pr && pr.places && pr.places[0];
+          if (!p || !Number.isFinite(p.lat)) return;
+          // the stop it is closest to, preferring the day the AI named
+          let best = null;
+          days.forEach((d, i) => (d.items || []).forEach(st => {
+            if (st.kind !== "stop" || !Number.isFinite(Number(st.lat)) || st.lat === "" || st.lat == null) return;
+            const m = metersBetween(st, p);
+            const score = m - (i + 1 === Number(h.day) ? 400 : 0);
+            if (Number.isFinite(m) && (!best || score < best.score)) best = { m, score, dayId: d.id, near: cleanPlaceName(plain(st.title)) };
+          }));
+          if (best && best.m > 3000) return;          // nowhere near the plan
+          items.push({ name_jp: h.name_jp || p.name, name_zh: h.name_zh || "", genre: h.genre || "", award: h.award || "", why: h.why || "",
+            placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, dayId: best ? best.dayId : "", near: best ? best.near : "", meters: best ? best.m : null });
+        } catch (_){}
+      });
+      const seen = new Set();
+      snap.hyakumeiten = { at: new Date().toISOString(), empty: !items.length, items: items.filter(x => !seen.has(x.placeId) && seen.add(x.placeId)) };
+      state.hyakuLoading = false; render();
+      await saveNow(items.length ? `搵咗 ${items.length} 間行程附近嘅 Tabelog 百名店` : "搵過百名店（冇結果）");
+    } catch (e){
+      state.hyakuLoading = false; render(); flash(e.message || "搵唔到");
+    }
+  }
+  async function addHyakumeiten(k){
+    const h = ((state.snapshot.hyakumeiten || {}).items || [])[k];
+    const day = h && dayById(h.dayId);
+    if (!h || !day) return;
+    const units = toUnits(day.items);
+    const at = units.findIndex(u => u.stop && cleanPlaceName(plain(u.stop.title)) === h.near);
+    await insertPlaceAt(day, at >= 0 ? at + 1 : units.length,
+      { name: h.name_jp, name_zh: h.name_zh || "", placeId: h.placeId, lat: h.lat, lng: h.lng, rating: h.rating }, "eat");
+    state.view = "overview"; render();
+    flash(`加咗「${h.name_zh || h.name_jp}」去 Day ${String(day.id).replace("day", "")}`);
+  }
+  document.addEventListener("click", e => {
+    if (state.readonly) return;
+    const f = e.target.closest && e.target.closest("[data-hyakufind]");
+    if (f){ e.preventDefault(); findHyakumeiten(); return; }
+    const a = e.target.closest && e.target.closest("[data-hyakuadd]");
+    if (a){ e.preventDefault(); addHyakumeiten(+a.dataset.hyakuadd); }
+  });
 
   // ---------- countdown ----------
   // Days to go until the trip, on the trip page and as the number on the

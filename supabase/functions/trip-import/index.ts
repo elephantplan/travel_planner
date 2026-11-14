@@ -395,6 +395,32 @@ function cleanAdvice(p: any) {
     tips: (Array.isArray(p?.tips) ? p.tips : []).slice(0, 3).map((x: unknown) => str(x, 60)).filter(Boolean) };
 }
 
+// Tabelog 百名店 near the plan: the model searches the web for the
+// restaurants on Tabelog's 百名店 lists (any genre, any recent year) that
+// are close to the places the family is going each day. The app then finds
+// each on Google Maps and works out the day and stop it is nearest to.
+const HYAKU_PROMPT = (q: string, today: string) => `你係香港人嘅日本美食顧問，今日係 ${today}，可以用 Google 搜尋。
+下面 JSON 係一個日本行程：每日去邊幾個地方。
+請搵出喺呢啲地方附近（行路大約 15 分鐘內）、真係入選咗「食べログ 百名店」（任何類別、近幾年）嘅餐廳，最多 15 間，盡量每日都有，唔好集中喺一日。
+每間寫：
+- name_jp：日文店名（同食べログ上面一樣）
+- name_zh：中文名（冇就留空）
+- genre：類別（例如 ラーメン、うどん、焼肉、寿司、喫茶店、パン）
+- award：入選邊年邊類（例如「百名店 2025 ラーメン」）
+- area：喺邊區（例如 道頓堀、梅田、祇園）
+- day：近邊一日（數字）
+- why：一句講點解值得去、大家推介食咩（最多 30 字，廣東話）
+只可以用搜尋到嘅資料，唔肯定係百名店就唔好寫。
+${q}
+只回覆一個 JSON（唔好有其他字、唔好 code fence）：
+{"places":[{"name_jp":"","name_zh":"","genre":"","award":"","area":"","day":1,"why":""}]}`;
+function cleanHyaku(p: any) {
+  return (Array.isArray(p?.places) ? p.places : []).slice(0, 15).map((x: any) => ({
+    name_jp: str(x?.name_jp, 60), name_zh: str(x?.name_zh, 40), genre: str(x?.genre, 20), award: str(x?.award, 40),
+    area: str(x?.area, 30), day: Math.max(0, Math.floor(Number(x?.day) || 0)), why: str(x?.why, 80),
+  })).filter((x: any) => x.name_jp || x.name_zh);
+}
+
 function parseJson(t: string): any {
   const c = t.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
   try { return JSON.parse(c); } catch { /* try the braces */ }
@@ -563,6 +589,14 @@ Deno.serve(async (req) => {
     const p = parseJson(raw);
     if (!p?.hotel) return json({ ok: false, message: "查唔到呢間酒店嘅資料。" });
     return json({ ok: true, hotel: cleanHotel(p.hotel) });
+  }
+
+  if (body?.mode === "hyakumeiten") {
+    let raw = "";
+    try { raw = await callGemini([{ text: HYAKU_PROMPT(str(text, 6000), today) }], true); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
+    const places = cleanHyaku(parseJson(raw));
+    return json({ ok: true, places });
   }
 
   if (body?.mode === "trip-advice") {
