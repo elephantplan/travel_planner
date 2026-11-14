@@ -924,6 +924,22 @@ img{max-width:100%;}
 .updday li.keep{color:var(--ink-soft);} .updday li.keep .i{color:var(--ink-faint);}
 .updday li.add .i,.updday li.add em{color:var(--gold);} .updday li.add em{background:color-mix(in srgb,var(--gold) 15%,transparent);}
 .updday li.drop{color:var(--ink-faint);} .updday li.drop span{text-decoration:line-through;} .updday li.drop em{color:#c0392b;background:color-mix(in srgb,#c0392b 12%,transparent);}
+.updday li.drop{padding:0;}
+.updkeep{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;padding:6px 0;}
+.updkeep input{position:absolute;opacity:0;pointer-events:none;}
+.updkeep-box{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;border:1.5px solid var(--rule);flex:none;}
+.updkeep-box .icon,.updkeep-box svg{width:13px;height:13px;}
+.updkeep-n{flex:1;}
+.updkeep-box i{display:contents;font-style:normal;} .updkeep-box .ub-k{display:none;}
+.updkeep:has(input:checked) .ub-x{display:none;} .updkeep:has(input:checked) .ub-k{display:contents;}
+.updday li.drop .updkeep-keep{display:none;color:var(--ok, #2e8b57);background:color-mix(in srgb,var(--ok, #2e8b57) 14%,transparent);}
+.updkeep:has(input:checked) .updkeep-n{text-decoration:none;color:var(--ink);}
+.updkeep:has(input:checked) .updkeep-drop{display:none;}
+.updday li.drop .updkeep:has(input:checked) .updkeep-keep{display:inline;}
+.updkeep:has(input:checked) .updkeep-box{background:var(--ok, #2e8b57);border-color:var(--ok, #2e8b57);color:#fff;}
+.updkeep:has(input:focus-visible) .updkeep-box{outline:2px solid var(--accent);outline-offset:2px;}
+.updkeep-hint{font-size:12px;color:var(--ink-faint);margin:6px 0 0;}
+.updrop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);}
 .updopt{display:flex;gap:8px;align-items:center;font-size:13px;margin:10px 2px;}
 #upd-go{margin-top:12px;}
 .mvrow{display:flex;gap:10px;align-items:baseline;padding:10px 12px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--rule);}
@@ -2136,7 +2152,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-4";
+  const BUILD = "2026-11-14-5";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5650,6 +5666,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!day) return `<p class="loading">搵唔到呢一日。</p>`;
     const lc = dayColorVar(day.id);
     const units = toUnits(day.items);
+    const lastStopIx = lastStopIndex(day);
     const mapOpen = !state.mapsShut.has(day.id);
     const sel = inSelectMode(day) ? state.selectMode : null;
     const firstStop = firstStopUnit(units);
@@ -5696,7 +5713,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${units.map((u,i) =>
           // a ＋ in every gap, so "between these two places" is a place you can
           // point at rather than something you fake by adding at the end and dragging
-          (sel ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
+          // (the gap after the last place has its ＋ drawn inside that unit,
+          // above the 返酒店 card, so it isn't repeated here)
+          (sel || (i > 0 && i - 1 === lastStopIx) ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
@@ -5914,7 +5933,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${!selecting && open ? editorHtml(day, u, i, total) : ""}
           </div>
         </div>
-        ${!selecting && i === lastStopIndex(day) ? hotelLegHtml(day, "backLeg") : ""}
+        ${!selecting && i === lastStopIndex(day) ? insertRowHtml(i + 1) + hotelLegHtml(day, "backLeg") : ""}
       </div>`;
   }
   function lastStopIndex(day){
@@ -11431,7 +11450,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       <p class="sec-sub">揀新嘅截圖、相、Excel，或者直接貼文字。AI 會照抄，對返每一日：已經有嘅地點保留（相、介紹、後備都唔郁），新嘅加入去，冇咗嘅拎走；冇提到嘅日子唔會改。更新之前會俾你睇清楚改咩。</p>
       <label class="updrop">
         <input type="file" id="upd-file" multiple accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,image/*">
-        ${icon("camera")}<b>影相／揀截圖或者 Excel</b><small>最多 8 張圖</small>
+        ${icon("camera")}<b>影相／揀截圖或者 Excel</b><small>最多 8 張圖${matchMedia("(pointer: fine)").matches ? "・電腦可以直接 Ctrl+V／⌘V 貼截圖，或者拉個檔案入嚟" : ""}</small>
       </label>
       <div class="updfiles" id="upd-files"></div>
       <label class="picker-label" for="upd-text">或者直接貼文字</label>
@@ -11447,10 +11466,27 @@ ${stayBlock}${dayBlocks}${secBlocks}
         sheet.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); files.splice(+b.dataset.rm, 1); refresh(); }));
         readBtn.disabled = !files.length && !textIn.value.trim();
       };
-      fileIn.addEventListener("change", () => {
-        files = files.concat([...fileIn.files].filter(f => updIsImage(f) || updIsSheet(f))).slice(0, 10);
-        fileIn.value = ""; refresh();
-      });
+      const addFiles = list => {
+        files = files.concat(list.filter(f => updIsImage(f) || updIsSheet(f))).slice(0, 10);
+        refresh();
+      };
+      fileIn.addEventListener("change", () => { addFiles([...fileIn.files]); fileIn.value = ""; });
+      // a screenshot copied on a computer (never saved as a file) pastes
+      // straight in; text pastes into the box as usual
+      const onPaste = e => {
+        if (!sheet.isConnected){ document.removeEventListener("paste", onPaste); return; }
+        const imgs = [...((e.clipboardData && e.clipboardData.items) || [])]
+          .filter(it => it.kind === "file" && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+        if (!imgs.length) return;
+        e.preventDefault();
+        addFiles(imgs.map((f, k) => new File([f], `截圖-${files.length + k + 1}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type })));
+        flash(`貼咗 ${imgs.length} 張截圖`);
+      };
+      document.addEventListener("paste", onPaste);
+      const drop = sheet.querySelector(".updrop");
+      drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+      drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+      drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); addFiles([...(e.dataTransfer.files || [])]); });
       textIn.addEventListener("input", refresh);
       readBtn.addEventListener("click", async () => {
         readBtn.disabled = true; err.innerHTML = "";
@@ -11493,7 +11529,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
           const hit = p.kept.find(st => updSame(st, x));
           return `<li class="${hit ? "keep" : "add"}">${hit ? icon("check") : icon("plus")}<span>${hit ? name(hit) : esc(x.title)}</span>${hit ? "" : `<em>新</em>`}</li>`;
         }).join("")}
-        ${p.dropped.map(st => `<li class="drop">${icon("trash")}<span>${name(st)}</span><em>拎走</em></li>`).join("")}</ul>
+        ${p.dropped.map((st, k) => `<li class="drop"><label class="updkeep"><input type="checkbox" data-keepdrop="${esc(p.day.id)}|${k}"><span class="updkeep-box"><i class="ub-x">${icon("trash")}</i><i class="ub-k">${icon("check")}</i></span><span class="updkeep-n">${name(st)}</span><em class="updkeep-drop">拎走</em><em class="updkeep-keep">保留</em></label></li>`).join("")}</ul>
+        ${p.dropped.length ? `<p class="updkeep-hint">新行程冇咗上面打「拎走」嘅地點，想留低就剔返佢。</p>` : ""}
       </div>`).join("")}
       ${lost.length ? `<p class="hint">有 ${lost.length} 日對唔到呢個行程嘅日子，略過咗。</p>` : ""}
       ${(t.flights || []).length ? `<label class="updopt"><input type="checkbox" id="upd-fl" checked> 順便更新航班（${t.flights.map(f => esc(f.no)).join("、")}）</label>` : ""}
@@ -11505,11 +11542,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (go) go.addEventListener("click", async () => {
       const withFlights = sheet.querySelector("#upd-fl") && sheet.querySelector("#upd-fl").checked;
       const withStays = sheet.querySelector("#upd-st") && sheet.querySelector("#upd-st").checked;
+      // places the family ticked to keep even though the new plan leaves them out
+      const keep = new Set([...sheet.querySelectorAll("[data-keepdrop]:checked")].map(c => {
+        const [id, k] = c.dataset.keepdrop.split("|"), p = live.find(x => x.day.id === id);
+        return p && p.dropped[+k];
+      }).filter(Boolean));
       closeLayer();
-      await applyUpdate(t, live, withFlights, withStays);
+      await applyUpdate(t, live, withFlights, withStays, keep);
     });
   }
-  async function applyUpdate(t, live, withFlights, withStays){
+  async function applyUpdate(t, live, withFlights, withStays, keep = new Set()){
     const d = state.snapshot;
     const fresh = [];
     live.forEach(p => {
@@ -11528,6 +11570,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
           fresh.push({ day, st });
           out.push({ seg: { kind: "connector", html: "", stale: true }, stop: st });
         }
+      });
+      // a kept place goes back after whichever place came before it in the
+      // old plan (or first, if nothing before it survived)
+      const oldStops = units.filter(u => u.stop).map(u => u.stop);
+      oldStops.forEach((st, k) => {
+        if (!keep.has(st)) return;
+        let at = 0;
+        for (let j = k - 1; j >= 0; j--){
+          const w = out.findIndex(u => u.stop === oldStops[j]);
+          if (w >= 0){ at = w + 1; break; }
+        }
+        out.splice(at, 0, { seg: segOf(st), stop: st });
       });
       if (out[0]) out[0].seg = null;
       day.items = fromUnits(out);
