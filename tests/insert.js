@@ -88,6 +88,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await sh.locator('.sugcard', { hasText: '土俗村參雞湯' }).first().locator('.nr-add').click();
   await p.waitForTimeout(200);
   await p.waitForTimeout(1500);
+  // AI picks keep the sheet open for more; 完成 closes it
+  await p.locator('#ins-done').click();
+  await p.waitForTimeout(300);
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
   const added = (last() || { days: [{}, { items: [] }] }).days[1].items.find(i => i.placeId === 'pN1');
   ok('一撳就加咗，唔使再填', added && added.title === '土俗村參雞湯' && added.type === 'eat' && Number.isFinite(added.lat), added);
