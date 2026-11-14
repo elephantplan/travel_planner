@@ -1740,6 +1740,7 @@ body.readonly .qa-del{display:none;}
   display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;
 }
 .selectbar span{flex:1;}
+.selectbar.fortarget span{font-size:12.5px;line-height:1.4;}
 .selectbar .btn{padding:8px 14px;font-size:12.5px;min-height:36px;}
 
 /* The picker is a full-width sheet, so the candidates get enough room to
@@ -2182,7 +2183,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-12";
+  const BUILD = "2026-11-14-13";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3473,6 +3474,33 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // bottom of the editor: turn this stop into a backup of another one (it
   // leaves the timeline and folds under that stop, one tap to bring back),
   // or delete it.
+  // several stops folded under one, in one go and one save
+  async function foldMany(day, target, sources){
+    let n = 0;
+    const names = [];
+    // which stop came before each one, to re-time only the legs that change
+    const prevOf = new Map();
+    { let prev = null; toUnits(day.items).forEach(u => { if (u.stop){ prevOf.set(u.stop, prev); prev = u.stop; } }); }
+    for (const src of sources){
+      if (src === target) continue;
+      const us = toUnits(day.items);
+      const ti = us.findIndex(u => u.stop === target), si = us.findIndex(u => u.stop === src);
+      if (ti < 0 || si < 0) continue;
+      const r = foldIntoAlts(day, ti, si);
+      if (r){ n++; names.push(r.name); }
+    }
+    state.selectMode = null;
+    state.open.clear();
+    const ti = toUnits(day.items).findIndex(u => u.stop === target);
+    if (ti >= 0) state.altsOpen.add(day.id + ":" + ti);
+    render();
+    if (!n) return;
+    await saveNow(`將「${names.join("、")}」摺咗做「${cleanPlaceName(plain(target.title))}」嘅後備`);
+    flash(`${n} 個地點做咗「${cleanPlaceName(plain(target.title))}」嘅後備`);
+    const after = toUnits(day.items); let prev = null; const redo = [];
+    after.forEach((u, j) => { if (!u.stop) return; if (j > 0 && prevOf.get(u.stop) !== prev) redo.push(j); prev = u.stop; });
+    if (redo.length) refreshTransit(day, redo);
+  }
   function openStopMenu(day, ui){
     const units = toUnits(day.items);
     const me = units[ui] && units[ui].stop;
@@ -3490,10 +3518,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <span class="foldt">${esc(plain(x.u.stop.time) || (x.j < ui ? "前面" : "後面"))}</span>
           <span class="foldn">${esc(cleanPlaceName(plain(x.u.stop.title)) || "未改名嘅地點")}</span>
         </button>`).join("")}</div>` : `<p class="hint">呢日冇第二個站，做唔到後備。</p>`}
+      ${others.length > 1 ? `<button class="btn wide" id="stopmany">${icon("list")}揀幾個地點一齊做「${esc(name)}」嘅後備</button>` : ""}
       <button class="btn wide menumove" id="stopmove">${icon("map")}搬去第二日／心水清單</button>
       <button class="btn danger wide menudel" id="stopdel">${icon("trash")}刪走「${esc(name)}」</button>
     `, sheet => {
       sheet.querySelector("#stopmove").addEventListener("click", () => { closeLayer(); openMovePicker({ kind: "day", day, index: ui }); });
+      const many = sheet.querySelector("#stopmany");
+      if (many) many.addEventListener("click", () => {
+        closeLayer();
+        state.selectMode = { dayId: day.id, selected: new Set(), target: me };
+        render();
+        flash(`揀要做「${name}」後備嘅地點，揀完撳「做後備」`);
+      });
       sheet.querySelectorAll("[data-backupof]").forEach(b => b.addEventListener("click", async () => {
         const r = foldIntoAlts(day, +b.dataset.backupof, ui);
         closeLayer();
@@ -5806,15 +5842,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
 
       ${sel ? `
-        <div class="selectbar">
-          <span>已選 ${sel.selected.size} 個</span>
+        <div class="selectbar${sel.target ? " fortarget" : ""}">
+          <span>${sel.target ? `揀做「${esc(cleanPlaceName(plain(sel.target.title)) || "呢個站")}」後備嘅地點・已選 ${sel.selected.size} 個` : `已選 ${sel.selected.size} 個`}</span>
           <button class="btn" id="selcancel">取消</button>
-          <button class="btn primary" id="selmove" ${sel.selected.size ? "" : "disabled"}>搬去邊度</button>
+          ${sel.target ? "" : `<button class="btn" id="selbackup" ${sel.selected.size ? "" : "disabled"}>做後備</button>`}
+          ${sel.target
+            ? `<button class="btn primary" id="selbackup" ${sel.selected.size ? "" : "disabled"}>做後備</button>`
+            : `<button class="btn primary" id="selmove" ${sel.selected.size ? "" : "disabled"}>搬去邊度</button>`}
         </div>
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
         <div class="toollist">
-        ${units.length ? `<button class="btn wide" id="selstart">${icon("down")}揀幾個一齊搬去第度</button>` : ""}
+        ${units.length ? `<button class="btn wide" id="selstart">${icon("down")}揀幾個一齊搬去第度／做後備</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
             ? `${icon("refresh")}重算全日交通（有 ${staleCount(units)} 段待確認）`
@@ -6178,9 +6217,34 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (!state.selectMode || !state.selectMode.selected.size) return;
       openMultiMovePicker(day, [...state.selectMode.selected]);
     });
+    const selBackup = $("#selbackup");
+    if (selBackup) selBackup.addEventListener("click", () => {
+      const sm = state.selectMode;
+      if (!sm || !sm.selected.size) return;
+      const units = toUnits(day.items);
+      const picked = [...sm.selected].map(i => units[i] && units[i].stop).filter(Boolean);
+      if (sm.target) return foldMany(day, sm.target, picked);
+      // which stop do they go under? the ones not picked
+      const others = units.map((u, j) => ({ u, j })).filter(x => x.u.stop && !sm.selected.has(x.j));
+      if (!others.length){ flash("要留低至少一個站俾佢哋做後備"); return; }
+      openSheet(`
+        <h3>做邊個站嘅後備？</h3>
+        <p class="sec-sub">揀咗嘅 ${picked.length} 個地點會由行程收起，摺喺你揀嗰個站下面，想用嗰陣撳「改用呢間」就得。</p>
+        <div class="foldlist">${others.map(x => `
+          <button class="foldopt" data-manyto="${x.j}">
+            <span class="foldt">${esc(plain(x.u.stop.time) || "")}</span>
+            <span class="foldn">${esc(cleanPlaceName(plain(x.u.stop.title)) || "未改名嘅地點")}</span>
+          </button>`).join("")}</div>
+      `, sheet => sheet.querySelectorAll("[data-manyto]").forEach(b => b.addEventListener("click", () => {
+        closeLayer();
+        foldMany(day, units[+b.dataset.manyto].stop, picked);
+      })));
+    });
     if (inSelectMode(day)){
       document.querySelectorAll("[data-select]").forEach(el => el.addEventListener("click", () => {
         const idx = +el.dataset.select;
+        const tg = state.selectMode.target;
+        if (tg && toUnits(day.items)[idx] && toUnits(day.items)[idx].stop === tg){ flash("呢個就係你揀嘅主站"); return; }
         const sel = state.selectMode.selected;
         if (sel.has(idx)) sel.delete(idx); else sel.add(idx);
         render();
@@ -12454,7 +12518,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     try {
       const res = await fetch(location.pathname, { cache: "reload" });
       if (!res || !res.ok) return false;
-      const m = (await res.text()).match(/const BUILD = "2026-11-14-12"]+)"/);
+      const m = (await res.text()).match(/const BUILD = "([^"]+)"/);
       if (!m || m[1] === BUILD) return false;
       updateReady = true;
       showUpdateBar();
