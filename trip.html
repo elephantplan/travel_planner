@@ -1678,6 +1678,12 @@ body.readonly .sechide{display:none;}
 .qa .qa-head{padding-right:40px;}
 .qa-sg{display:inline;}
 .qa-sg .usec-add,.qa-sg .usec-inday{display:inline-flex;margin:6px 0 2px 0;}
+.qa-sg.qa-rec{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin:6px 0;padding:10px 12px;border-radius:12px;
+  background:color-mix(in srgb,var(--gold) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 25%,var(--rule));white-space:normal;}
+.qa-rec b{font-weight:600;color:var(--ink);}
+.qa-rec .kr{font-size:12px;color:var(--ink-faint);}
+.qa-rec .qa-rec-d{flex-basis:100%;font-size:13px;color:var(--ink-soft);line-height:1.55;}
+.qa-rec .usec-add,.qa-rec .usec-inday{margin:6px 0 0;}
 .daypick button.suggested{outline:2px solid var(--gold);outline-offset:1px;}
 body.readonly .qa-del{display:none;}
 
@@ -1916,6 +1922,10 @@ body.readonly .qa-del{display:none;}
 }
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
+.ai-optshead{display:flex;gap:8px;align-items:flex-start;margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--ink);}
+.ai-optshead .i{width:15px;height:15px;flex:none;margin-top:2px;color:var(--gold);}
+.ai-change.ai-opt.picked{outline:2px solid var(--ok, #2e8b57);outline-offset:-2px;}
+.ai-change .ttl .kr{font-weight:400;font-size:12px;color:var(--ink-faint);}
 .ai-change .why.sub{font-size:11.5px;margin-top:4px;opacity:.85;}
 .ai-change .editor-tools{flex-wrap:wrap;gap:8px;}
 .idea-dayhint{font-size:12px;color:var(--ink-faint);margin-top:6px;}
@@ -2160,7 +2170,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-8";
+  const BUILD = "2026-11-14-9";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5138,7 +5148,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const { head, body } = splitLine(line);
     openAddPlaceSheetFor(Object.assign(placeFromHead(head), { body }));
   }
-  function openAddPlaceSheetFor({ name, region, body, time, day: preDay }){
+  function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr }){
     const snap = state.snapshot;
     const boards = snap.boards || [];
     openSheet(`
@@ -5154,8 +5164,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <div class="daypick">${boards.map(b => `<button data-addboard="${b.id}" style="--lc:var(--bookmark)">
           <span class="bullet"></span><span class="dcode">${icon("pin")}</span><span>${esc(b.name)}</span></button>`).join("")}</div>` : ""}
     `, sheet => {
-      const make = () => Object.assign(blankStop(), { title: name, desc: body || "", time: time || "",
-        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, region].filter(Boolean).join(" "))}` });
+      const make = () => Object.assign(blankStop(), { title: name, kr: kr || "", desc: body || "", time: time || "",
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([kr || name, region].filter(Boolean).join(" "))}` });
       sheet.querySelectorAll("[data-addto]").forEach(b => b.addEventListener("click", async () => {
         const day = dayById(b.dataset.addto);
         const st = make();
@@ -10205,11 +10215,32 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
 
   // ---------- AI 建議卡（成個行程同單日都用同一套） ----------
+  // Several new places for the same day and time are choices for one slot
+  // (「搵幾間餐廳」), not a list to add. They are shown as a group: pick one,
+  // and the rest can go in as its backups.
+  function optionGroups(changes){
+    const key = c => c && c.op === "add" && c.stop && timeToMinutes(c.stop.time) != null ? c.dayId + "@" + timeToMinutes(c.stop.time) : "";
+    const count = {};
+    changes.forEach(c => { const k = key(c); if (k) count[k] = (count[k] || 0) + 1; });
+    return changes.map(c => { const k = key(c); return k && count[k] > 1 ? k : ""; });
+  }
   function changeCardsHtml(changes, notes){
+    const groups = optionGroups(changes), seen = new Set();
     return (notes ? `<div class="ai-msg">${esc(notes)}</div>` : "") +
       changes.map((c, i) => {
         const label = c.op === "add" ? "加" : c.op === "remove" ? "刪" : "改";
         const name = (c.stop && c.stop.title) || c.matchTitle || "";
+        const g = groups[i];
+        if (g){
+          const head = seen.has(g) ? "" : `<div class="ai-optshead">${icon("list")}<span>Day ${String(c.dayId||"").replace("day","")}${c.stop.time ? " · " + esc(c.stop.time) : ""}：AI 搵咗 ${groups.filter(x => x === g).length} 個選擇，揀一個加落去，其他可以做後備</span></div>`;
+          seen.add(g);
+          return head + `<div class="ai-change ai-opt" data-group="${esc(g)}" style="--lc:${dayColorVar(c.dayId)}">
+            <div class="ttl">${esc(name)}${c.stop.kr && plain(c.stop.kr) !== plain(name) ? ` <span class="kr">${esc(plain(c.stop.kr))}</span>` : ""}</div>
+            ${plain(c.stop.desc) ? `<div class="why">${esc(plain(c.stop.desc))}</div>` : ""}
+            <div class="why">${esc(String(c.reason||"").replace(/^選擇\s*\d+\s*[：:]\s*/, ""))}</div>
+            <div class="editor-tools"><button class="btn primary" data-apply="${i}" data-opt="${esc(g)}">${icon("check")}揀呢個</button></div>
+          </div>`;
+        }
         return `<div class="ai-change" style="--lc:${dayColorVar(c.dayId)}">
           <div class="op">Day ${String(c.dayId||"").replace("day","")} · ${label}${c.stop && c.stop.time ? " · " + esc(c.stop.time) : ""}</div>
           <div class="ttl">${esc(name)}</div>
@@ -10232,8 +10263,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
   function wireApplyButtons(out, changes, onAll){
     // one change → one awaited apply, so "apply all" can reuse it
+    const chosen = {};              // option group → the stop that was picked
     async function applyOne(ab){
       let c = changes[+ab.dataset.apply];
+      const g = ab.dataset.opt;
+      if (g && chosen[g]) return addAsBackup(ab, c, chosen[g]);
       // "加落去": the suggested place goes in beside the old one, which stays
       if (ab.dataset.mode === "add") c = Object.assign({}, c, { op:"add" });
       const label = ab.textContent;
@@ -10243,8 +10277,33 @@ ${stayBlock}${dayBlocks}${secBlocks}
       // inserts by time, then fills in photo and transit; "" means it worked
       const why = await applyAiChange(c);
       if (why){ ab.textContent = why; sibs.forEach(b => b.disabled = false); setTimeout(() => { ab.innerHTML = label; }, 2500); return false; }
+      if (g){
+        chosen[g] = c._stop;
+        ab.textContent = "已加落去";
+        ab.closest(".ai-opt").classList.add("picked");
+        out.querySelectorAll(`[data-opt="${CSS.escape(g)}"]`).forEach(b => {
+          if (b === ab) return;
+          b.classList.remove("primary"); b.innerHTML = `${icon("plus")}加做「${esc(plain(c.stop.title))}」嘅後備`;
+        });
+        return true;
+      }
       ab.textContent = ab.dataset.mode === "add" ? "已加落去" : ab.dataset.mode === "replace" ? "已取代" : "已套用";
       sibs.forEach(b => { if (b !== ab) b.hidden = true; });
+      return true;
+    }
+    // another choice for a slot already filled: tucked under the pick as a backup
+    async function addAsBackup(ab, c, target){
+      ab.disabled = true; ab.textContent = "加緊…";
+      const st = Object.assign(blankStop(), c.stop, { kind:"stop" });
+      delete st.transitBefore;
+      await enrichStop(st).catch(() => {});
+      const place = {};
+      Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) place[k] = st[k]; });
+      if (!Array.isArray(target.alts)) target.alts = [];
+      target.alts.push(place);
+      render();
+      await saveNow(`加咗「${plain(st.title)}」做「${plain(target.title)}」嘅後備`);
+      ab.textContent = "已做後備";
       return true;
     }
     out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => applyOne(ab)));
@@ -10256,7 +10315,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       // WITHOUT awaiting, so several applies mutated (and saved) the same
       // snapshot concurrently and could lose each other's edits.
       // a swap goes in as an addition; replacing is only ever done by hand
-      for (const btn of out.querySelectorAll('[data-apply]:not([data-mode="replace"])')){
+      for (const btn of out.querySelectorAll('[data-apply]:not([data-mode="replace"]):not([data-opt])')){
         if (btn.disabled) continue;
         if (await applyOne(btn)) n++;
       }
@@ -10310,6 +10369,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // extra day and can't coordinate between the days it's touching (e.g. not
   // putting the same cuisine on both), so this always sends a single request
   // covering everything ticked — the current day plus whatever else is checked.
+  // Asked to find somewhere (a restaurant, a café…), one answer is too few
+  // to choose from, so the model is asked for several for the same slot.
+  const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。）";
+  function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|邊度|邊間|店/i.test(q || ""); }
   function openDayAiSheet(day){
     const stops = day.items.filter(i => i.kind === "stop").length;
     const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
@@ -10356,7 +10419,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           hint:`AI 會睇埋其他日子避開重複，大約 ${dayIds.length > 1 ? "20-40" : "15-30"} 秒。` });
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayIds, question: asked, itinerary: state.snapshot });
+          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : ""), itinerary: state.snapshot });
         } catch (e){
           stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; go.textContent = "問"; return;
@@ -10372,8 +10435,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
           saveAiNote("day-plan", `${label}：AI 建議`, r.notes || "冇建議");
           return;
         }
+        const plainCount = optionGroups(changes).filter(g => !g).length;
         out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) +
-          (changes.length > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${changes.length} 個${changes.some(swapsPlace) ? "，原本地點會保留" : ""}）</button>` : "") +
+          (plainCount > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${plainCount} 個${changes.some(swapsPlace) ? "，原本地點會保留" : ""}${plainCount < changes.length ? "；選擇要自己揀" : ""}）</button>` : "") +
           titleCards;
         wireApplyButtons(out, changes);
         wireDayTitleButtons(out, dayTitles);
@@ -10437,9 +10501,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
           } else if (act === "ask"){
             const question = q.value.trim();
             if (!question){ out.innerHTML = ""; q.focus(); return; }
-            const r = await callAi({ action:"ask", question, itinerary: state.snapshot });
+            const r = await callAi({ action:"ask", question: question + REC_HINT, itinerary: state.snapshot });
             const a = r.aiSummary || r.message || "冇回覆";
-            out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
+            const rec = { answer: a };
+            out.innerHTML = `<div class="ai-msg qa-a">${qaAnswerHtml(rec, 0, k => `data-askadd="${k}"`)}</div>`;
+            out.querySelectorAll("[data-askadd]").forEach(btn => btn.addEventListener("click", e => {
+              e.stopPropagation();
+              const sg = qaSuggestions(a)[+btn.dataset.askadd];
+              if (sg) openAddPlaceSheetFor(sg);
+            }));
             if (r.aiSummary) saveAiNote("ask", question, a);
           } else if (act === "suggest"){
             const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
@@ -10472,10 +10542,21 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // A past day-plan answer lists its changes as 「【Day 3・加】名（約 15:30）」
   // followed by a reason. Each one becomes a button to put that place into
   // the trip (on that day, at that time), or says where it already is.
+  // AI 助手 answers mark each place they recommend on its own line, so every
+  // one can get a 「加去行程」 button: 【推介】名稱｜當地名｜一句介紹
+  const REC_HINT = "\n（如果你推介具體地點、餐廳或者店舖：每個獨立一行，格式係「【推介】中文名｜當地語言名｜一句介紹」，其他解釋照寫。）";
+  const REC_LINE = /^\s*[-•*]?\s*【\s*推介\s*】\s*(.+?)\s*$/;
   const QA_LINE = /^【\s*Day\s*(\d+)\s*[・·]\s*(加|改)\s*】\s*(.+?)\s*(?:[（(]\s*約?\s*(\d{1,2}[:：]\d{2})\s*[)）])?\s*$/;
   function qaSuggestions(answer){
     const lines = String(answer || "").split(/\n/), out = [];
     lines.forEach((l, i) => {
+      const rm = l.match(REC_LINE);
+      if (rm){
+        const [nm, local, desc] = rm[1].split(/\s*[｜|]\s*/);
+        const name = plain(nm || "").replace(/\*\*/g, "").trim();
+        if (name) out.push({ line: i, kind: "推介", name, kr: plain(local || ""), region: "", time: "", body: plain(desc || ""), day: "" });
+        return;
+      }
       const m = l.trim().match(QA_LINE);
       if (!m) return;
       const head = m[3].replace(/<[^>]*>/g, "").replace(/\s*[（(][^）)]*[）)]\s*$/, "").trim();
@@ -10486,17 +10567,19 @@ ${stayBlock}${dayBlocks}${secBlocks}
     });
     return out;
   }
-  function qaAnswerHtml(r, ri){
+  function qaAnswerHtml(r, ri, attrOf){
     const sgs = qaSuggestions(r.answer);
     if (!sgs.length) return esc(r.answer);
     const byLine = new Map(sgs.map((x, k) => [x.line, [x, k]]));
     return String(r.answer).split(/\n/).map((l, i) => {
       if (!byLine.has(i)) return esc(l);
       const [x, k] = byLine.get(i);
-      const inDay = findInItinerary(state.snapshot, { title: x.name });
+      const inDay = findInItinerary(state.snapshot, { title: x.name, kr: x.kr || "" });
       const tool = inDay
         ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
-        : `<button type="button" class="usec-add" data-noteadd="${ri}|${k}">${icon("plus")}加去${x.day ? " D" + esc(x.day.replace("day", "")) : "行程"}</button>`;
+        : `<button type="button" class="usec-add" ${attrOf ? attrOf(k) : `data-noteadd="${ri}|${k}"`}>${icon("plus")}加去${x.day ? " D" + esc(x.day.replace("day", "")) : "行程"}</button>`;
+      if (x.kind === "推介")
+        return `<span class="qa-sg qa-rec"><b>${esc(x.name)}</b>${x.kr && x.kr !== x.name ? `<span class="kr">${esc(x.kr)}</span>` : ""}${x.body ? `<span class="qa-rec-d">${esc(x.body)}</span>` : ""}${tool}</span>`;
       return `<span class="qa-sg">${esc(l)}${tool}</span>`;
     }).join("\n");
   }
@@ -10887,6 +10970,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       // drop it in by time rather than at the end, so the day still reads in order
       const at = slotForTime(units, stop.time);
       units.splice(at, 0, { seg: null, stop });
+      c._stop = stop;
       day.items = fromUnits(units);
       render();
       await enrichStop(stop);
