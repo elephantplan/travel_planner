@@ -1922,6 +1922,14 @@ body.readonly .qa-del{display:none;}
 }
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
+.ins-past{margin-top:8px;}
+.pastsug{margin:10px 0;border:1px solid var(--rule);border-radius:14px;background:var(--surface);}
+.pastsug > summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;flex-direction:column;gap:2px;}
+.pastsug > summary::-webkit-details-marker{display:none;}
+.pastsug .ps-k{font-weight:600;color:var(--ink);font-size:14px;}
+.pastsug .ps-m{font-size:12px;color:var(--ink-faint);}
+.pastsug .nearlist{padding:0 10px 10px;}
+.ps-in{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;color:var(--lc);background:color-mix(in srgb,var(--lc) 14%,transparent);margin-right:6px;white-space:nowrap;}
 .ai-optshead{display:flex;gap:8px;align-items:flex-start;margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--ink);}
 .ai-optshead .i{width:15px;height:15px;flex:none;margin-top:2px;color:var(--gold);}
 .ai-change.ai-opt.picked{outline:2px solid var(--ok, #2e8b57);outline-offset:-2px;}
@@ -2170,7 +2178,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-9";
+  const BUILD = "2026-11-14-10";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2633,8 +2641,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       });
     } catch (e) { /* an unsaved note must never block the answer on screen */ }
   }
-  async function fetchAiNotes(){
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?trip_id=eq.${state.tripId}&select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
+  // 加地點's AI picks are kept here too (kind "addsug"), but listed in that
+  // sheet, not on the 問過啲咩 page
+  async function fetchAiNotes(onlyKind){
+    const k = onlyKind ? `&kind=eq.${onlyKind}` : "&kind=neq.addsug";
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?trip_id=eq.${state.tripId}${k}&select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取紀錄失敗 " + res.status);
     return res.json();
   }
@@ -6650,6 +6661,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button type="button" class="pfchip" data-pft="book" data-only="eat">唔使排太耐</button>
         </div>
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
+        <button type="button" class="btn wide ins-past" id="ins-past">${icon("clock")}睇返之前 AI 建議過嘅</button>
         <div id="ins-nearres"></div>
       </div>` : ""}
       ${hotels.length ? `<div class="ins-hotels">${hotels.map((h, k) =>
@@ -6754,10 +6766,48 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         paint();                                   // Google's list first, straight away
         out.scrollIntoView({ block: "start", behavior: "smooth" });
         if (list.length && await briefsFor(list, kind) !== null && out.isConnected && runId === run.n) paint();
+        if (list.length) keepSuggestions(day, kind, w, anchors, list);
       };
+      // earlier picks (anyone's, on any day) — one tap puts one in here
+      const past = sheet.querySelector("#ins-past");
+      if (past) past.addEventListener("click", async () => {
+        const out = sheet.querySelector("#ins-nearres");
+        out.innerHTML = loaderHtml("讀緊之前嘅建議…", true);
+        let rows = [];
+        try { rows = await fetchAiNotes("addsug"); } catch (e){ out.innerHTML = `<p class="hint">讀唔到：${esc(e.message)}</p>`; return; }
+        const runs = rows.map(r => { try { return Object.assign(JSON.parse(r.answer), { at: r.created_at, by: r.asked_by }); } catch (_){ return null; } })
+          .filter(x => x && Array.isArray(x.places) && x.places.length);
+        // this day's first, newest first within each
+        runs.sort((a, b) => (b.day === day.id) - (a.day === day.id));
+        if (!runs.length){ out.innerHTML = `<p class="hint">仲未有 AI 建議紀錄。撳「幫我揀」搵一次，之後就會喺度見到。</p>`; return; }
+        out.innerHTML = runs.slice(0, 20).map((x, ri) => {
+          const d = dayById(x.day);
+          const when = new Date(x.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+          return `<details class="pastsug"${ri === 0 ? " open" : ""}><summary>
+              <span class="ps-k">${esc(SUG_KIND[x.kind] || "地方")}${x.want ? `「${esc(x.want)}」` : ""}</span>
+              <span class="ps-m">${d ? `Day ${esc(d.id.replace("day", ""))}・` : ""}${x.near ? `${esc(x.near)}附近・` : ""}${esc(when)}${x.by ? `・${esc(x.by)}` : ""}</span>
+            </summary>
+            <div class="nearlist">${x.places.map((p, k) => {
+              const id = `past${ri}-${k}`; found[id] = Object.assign({ briefed: true }, p);
+              const there = p.placeId && findInItinerary(state.snapshot, { title: p.name_zh || p.name, kr: p.name, placeId: p.placeId });
+              return suggestRowHtml(found[id], id, x.kind).replace('<div class="sc-top">', `<div class="sc-top">${there ? `<span class="ps-in" style="--lc:${dayColorVar(there.id)}">已喺 D${esc(there.id.replace("day", ""))}</span>` : ""}`);
+            }).join("")}</div></details>`;
+        }).join("");
+        wirePicks(out);
+        out.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
       if (go) go.addEventListener("click", run);
       if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });
     }, { tall: true });
+  }
+  // Every 「幫我揀」 list is kept (with the intros) so it can be looked at
+  // again from any 加地點, by anyone on the trip.
+  function keepSuggestions(day, kind, want, anchors, list){
+    const places = list.slice(0, 8).map(p => ({ name: p.name, name_zh: p.name_zh || "", placeId: p.placeId, lat: p.lat, lng: p.lng,
+      rating: p.rating, ratingCount: p.ratingCount, price: p.price, types: p.types, walk: p.walk, nearName: p.nearName || "",
+      onTheWay: !!p.onTheWay, what: p.what || "", mustTry: p.mustTry || "", fit: p.fit || "" }));
+    saveAiNote("addsug", `${SUG_KIND[kind]}${want ? "：" + want : ""}`,
+      JSON.stringify({ day: day.id, kind, want, near: anchors.map(a => a.name).filter(Boolean).join("、"), places }));
   }
   // A place picked from search or 「附近」 arrives with its Google id, so it
   // needs no editing: photo, hours and local name fill in behind, and the
