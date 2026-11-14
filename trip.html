@@ -327,6 +327,15 @@ img{max-width:100%;}
    the only colour in the bar */
 .lines{display:flex;gap:2px;overflow-x:auto;padding:0;scrollbar-width:none;scroll-behavior:smooth;}
 .lines::-webkit-scrollbar{display:none;}
+/* on a computer there is no swipe: the wheel and a drag scroll the days, and
+   arrows appear at whichever end has more */
+.lineswrap{position:relative;}
+.linesnav{position:absolute;top:0;bottom:2px;z-index:2;width:34px;border:0;cursor:pointer;font-size:22px;line-height:1;color:var(--ink);
+  background:linear-gradient(to right, var(--paper) 55%, transparent);}
+.linesnav.next{right:0;background:linear-gradient(to left, var(--paper) 55%, transparent);}
+.linesnav.prev{left:0;}
+.linesnav:hover{color:var(--gold);}
+.lines.dragging{cursor:grabbing;scroll-behavior:auto;user-select:none;}
 .linebtn{
   flex:0 0 auto;display:flex;align-items:center;gap:7px;
   padding:9px 12px 11px;cursor:pointer;
@@ -860,6 +869,8 @@ img{max-width:100%;}
   background:color-mix(in srgb,var(--gold) 18%,transparent);color:var(--ink);}
 .countdown b{font-size:18px;color:var(--gold);font-variant-numeric:tabular-nums;}
 .maplink.tabelog{color:#E8833A;}
+.hygenres{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px;}
+.hyagain{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);}
 .hyday{border-left:3px solid var(--lc);padding:2px 0 2px 12px;margin:14px 0;}
 .hyday-h{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .hyday-n{width:22px;height:22px;border-radius:999px;background:var(--lc);color:var(--paper);display:grid;place-items:center;font-size:12px;font-weight:700;}
@@ -2084,7 +2095,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
       </nav>
     </div>
-    <div class="lines" id="lines" role="tablist" aria-label="揀日子"></div>
+    <div class="lineswrap">
+      <button type="button" class="linesnav prev" aria-label="向左睇日子" hidden>‹</button>
+      <div class="lines" id="lines" role="tablist" aria-label="揀日子"></div>
+      <button type="button" class="linesnav next" aria-label="向右睇日子" hidden>›</button>
+    </div>
   </div>
 </header>
 
@@ -2119,7 +2134,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-1";
+  const BUILD = "2026-11-14-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5853,7 +5868,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
       if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
@@ -9181,7 +9195,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     );
     if (s.mapUrl){
       const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gr) links.push(`<a class="maplink" href="${esc(gr)}" target="_blank" rel="noopener">${icon("star")}評論</a>`);
       if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
@@ -9954,6 +9967,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
       </div>
 
       <div class="exgroup">
+        <div class="exgroup-label">iPhone 鎖定畫面</div>
+        <button class="btn wide primary" id="ex-ics">${icon("clock")}加入 iPhone 日曆</button>
+        <p class="exhint">每日一個全日項目（寫住去邊度），有時間嘅地點、航班都會入日曆；航班同已訂位嘅地方會提早提你。加咗之後，鎖定畫面加個「日曆」小工具，就會見到下一個行程。</p>
+      </div>
+
+      <div class="exgroup">
         <div class="exgroup-label">畀 AI 畫圖</div>
         <label class="picker-label" for="ex-chars">圖入面想加咩卡通、公仔或者人物？兩張圖都會用（可以唔填）</label>
         <input class="input" id="ex-chars" maxlength="80" autocomplete="off" placeholder="例如：我哋一家四口、柴犬、小松鼠">
@@ -10021,6 +10040,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
       sheet.querySelector("#ex-prompt").addEventListener("click", () => {
         try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
         copyInto("#ex-prompt", exportAiPrompt(snap, charsIn.value), "複製咗，貼落 AI 度");
+      });
+      sheet.querySelector("#ex-ics").addEventListener("click", () => {
+        const blob = new Blob([exportIcs(snap)], { type: "text/calendar;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = (plain((snap.meta || {}).title) || "trip") + ".ics";
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        flash("開咗個日曆檔，揀「加入全部」就得");
       });
       sheet.querySelector("#ex-prep").addEventListener("click", () => {
         try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
@@ -11516,30 +11544,129 @@ ${stayBlock}${dayBlocks}${secBlocks}
     setTimeout(() => genBanner(null), 6000);
   }
 
+  // The trip as a calendar file: one all-day item per day listing where it
+  // goes, a timed item for every stop with a time and every flight, and an
+  // alert before flights and booked places. iPhone's lock-screen Calendar
+  // widget then shows what is next. Times are "floating" (no time zone), so
+  // they read as local time wherever the phone is — 10:00 in Osaka is 10:00.
+  function exportIcs(snap){
+    const m = snap.meta || {}, days = snap.days || [];
+    const esc2 = t => String(t || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+    const d8 = iso => iso.replace(/-/g, "");
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    const uid = k => `${state.tripId || "trip"}-${k}@timely-truffle-6514b7.netlify.app`;
+    const addDay = (iso, n) => { const x = new Date(iso + "T00:00:00"); x.setDate(x.getDate() + n); return localIso(x); };
+    const booked = t => /已\s*(訂|預約|book|reserv)/i.test(t) && !/未\s*(訂|預約|book)/i.test(t);
+    const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//trip planner//zh-HK", "CALSCALE:GREGORIAN",
+      `X-WR-CALNAME:${esc2(plain(m.title) || "行程")}`];
+    const ev = (k, lines) => L.push("BEGIN:VEVENT", `UID:${uid(k)}`, `DTSTAMP:${stamp}`, ...lines, "END:VEVENT");
+    days.forEach((day, i) => {
+      const iso = dayIso(day); if (!iso) return;
+      const stops = (day.items || []).filter(x => x.kind === "stop" && plain(x.title));
+      ev(`day${i + 1}`, [`DTSTART;VALUE=DATE:${d8(iso)}`, `DTEND;VALUE=DATE:${d8(addDay(iso, 1))}`,
+        `SUMMARY:${esc2(`Day ${i + 1}：${plain(day.title) || plain(m.title) || "行程"}`)}`,
+        `DESCRIPTION:${esc2(stops.map(x => `${plain(x.time) ? plain(x.time).replace(/^約\s*/, "") + " " : ""}${cleanPlaceName(plain(x.title))}`).join("\n"))}`,
+        "TRANSP:TRANSPARENT"]);
+      stops.forEach((x, j) => {
+        const t = (plain(x.time).match(/(\d{1,2})[:：](\d{2})/) || []);
+        if (!t[1]) return;
+        const hh = String(+t[1]).padStart(2, "0"), mm = t[2];
+        const end = new Date(`${iso}T${hh}:${mm}:00`); end.setHours(end.getHours() + 1);
+        const endS = `${localIso(end).replace(/-/g, "")}T${String(end.getHours()).padStart(2, "0")}${String(end.getMinutes()).padStart(2, "0")}00`;
+        const isBooked = booked(plain(x.tip || ""));
+        ev(`day${i + 1}-${j}`, [`DTSTART:${d8(iso)}T${hh}${mm}00`, `DTEND:${endS}`,
+          `SUMMARY:${esc2((isBooked ? "已訂：" : "") + cleanPlaceName(plain(x.title)))}`,
+          ...(plain(x.kr) ? [`LOCATION:${esc2(plain(x.kr))}`] : []),
+          ...(plain(x.tip) ? [`DESCRIPTION:${esc2(plain(x.tip))}`] : []),
+          ...(isBooked ? ["BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc2(cleanPlaceName(plain(x.title)))}`, "TRIGGER:-PT1H", "END:VALARM"] : [])]);
+      });
+    });
+    (snap.flights || []).forEach((f, k) => {
+      const t = String(f.dep || "").match(/^(\d{2}):(\d{2})$/);
+      const iso = f.date || (f.dir === "back" ? m.dateEnd : m.dateStart);
+      if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return;
+      ev(`flight${k}`, [`DTSTART:${d8(iso)}T${t[1]}${t[2]}00`, `DURATION:PT3H`,
+        `SUMMARY:${esc2(`✈ ${f.no || "航班"} ${f.from || ""}→${f.to || ""}`)}`,
+        ...(f.terminal ? [`LOCATION:${esc2(f.from + " " + f.terminal)}`] : []),
+        "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc2(`${f.no} 3 個鐘後起飛`)}`, "TRIGGER:-PT3H", "END:VALARM"]);
+    });
+    L.push("END:VCALENDAR");
+    return L.join("\r\n") + "\r\n";
+  }
+
+  // ---------- the day bar on a computer ----------
+  (function wireLines(){
+    const bar = document.getElementById("lines");
+    if (!bar) return;
+    const prev = document.querySelector(".linesnav.prev"), next = document.querySelector(".linesnav.next");
+    const fine = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
+    const sync = () => {
+      if (!fine){ prev.hidden = next.hidden = true; return; }
+      prev.hidden = bar.scrollLeft <= 4;
+      next.hidden = bar.scrollLeft + bar.clientWidth >= bar.scrollWidth - 4;
+    };
+    prev.addEventListener("click", () => bar.scrollBy({ left: -bar.clientWidth * 0.7, behavior: "smooth" }));
+    next.addEventListener("click", () => bar.scrollBy({ left: bar.clientWidth * 0.7, behavior: "smooth" }));
+    bar.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync);
+    new MutationObserver(() => requestAnimationFrame(sync)).observe(bar, { childList: true, subtree: true });
+    // a mouse wheel scrolls the bar sideways
+    bar.addEventListener("wheel", e => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || bar.scrollWidth <= bar.clientWidth) return;
+      e.preventDefault(); bar.scrollLeft += e.deltaY;
+    }, { passive: false });
+    // and the bar can be dragged; a drag is not a click on a day
+    let down = null, moved = false;
+    bar.addEventListener("mousedown", e => { if (e.button !== 0) return; down = { x: e.clientX, left: bar.scrollLeft }; moved = false; });
+    window.addEventListener("mousemove", e => {
+      if (!down) return;
+      const dx = e.clientX - down.x;
+      if (!moved && Math.abs(dx) > 5){ moved = true; bar.classList.add("dragging"); }
+      if (moved) bar.scrollLeft = down.left - dx;
+    });
+    window.addEventListener("mouseup", () => { down = null; setTimeout(() => bar.classList.remove("dragging"), 0); });
+    bar.addEventListener("click", e => { if (moved){ e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+    sync();
+  })();
+
   // ---------- Tabelog ----------
   // In Japan people choose restaurants on Tabelog, not Google. The link
   // searches Tabelog by the Japanese name when there is one.
+  // Tabelog itself drops a search word passed in a link (it opened on its
+  // home page), so this asks Google for 「食べログ + the name」, which puts the
+  // restaurant's own Tabelog page first.
   function tabelogUrl(st){
     if (!destIsJapan()) return "";
     const q = plain(st.kr) || cleanPlaceName(plain(st.title));
-    return q ? `https://tabelog.com/rstLst/?vs=1&sk=${encodeURIComponent(q)}` : "";
+    return q ? tabelogSearch(q) : "";
+  }
+  function tabelogSearch(name, area){
+    return `https://www.google.com/search?q=${encodeURIComponent(["食べログ", name, area || ""].filter(Boolean).join(" "))}`;
   }
   // 百名店 near the plan: the AI searches the web for Tabelog's 百名店
   // lists around each day's places; every one is then found on Google Maps
   // (so it is real and has a location) and matched to the day and the stop
   // it is closest to. Kept in the trip so it is only searched when asked.
+  const HYAKU_GENRES = [["", "全部"], ["ラーメン", "拉麵"], ["寿司", "壽司"], ["焼肉", "燒肉"], ["うどん・そば", "烏冬／蕎麥"],
+    ["日本料理", "和食"], ["とんかつ・天ぷら", "炸豬扒／天婦羅"], ["カフェ・スイーツ", "咖啡／甜品"], ["パン", "麵包"], ["居酒屋", "居酒屋"]];
+  function hyakuGenreChips(){
+    const cur = state.hyakuGenre != null ? state.hyakuGenre : (((state.snapshot.hyakumeiten || {}).genre) || "");
+    return `<div class="hygenres" role="radiogroup" aria-label="想食邊類">${HYAKU_GENRES.map(([v, l]) =>
+      `<button type="button" class="pfchip${cur === v ? " on" : ""}" data-hyakugenre="${esc(v)}" role="radio" aria-checked="${cur === v}">${esc(l)}</button>`).join("")}</div>`;
+  }
   function hyakuHtml(d){
     const hy = d.hyakumeiten, days = d.days || [];
     if (state.hyakuLoading) return loaderHtml("AI 搵緊行程附近嘅 Tabelog 百名店…");
     if (!hy || !(hy.items || []).length) return `
       <p class="sec-sub">跟住每日去嘅地方，搵附近嘅 Tabelog 百名店（食べログ 每年按類別選出嘅名店），再對返係邊日、近邊個景點。</p>
       ${hy && hy.empty ? `<p class="hint">上次搵唔到附近嘅百名店，可以再試。</p>` : ""}
-      ${state.readonly ? "" : `<button class="btn primary wide" data-hyakufind>${icon("sparkle")}搵行程附近嘅百名店</button>`}`;
+      ${state.readonly ? "" : `<p class="picker-label">想食邊類？</p>${hyakuGenreChips()}<button class="btn primary wide" data-hyakufind>${icon("sparkle")}搵行程附近嘅百名店</button>`}`;
     const byDay = new Map();
     hy.items.forEach((h, k) => { const key = h.dayId || ""; if (!byDay.has(key)) byDay.set(key, []); byDay.get(key).push([h, k]); });
     const dayIds = [...byDay.keys()].sort((a, b) => dayIndexById(d, a) - dayIndexById(d, b));
     const onDay = id => new Set(((dayById(id) || {}).items || []).filter(i => i.placeId).map(i => i.placeId));
-    return `<p class="sec-sub">按日分好，近嘅排先。百名店資料係 AI 喺網上搵，撳 Tabelog 確認返先好訂。</p>
+    const gl = (HYAKU_GENRES.find(g => g[0] === (hy.genre || "")) || [])[1];
+    return `<p class="sec-sub">${hy.genre ? `類別：<b>${esc(gl || hy.genre)}</b>。` : ""}按日分好，近嘅排先。百名店資料係 AI 喺網上搵，撳 Tabelog 確認返先好訂。</p>
       ${dayIds.map(id => { const day = dayById(id), n = day ? String(day.id).replace("day", "") : "";
         const here = onDay(id);
         return `<div class="hyday" style="--lc:${day ? dayColorVar(day.id) : "var(--ink-faint)"}">
@@ -11553,18 +11680,19 @@ ${stayBlock}${dayBlocks}${secBlocks}
               <div class="hy-acts">
                 ${here.has(h.placeId) ? `<span class="sgchosen">${icon("check")}已經喺 Day ${esc(n)}</span>`
                   : !state.readonly && day ? `<button class="btn primary" data-hyakuadd="${k}">${icon("plus")}加入 Day ${esc(n)}</button>` : ""}
-                <a class="maplink tabelog" href="${esc(`https://tabelog.com/rstLst/?vs=1&sk=${encodeURIComponent(h.name_jp || h.name_zh)}`)}" target="_blank" rel="noopener">${icon("star")}Tabelog</a>
+                <a class="maplink tabelog" href="${esc(h.tabelogUrl || tabelogSearch(h.name_jp || h.name_zh, h.area))}" target="_blank" rel="noopener">${icon("star")}Tabelog</a>
                 ${h.placeId ? `<a class="maplink" href="${esc(googlePlaceUrl({ title: h.name_jp, placeId: h.placeId }))}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}
               </div>
             </div>`).join("")}
         </div>`; }).join("")}
-      ${state.readonly ? "" : `<button class="btn wide" data-hyakufind>${icon("refresh")}再搵過</button>`}`;
+      ${state.readonly ? "" : `<div class="hyagain"><p class="picker-label">再搵過，揀類別：</p>${hyakuGenreChips()}<button class="btn wide" data-hyakufind>${icon("refresh")}再搵過</button></div>`}`;
   }
   async function findHyakumeiten(){
     const snap = state.snapshot, days = snap.days || [];
     state.hyakuLoading = true; state.foldOpen.add("hyaku"); render();
     try {
-      const text = JSON.stringify({ destination: (snap.meta || {}).destinationLocal || "",
+      const genre = state.hyakuGenre != null ? state.hyakuGenre : ((snap.hyakumeiten || {}).genre || "");
+      const text = JSON.stringify({ destination: (snap.meta || {}).destinationLocal || "", ...(genre ? { genre } : {}),
         days: days.map((d, i) => ({ day: i + 1, title: plain(d.title), stops: (d.items || []).filter(x => x.kind === "stop" && plain(x.title)).map(x => plain(x.kr) || cleanPlaceName(plain(x.title))) })) });
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
         body: JSON.stringify({ mode: "hyakumeiten", text, today: localIso(new Date()) }) }), 120000, null);
@@ -11590,7 +11718,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         } catch (_){}
       });
       const seen = new Set();
-      snap.hyakumeiten = { at: new Date().toISOString(), empty: !items.length, items: items.filter(x => !seen.has(x.placeId) && seen.add(x.placeId)) };
+      snap.hyakumeiten = { at: new Date().toISOString(), genre, empty: !items.length, items: items.filter(x => !seen.has(x.placeId) && seen.add(x.placeId)) };
       state.hyakuLoading = false; render();
       await saveNow(items.length ? `搵咗 ${items.length} 間行程附近嘅 Tabelog 百名店` : "搵過百名店（冇結果）");
     } catch (e){
@@ -11610,6 +11738,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
   document.addEventListener("click", e => {
     if (state.readonly) return;
+    const g = e.target.closest && e.target.closest("[data-hyakugenre]");
+    if (g){ e.preventDefault(); state.hyakuGenre = g.dataset.hyakugenre;
+      document.querySelectorAll("[data-hyakugenre]").forEach(x => { const on = x.dataset.hyakugenre === state.hyakuGenre; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
+      return; }
     const f = e.target.closest && e.target.closest("[data-hyakufind]");
     if (f){ e.preventDefault(); findHyakumeiten(); return; }
     const a = e.target.closest && e.target.closest("[data-hyakuadd]");

@@ -41,12 +41,16 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
 
   ok('日本行程主頁有「Tabelog 百名店」', await p.locator('[data-fold="hyaku"]').count() === 1);
   await p.click('[data-fold="hyaku"]'); await p.waitForTimeout(300);
+  ok('可以揀類別', await p.locator('[data-hyakugenre]').count() >= 8);
+  await p.click('[data-hyakugenre="ラーメン"]');
   await p.click('[data-hyakufind]'); await p.waitForTimeout(1500);
   ok('將每日去邊度送去搵', asked[0] && asked[0].days[1].stops.includes('경복궁'), asked[0]);
+  ok('揀咗嘅類別都送埋去', asked[0] && asked[0].genre === 'ラーメン', asked[0] && asked[0].genre);
+  ok('顯示返揀咗咩類別', /類別：拉麵/.test(await p.locator('#app').innerText()));
   const t = await p.locator('#app').innerText();
   ok('百名店對返 Day 2，近北村', /麵屋一燈/.test(t) && /百名店 2025 ラーメン/.test(t) && /離「北村韓屋村」約/.test(t), t.slice(0, 400));
   ok('離行程太遠嘅唔要', !/遠い店/.test(t));
-  ok('有 Tabelog 連結', /tabelog\.com\/rstLst\/\?vs=1&sk=/.test(await p.locator('.hycard a.tabelog').first().getAttribute('href')));
+  ok('Tabelog 連結經 Google 搵（食べログ + 店名）', decodeURIComponent(await p.locator('.hycard a.tabelog').first().getAttribute('href')).includes('食べログ 麺屋 一燈'));
   await p.click('[data-hyakuadd]'); await p.waitForTimeout(1500);
   const last = [...saved].reverse().find(v => v.snapshot).snapshot;
   const d2 = last.days[1].items.filter(i => i.title && i.kind !== 'connector' && i.kind !== 'note').map(i => i.title);
@@ -55,7 +59,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   // the restaurant card itself carries a Tabelog link with the Japanese name
   await p.evaluate(() => document.querySelector('[data-go="day2"]').click()); await p.waitForTimeout(800);
   const tl = await p.locator('.stopcard', { hasText: '南山塔 韓牛燒肉' }).locator('a.tabelog').getAttribute('href').catch(() => '');
-  ok('餐廳卡有 Tabelog（用日文名搵）', tl && tl.includes(encodeURIComponent('焼肉 万両')), tl);
+  ok('餐廳卡有 Tabelog（用日文名搵）', tl && decodeURIComponent(tl).includes('食べログ 焼肉 万両'), tl);
+  ok('冇咗「評論」掣', await p.locator('.stopcard a.maplink', { hasText: '評論' }).count() === 0);
   ok('景點唔會有 Tabelog', await p.locator('.stopcard', { hasText: '景福宮' }).locator('a.tabelog').count() === 0);
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();
