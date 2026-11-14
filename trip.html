@@ -315,6 +315,8 @@ img{max-width:100%;}
 .topbtn:hover{color:var(--ink);border-color:var(--ink-faint);}
 .topbtn:active{transform:scale(.96);}
 .topbtn.icononly{padding:0;width:34px;justify-content:center;}
+#btn-undo{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 55%,var(--rule));}
+@media (max-width:560px){ #btn-undo{padding:0;width:34px;justify-content:center;} #btn-undo span:last-child{display:none;} }
 .iconbtn{
   width:34px;height:34px;flex:0 0 auto;display:grid;place-items:center;
   border:1px solid var(--rule);border-radius:999px;background:var(--surface);
@@ -2109,6 +2111,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="topbtns" aria-label="行程工具">
         <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
         <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
+        <button class="topbtn" id="btn-undo" hidden aria-label="返上一步" title="返上一步"><span class="topbtn-i"></span><span>上一步</span></button>
         <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
         <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
       </nav>
@@ -2152,7 +2155,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-5";
+  const BUILD = "2026-11-14-6";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2249,6 +2252,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     star:      '<path d="m12 4.3 2.5 5.2 5.6.8-4 4 .9 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z"/>',
     search:    '<circle cx="11" cy="11" r="6.4"/><path d="m15.8 15.8 4 4"/>',
     refresh:   '<path d="M19.3 12a7.3 7.3 0 1 1-2.2-5.2"/><path d="M19.6 4.8v4.4h-4.4"/>',
+    undo:      '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     camera:    '<path d="M4.2 8.4h3.1l1.4-2.2h6.6l1.4 2.2h3.1v10.2H4.2z"/><circle cx="12" cy="13.2" r="3.1"/>',
     bed:       '<path d="M3.4 18.4V7.2"/><path d="M3.4 11.6h17.2v6.8"/><circle cx="8" cy="11.6" r="0"/><path d="M3.4 14.9h17.2"/>',
     walk:      '<circle cx="13" cy="4.9" r="1.7"/><path d="m9.2 20.4 2.4-5.1-1.9-2.4.9-4.2 3.1 1.5 1 2.7 2.6 1"/><path d="m11.6 15.3 1.8 5.1"/><path d="m10.6 8.7-3 1.6-1 2.6"/>',
@@ -2372,6 +2376,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     put("#btn-home .topbtn-i", "home");
     put("#btn-export .topbtn-i", "share");
     put("#btn-reload .topbtn-i", "refresh");
+    put("#btn-undo .topbtn-i", "undo");
     put("#btn-theme .topbtn-i", "contrast");
     put("#btn-boards .dockbtn-i", "pin");
     put("#btn-history .dockbtn-i", "clock");
@@ -2711,8 +2716,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       let lastErr = null;
       for (let attempt = 0; attempt < 3; attempt++){
         try {
-          await saveVersion(state.snapshot, "manual", summary, trivial);
+          const before = saver.lastPersistedJson;
+          const rows = await saveVersion(state.snapshot, "manual", summary, trivial);
+          saver.lastVersionId = (Array.isArray(rows) && rows[0] && rows[0].id) || saver.lastVersionId;
           if (!trivial) pushQueue(summary);
+          // the state this save replaced, for 「上一步」 (an undo itself isn't one)
+          if (!trivial && before && !undo.busy) undoPush(before, summary);
           saver.lastPersistedJson = json;
           clearMirror();
           flash("已儲存");
@@ -2735,6 +2744,50 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // Resolve on ENQUEUE, not on persistence: ~50 call sites `await saveNow(...)`,
   // and if each of those waited for a real POST the coalescing would never
   // happen. Nothing reads a version row back after saving, so this is safe.
+  // ---------- 上一步 ----------
+  // Every user save remembers the trip as it was just before, so one tap
+  // puts it back. Kept on this phone only, for this visit; cleared when the
+  // trip is reloaded from the server or restored from history, because
+  // going back then would also undo whatever else came in.
+  const undo = { stack: [], busy: false };
+  function undoPush(json, summary){
+    undo.stack.push({ json, summary: plain(summary || "").slice(0, 60) });
+    if (undo.stack.length > 30) undo.stack.shift();
+    undoButton();
+  }
+  function undoClear(){ undo.stack.length = 0; undoButton(); }
+  function undoButton(){
+    const b = $("#btn-undo");
+    if (!b) return;
+    b.hidden = !undo.stack.length || !!state.readonly;
+    const top = undo.stack[undo.stack.length - 1];
+    b.title = top ? `返上一步：取消「${top.summary || "上一個改動"}」` : "返上一步";
+  }
+  async function undoLast(){
+    if (undo.busy) return;
+    if (saverDirty()) await flushSaves("undo");
+    const e = undo.stack[undo.stack.length - 1];
+    if (!e) return;
+    undo.busy = true;
+    try {
+      // someone else saved since: going back would wipe their change too
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,edited_by&order=created_at.desc&limit=1`, { headers: sbHeaders() });
+        const top = r.ok ? (await r.json())[0] : null;
+        if (top && saver.lastVersionId && top.id !== saver.lastVersionId &&
+            !confirm(`${plain(top.edited_by) || "其他人"} 之後改過行程。返上一步會連佢嘅改動一齊蓋過，照做？`)) return;
+      } catch (_){}
+      undo.stack.pop();
+      state.snapshot = normalizeSnapshot(JSON.parse(e.json));
+      state.open.clear();
+      if (state.view !== "overview" && state.view !== "notes" && state.view !== "stays" && !dayById(state.view) && !boardById(state.view)) state.view = "overview";
+      render();
+      saveNow(`返上一步：取消「${e.summary || "上一個改動"}」`);
+      await flushSaves("undo");
+      flash(`已返上一步${e.summary ? `（取消咗「${e.summary}」）` : ""}`);
+    } finally { undo.busy = false; undoButton(); }
+  }
+
   function saveNow(summary, trivial){
     if (!trivial) askNameOnce();
     queueSave(summary, trivial ? "upkeep" : "user");
@@ -11167,7 +11220,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
             if (!snap) return;
             cancelPending();
             saver.paused = true;          // don't persist a version being previewed
-            state.snapshot = normalizeSnapshot(snap); state.open.clear();
+            state.snapshot = normalizeSnapshot(snap); state.open.clear(); undoClear();
             closeLayer(); render();
             flash("而家睇緊舊版本（未還原・唔會存）");
           } catch (err){ alert("睇唔到呢版：" + err.message); }
@@ -11181,6 +11234,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
             if (!snap) return;
             cancelPending();
             state.snapshot = normalizeSnapshot(snap);
+            undoClear();
             saver.paused = false;
             saver.lastPersistedJson = snapJson();
             await saveVersion(snap, "restore", "還原到版本 #" + b.dataset.restore);
@@ -11864,6 +11918,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function pushOn(){ try { return localStorage.getItem(pushKey()) === "1"; } catch (_){ return false; } }
   // the 9am countdown is about the next trip, whichever it is, so it is one
   // choice per phone (on unless switched off)
+  function pushFreq(){ try { return localStorage.getItem("trip_push_freq") === "daily" ? "daily" : "batch"; } catch (_){ return "batch"; } }
   function countdownWanted(){ try { return localStorage.getItem("trip_push_countdown") !== "0"; } catch (_){ return true; } }
   function b64ToBytes(b64){
     const pad = "=".repeat((4 - b64.length % 4) % 4), raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
@@ -11887,7 +11942,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.key) });
-    const r = await pushCall({ mode: "subscribe", trip_id: Number(state.tripId), sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.userAgentData && navigator.userAgentData.platform) || "", editor: getEditedBy(), countdown: countdownWanted() });
+    const r = await pushCall({ mode: "subscribe", trip_id: Number(state.tripId), sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.userAgentData && navigator.userAgentData.platform) || "", editor: getEditedBy(), countdown: countdownWanted(), freq: pushFreq() });
     if (!r || !r.ok) throw new Error("登記唔到，遲啲再試。");
     try { localStorage.setItem(pushKey(), "1"); } catch (_){}
     return sub;
@@ -11903,7 +11958,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!state.tripId || state.readonly) return;
     pushPending.push(plain(summary || "").slice(0, 60));
     clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => pushFlush(false), 60000);
+    // one message per sitting, not per tap; the server also merges anything
+    // that arrives within half an hour of the last one it sent each phone
+    pushTimer = setTimeout(() => pushFlush(false), 180000);
   }
   async function pushFlush(leaving){
     clearTimeout(pushTimer); pushTimer = null;
@@ -11915,7 +11972,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!me){ try { const sub = await mySub(); except = sub ? sub.endpoint : ""; } catch (_){} }
     const who = getEditedBy(), title = plain((state.snapshot.meta || {}).title) || "行程";
     pushCall({ mode: "notify", trip_id: Number(state.tripId), except,
-      title: `${who} 改咗「${title}」`,
+      title: `${who} 改咗「${title}」`, editor: who, trip_name: title, items,
       body: items.length > 1 ? `${items.slice(0, 3).join("；")}${items.length > 3 ? ` 等 ${items.length} 項` : ""}` : items[0],
       url: location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString() }, leaving).catch(() => {});
   }
@@ -11925,12 +11982,17 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const needHome = !sup && isIOS();
     openSheet(`
       <h3>通知</h3>
-      <p class="sec-sub">開咗之後，屋企其他人改呢個行程，你部手機會收到通知。自己改嘅預設唔會通知自己；改完大約一分鐘、或者你離開 app 先會發。每部手機自己揀。</p>
+      <p class="sec-sub">開咗之後，屋企其他人改呢個行程，你部手機會收到通知。自己改嘅預設唔會通知自己。幾個改動會合埋一個通知，唔會一改就響；每部手機可以自己揀幾密。</p>
       ${needHome ? `<div class="pushhow"><b>iPhone 要先咁做：</b><ol><li>喺 Safari 撳下面「分享」掣</li><li>揀「加入主畫面」</li><li>由主畫面個 app icon 開返呢個行程</li><li>再撳呢度開通知</li></ol></div>` : ""}
       <div class="pushstate ${on ? "on" : ""}">${icon(on ? "check" : "clock")}<span>${on ? "呢部機已經開咗通知" : "呢部機未開通知"}</span></div>
       <div id="push-msg"></div>
       ${on
-        ? `<label class="updopt"><input type="checkbox" id="push-cd"${countdownWanted() ? " checked" : ""}> 每日朝早 9 點提我仲有幾多日出發（出發前 20 日開始）</label>
+        ? `<p class="picker-label">幾密收行程改動通知？</p>
+           <div class="pushfreq" role="radiogroup">
+             <label class="updopt"><input type="radio" name="push-freq" value="batch"${pushFreq() === "batch" ? " checked" : ""}> 合埋一齊，最多每 30 分鐘一次</label>
+             <label class="updopt"><input type="radio" name="push-freq" value="daily"${pushFreq() === "daily" ? " checked" : ""}> 每日一次：晚上 9 點總結當日改咗咩</label>
+           </div>
+           <label class="updopt"><input type="checkbox" id="push-cd"${countdownWanted() ? " checked" : ""}> 每日朝早 9 點提我仲有幾多日出發（出發前 20 日開始）</label>
            <label class="updopt"><input type="checkbox" id="push-me"${(() => { try { return localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){ return false; } })() ? " checked" : ""}> 自己改都通知埋我（自己一個試用）</label>
            <button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
            <button class="btn wide" id="push-off" style="margin-top:8px;">熄通知</button>`
@@ -11957,6 +12019,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
         } catch (e){ msg(e.message || "發唔到"); }
         test.disabled = false;
       });
+      sheet.querySelectorAll('[name="push-freq"]').forEach(r => r.addEventListener("change", async () => {
+        if (!r.checked) return;
+        try { localStorage.setItem("trip_push_freq", r.value); } catch (_){}
+        try { const sub = await mySub(); if (sub) await pushCall({ mode: "prefs", endpoint: sub.endpoint, freq: r.value }); } catch (_){}
+        flash(r.value === "daily" ? "改咗：每晚 9 點一個總結" : "改咗：最多每 30 分鐘一次");
+      }));
       const cd = sheet.querySelector("#push-cd");
       if (cd) cd.addEventListener("change", async () => {
         try { localStorage.setItem("trip_push_countdown", cd.checked ? "1" : "0"); } catch (_){}
@@ -12082,6 +12150,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const before = snapJson();
     state.snapshot = normalizeSnapshot(row.snapshot);
     const after = snapJson();
+    if (after !== before) undoClear();
+    saver.lastVersionId = row.id;
     saver.lastPersistedJson = after;
     // Card indices are positions, not identities, so a card left open could
     // reopen over a different stop once the list has moved underneath it.
@@ -12243,6 +12313,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       document.body.appendChild(bar);
     }
     saver.lastPersistedJson = snapJson();
+    saver.lastVersionId = row.id;
     const back = readPlace();
     const resumeY = (back && back.trip === tripId) ? back.y : 0;
     if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes" || back.view === "stays"
@@ -12260,6 +12331,14 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     wirePullToRefresh();
     wireReloadButton();
+    $("#btn-undo").addEventListener("click", undoLast);
+    // ⌘Z / Ctrl+Z on a computer, unless typing in a box (that's the box's own undo)
+    document.addEventListener("keydown", e => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
+      if (e.target.closest && e.target.closest("input, textarea, [contenteditable]")) return;
+      if (!undo.stack.length) return;
+      e.preventDefault(); undoLast();
+    });
     wireUpdateBar();
     // Checked on every launch, not only when somebody pulls: the whole point
     // is that an update finds you rather than the other way round.
