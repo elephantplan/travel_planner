@@ -1151,6 +1151,11 @@ img{max-width:100%;}
 .stopcard .meta-chip.rating{background:transparent;padding-left:0;}
 .stopcard .meta-chip.closed{background:var(--danger-bg);}
 /* the tip: a labelled note, not a quotation */
+.faroff{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 16px 4px;padding:10px 12px;border-radius:12px;
+  background:var(--warn-bg);color:var(--warn);font-size:13px;line-height:1.55;}
+.faroff > .i{width:15px;height:15px;flex:none;}
+.faroff > span{flex:1 1 200px;}
+.faroff .btn{height:30px;padding:0 12px;font-size:12.5px;}
 .stopcard .tipbox{margin:10px 16px 4px;padding:10px 12px 10px 14px;border:0;border-radius:12px;
   background:color-mix(in srgb,var(--gold) 10%,transparent);color:var(--ink);font-size:13.5px;line-height:1.65;}
 .stopcard .tipbox::before{content:"提示";display:block;font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--gold);margin-bottom:2px;}
@@ -2155,7 +2160,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-6";
+  const BUILD = "2026-11-14-8";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3943,9 +3948,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       st.placeTried = true;
       const q = cleanPlaceName(st.title);
       try {
-        const r = await withTimeout(callAi({ action:"place-search", query: q }), 20000, null);
-        const p = r && r.places && r.places[0];
-        if (p && p.placeId){
+        const p = await findPlaceNear(st, plain(st.kr) || q, q);
+        if (p && p.placeId && !st.placeId){
           st.placeId = p.placeId;
           if (Number.isFinite(p.lat)){ st.lat = p.lat; st.lng = p.lng; }
           // the legs into and out of it were timed from a guess
@@ -5979,6 +5983,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <div class="draghandle" data-drag="${i}" title="拉上拉落搬位">${icon("grip")}</div>
             </div>`}
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
+            ${selecting ? "" : farOffHtml(day, s, i)}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
@@ -5988,6 +5993,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         ${!selecting && i === lastStopIndex(day) ? insertRowHtml(i + 1) + hotelLegHtml(day, "backLeg") : ""}
       </div>`;
+  }
+  // A place Google matched far from everything else that day is probably a
+  // same-named shop in another city. Said on the card, with a way to look
+  // again near the day's other places.
+  function farOffMeters(day, s){
+    if (!s.placeId || !Number.isFinite(Number(s.lat)) || s.lat === "") return 0;
+    // airports and stations are meant to be far from the rest of the day
+    if (/機場|空港|airport|공항|駅|車站|station|港/i.test(plain(s.title) + " " + plain(s.kr))) return 0;
+    const others = toUnits(day.items).filter(u => u.stop && u.stop !== s && Number.isFinite(Number(u.stop.lat)) && u.stop.lat !== "").map(u => u.stop);
+    if (others.length < 2) return 0;
+    const near = Math.min(...others.map(o => metersBetween(s, o)).filter(Number.isFinite));
+    return Number.isFinite(near) && near > 30000 ? near : 0;
+  }
+  function farOffHtml(day, s, i){
+    const m = farOffMeters(day, s);
+    if (!m || s.farOk) return "";
+    return `<div class="faroff">${icon("pin")}<span>呢個地點離同日其他地方 ${Math.round(m / 1000)} 公里，可能搵錯咗另一個城市嘅同名店。</span>
+      <button class="btn" data-refind="${i}">喺附近再搵</button><button class="btn" data-farok="${i}">冇錯</button></div>`;
   }
   function lastStopIndex(day){
     const us = toUnits(day.items);
@@ -6188,6 +6211,35 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (problem) flash(problem);
       else if (!got) flash("Google 嗰邊冇呢啲地點嘅相。");
     });
+
+    document.querySelectorAll("[data-refind]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const i = +el.dataset.refind, st = toUnits(day.items)[i].stop;
+      const old = { placeId: st.placeId, lat: st.lat, lng: st.lng };
+      el.disabled = true; el.textContent = "搵緊…";
+      // forget the far match (and what came with it), then look near the day
+      st.placeId = ""; st.lat = ""; st.lng = "";
+      const p = await findPlaceNear(st, cleanPlaceName(plain(st.title)), cleanPlaceName(plain(st.title))).catch(() => null);
+      if (!p || p.placeId === old.placeId || !(farOffMeters(day, Object.assign({}, st, { placeId: p.placeId, lat: p.lat, lng: p.lng })) === 0)){
+        Object.assign(st, old);
+        el.disabled = false; el.textContent = "喺附近再搵";
+        flash("附近搵唔到同名嘅地方。可以撳「編輯」自己改名，或者撳「冇錯」。");
+        return;
+      }
+      Object.assign(st, { placeId: p.placeId, lat: p.lat, lng: p.lng, photoUrl: "", rating: p.rating ?? st.rating, ratingCount: p.ratingCount ?? st.ratingCount,
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`, kr: "" });
+      st.eatMeta = (st.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
+      render();
+      await enrichHours(st); await enrichLocalName(st).catch(() => {}); await enrichPhoto(st, plain(st.title));
+      render();
+      await saveNow(`「${plain(st.title)}」改返做附近嗰間（${p.name}）`);
+      await refreshTransit(day, [i, i + 1]);
+    }));
+    document.querySelectorAll("[data-farok]").forEach(el => el.addEventListener("click", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const st = toUnits(day.items)[+el.dataset.farok].stop;
+      st.farOk = true; render(); saveNow(`確認「${plain(st.title)}」個位置冇錯`);
+    }));
 
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", ev => {
       ev.preventDefault();
@@ -10549,6 +10601,41 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
   // A stop the AI invented has only a name. Find the real place behind it so it
   // gets a photo, a map link, and coordinates good enough to route from.
+  // where a stop is, roughly: the nearest other place on the same day that
+  // already has coordinates (the one before it, else the one after)
+  function stopAnchor(s){
+    for (const d of (state.snapshot && state.snapshot.days) || []){
+      const list = toUnits(d.items).filter(u => u.stop).map(u => u.stop);
+      const i = list.indexOf(s);
+      if (i < 0) continue;
+      const has = x => x && x !== s && Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng)) && x.lat !== "" && x.lng !== "";
+      for (let k = 1; k < list.length; k++){
+        for (const x of [list[i - k], list[i + k]]) if (has(x)) return { lat: Number(x.lat), lng: Number(x.lng) };
+      }
+      return null;
+    }
+    return null;
+  }
+  // Google's match for a stop, searched near the other places that day first.
+  // The plain search adds the trip's city to the name, so a Kyoto restaurant
+  // on a day trip from Osaka came back as a same-named shop in Osaka, an hour
+  // away. Only when nothing is found near the day does it fall back to that,
+  // and even then takes whichever result is closest to the day.
+  async function findPlaceNear(s, query, plainQuery){
+    const ref = stopAnchor(s);
+    if (ref){
+      const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
+      const j = rs ? await rs.json().catch(() => null) : null;
+      const near = ((j && j.places) || []).filter(x => x.placeId && Number.isFinite(x.meters) && x.meters <= 40000);
+      if (near.length) return near.slice(0, 3).sort((x, y) => x.meters - y.meters)[0];
+    }
+    const r = await withTimeout(callAi({ action:"place-search", query: plainQuery || query }), 20000, null);
+    const list = ((r && r.places) || []).filter(x => x.placeId);
+    if (!ref) return list[0] || null;
+    const far = x => { const m = metersBetween(ref, x); return Number.isFinite(m) ? m : Infinity; };
+    return list.slice().sort((x, y) => far(x) - far(y))[0] || null;
+  }
   async function enrichStop(s){
     const name = plain(s.title);
     if (!name) return;
@@ -10558,8 +10645,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
     // rating with another shop's. Keep what we have; just get the photo.
     if (s.placeId){ await enrichHours(s); return enrichPhoto(s, name); }
     try {
-      const r = await callAi({ action:"place-search", query:name });
-      const p = r && r.places && r.places[0];
+      s.placeTried = true;           // matchLoosePlaces must not race this lookup
+      const p = await findPlaceNear(s, plain(s.kr) || name, name);
       if (p){
         s.placeId = p.placeId;
         if (Number.isFinite(p.lat)) s.lat = p.lat;
