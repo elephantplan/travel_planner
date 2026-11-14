@@ -6716,19 +6716,30 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       // tick. One at a time, so two saves never race.
       let added = 0, chain = Promise.resolve();
       const done = sheet.querySelector("#ins-done");
-      const pickMore = (p, kind, b) => {
+      // what has been added stays ticked when the list is drawn again (the
+      // intros arrive after it is first shown, and redraw it)
+      const picked = new Set();
+      const pickKey = p => p.placeId || p.name;
+      const tick = (b, p) => {
         b.disabled = true; b.classList.add("added"); b.innerHTML = icon("check");
         b.setAttribute("aria-label", `已加「${p.name_zh || p.name}」`);
+      };
+      const pickMore = (p, kind, b) => {
+        picked.add(pickKey(p));
+        tick(b, p);
         const at = pos + added; added++;
         if (done){ done.hidden = false; done.querySelector("b").textContent = added; }
         flash(`加咗「${p.name_zh || p.name}」，可以繼續揀`);
         chain = chain.then(() => insertPlaceAt(day, at, p, kind)).catch(() => {});
       };
-      const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => {
-        const p = found[b.dataset.pick]; if (!p) return;
+      const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(b => {
+        const p0 = found[b.dataset.pick];
+        if (p0 && picked.has(pickKey(p0))){ tick(b, p0); return; }
+        b.addEventListener("click", () => {
+        const p = found[b.dataset.pick]; if (!p || picked.has(pickKey(p))) return;
         if (b.dataset.kind && b.closest("[data-pane=ai]")) pickMore(p, b.dataset.kind, b);
         else pick(p, b.dataset.kind || "");
-      }));
+      }); });
       if (done) done.addEventListener("click", () => closeLayer());
       // search
       const q = sheet.querySelector("#ins-q"), res = sheet.querySelector("#ins-res");
@@ -6811,6 +6822,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         paint();                                   // Google's list first, straight away
         out.scrollIntoView({ block: "start", behavior: "smooth" });
         if (list.length && await briefsFor(list, kind) !== null && out.isConnected && runId === run.n) paint();
+        // places picked before their intros arrived: give them the Chinese
+        // name and the intro now, once they are in the day
+        const late = list.filter(p => picked.has(pickKey(p)) && (p.name_zh || p.what));
+        if (late.length) chain = chain.then(async () => {
+          let n = 0;
+          late.forEach(p => {
+            const st = toUnits(day.items).map(u => u.stop).find(x => x && x.placeId && x.placeId === p.placeId);
+            if (!st) return;
+            if (p.name_zh && p.name_zh !== p.name && plain(st.title) === p.name){ st.title = p.name_zh; if (!plain(st.kr)) st.kr = p.name; n++; }
+            if ((p.what || p.mustTry) && !plain(st.desc)){ st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n"); st.briefV = BRIEF_V; n++; }
+          });
+          if (n){ render(); await saveNow("補返中文名同介紹", true); }
+        }).catch(() => {});
         if (list.length) keepSuggestions(day, kind, w, anchors, list);
       };
       // earlier picks (anyone's, on any day) — one tap puts one in here

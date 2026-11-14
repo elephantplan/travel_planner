@@ -38,7 +38,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     if (body.mode === 'suggest-add') return j({ ok: true, places: [
       { name: 'Sushi A', placeId: 'sA', lat: 37.58, lng: 126.98, rating: 4.5, ratingCount: 300, walk: 4, nearName: '景福宮', types: ['restaurant'] },
       { name: 'Sushi B', placeId: 'sB', lat: 37.581, lng: 126.981, rating: 4.3, ratingCount: 120, walk: 6, nearName: '景福宮', types: ['restaurant'] }] });
-    if (body.mode === 'brief-many') return j({ ok: true, briefs: { sA: { name_zh: '壽司甲', what: '好新鮮', mustTry: '吞拿魚', rank: 0 }, sB: { name_zh: '壽司乙', what: '平', mustTry: '', rank: 1 } } });
+    if (body.mode === 'brief-many') return new Promise(res => setTimeout(res, 2000)).then(() => j({ ok: true, briefs: { sA: { name_zh: '壽司甲', what: '好新鮮', mustTry: '吞拿魚', rank: 0 }, sB: { name_zh: '壽司乙', what: '平', mustTry: '', rank: 1 } } }));
     return j({ ok: true });
   });
   await p.route('**tile**', r => r.abort());
@@ -53,11 +53,15 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(300);
   await p.locator('[data-instab="ai"]').click();
   await p.locator('#ins-go').click();
-  await p.waitForTimeout(1500);
+  await p.waitForTimeout(600);
+  ok('介紹未寫好', /寫緊介紹/.test(await p.locator('#ins-nearres').innerText()));
   await p.locator('#ins-nearres [data-pick]').nth(0).click();
   await p.waitForTimeout(300);
   ok('揀咗一間個 sheet 唔會關', await p.locator('#ins-nearres').isVisible());
   ok('揀咗嗰間變剔', await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
+  await p.waitForTimeout(2500);
+  ok('介紹寫好之後', /好新鮮/.test(await p.locator('#ins-nearres').innerText()));
+  ok('揀咗嗰間仲係剔住', await p.locator('#ins-nearres .nr-add.added').count() === 1 && await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
   await p.locator('#ins-nearres [data-pick]').nth(1).click();
   await p.waitForTimeout(300);
   ok('「完成」寫住加咗幾多個', /已加 2 個/.test(await p.locator('#ins-done').textContent()), await p.locator('#ins-done').textContent());
