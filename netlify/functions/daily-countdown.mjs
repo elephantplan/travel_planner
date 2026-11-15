@@ -1,6 +1,6 @@
-// Every hour, ask the trip-push function to send what is due: change
-// notifications it held back so they could be merged (at most one every 30
-// minutes per phone, or a 9pm summary), and from 9:00 Hong Kong time the
+// Every 15 minutes, ask the trip-push function to send what is due: change
+// notifications it held back so they could be merged (half an hour after the
+// first change, or a 9pm summary), and from 9:00 Hong Kong time the
 // countdown to the next trip for every phone that ticked 「每日倒數」. The
 // function never sends the same thing twice, so a retry is harmless.
 // The key below is the app's public (anon) key, the same one every page uses.
@@ -18,4 +18,4 @@ export default async () => {
   return new Response(text, { status: res.ok ? 200 : 502 });
 };
 
-export const config = { schedule: "5 * * * *" };
+export const config = { schedule: "*/15 * * * *" };

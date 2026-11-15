@@ -18,7 +18,7 @@
 // POST { mode: "daily" }  the countdown on its own (kept for old schedules)
 //
 // Change notifications are never sent one per edit. Each phone collects them
-// in push_subs.pending and is told at most once every 30 minutes ('batch'),
+// in push_subs.pending and is told half an hour after the first one ('batch'),
 // or once a day at 9pm ('daily'), in one message that lists who changed what.
 import webpush from "npm:web-push@3.6.7";
 
@@ -79,9 +79,11 @@ async function sendTo(subs: any[], payload: unknown) {
 
 const FREQS = ["batch", "daily"];
 const GAP = 30 * 60e3;
-// 'batch' phones hear straight away if the last message was over half an
-// hour ago; otherwise the change waits for the hourly tick
-const dueNow = (s: any) => s.freq !== "daily" && (!s.last_notified || Date.now() - Date.parse(s.last_notified) >= GAP);
+// 'batch': nothing is sent the moment a change is saved. The first change
+// starts a half-hour wait, everything saved in that time is collected, and
+// the tick (every 15 minutes) sends it as one message once the wait is over.
+const oldest = (s: any) => Math.min(...(Array.isArray(s.pending) ? s.pending : []).map((p: any) => Date.parse(p.at) || Date.now()));
+const dueNow = (s: any) => s.freq !== "daily" && Array.isArray(s.pending) && s.pending.length > 0 && Date.now() - oldest(s) >= GAP;
 
 // Everything a phone hasn't been told, as one message:
 //   title 「Tiffany、Ivan 改咗大阪行程」  body 「加咗三嶋亭；改咗 Day 3 時間 等 5 項」
@@ -205,7 +207,7 @@ Deno.serve(async (req) => {
       let sent = 0, held = 0;
       for (const s of subs) {
         const pending = [...(Array.isArray(s.pending) ? s.pending : []), entry].slice(-40);
-        if (dueNow(s)) { sent += await tell(s, pending); }
+        if (dueNow({ ...s, pending })) { sent += await tell(s, pending); }
         else { held++; await db("push_subs?endpoint=eq." + encodeURIComponent(s.endpoint), { method: "PATCH", body: JSON.stringify({ pending }) }); }
       }
       return json({ ok: true, sent, held });

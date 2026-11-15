@@ -2213,7 +2213,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-15-4";
+  const BUILD = "2026-11-15-5";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -12599,7 +12599,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       ${on
         ? `<p class="picker-label">幾密收行程改動通知？</p>
            <div class="pushfreq" role="radiogroup">
-             <label class="updopt"><input type="radio" name="push-freq" value="batch"${pushFreq() === "batch" ? " checked" : ""}> 合埋一齊，最多每 30 分鐘一次</label>
+             <label class="updopt"><input type="radio" name="push-freq" value="batch"${pushFreq() === "batch" ? " checked" : ""}> 改完等 30 分鐘，合埋一個通知</label>
              <label class="updopt"><input type="radio" name="push-freq" value="daily"${pushFreq() === "daily" ? " checked" : ""}> 每日一次：晚上 9 點總結當日改咗咩</label>
            </div>
            <label class="updopt"><input type="checkbox" id="push-cd"${countdownWanted() ? " checked" : ""}> 每日朝早 9 點提我仲有幾多日出發（出發前 20 日開始）</label>
@@ -12633,7 +12633,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         if (!r.checked) return;
         try { localStorage.setItem("trip_push_freq", r.value); } catch (_){}
         try { const sub = await mySub(); if (sub) await pushCall({ mode: "prefs", endpoint: sub.endpoint, freq: r.value }); } catch (_){}
-        flash(r.value === "daily" ? "改咗：每晚 9 點一個總結" : "改咗：最多每 30 分鐘一次");
+        flash(r.value === "daily" ? "改咗：每晚 9 點一個總結" : "改咗：改完 30 分鐘後合埋一個通知");
       }));
       const cd = sheet.querySelector("#push-cd");
       if (cd) cd.addEventListener("change", async () => {
