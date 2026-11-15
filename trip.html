@@ -1499,6 +1499,7 @@ a.btn{text-decoration:none;}
 .taxi-k{font-size:13px;color:#888;margin:10px 0 2px;letter-spacing:.1em;}
 .taxi-addr{font-size:clamp(20px,5.6vw,30px);font-weight:700;line-height:1.4;margin:0;word-break:break-word;}
 .taxi-tel{display:inline-block;font-size:clamp(22px,6vw,32px);font-weight:700;color:#0b57d0;text-decoration:none;margin-top:2px;}
+.taxi-en{font-size:15px;color:#666;margin:6px 0 0;line-height:1.4;}
 .taxi-wait{font-size:14px;color:#999;margin:0;}
 .taxi-hint{position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));font-size:13px;color:#999;margin:0;}
 
@@ -2207,7 +2208,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-15-2";
+  const BUILD = "2026-11-15-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -4217,10 +4218,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   // address and phone in the local language, from Google, kept for the visit
   const contactCache = new Map();
-  async function placeContact(pid, local){
-    const k = pid || local;
+  async function placeContact(pid, local, langOver){
+    const lang = langOver || (destIsKorea() ? "ko" : destIsJapan() ? "ja" : "en");
+    const k = lang + ":" + (pid || local);
     if (contactCache.has(k)) return contactCache.get(k);
-    const lang = destIsKorea() ? "ko" : destIsJapan() ? "ja" : "zh-TW";
     const p = withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
       body: JSON.stringify({ mode: "place-contact", placeId: pid || "", query: pid ? "" : local, lang }) }).then(r => r.json()), 12000, null).catch(() => null);
     contactCache.set(k, p);
@@ -4241,11 +4242,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     </div>`;
     layer.querySelector(".taxicard").addEventListener("click", e => { if (e.target.closest("a")) return; layer.innerHTML = ""; });
     const box = layer.querySelector(".taxi-contact");
-    placeContact(pid, local).then(r => {
+    // the driver's own language first, then English for anyone else
+    const both = destIsJapan() || destIsKorea();
+    Promise.all([placeContact(pid, local), both ? placeContact(pid, local, "en") : null]).then(([r, en]) => {
       if (!box.isConnected) return;
       if (!r || (!r.address && !r.phone)){ box.innerHTML = ""; return; }
-      const label = destIsJapan() ? ["住所", "電話"] : destIsKorea() ? ["주소", "전화"] : ["地址", "電話"];
-      box.innerHTML = (r.address ? `<p class="taxi-k">${label[0]}</p><p class="taxi-addr">${esc(r.address)}</p>` : "") +
+      const label = destIsJapan() ? ["住所 Address", "電話 Phone"] : destIsKorea() ? ["주소 Address", "전화 Phone"] : ["Address", "Phone"];
+      const enAddr = en && en.address && en.address !== r.address ? en.address : "";
+      box.innerHTML = (r.address ? `<p class="taxi-k">${label[0]}</p><p class="taxi-addr">${esc(r.address)}</p>${enAddr ? `<p class="taxi-en">${esc(enAddr)}</p>` : ""}` : "") +
         (r.phone ? `<p class="taxi-k">${label[1]}</p><a class="taxi-tel" href="tel:${esc((r.intl || r.phone).replace(/[^\d+]/g, ""))}">${esc(r.phone)}</a>` : "");
     });
   }

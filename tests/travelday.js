@@ -34,7 +34,7 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     await p.route('**/functions/v1/**', r => {
       let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (_){}
       if (b.mode === 'place-contact') return r.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify({ ok: true, address: '서울특별시 중구 명동 123', phone: '02-1234-5678', intl: '+82 2-1234-5678' }) });
+        body: JSON.stringify(b.lang === 'en' ? { ok: true, address: '123 Myeongdong, Jung-gu, Seoul', phone: '02-1234-5678' } : { ok: true, address: '서울특별시 중구 명동 123', phone: '02-1234-5678', intl: '+82 2-1234-5678' }) });
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     });
     await p.route('**tile**', r => r.abort());
@@ -110,7 +110,7 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     ok('全螢幕顯示當地文字同一句請帶我去', /여기로 가 주세요/.test(card) && /[가-힣]/.test(card), card.slice(0, 60));
     await p.waitForTimeout(500);
     const card2 = await p.locator('.taxicard').innerText();
-    ok('有當地文地址同電話', /서울특별시 중구 명동 123/.test(card2) && /02-1234-5678/.test(card2), card2);
+    ok('有當地文地址同電話', /서울특별시 중구 명동 123/.test(card2) && /02-1234-5678/.test(card2) && /123 Myeongdong/.test(card2) && /주소 Address/.test(card2), card2);
     ok('電話撳得打', await p.locator('.taxicard a[href="tel:+82212345678"]').count() === 1);
     await p.locator('.taxicard').click();
     ok('撳一下就收', await p.locator('.taxicard').count() === 0);
