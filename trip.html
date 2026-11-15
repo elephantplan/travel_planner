@@ -2202,7 +2202,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-14-15";
+  const BUILD = "2026-11-15-1";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -10567,6 +10567,31 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // An "edit" that puts a different place where another one was. The family
   // usually wants to keep what they already planned, so it is offered as an
   // addition first and only replaces the old place when they say so.
+  // each new place on Google, near its day: score, how many rated it, map
+  // link; the match is kept so 套用 adds that same place
+  function addGoogleFacts(out, changes){
+    out.querySelectorAll(".ai-change").forEach(card => {
+      const btn = card.querySelector("[data-apply]");
+      const c = btn && changes[+btn.dataset.apply];
+      if (!c || !c.stop || c.op === "remove" || !plain(c.stop.title) || c.stop.placeId) return;
+      const day = dayById(c.dayId);
+      const pts = day ? toUnits(day.items).map(u => u.stop).filter(x => x && Number.isFinite(Number(x.lat)) && x.lat !== "") : [];
+      const t = timeToMinutes(c.stop.time);
+      const near = pts.slice().sort((a, b) => Math.abs((timeToMinutes(a.time) ?? 720) - (t ?? 720)) - Math.abs((timeToMinutes(b.time) ?? 720) - (t ?? 720)))[0];
+      const facts = document.createElement("div");
+      facts.className = "rec-facts";
+      facts.innerHTML = `${loaderSvg()}<span>搵緊 Google 評分…</span>`;
+      card.querySelector(".editor-tools").before(facts);
+      findPlaceNear(null, plain(c.stop.kr) || plain(c.stop.title), plain(c.stop.title), near ? { lat: Number(near.lat), lng: Number(near.lng) } : null).catch(() => null).then(g => {
+        if (!facts.isConnected) return;
+        if (!g){ facts.innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plain(c.stop.kr) || plain(c.stop.title))}" target="_blank" rel="noopener">${icon("pin")}Google 地圖搵</a>`; return; }
+        if (!c.stop.placeId) Object.assign(c.stop, { placeId: g.placeId, lat: g.lat, lng: g.lng },
+          Number.isFinite(g.rating) ? { rating: g.rating, ratingCount: g.ratingCount } : {});
+        const n = Number(g.ratingCount);
+        facts.innerHTML = `<a href="${esc(googlePlaceUrl({ title: g.name, placeId: g.placeId }))}" target="_blank" rel="noopener">${Number.isFinite(g.rating) ? `${icon("star")}<b>${g.rating.toFixed(1)}</b>${n > 0 ? `（${n.toLocaleString("en-US")} 個評價）` : ""}・` : ""}${icon("pin")}Google 地圖</a>`;
+      });
+    });
+  }
   function swapsPlace(c){
     return !!(c && c.op === "edit" && c.stop && c.matchTitle && plain(c.stop.title) &&
       cleanPlaceName(plain(c.stop.title)) !== cleanPlaceName(plain(c.matchTitle)));
@@ -10681,8 +10706,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // covering everything ticked — the current day plus whatever else is checked.
   // Asked to find somewhere (a restaurant, a café…), one answer is too few
   // to choose from, so the model is asked for several for the same slot.
-  const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。）";
-  function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|邊度|邊間|店/i.test(q || ""); }
+  const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店、景點或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。如果問緊幾個唔同時段（例如上晝景點、晏晝食飯），每個時段都俾 3 至 5 個選擇。）";
+  function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|推薦|建議|邊度|邊間|店|去邊|去哪|哪裡|哪裏|邊個地方|逛|行街|景點|好去處|地方|睇紅葉|賞|寺|神社|公園|購物|買/i.test(q || ""); }
   function openDayAiSheet(day){
     const stops = day.items.filter(i => i.kind === "stop").length;
     const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
@@ -10751,6 +10776,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           titleCards;
         wireApplyButtons(out, changes);
         wireDayTitleButtons(out, dayTitles);
+        addGoogleFacts(out, changes);
         saveAiNote("day-plan", `${label}：AI 建議${asked ? "（" + asked + "）" : ""}`,
           [r.notes, ...changes.map(c => `【Day ${String(c.dayId||"").replace("day","")}・${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
             .filter(Boolean).join("\n\n"));
