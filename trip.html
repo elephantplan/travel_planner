@@ -1495,6 +1495,11 @@ a.btn{text-decoration:none;}
 .taxi-ask{font-size:22px;font-weight:700;margin:0 0 18px;color:#444;}
 .taxi-local{font-size:clamp(30px,9vw,52px);font-weight:900;line-height:1.3;margin:0;word-break:break-word;}
 .taxi-name{font-size:18px;color:#555;margin:16px 0 0;}
+.taxi-contact{margin-top:26px;border-top:1px solid #ddd;padding-top:18px;}
+.taxi-k{font-size:13px;color:#888;margin:10px 0 2px;letter-spacing:.1em;}
+.taxi-addr{font-size:clamp(20px,5.6vw,30px);font-weight:700;line-height:1.4;margin:0;word-break:break-word;}
+.taxi-tel{display:inline-block;font-size:clamp(22px,6vw,32px);font-weight:700;color:#0b57d0;text-decoration:none;margin-top:2px;}
+.taxi-wait{font-size:14px;color:#999;margin:0;}
 .taxi-hint{position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));font-size:13px;color:#999;margin:0;}
 
 /* ---------- 時間好趕 ---------- */
@@ -2202,7 +2207,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-15-1";
+  const BUILD = "2026-11-15-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3805,7 +3810,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const legBusy = new Set();
   function hotelStopHtml(st, which){
     const g = googlePlaceUrl({ title: st.name, kr: st.kr || "", placeId: st.placeId || "", mapUrl: st.mapUrl || "" });
-    const tx = taxiBtnHtml(st.kr, st.name);
+    const tx = taxiBtnHtml(st.kr, st.name, st.placeId);
     return `<div class="stop hotelrow">
       <div class="stop-rail"><span class="stoptime"></span><span class="node hotelnode">${icon("home")}</span></div>
       <div class="hotelcard">
@@ -4206,11 +4211,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // ---------- 畀司機睇 ----------
   // A full-screen card a taxi driver can read at arm's length: the place in
   // the local script, large, and "please take me here" in their language.
-  function taxiBtnHtml(local, name){
+  function taxiBtnHtml(local, name, placeId){
     if (!plain(local)) return "";
-    return `<button class="maplink" data-taxi="${esc(plain(local))}" data-taxi-name="${esc(plain(name || ""))}">${icon("map")}畀司機睇</button>`;
+    return `<button class="maplink" data-taxi="${esc(plain(local))}" data-taxi-name="${esc(plain(name || ""))}" data-taxi-pid="${esc(placeId || "")}">${icon("map")}畀司機睇</button>`;
   }
-  function openTaxiCard(local, name){
+  // address and phone in the local language, from Google, kept for the visit
+  const contactCache = new Map();
+  async function placeContact(pid, local){
+    const k = pid || local;
+    if (contactCache.has(k)) return contactCache.get(k);
+    const lang = destIsKorea() ? "ko" : destIsJapan() ? "ja" : "zh-TW";
+    const p = withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+      body: JSON.stringify({ mode: "place-contact", placeId: pid || "", query: pid ? "" : local, lang }) }).then(r => r.json()), 12000, null).catch(() => null);
+    contactCache.set(k, p);
+    const r = await p;
+    if (!r || !r.ok) contactCache.delete(k);
+    return r;
+  }
+  function openTaxiCard(local, name, pid){
     const ask = /[가-힣]/.test(local) ? "여기로 가 주세요" : /[぀-ヿ]/.test(local) || destIsJapan() ? "ここまでお願いします" : "請帶我去呢度";
     const layer = $("#layer");
     layer.innerHTML = `<div class="taxicard" role="dialog" aria-label="畀司機睇">
@@ -4218,13 +4236,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <p class="taxi-ask">${esc(ask)}</p>
       <p class="taxi-local">${esc(local)}</p>
       ${name && name !== local ? `<p class="taxi-name">${esc(name)}</p>` : ""}
+      <div class="taxi-contact"><p class="taxi-wait">搵緊地址同電話…</p></div>
       <p class="taxi-hint">撳任何位置關閉</p>
     </div>`;
-    layer.querySelector(".taxicard").addEventListener("click", () => { layer.innerHTML = ""; });
+    layer.querySelector(".taxicard").addEventListener("click", e => { if (e.target.closest("a")) return; layer.innerHTML = ""; });
+    const box = layer.querySelector(".taxi-contact");
+    placeContact(pid, local).then(r => {
+      if (!box.isConnected) return;
+      if (!r || (!r.address && !r.phone)){ box.innerHTML = ""; return; }
+      const label = destIsJapan() ? ["住所", "電話"] : destIsKorea() ? ["주소", "전화"] : ["地址", "電話"];
+      box.innerHTML = (r.address ? `<p class="taxi-k">${label[0]}</p><p class="taxi-addr">${esc(r.address)}</p>` : "") +
+        (r.phone ? `<p class="taxi-k">${label[1]}</p><a class="taxi-tel" href="tel:${esc((r.intl || r.phone).replace(/[^\d+]/g, ""))}">${esc(r.phone)}</a>` : "");
+    });
   }
   document.addEventListener("click", e => {
     const t = e.target.closest && e.target.closest("[data-taxi]");
-    if (t){ e.preventDefault(); e.stopPropagation(); openTaxiCard(t.dataset.taxi, t.dataset.taxiName); return; }
+    if (t){ e.preventDefault(); e.stopPropagation(); openTaxiCard(t.dataset.taxi, t.dataset.taxiName, t.dataset.taxiPid || ""); return; }
     const g = e.target.closest && e.target.closest("[data-go-today]");
     if (g){ e.preventDefault(); state.view = g.dataset.goToday; window.scrollTo({ top: 0 }); render(); }
   });
@@ -4746,7 +4773,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}${taxiBtnHtml(st.kr, st.name)}</div>` : ""}
+            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}${taxiBtnHtml(st.kr, st.name, st.placeId)}</div>` : ""}
             ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
             <div class="stayacts">
               <button class="btn" data-editsec="acc">${icon("pencil")}改日子／資料</button>
@@ -6109,7 +6136,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     { const tb = s.type === "eat" ? tabelogUrl(s) : "";
       if (tb) links.push(`<a class="maplink tabelog" href="${esc(tb)}" target="_blank" rel="noopener">${icon("star")}Tabelog</a>`); }
     { const c = copyBtnHtml(subj || s); if (c) links.push(c); }
-    { const tx = taxiBtnHtml((subj || s).kr, (subj || s).title); if (tx) links.push(tx); }
+    { const tx = taxiBtnHtml((subj || s).kr, (subj || s).title, (subj || s).placeId); if (tx) links.push(tx); }
     if (fetchable) links.push(`<button class="maplink" data-getphoto="${i}">${icon("camera")}搵張相</button>`);
 
     return `

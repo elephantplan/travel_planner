@@ -170,6 +170,28 @@ async function legBetween(body: any) {
   return { ok: false, message: "計唔到呢段交通。" };
 }
 
+// For the taxi card: the place's address and phone number in the local
+// language, so a driver who doesn't know the name can still find it.
+async function placeContact(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const lang = str(body?.lang, 8) || "ja";
+  let pid = str(body?.placeId, 200);
+  if (!key) return { ok: false };
+  try {
+    if (!pid) {
+      const q = str(body?.query, 80);
+      if (!q) return { ok: false };
+      const f = await (await fetch(`https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(q)}&inputtype=textquery&fields=place_id&language=${lang}&key=${key}`)).json();
+      pid = f?.candidates?.[0]?.place_id || "";
+      if (!pid) return { ok: false };
+    }
+    const r = (await (await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=name,formatted_address,formatted_phone_number,international_phone_number&language=${lang}&key=${key}`)).json())?.result;
+    if (!r) return { ok: false };
+    return { ok: true, name: String(r.name || ""), address: String(r.formatted_address || "").replace(/^日本、?\s*/, "").replace(/^대한민국\s*/, ""),
+      phone: String(r.formatted_phone_number || ""), intl: String(r.international_phone_number || "") };
+  } catch { return { ok: false }; }
+}
+
 // A name typed by hand, looked up around a point — for chains (一蘭,
 // Starbucks) Google then returns the branches close to the previous stop
 // instead of the most famous ones, each with its distance in metres.
@@ -557,6 +579,7 @@ Deno.serve(async (req) => {
   if (body?.mode === "leg") return json(await legBetween(body));
   if (body?.mode === "nearby") return json(await nearbyPlaces(body));
   if (body?.mode === "near-search") return json(await nearSearch(body));
+  if (body?.mode === "place-contact") return json(await placeContact(body));
   if (body?.mode === "suggest-add") return json(await suggestAdd(body));
   if (body?.mode === "place-brief") return json(await placeBrief(body));
   if (body?.mode === "brief-many") return json(await briefMany(body));

@@ -31,7 +31,12 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
         edited_by: 'x', source: 'seed', summary: 's', snapshot: cur, has_snapshot: true }]) });
     });
     await p.route('**/rest/v1/ai_notes**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-    await p.route('**/functions/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }));
+    await p.route('**/functions/v1/**', r => {
+      let b = {}; try { b = JSON.parse(r.request().postData() || '{}'); } catch (_){}
+      if (b.mode === 'place-contact') return r.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ ok: true, address: '서울특별시 중구 명동 123', phone: '02-1234-5678', intl: '+82 2-1234-5678' }) });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+    });
     await p.route('**tile**', r => r.abort());
     await p.goto('http://localhost:8799/trip.html?trip=1' + (opts.query || ''), { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(1300);
@@ -103,6 +108,10 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     await p.waitForTimeout(200);
     const card = await p.locator('.taxicard').innerText();
     ok('全螢幕顯示當地文字同一句請帶我去', /여기로 가 주세요/.test(card) && /[가-힣]/.test(card), card.slice(0, 60));
+    await p.waitForTimeout(500);
+    const card2 = await p.locator('.taxicard').innerText();
+    ok('有當地文地址同電話', /서울특별시 중구 명동 123/.test(card2) && /02-1234-5678/.test(card2), card2);
+    ok('電話撳得打', await p.locator('.taxicard a[href="tel:+82212345678"]').count() === 1);
     await p.locator('.taxicard').click();
     ok('撳一下就收', await p.locator('.taxicard').count() === 0);
     ok('冇 JS 錯誤', errs.length === 0, errs);
