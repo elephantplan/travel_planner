@@ -1802,6 +1802,11 @@ body.readonly .qa-del{display:none;}
   padding:10px 16px calc(12px + env(safe-area-inset-bottom));
   background:linear-gradient(to top, var(--paper) 58%, transparent);
   pointer-events:none;
+  /* its own layer: in the installed iPhone app a fixed bar could be left
+     painted mid-screen after a sheet closed or the page re-laid out while
+     scrolling; a composited layer is re-placed by the GPU instead */
+  transform:translate3d(0,0,0);-webkit-transform:translate3d(0,0,0);
+  will-change:transform;-webkit-backface-visibility:hidden;backface-visibility:hidden;
 }
 .dock > *{pointer-events:auto;}
 .dockbtn{
@@ -2208,7 +2213,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-15-3";
+  const BUILD = "2026-11-15-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -10079,8 +10084,28 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function closeLayer(){
     $("#layer").innerHTML = "";
     document.body.style.overflow = "";
+    repinDock();
     document.removeEventListener("keydown", onLayerKey);
   }
+  // iOS (Home Screen app) sometimes leaves position:fixed bars where they
+  // were before the page re-laid out — a sheet closing, the keyboard going
+  // away, a big redraw. Taking the bar out and back forces it to be placed again.
+  function repinDock(){
+    const d = document.querySelector(".dock");
+    if (!d) return;
+    requestAnimationFrame(() => {
+      d.style.display = "none";
+      void d.offsetHeight;
+      d.style.display = "";
+    });
+  }
+  if (window.visualViewport){
+    let t = null;
+    window.visualViewport.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(repinDock, 120); });
+  }
+  window.addEventListener("orientationchange", () => setTimeout(repinDock, 300));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") repinDock(); });
+  document.addEventListener("focusout", e => { if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) setTimeout(repinDock, 250); });
   function onLayerKey(e){ if (e.key === "Escape") closeLayer(); }
   function openSheet(inner, after, opts){
     const layer = $("#layer");
