@@ -1850,6 +1850,15 @@ body.readonly .qa-del{display:none;}
 @keyframes genspin{to{transform:rotate(360deg);}}
 .genbanner .txt{flex:1;line-height:1.6;}
 
+button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0;cursor:pointer;}
+.sgplan-n{display:block;margin-top:4px;font-size:12px;font-weight:700;color:var(--gold);}
+.sggroup{margin-top:22px;scroll-margin-top:120px;}
+.sggroup-h{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;font-size:16px;}
+.sggroup-h .sgd{font-size:12.5px;color:var(--gold);font-weight:700;}
+.sggroup-h small{margin-left:auto;font-size:12px;font-weight:500;color:var(--ink-faint);}
+.sggroup-wait{display:flex;align-items:center;gap:8px;}
+.sggroup-wait .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--gold);animation:genspin .8s linear infinite;}
+.sggroup > .btn{margin-top:10px;}
 .sgpending{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px 12px;border-radius:var(--r-lg);background:var(--surface-2);font-size:13px;color:var(--ink-soft);}
 .sgpending .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--gold);flex:none;animation:genspin .8s linear infinite;}
 /* ---------- AI 諗行程: thinking stage, summary bar, sticky footer ---------- */
@@ -2283,7 +2292,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-11";
+  const BUILD = "2026-11-17-13";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2834,7 +2843,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (saver.paused || !saverDirty() || !state.snapshot) return;
     if (saver.inFlight){ saver.again = true; return saver.inFlight; }
 
-    const json = snapJson();
+    let json = snapJson();
     if (json && json === saver.lastPersistedJson){   // nothing actually changed
       saver.pendingUser = []; saver.pendingUpkeep = false;
       flash("已儲存");
@@ -2847,6 +2856,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     flash("儲存緊…", true);
     saver.inFlight = (async () => {
       let lastErr = null;
+      // someone else saved since this page last did: fold their changes in
+      // rather than write over them
+      try { if (await mergeRemote()) json = snapJson(); } catch (_){}
       for (let attempt = 0; attempt < 3; attempt++){
         try {
           const before = saver.lastPersistedJson;
@@ -2873,6 +2885,84 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     try { await saver.inFlight; } finally { saver.inFlight = null; }
     if (saver.again){ saver.again = false; return flushSaves("again"); }
   }
+
+  // ---------- two people editing at once ----------
+  // Each save is a whole new version, so the last one to save used to win and
+  // the other person's edit was simply gone. Before saving, the newest version
+  // is checked; if someone else saved, the two are merged one day (and one
+  // section) at a time: what only they changed is taken, what only we changed
+  // is kept, and only a day both changed keeps ours (theirs stays in 改動紀錄).
+  const MERGE_NAMES = { meta: "行程資料", stays: "住宿", staySuggest: "住宿建議", boards: "清單", sections: "主頁內容", money: "使費", prep: "行前準備" };
+  function mergeSnapshots(base, mine, theirs){
+    // the database hands JSON back with its keys in its own order, so compare by content
+    const canon = x => Array.isArray(x) ? x.map(canon) : x && typeof x === "object"
+      ? Object.keys(x).sort().reduce((o, k) => { if (x[k] !== undefined) o[k] = canon(x[k]); return o; }, {}) : x;
+    const S = x => JSON.stringify(canon(x === undefined ? null : x));
+    const conflicts = [];
+    const pick = (b, m, t, label) => {
+      if (S(m) === S(b)) return t;
+      if (S(t) === S(b) || S(t) === S(m)) return m;
+      conflicts.push(label);
+      return m;
+    };
+    const out = {};
+    new Set([...Object.keys(base || {}), ...Object.keys(mine || {}), ...Object.keys(theirs || {})]).forEach(k => {
+      if (k === "days") return;
+      const v = pick((base || {})[k], (mine || {})[k], (theirs || {})[k], MERGE_NAMES[k] || "其他資料");
+      if (v !== undefined) out[k] = v;
+    });
+    const byId = list => new Map((list || []).map(d => [d.id, d]));
+    const bD = byId(base && base.days), mD = byId(mine && mine.days), tD = byId(theirs && theirs.days);
+    const ids = list => S((list || []).map(d => d.id));
+    // which days there are: whoever changed the list (both: ours)
+    const order = ids(mine && mine.days) === ids(base && base.days) ? (theirs.days || []).map(d => d.id) : (mine.days || []).map(d => d.id);
+    out.days = order.map(id => {
+      const t = tD.get(id), m = mD.get(id), b = bD.get(id);
+      const d = pick(b, m, t, (m || t || {}).title ? `Day ${id.replace("day", "")}「${plain((m || t).title)}」` : `Day ${id.replace("day", "")}`);
+      return d || m || t;
+    }).filter(Boolean);
+    return { merged: out, conflicts };
+  }
+  async function latestHead(){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,edited_by,created_at&order=created_at.desc&limit=1`, { headers: sbHeaders() });
+    return res.ok ? (await res.json())[0] || null : null;
+  }
+  async function mergeRemote(){
+    if (!saver.lastVersionId || !saver.lastPersistedJson) return false;
+    const head = await latestHead();
+    if (!head || head.id === saver.lastVersionId) return false;
+    const row = await fetchLatestVersion();
+    if (!row || !row.snapshot) return false;
+    const { merged, conflicts } = mergeSnapshots(JSON.parse(saver.lastPersistedJson), JSON.parse(snapJson()), row.snapshot);
+    state.snapshot = normalizeSnapshot(merged);
+    saver.lastVersionId = row.id;
+    saver.lastPersistedJson = JSON.stringify(row.snapshot);
+    render();
+    const who = plain(row.edited_by) || "其他人";
+    flash(conflicts.length
+      ? `${who} 同時改咗 ${conflicts.join("、")}，用咗你嘅版本；佢嘅喺「改動紀錄」`
+      : `${who} 啱啱都改咗，已經同你嘅改動合埋`);
+    return true;
+  }
+  // While the trip is open, notice someone else's save within half a minute.
+  // Nothing of ours unsaved: just show theirs. Otherwise the save merges.
+  async function watchRemote(){
+    if (document.visibilityState !== "visible" || state.readonly || state.offline || !saver.lastVersionId) return;
+    if (saverDirty() || saver.inFlight || state.dragBusy) return;
+    let head = null;
+    try { head = await latestHead(); } catch (_){ return; }
+    if (!head || head.id === saver.lastVersionId || saverDirty() || saver.inFlight) return;
+    const who = plain(head.edited_by) || "其他人";
+    const busy = document.querySelector("#layer .sheet") || state.open.size;
+    if (busy){
+      // don't pull the page from under an open sheet or editor
+      if (watchRemote.told !== head.id){ watchRemote.told = head.id; hintBar(`${who} 啱啱改咗行程`, "睇最新", () => reloadFromServer().catch(() => {})); }
+      return;
+    }
+    try { await reloadFromServer(); flash(`${who} 啱啱改咗行程，已經更新咗`); } catch (_){}
+  }
+  setInterval(watchRemote, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") setTimeout(watchRemote, 800); });
 
   // Resolve on ENQUEUE, not on persistence: ~50 call sites `await saveNow(...)`,
   // and if each of those waited for a real POST the coalescing would never
@@ -8941,7 +9031,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           ${a.cons ? `<span class="sga-row con"><i>留意</i>${esc(a.cons)}</span>` : ""}
           ${a.goodFor ? `<span class="sga-row"><i>啱</i>${esc(a.goodFor)}</span>` : ""}
         </button>`; }).join("")}</div>` : ""}
-      ${(sg.plan || []).length ? `<p class="picker-label">邊幾晚住邊度</p><div class="sgplan">${sg.plan.map(x => `<div class="sgplan-row"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span></div>`).join("")}</div>` : ""}
+      ${(sg.plan || []).length ? `<p class="picker-label">邊幾晚住邊度（撳一段睇嗰段嘅酒店）</p><div class="sgplan">${sg.plan.map((x, i) => `<button type="button" class="sgplan-row" data-seggo="${i}"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span><b>住${esc(x.area)}</b><span class="sgwhy">${esc(x.why)}</span><span class="sgplan-n">${(stayGroups(sg)[i] || []).length} 間 ›</span></button>`).join("")}</div>` : ""}
       ${sg.hotels.some(h => Number.isFinite(h.lat)) ? `<div class="mapbox sgmap" id="map-stays"></div>
         <p class="hint sgmaplegend"><span class="lg-h">A</span> 建議嘅酒店　<span class="lg-s"></span> 行程入面嘅景點</p>` : ""}
       <div class="sgsort" role="group" aria-label="排序">${STAY_SORTS.map(([k, l]) =>
@@ -8949,7 +9039,27 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${(sg.areas || []).length > 1 ? `<div class="sgsort sgfilter">${[["", "全部區"]].concat(sg.areas.map(a => [a.area, a.area])).map(([k, l]) =>
         `<button type="button" class="pfchip${(state.stayArea || "") === k ? " on" : ""}" data-stayarea="${esc(k)}">${esc(l)}</button>`).join("")}</div>` : ""}
       ${pend}
-      <div class="sghotels">${sortedStayIdx(sg.hotels).filter(k => !state.stayArea || sg.hotels[k].area === state.stayArea).map(k => { const h = sg.hotels[k]; return `
+      ${(() => {
+        const shown = k => !state.stayArea || sg.hotels[k].area === state.stayArea;
+        const order = sortedStayIdx(sg.hotels);
+        if (!(sg.plan || []).length) return `<div class="sghotels">${order.filter(shown).map(card).join("")}</div>`;
+        // one group per stretch of nights, so Day 1–4 and Day 7–10 in the same area each get their own
+        const groups = stayGroups(sg), rest = groups[sg.plan.length] || [];
+        return sg.plan.map((x, i) => {
+          const ks = order.filter(k => (groups[i] || []).includes(k) && shown(k));
+          const pending = (state.stayPending || []).includes(segLabel(x));
+          return `<section class="sggroup" id="sgseg-${i}">
+            <h4 class="sggroup-h"><span class="sgd">${esc(dLab(x.fromDay, x.toDay))}</span>住${esc(x.area)}<small>${ks.length} 間</small></h4>
+            ${ks.length ? `<div class="sghotels">${ks.map(card).join("")}</div>`
+              : pending ? `<p class="hint sggroup-wait"><span class="spin"></span>搵緊呢段嘅酒店…</p>`
+              : `<p class="hint">呢段仲未有推介。</p>`}
+            ${!state.readonly && !pending ? `<button class="btn wide" data-segask="${i}">${icon("sparkle")}${ks.length ? "呢段再搵多幾間" : "搵呢段嘅酒店"}</button>` : ""}
+          </section>`;
+        }).join("") + (order.filter(k => rest.includes(k) && shown(k)).length ? `<section class="sggroup"><h4 class="sggroup-h">其他</h4><div class="sghotels">${order.filter(k => rest.includes(k) && shown(k)).map(card).join("")}</div></section>` : "");
+      })()}
+      <p class="hint">AI 推薦嘅價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
+    </div>`;
+    function card(k){ const h = sg.hotels[k]; return `
         <div class="sgh${h.fresh ? " fresh" : ""}">
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
           ${h.photoUrl ? `<div class="sgh-photo"><img src="${esc(h.photoUrl)}" alt="" loading="lazy">${rateBadge(h)}</div>` : ""}
@@ -8974,9 +9084,20 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <div class="sgh-when">${icon("clock")}${nightsLabel(h) ? `入住 ${esc(nightsLabel(h).replace("–", " ・退房 "))}` : ""}${whoLabel() ? `・${esc(whoLabel())}` : ""}<span>Google 開咗如果日子唔啱，揀返呢個日子</span>
             </div>
           </div>
-        </div>`; }).join("")}</div>
-      <p class="hint">AI 推薦嘅價錢係網上搜尋嘅大約範圍，訂之前要自己再睇。評分同相嚟自 Google。</p>
-    </div>`;
+        </div>`; }
+  }
+  // which stretch of nights each suggested hotel is for: the same nights
+  // first, then the same area; the last slot holds the rest
+  const segLabel = x => `Day ${x.fromDay}–${x.toDay} ${x.area}`;
+  function stayGroups(sg){
+    const plan = sg.plan || [], out = plan.map(() => []).concat([[]]);
+    const near = (a, b) => !!a && !!b && (a.includes(b) || b.includes(a) || a.replace(/周邊|一帶|附近|區|站/g, "") === b.replace(/周邊|一帶|附近|區|站/g, ""));
+    (sg.hotels || []).forEach((h, k) => {
+      let i = plan.findIndex(x => x.fromDay === h.fromDay && x.toDay === h.toDay);
+      if (i < 0) i = plan.findIndex(x => near(x.area, h.area));
+      out[i < 0 ? plan.length : i].push(k);
+    });
+    return out;
   }
   // ---------- where the suggested hotels are ----------
   // Lettered pins for the hotels (the same letter is on each card) over the
@@ -9231,6 +9352,36 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         每間房每晚預算: pf.budget, 最緊要: pf.focus, 其他要求: pf.other } : { 人數: "未講（當 2 個大人 1 間房）" }),
     };
   }
+  // more hotels for one stretch of nights only
+  async function suggestStaySeg(i){
+    const snap = state.snapshot, sg = snap.staySuggest, x = sg && (sg.plan || [])[i];
+    if (!x) return 0;
+    const label = segLabel(x);
+    state.stayPending = [...(state.stayPending || []), label];
+    render();
+    const ctx = stayContext();
+    const t = JSON.stringify(Object.assign({}, ctx, {
+      "今次只要": `淨係 Day ${x.fromDay}–${x.toDay}（fromDay 用 ${x.fromDay}、toDay 用 ${x.toDay}）住「${x.area}」呢一段，3 間唔同價位嘅酒店；areas 只寫呢區，plan 留空陣列`,
+      "已經建議過（唔好再推介呢啲，要揀其他）": (sg.hotels || []).map(h => h.name) }));
+    let r = null;
+    try {
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "stay-suggest", quick: true, text: t, today: localIso(new Date()) }) }), 100000, null);
+      r = res ? await res.json().catch(() => null) : null;
+    } catch (_){}
+    state.stayPending = (state.stayPending || []).filter(y => y !== label);
+    const seen = new Set((sg.hotels || []).map(h => plain(h.local || h.name).toLowerCase() + "|" + h.fromDay + "-" + h.toDay));
+    const added = ((r && r.ok !== false && r.stays && r.stays.hotels) || [])
+      .map(h => Object.assign(h, { fromDay: x.fromDay, toDay: x.toDay, fresh: true, at: new Date().toISOString() }))
+      .filter(h => !seen.has(plain(h.local || h.name).toLowerCase() + "|" + h.fromDay + "-" + h.toDay));
+    sg.hotels = [...added, ...(sg.hotels || [])];
+    render();
+    if (!added.length){ flash((r && r.message) || "今次冇搵到新嘅，再試一次"); return 0; }
+    await verifyHotels(added);
+    render();
+    await saveNow(`${label} 多咗 ${added.length} 間酒店建議`);
+    return added.length;
+  }
   async function suggestStays(onProgress, extra){
     const snap = state.snapshot, days = snap.days || [];
     const pf = snap.stayPrefs;
@@ -9261,7 +9412,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       } catch (e){ return { ok: false, message: e.message }; }
     };
     const old = ((snap.staySuggest || {}).hotels || []).map(h => Object.assign(h, { fresh: false }));
-    const nameKey = h => plain(h.local || h.name).toLowerCase();
+    const nameKey = h => plain(h.local || h.name).toLowerCase() + "|" + h.fromDay + "-" + h.toDay;
     const seenName = new Set(old.map(nameKey));
     const areas = new Map(((snap.staySuggest || {}).areas || []).map(a => [a.area, a]));
     const addAreas = list => {
@@ -9270,7 +9421,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     };
     const allAdded = [];
     // hotels from one answer: shown at once, then checked on Google behind them
-    const takeHotels = async (sg) => {
+    const takeHotels = async (sg, days) => {
+      // a stretch's hotels are for that stretch's nights, whatever the reply says
+      if (days) (sg.hotels || []).forEach(h => { h.fromDay = days[0]; h.toDay = days[1]; });
       const added = (sg.hotels || []).filter(h => !seenName.has(nameKey(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
       added.forEach(h => seenName.add(nameKey(h)));
       if (!added.length) return;
@@ -9291,19 +9444,23 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         addAreas(areaList);
         snap.staySuggest = { at: new Date().toISOString(), plan: (a.stays.plan || []).length ? a.stays.plan : ((snap.staySuggest || {}).plan || []),
           areas: [...areas.values()], hotels: [...old] };
-        const names = areaList.map(x => x.area).slice(0, 4);
-        state.stayPending = names.slice();
-        state.stayLoadingText = `揀咗住宿區：${names.join("、")}。逐區搵緊酒店…`;
+        const segs = (a.stays.plan || []).length
+          ? a.stays.plan.slice(0, 6).map(x => ({ label: segLabel(x), area: x.area, days: [x.fromDay, x.toDay], ask: `淨係 Day ${x.fromDay}–${x.toDay}（fromDay 用 ${x.fromDay}、toDay 用 ${x.toDay}）住「${x.area}」呢一段，3 間唔同價位嘅酒店；areas 只寫呢區，plan 留空陣列` }))
+          : areaList.slice(0, 4).map(x => ({ label: x.area, area: x.area, ask: `淨係「${x.area}」呢一區，3 間唔同價位嘅酒店；areas 只寫呢區，plan 留空陣列` }));
+        state.stayPending = segs.map(x => x.label);
+        state.stayLoadingText = (a.stays.plan || []).length
+          ? `分咗 ${segs.length} 段住：${segs.map(x => x.label).join("、")}。逐段搵緊酒店…`
+          : `揀咗住宿區：${segs.map(x => x.area).join("、")}。逐區搵緊酒店…`;
         state.stayArea = "";
         repaint();
-        onProgress && onProgress(`逐區搵緊酒店：${names.join("、")}`);
-        // 2. each area's hotels, all at once; whichever answers first shows first
+        onProgress && onProgress(state.stayLoadingText);
+        // 2. each stretch's hotels, all at once; whichever answers first shows first
         const base = JSON.parse(trip);
-        await Promise.all(names.map(async area => {
-          const t = JSON.stringify(Object.assign({}, base, { "今次只要": `淨係「${area}」呢一區，2–3 間酒店；areas 只寫呢區，plan 留空陣列` }));
+        await Promise.all(segs.map(async seg => {
+          const t = JSON.stringify(Object.assign({}, base, { "今次只要": seg.ask }));
           const r = await post({ mode: "stay-suggest", quick: true, text: t }, 100000);
-          state.stayPending = (state.stayPending || []).filter(x => x !== area);
-          if (r && r.ok !== false && r.stays){ ok = true; await takeHotels(r.stays); }
+          state.stayPending = (state.stayPending || []).filter(x => x !== seg.label);
+          if (r && r.ok !== false && r.stays){ ok = true; await takeHotels(r.stays, seg.days); }
           else { why = (r && r.message) || why; repaint(); }
         }));
       } else {
@@ -9377,6 +9534,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.readonly) return;
     const pick = e.target.closest && e.target.closest("[data-staypick]");
     if (pick){ e.preventDefault(); pickSuggestedStay(+pick.dataset.staypick); return; }
+    const sgo = e.target.closest && e.target.closest("[data-seggo]");
+    if (sgo){ e.preventDefault(); const el = document.getElementById("sgseg-" + sgo.dataset.seggo); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); return; }
+    const sask = e.target.closest && e.target.closest("[data-segask]");
+    if (sask){ e.preventDefault(); sask.disabled = true; suggestStaySeg(+sask.dataset.segask).catch(() => {}); return; }
     const ar = e.target.closest && e.target.closest("[data-stayarea]");
     if (ar){ e.preventDefault(); const v = ar.dataset.stayarea; state.stayArea = state.stayArea === v ? "" : v; render(); return; }
     const ask = e.target.closest && e.target.closest("[data-sgask]");

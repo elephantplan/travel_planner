@@ -147,7 +147,9 @@ const SUGGEST = { ok: true, stays: {
   ok('先攞酒店名（快速模式），詳情之後逐間補', quickFlags.length > 0 && quickFlags.every(Boolean), quickFlags);
   ok('搵完動畫就走', await p.locator('.sgloading').count() === 0);
   ok('唔使打字都撳得「AI 推介」', sentText.length > n0 && sentText.slice(n0).every(t => !/今次額外要求/.test(t)));
-  ok('先問住邊區，再逐區搵酒店', areaAsks.length >= 1 && sentText.slice(n0).every(t => /淨係「/.test(t)), sentText.slice(n0).map(t => (t.match(/淨係「[^」]+」/) || [''])[0]));
+  ok('先問住邊區，再逐區搵酒店', areaAsks.length >= 1 && sentText.slice(n0).every(t => /今次只要":"淨係/.test(t)), sentText.slice(n0).map(t => (t.match(/淨係[^，]+/) || [''])[0]));
+  ok('分段住就逐段列酒店', await p.locator('.sggroup[id^=sgseg-]').count() === ((SUGGEST.stays.plan || []).length || 0) || !(SUGGEST.stays.plan || []).length, await p.locator('.sggroup').count());
+  if ((SUGGEST.stays.plan || []).length) ok('撳一段會去嗰段', await p.locator('[data-seggo]').count() === SUGGEST.stays.plan.length);
   ok('要求擺喺掣上面', await p.evaluate(() => { const a = document.querySelector('.sgprefs'), b = document.querySelector('[data-sgask]'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   // searching again keeps what was found and asks for different ones
   // the questions can be saved without starting a search
