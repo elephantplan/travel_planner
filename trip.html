@@ -1958,6 +1958,14 @@ body.readonly .qa-del{display:none;}
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
 .ins-past{margin-top:8px;}
+.reord{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 12px;}
+.reord ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.8;}
+.reord li.moved{color:var(--gold);font-weight:600;}
+.shophere{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 16px 4px;padding:10px 12px;border-radius:12px;font-size:13px;
+  background:color-mix(in srgb,var(--gold) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 30%,var(--rule));}
+.shophere > span{flex:1 1 180px;display:flex;gap:6px;align-items:center;}
+.shophere .i{width:15px;height:15px;color:var(--gold);}
+.shophere .btn{min-height:32px;padding:0 12px;font-size:12.5px;}
 .ap-facts{margin:0 0 6px;}
 .ap-sug{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:12px;margin:6px 0 4px;font-size:13.5px;line-height:1.5;
   background:color-mix(in srgb,var(--gold) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 35%,var(--rule));}
@@ -2224,7 +2232,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-5";
+  const BUILD = "2026-11-16-6";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6065,6 +6073,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${sel ? "" : `
           <div class="toollist">
             <button class="btn wide dayai" id="dayai">${icon("sparkle")}AI 諗行程</button>
+            ${routeSaving(day) ? `<button class="btn wide" id="reorder">${icon("map")}按距離排順路（可以少行約 ${routeSaving(day).saveKm} 公里）</button>` : ""}
             <button class="btn wide" id="swapday">${icon("refresh")}同另一日成日對調</button>
           </div>
         `}
@@ -6292,6 +6301,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             </div>`}
             ${s.eatboxHtml ? `<div class="eatbox">${s.eatboxHtml}</div>` : ""}
             ${selecting ? "" : farOffHtml(day, s, i)}
+            ${!selecting && !state.readonly && isShopArea(s) ? `<div class="shophere"><span>${icon("bag")}呢個係一個購物區，唔係一間店</span><button class="btn" data-shophere="${i}">推介呢度嘅商場同店舖</button></div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
             ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
@@ -6319,6 +6329,74 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!m || s.farOk) return "";
     return `<div class="faroff">${icon("pin")}<span>呢個地點離同日其他地方 ${Math.round(m / 1000)} 公里，可能搵錯咗另一個城市嘅同名店。</span>
       <button class="btn" data-refind="${i}">喺附近再搵</button><button class="btn" data-farok="${i}">冇錯</button></div>`;
+  }
+  // ---------- 排順路 ----------
+  // The day's places in the order that walks least: the first and last stay
+  // put (arriving, leaving for the airport), the rest are ordered nearest-
+  // next and then untangled (2-opt). Notes travel with the place before them.
+  function routePlan(day){
+    const units = toUnits(day.items);
+    const blocks = [];
+    units.forEach((u, j) => { if (u.stop || !blocks.length) blocks.push({ units: [u], stop: u.stop || null }); else blocks[blocks.length - 1].units.push(u); });
+    const ok = b => b.stop && Number.isFinite(Number(b.stop.lat)) && b.stop.lat !== "" && b.stop.lat != null;
+    if (blocks.length < 4 || !blocks.every(ok)) return null;
+    const d = (a, b) => metersBetween(a.stop, b.stop);
+    const len = order => order.reduce((t, b, k) => k ? t + d(order[k - 1], b) : 0, 0);
+    const first = blocks[0], last = blocks[blocks.length - 1];
+    let rest = blocks.slice(1, -1), order = [first];
+    while (rest.length){
+      const cur = order[order.length - 1];
+      rest.sort((a, b) => d(cur, a) - d(cur, b));
+      order.push(rest.shift());
+    }
+    order.push(last);
+    for (let improved = true, n = 0; improved && n < 50; n++){
+      improved = false;
+      for (let i = 1; i < order.length - 2; i++) for (let k = i + 1; k < order.length - 1; k++){
+        const cand = order.slice(0, i).concat(order.slice(i, k + 1).reverse(), order.slice(k + 1));
+        if (len(cand) < len(order) - 1){ order = cand; improved = true; }
+      }
+    }
+    return { blocks, order, before: len(blocks), after: len(order) };
+  }
+  function routeSaving(day){
+    const r = routePlan(day);
+    if (!r || r.before - r.after < 1500 || r.after > r.before * 0.85) return null;
+    return { saveKm: ((r.before - r.after) / 1000).toFixed(1), r };
+  }
+  function openReorderSheet(day){
+    const sv = routeSaving(day);
+    if (!sv){ flash("呢日已經幾順路"); return; }
+    const { r } = sv;
+    const nm = b => esc(cleanPlaceName(plain(b.stop.title)) || "未改名");
+    openSheet(`
+      <h3>按距離排順路</h3>
+      <p class="sec-sub">第一個同最後一個站唔郁，中間嘅照最少行嘅次序排。直線距離總共約 <b>${(r.before / 1000).toFixed(1)}</b> → <b>${(r.after / 1000).toFixed(1)}</b> 公里。原本嘅時間會跟次序重新分配，排完都可以撳「上一步」還原。</p>
+      <div class="reord"><div><p class="picker-label">而家</p><ol>${r.blocks.map(b => `<li>${nm(b)}</li>`).join("")}</ol></div>
+        <div><p class="picker-label">排完</p><ol>${r.order.map(b => `<li${r.blocks.indexOf(b) !== r.order.indexOf(b) ? ' class="moved"' : ""}>${nm(b)}</li>`).join("")}</ol></div></div>
+      <button class="btn primary wide" id="reord-go">${icon("check")}照咁排</button>
+    `, sheet => sheet.querySelector("#reord-go").addEventListener("click", async () => {
+      closeLayer();
+      // the times stay in the order they were, given to the new order
+      const times = r.blocks.map(b => b.stop.time).filter(t => timeToMinutes(t) != null).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+      const timed = r.blocks.every(b => timeToMinutes(b.stop.time) != null);
+      if (timed) r.order.forEach((b, k) => { b.stop.time = times[k]; });
+      const units = [];
+      r.order.forEach(b => b.units.forEach(u => units.push(u)));
+      units.forEach((u, k) => { if (u.stop) u.seg = k ? { kind: "connector", html: "", stale: true } : null; });
+      day.items = fromUnits(units);
+      syncMapPoints(day);
+      state.open.clear();
+      render();
+      await saveNow(`按距離排順咗 ${day.title}（少行約 ${sv.saveKm} 公里）`);
+      const us = toUnits(day.items);
+      refreshTransit(day, us.map((u, j) => j).filter(j => j > 0 && us[j].stop));
+    }));
+  }
+  // a stop that is only an area to shop in (「澀谷購物」), not a place
+  function isShopArea(s){
+    const t = plain(s.title || "");
+    return /行街|購物|购物|逛街|shopping|血拼|買嘢|掃貨/i.test(t) || (districtOf(t) >= 0 && cleanPlaceName(t).length <= 4 && !s.placeId);
   }
   function lastStopIndex(day){
     const us = toUnits(day.items);
@@ -6442,6 +6520,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const dayAi = $("#dayai");
     if (dayAi) dayAi.addEventListener("click", () => openDayAiSheet(day));
 
+    const reorderBtn = $("#reorder");
+    if (reorderBtn) reorderBtn.addEventListener("click", () => openReorderSheet(day));
+    document.querySelectorAll("[data-shophere]").forEach(el => el.addEventListener("click", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      openInsertSheet(day, +el.dataset.shophere + 1, { kind: "shop", auto: true });
+    }));
     const swapDayBtn = $("#swapday");
     if (swapDayBtn) swapDayBtn.addEventListener("click", () => openDaySwapPicker(day));
 
@@ -7092,7 +7176,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (state.view === day.id) render();
     if (got) await saveNow(`幫 ${got} 個地點寫咗簡介`, true);
   }
-  function openInsertSheet(day, pos){
+  function openInsertSheet(day, pos, opts){
     const units = toUnits(day.items);
     // the stops either side — for the sentence and for 「附近」
     let prevS = null, nextS = null;
@@ -7237,7 +7321,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const f = sheet.querySelector(t.dataset.instab === "ai" ? "#ins-want" : "#ins-q"); if (f) setTimeout(() => f.focus(), 30);
       }));
       // AI: kind, what they fancy, a few options
-      let kind = "eat";
+      let kind = (opts && opts.kind) || "eat";
       const prefs = { budget: 0, near: false, kids: false, book: false };
       const want = sheet.querySelector("#ins-want");
       const PH = { eat: "例如：壽司、拉麵、有兒童椅", see: "例如：影相靚、室內、免費", shop: "例如：藥妝、手信、波鞋" };
@@ -7321,6 +7405,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         out.scrollIntoView({ block: "start", behavior: "smooth" });
       });
       if (go) go.addEventListener("click", run);
+      if (opts && opts.auto && go){
+        const tab = sheet.querySelector('[data-instab="ai"]'); if (tab) tab.click();
+        run();
+      }
       if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });
     }, { tall: true });
   }
@@ -11055,6 +11143,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // covering everything ticked — the current day plus whatever else is checked.
   // Asked to find somewhere (a restaurant, a café…), one answer is too few
   // to choose from, so the model is asked for several for the same slot.
+  // 「想行街」 is not a stop; the places to shop are. And a day should flow.
+  const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
+  const ROUTE_HINT = "排每日嘅地點要順路：同一區嘅放埋一齊，由一頭行去另一頭，唔好喺幾個區之間來回走。";
   const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店、景點或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。如果問緊幾個唔同時段（例如上晝景點、晏晝食飯），每個時段都俾 3 至 5 個選擇。）";
   function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|推薦|建議|邊度|邊間|店|去邊|去哪|哪裡|哪裏|邊個地方|逛|行街|景點|好去處|地方|睇紅葉|賞|寺|神社|公園|購物|買/i.test(q || ""); }
   function openDayAiSheet(day){
@@ -11103,7 +11194,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           hint:`AI 會睇埋其他日子避開重複，大約 ${dayIds.length > 1 ? "20-40" : "15-30"} 秒。` });
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : ""), itinerary: state.snapshot });
+          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT, itinerary: state.snapshot });
         } catch (e){
           stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; go.textContent = "問"; return;
@@ -11910,6 +12001,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     onProgress && onProgress(`AI 諗緊「${label}」…`);
     const notes = [];
     if (edges && edges.first) notes.push("呢批入面有成個行程嘅第一日：一定要留返啱啱抵達目的地嘅安排（例如「抵達機場／車站」、「前往酒店」），唔好一開波就當人已經喺市中心。");
+    notes.push(SHOP_HINT, ROUTE_HINT);
     if (edges && edges.last) notes.push("呢批入面有成個行程嘅最尾一日：一定要預留返足夠時間去機場——最後一個站要係「前往機場」或者類似安排，之前嗰個站要預至少2-3個鐘畀退房／去機場／辦理登機，唔可以行程排到好夜先冇處理返程。");
     let r;
     try {
