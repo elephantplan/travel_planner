@@ -22,10 +22,11 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, created_at: '2026-09-20T00:00:00Z',
       edited_by: 'x', source: 'seed', summary: 's', snapshot: snap, has_snapshot: true }]) });
   });
-  let asked = null;
+  let asked = null, planCalls = 0;
   await p.route('**/functions/v1/**', r => {
     const body = JSON.parse(r.request().postData() || '{}');
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (body.action === 'day-plan' && !(planCalls++)) return j({ ok: false, message: '🔧 AI 今次冇整到有效嘅建議格式，麻煩再試一次（通常第二次就得）。' });
     if (body.action === 'day-plan'){ asked = body; return new Promise(res => setTimeout(res, 2500)).then(() => j({ ok: true, notes: '加多三個', changes: [
       { op: 'add', dayId: 'day2', stop: { title: '仁寺洞', time: '約 13:00' }, reason: '順路' },
       { op: 'add', dayId: 'day2', stop: { title: '廣藏市場', time: '約 15:00' }, reason: '食嘢' },
@@ -46,6 +47,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('諗緊嘅時候收埋啲問題', await p.locator('.dai-form').isHidden());
   ok('諗緊有動畫同講緊做咩', await p.locator('.dai-think .ldr').count() === 1 && /Day 2/.test(await p.locator('#dai-now').innerText()));
   await p.waitForTimeout(2600);
+  ok('格式錯咗會自己再試，唔使用戶撳', planCalls === 2, planCalls);
   ok('答完頂部講返問咗咩', /想食好嘢/.test(await p.locator('.dai-asked').innerText()));
   ok('問題仍然收埋', await p.locator('.dai-form').isHidden());
   ok('全部加入喺底部', /全部加入行程（3 個）/.test(await p.locator('.dai-foot').innerText()));

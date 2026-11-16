@@ -2281,7 +2281,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-9";
+  const BUILD = "2026-11-17-10";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -11602,10 +11602,16 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const stop = thinkingIn(out, dayIds, asked);
         // a cleared day: a new plan, not the old one again, and a new name
         const fresh = pickedDays.filter(d => d.fresh || !d.items.some(i => i.kind === "stop"));
-        const freshNote = fresh.length ? "\n" + fresh.map(d => `${d.id} 係清空咗要重新諗嘅：完全跟我今次嘅要求重新諗，唔好跟返之前嘅主題或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，唔好再用）` : ""}；一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字）。`).join("\n") : "";
+        const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + freshNote, itinerary: state.snapshot });
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT;
+          // a reply that isn't valid JSON is usually fine on the next go:
+          // try again quietly instead of handing the family an error
+          for (let tries = 0; tries < 3; tries++){
+            r = await callAi({ action:"day-plan", dayIds, question, itinerary: state.snapshot });
+            if (!(r && r.ok === false && /格式|截斷|太長/.test(r.message || ""))) break;
+          }
         } catch (e){
           stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; wireReask(); return;
@@ -12499,7 +12505,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const msg = (r && r.message) || (r && r.error) || "";
     // the AI was busy or over its per-minute limit: wait and try again,
     // then a day at a time, rather than leave days empty
-    if (attempt < 2 && /429|503|quota|額度|太多人|太密|RESOURCE|UNAVAILABLE|overloaded|timeout|超時|失敗|fetch/i.test(msg + " " + (!r ? "timeout" : ""))){
+    if (attempt < 2 && /429|503|quota|額度|太多人|太密|RESOURCE|UNAVAILABLE|overloaded|timeout|超時|失敗|fetch|格式/i.test(msg + " " + (!r ? "timeout" : ""))){
       onProgress && onProgress(`AI 而家好多人用，等一陣再試「${label}」…`);
       await new Promise(res => setTimeout(res, 25000 * (attempt + 1)));
       if (dayIds.length > 1 && attempt === 1){
