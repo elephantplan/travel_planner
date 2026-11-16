@@ -559,6 +559,8 @@ img{max-width:100%;}
 }
 .dayhead .kline{flex:1 1 auto;height:1px;background:var(--lc);opacity:.4;}
 .dayhead .date{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-faint);}
+.dayhead .kicker .secedit{margin-left:2px;}
+.stoptime .daypart{font-family:var(--f-body);font-size:12px;font-weight:600;letter-spacing:.02em;}
 .dayhead h2{
   font-family:var(--f-body);font-weight:700;
   font-size:clamp(24px,6.6vw,32px);line-height:1.25;letter-spacing:-.025em;margin:0 0 8px;
@@ -1992,7 +1994,9 @@ body.readonly .qa-del{display:none;}
 .pp-add{min-height:30px;padding:0 10px;font-size:12.5px;}
 .sheet-row{display:flex;gap:8px;margin-top:10px;}
 .sheet-row .btn{flex:1;}
-@media (max-width:560px){ #btn-share{padding:0;width:34px;justify-content:center;} #btn-share span:last-child{display:none;} }
+@media (max-width:560px){ #btn-share,#btn-home{padding:0;width:34px;justify-content:center;} #btn-share span:last-child,#btn-home span:last-child{display:none;}
+  .brandmark .ko{display:none;}
+  .brandmark .sys{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;font-size:13.5px;} }
 .hintbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:70;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
   padding:12px 12px 12px 14px;border-radius:16px;background:var(--surface);border:1px solid color-mix(in srgb,var(--gold) 45%,var(--rule));
   box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:13.5px;line-height:1.5;max-width:640px;margin:0 auto;}
@@ -2277,7 +2281,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-8";
+  const BUILD = "2026-11-17-9";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2877,12 +2881,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // trip is reloaded from the server or restored from history, because
   // going back then would also undo whatever else came in.
   const undo = { stack: [], busy: false };
+  // kept in this tab's storage, so a reload (or the phone dropping the page)
+  // doesn't lose 上一步; trimmed until it fits
+  const UNDO_KEY = () => "trip_undo_" + (new URLSearchParams(location.search).get("trip") || "");
+  function undoStore(){
+    for (let n = undo.stack.length; n >= 0; n--){
+      try { sessionStorage.setItem(UNDO_KEY(), JSON.stringify(undo.stack.slice(undo.stack.length - n))); return; } catch (_){}
+    }
+  }
+  try { const k = JSON.parse(sessionStorage.getItem(UNDO_KEY()) || "[]"); if (Array.isArray(k)) undo.stack.push(...k.slice(-30)); } catch (_){}
   function undoPush(json, summary){
     undo.stack.push({ json, summary: plain(summary || "").slice(0, 60) });
     if (undo.stack.length > 30) undo.stack.shift();
+    undoStore();
     undoButton();
   }
-  function undoClear(){ undo.stack.length = 0; undoButton(); }
+  function undoClear(){ undo.stack.length = 0; undoStore(); undoButton(); }
   function undoButton(){
     const b = $("#btn-undo");
     if (!b) return;
@@ -2905,6 +2919,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             !await askConfirm(`${plain(top.edited_by) || "其他人"} 之後改過行程。返上一步會連佢嘅改動一齊蓋過，照做？`)) return;
       } catch (_){}
       undo.stack.pop();
+      undoStore();
       state.snapshot = normalizeSnapshot(JSON.parse(e.json));
       state.open.clear();
       if (state.view !== "overview" && state.view !== "notes" && state.view !== "stays" && !dayById(state.view) && !boardById(state.view)) state.view = "overview";
@@ -3394,9 +3409,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // out of whatever was typed ("約 14:00", "14:00 前後") and set it on its own.
   // "約" becomes a leading ~ so it survives without costing a whole column of
   // width; anything with no clock time in it falls back to the raw words.
-  function timeLabelHtml(t){
+  // A time the AI chose is only a guide: shown as part of the day, not to
+  // the minute. One the family typed is shown exactly.
+  function dayPart(min){
+    return min < 11 * 60 ? "上晝" : min < 14 * 60 ? "中午" : min < 17 * 60 ? "下晝" : min < 19 * 60 ? "傍晚" : "夜晚";
+  }
+  function timeLabelHtml(t, auto){
     const raw = plain(t).trim();
     if (!raw) return "";
+    if (auto){ const mm = timeToMinutes(raw); if (mm != null) return `<span class="daypart" title="AI 建議大約 ${esc(raw.replace(/^約\s*/, ""))}">${dayPart(mm)}</span>`; }
     const m = raw.match(/(\d{1,2})\s*[:：]\s*(\d{2})/);
     if (!m) return `<span class="raw">${esc(raw)}</span>`;
     const approx = /約|大概|前後|左右|ish/i.test(raw);
@@ -6105,8 +6126,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <span class="dno">Day<span class="dno-n">${day.id.replace('day','')}</span></span>
           <span class="kline"></span>
           <span class="date">${esc(day.date)}</span>
+          <button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">${icon("pencil")}</button>
         </div>
-        <h2>${esc(day.title)}<button class="secedit" id="dayedit" title="改呢日嘅名／簡介／tag" aria-label="改呢日資料">${icon("pencil")}</button></h2>
+        <h2>${esc(day.title)}</h2>
         <p class="intro">${esc(day.desc)}</p>
         ${dayFlightChipHtml(day)}
         ${todayDay() === day ? (() => { const nx = nextStopOf(day); return nx
@@ -6341,7 +6363,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${segHtml}
         <div class="stop">
           <div class="stop-rail">
-            <span class="stoptime">${timeLabelHtml(s.time)}</span>
+            <span class="stoptime">${timeLabelHtml(s.time, s.timeAuto)}</span>
             <span class="node${stopNums && stopNums.has(i) ? " numbered" : ""}" data-type="${esc(s.type||'normal')}">${stopNums && stopNums.has(i) ? stopNums.get(i) : ""}</span>
           </div>
           <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}${state.justAdded && state.justAdded.has(s) ? " justadded" : ""}">
@@ -6434,7 +6456,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function applyRoute(day, r){
     const times = r.blocks.map(b => b.stop.time);
     const timed = times.every(t => timeToMinutes(t) != null);
-    if (timed) r.order.forEach((b, k) => { b.stop.time = times[k]; });
+    const autos = r.blocks.map(b => b.stop.timeAuto);
+    if (timed) r.order.forEach((b, k) => { b.stop.time = times[k]; if (autos[k]) b.stop.timeAuto = true; else delete b.stop.timeAuto; });
     const units = [];
     r.order.forEach(b => b.units.forEach(u => units.push(u)));
     units.forEach((u, k) => { if (u.stop) u.seg = k ? { kind: "connector", html: "", stale: true } : null; });
@@ -6489,6 +6512,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const me = TripAuth.user();
     const sb = $("#btn-share");
     if (sb) sb.hidden = false;
+    const eb = $("#btn-export");
+    if (eb) eb.hidden = true;            // it's inside 分享 now
     if (me && !t.row.owner_id){
       hintBar("呢個係開 account 之前嘅行程，未屬於任何人。撥入你個 account 之後，就淨係你同你分享咗嘅人先睇到。", "撥入我個 account", async () => {
         try { await TripAuth.rpc("claim_trip", { tid: Number(state.tripId) }); flash("撥咗入你個 account"); syncTripOwner(); }
@@ -6522,7 +6547,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${navigator.share ? `<button class="btn" id="sh-send">${icon("share")}傳送…</button>` : ""}
       </div>
       ${mine ? `<button class="btn wide" id="sh-reset" style="margin-top:12px;">${icon("refresh")}重設連結（舊連結失效，已加入嘅人唔受影響）</button>` : `<p class="hint">只有擁有人先可以重設連結同移除成員。</p>`}
+      <p class="picker-label" style="margin-top:20px;">帶走一份</p>
+      <p class="sec-sub">冇網都睇到：文字（貼落 WhatsApp）、PDF（打印）、或者備份檔。</p>
+      <button class="btn wide" id="sh-export">${icon("share")}匯出</button>
     `, async sheet => {
+      sheet.querySelector("#sh-export").addEventListener("click", () => { closeLayer(); openExportSheet(); });
       sheet.querySelector("#sh-copy").addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(link); flash("複製咗"); } catch (_){ sheet.querySelector("#sh-link").select(); document.execCommand("copy"); flash("複製咗"); }
       });
@@ -6792,6 +6821,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         : `刪走 ${gone.length} 個：${names.slice(0, 6).join("、")}${names.length > 6 ? "…" : ""}？\n撳頂部「上一步」可以還原。`)) return;
       const left = us.filter((u, j) => !drop.has(j));
       day.items = fromUnits(left);
+      // an empty day keeps nothing of its old plan, so the AI starts afresh
+      if (opts.all){ day.oldTitle = plain(day.title); day.title = `第 ${day.id.replace("day", "")} 日`; day.desc = ""; day.badges = []; day.fresh = true; }
       syncMapPoints(day);
       state.selectMode = null;
       state.open.clear();
@@ -7780,6 +7811,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const evt = el.tagName === "SELECT" ? "change" : "input";
       el.addEventListener(evt, () => {
         s[el.dataset.f] = el.value;
+        if (el.dataset.f === "time") delete s.timeAuto;
         if (el.dataset.f === "type" || el.dataset.f === "title"){
           const nameEl = box.closest(".stopcard").querySelector(".stopname");
           if (el.dataset.f === "title" && nameEl){
@@ -11486,7 +11518,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // to choose from, so the model is asked for several for the same slot.
   // 「想行街」 is not a stop; the places to shop are. And a day should flow.
   const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
-  const ROUTE_HINT = "排每日嘅地點要順路：同一區嘅放埋一齊，由一頭行去另一頭，唔好喺幾個區之間來回走。";
+  const ROUTE_HINT = "排每日嘅地點要順路：同一區嘅放埋一齊，由一頭行去另一頭，唔好喺幾個區之間來回走。時間只係用嚟排先後，app 會顯示成上晝／下晝；如果某個地方要早啲去（例如排隊、人少、日落），喺 reason 或者 tip 講「建議早啲去」就得。";
   const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店、景點或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。如果問緊幾個唔同時段（例如上晝景點、晏晝食飯），每個時段都俾 3 至 5 個選擇。）";
   function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|推薦|建議|邊度|邊間|店|去邊|去哪|哪裡|哪裏|邊個地方|逛|行街|景點|好去處|地方|睇紅葉|賞|寺|神社|公園|購物|買/i.test(q || ""); }
   // After clearing a day (or keeping just a few): plan it again?
@@ -11568,9 +11600,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
           <button class="btn" data-reask>改要求</button></div>`;
         go.disabled = true;
         const stop = thinkingIn(out, dayIds, asked);
+        // a cleared day: a new plan, not the old one again, and a new name
+        const fresh = pickedDays.filter(d => d.fresh || !d.items.some(i => i.kind === "stop"));
+        const freshNote = fresh.length ? "\n" + fresh.map(d => `${d.id} 係清空咗要重新諗嘅：完全跟我今次嘅要求重新諗，唔好跟返之前嘅主題或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，唔好再用）` : ""}；一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字）。`).join("\n") : "";
         let r;
         try {
-          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT, itinerary: state.snapshot });
+          r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + freshNote, itinerary: state.snapshot });
         } catch (e){
           stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
           go.disabled = false; wireReask(); return;
@@ -11596,7 +11631,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
                <p>${changes.some(swapsPlace) ? "原本地點會保留。" : ""}${plainCount < changes.length ? "有「選擇」嘅要自己揀。" : ""}唔啱可以撳頂部「上一步」還原。</p>`
             : `<button class="btn wide" data-donelook>完成，返去行程睇</button>`}</div>`;
         wireReask();
-        wireApplyButtons(out, changes, null, { fast: true, onDone: (n, ids) => finishDayAi(n, ids) });
+        const freshTitles = {};
+        fresh.forEach(d => { if (plain(dayTitles[d.id] || "")) freshTitles[d.id] = dayTitles[d.id]; });
+        wireApplyButtons(out, changes, null, { fast: true, onDone: (n, ids) => {
+          Object.entries(freshTitles).forEach(([id, t]) => { const d = dayById(id); if (d){ d.title = plain(t); delete d.fresh; delete d.oldTitle; } });
+          if (Object.keys(freshTitles).length) render();
+          finishDayAi(n, ids);
+        } });
         const look = out.querySelector("[data-donelook]");
         if (look) look.addEventListener("click", () => finishDayAi(0, dayIds));
         wireDayTitleButtons(out, dayTitles);
@@ -12293,6 +12334,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
     if (c.op === "add" && c.stop){
       const stop = Object.assign(blankStop(), c.stop, { kind:"stop" });
+      if (plain(stop.time)) stop.timeAuto = true;
       delete stop.transitBefore;          // describes a leg we are about to recompute
       // drop it in by time rather than at the end, so the day still reads in order
       const at = slotForTime(units, stop.time);
@@ -12381,6 +12423,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       if (!touched.has(day.id)) touched.set(day.id, { day, units: toUnits(day.items), newStops: [] });
       const rec = touched.get(day.id);
       const stop = Object.assign(blankStop(), c.stop, { kind:"stop" });
+      if (plain(stop.time)) stop.timeAuto = true;
       delete stop.transitBefore;   // describes a leg we're about to compute for real
       const at = slotForTime(rec.units, stop.time);
       rec.units.splice(at, 0, { seg:null, stop });
@@ -13891,6 +13934,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     saver.lastPersistedJson = snapJson();
     saver.lastVersionId = row.id;
+    undoButton();                        // a 上一步 kept from before a reload
     setTimeout(syncCover, 4000);
     setTimeout(syncTripOwner, 1200);
     const back = readPlace();

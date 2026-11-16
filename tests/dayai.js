@@ -13,6 +13,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 860 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.addInitScript(() => setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y) y.click(); }, 50));
   const saved = [];
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/rest/v1/itinerary_versions**', r => {
@@ -28,7 +29,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     if (body.action === 'day-plan'){ asked = body; return new Promise(res => setTimeout(res, 2500)).then(() => j({ ok: true, notes: '加多三個', changes: [
       { op: 'add', dayId: 'day2', stop: { title: '仁寺洞', time: '約 13:00' }, reason: '順路' },
       { op: 'add', dayId: 'day2', stop: { title: '廣藏市場', time: '約 15:00' }, reason: '食嘢' },
-      { op: 'add', dayId: 'day2', stop: { title: '清溪川', time: '約 17:00' }, reason: '散步' }] })); }
+      { op: 'add', dayId: 'day2', stop: { title: '清溪川', time: '約 17:00' }, reason: '散步' }], dayTitles: { day2: '壽司同 outlet' } })); }
     return new Promise(res => setTimeout(res, 800)).then(() => j({ ok: true }));
   });
   await p.route('**tile**', r => r.abort());
@@ -65,6 +66,24 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('#dayai-go').click(); await p.waitForTimeout(2900);
   await p.locator('[data-reask]').click();
   ok('改要求就返返啲問題', await p.locator('.dai-form').isVisible());
+  ok('AI 排嘅時間顯示做上晝／下晝', (await p.locator('.stopcard', { hasText: '仁寺洞' }).locator('xpath=ancestor::div[contains(@class,"stop")][1]').locator('.daypart').innerText().catch(() => '')) === '中午');
+  ok('支筆喺日期旁邊', await p.locator('.dayhead .kicker #dayedit').count() === 1);
+  await p.locator('.sheet-close').first().click().catch(() => {}); await p.waitForTimeout(300);
+
+  // 清走成日 → 再諗過: a fresh plan and a new name
+  await p.locator('#clearday').click(); await p.waitForTimeout(1200);
+  ok('清咗之後標題都清埋', /第 2 日/.test(await p.locator('.dayhead h2').innerText()));
+  await p.locator('#rp-yes').click(); await p.waitForTimeout(300);
+  await p.locator('#dayai-q').fill('壽司同 outlet');
+  await p.locator('#dayai-go').click(); await p.waitForTimeout(2900);
+  ok('叫 AI 唔好跟返舊主題', /清空咗/.test(asked.question) && /古宮/.test(asked.question), asked.question.slice(-200));
+  await p.locator('[data-applyall]').click(); await p.waitForTimeout(500);
+  ok('套用之後換埋新標題', /壽司同 outlet/.test(await p.locator('.dayhead h2').innerText()), await p.locator('.dayhead h2').innerText());
+
+  // 上一步 survives a reload
+  await p.waitForTimeout(1500);
+  await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1500);
+  ok('reload 之後仲有「上一步」', await p.locator('#btn-undo').isVisible());
   ok('冇 JS error', !errs.length, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
