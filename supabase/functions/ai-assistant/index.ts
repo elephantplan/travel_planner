@@ -78,7 +78,7 @@ function getTextModel(): string {
 // same budget, an explicit cap is what pushed the long board-ai answer into
 // finishReason=MAX_TOKENS. Let the model use its full default budget; the
 // prompts are instead written to ask for less.
-async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: boolean }): Promise<string> {
+async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: boolean; label?: string }): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${getTextModel()}:generateContent?key=${apiKey}`;
   const generationConfig: Record<string, unknown> = {};
   if (opts?.json) generationConfig.responseMimeType = "application/json";
@@ -99,7 +99,7 @@ async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: bo
     // request-level logs available via the dashboard/MCP tools only show
     // status codes, never stdout, so friendlyGeminiError() below needs the
     // model+quotaId in the error itself to ever surface them to the user.
-    console.error(`Gemini text call failed (model=${getTextModel()}): ${res.status} ${errText.slice(0, 500)}`);
+    console.error(`Gemini text call failed (model=${getTextModel()}, ${opts?.label || "key ?"}): ${res.status} ${errText.slice(0, 500)}`);
     throw new Error(`Gemini error ${res.status} (model=${getTextModel()}): ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
@@ -115,9 +115,10 @@ async function callGeminiOnce(apiKey: string, prompt: string, opts?: { json?: bo
 }
 async function callGemini(apiKeys: string[], prompt: string, opts?: { json?: boolean }): Promise<string> {
   let lastErr: unknown = new Error("Gemini key 未設定");
-  for (const apiKey of apiKeys) {
+  // "key 2/2" in the log (never the key itself) shows which secret failed
+  for (const [i, apiKey] of apiKeys.entries()) {
     try {
-      return await callGeminiOnce(apiKey, prompt, opts);
+      return await callGeminiOnce(apiKey, prompt, { ...opts, label: `key ${i + 1}/${apiKeys.length}` });
     } catch (e) {
       lastErr = e;
       if (!isRetryableError(e)) throw e;   // not quota/overload — another key won't help

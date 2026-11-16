@@ -47,7 +47,8 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
   let last = "Gemini key 未設定";
   let firstErr = "";        // the configured model's own failure is the one worth reporting
   const models = [...new Set([model(), fallbackModel()])];
-  models: for (const m of models) for (const key of geminiKeys()) {
+  const keys = geminiKeys();
+  models: for (const m of models) for (const [ki, key] of keys.entries()) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`,
       {
@@ -61,7 +62,7 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
       },
     );
     if (!res.ok) {
-      last = `Gemini error ${res.status} (model=${m}${search ? ", search" : ""}): ${(await res.text()).slice(0, 300)}`;
+      last = `Gemini error ${res.status} (model=${m}${search ? ", search" : ""}, key ${ki + 1}/${keys.length}): ${(await res.text()).slice(0, 300)}`;
       console.error(last);
       if (!firstErr) firstErr = last;
       if (retryable(last)) continue;
