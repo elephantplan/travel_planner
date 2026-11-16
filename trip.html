@@ -2253,7 +2253,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-2";
+  const BUILD = "2026-11-17-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3770,9 +3770,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return m;
   }
 
+  // An event (market, festival, illuminations…) is searched with the trip's
+  // year, so the results say whether it is really on when you are there.
+  const EVENT_RE = /市集|市場祭|祭|節|燈飾|點燈|燈光|展覽|演唱會|花火|煙火|音樂會|嘉年華|聖誕|マーケット|イルミ|フェス|まつり|축제|마켓|festival|market|illumination|fair|concert|parade/i;
   function googleSearchUrl(s){
     const q = searchTerm(s);
-    return q ? `https://www.google.com/search?q=${encodeURIComponent(q + destHint())}` : null;
+    if (!q) return null;
+    const m = (state.snapshot && state.snapshot.meta) || {};
+    const yr = EVENT_RE.test(plain(s.title) + " " + plain(s.kr)) ? (String(m.dateStart || "").slice(0, 4) || String(new Date().getFullYear())) : "";
+    return `https://www.google.com/search?q=${encodeURIComponent(q + destHint() + (yr ? " " + yr : ""))}`;
   }
   // The Maps "search action" URL (Google's documented format) lands on the
   // place card with its star rating and review count visible immediately.
@@ -6284,9 +6290,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       (() => { const g = subj ? googlePlaceUrl(subj) : ""; return g
         ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
     );
+    // every place gets 搜尋, so an event or a claim can be checked
+    { const gs = subj ? googleSearchUrl(subj) : null;
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`); }
     if (s.mapUrl){
-      const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
@@ -10256,9 +10263,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       (() => { const g = googlePlaceUrl(s); return g
         ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>` : ""; })(),
     );
+    // every place gets 搜尋, so an event or a claim can be checked
+    { const gs = googleSearchUrl(s);
+      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`); }
     if (s.mapUrl){
-      const gr = googleReviewsUrl(s), gs = googleSearchUrl(s);
-      if (gs) links.push(`<a class="maplink" href="${esc(gs)}" target="_blank" rel="noopener">${icon("search")}搜尋</a>`);
       const cm = customMapUrl(s);
       if (cm) links.push(`<a class="maplink" href="${esc(cm)}" target="_blank" rel="noopener">${icon("link")}自訂地圖</a>`);
     }
