@@ -2306,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-14";
+  const BUILD = "2026-11-17-15";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5268,13 +5268,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             }${st.more ? `<span class="dayline-more">＋${st.more}</span>` : ""}</span>` : ""}
             <span class="dayline-count">${state.genStatus && state.genStatus[day.id] === "doing" ? `<span class="spin"></span>AI 排緊呢日…`
               : state.genStatus && state.genStatus[day.id] === "wait" && !count ? "等緊排…"
-              : `${count} 站${(() => { const c = costSum(dayStops(day)); return c && c.n ? `・每人約 ${esc(fmtCost(c.cur, c.n))}` : ""; })()}`}</span>
+              : `${count} 站`}</span>
           </span>
         </button>`;
     }).join("");
 
-    const tc = tripCost();
-    const costLine = tc && tc.n ? `<div class="tripcost">${icon("money")}成個行程大約每人 <b>${esc(fmtCost(tc.cur, tc.n))}</b><small>門票同食飯嘅估計；未計機票、酒店同交通</small></div>` : "";
     const prep = [
       groupToolsHtml(d, "prep"),
       addSectionBtn(d, "prep"),
@@ -5312,7 +5310,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>
-      ${costLine}
       ${state.readonly ? "" : `<div class="ovtools"><button type="button" class="btn ovupdate" id="ov-update">${icon("camera")}用相或者文字更新行程</button>
         <button type="button" class="btn ovpush${pushOn() ? " on" : ""}" id="ov-push">${icon(pushOn() ? "check" : "clock")}${pushOn() ? "通知已開" : "開通知"}</button></div>`}
 
@@ -5463,8 +5460,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // has no 「名：」 head, but still starts with a place. The words before the
   // first verb-ish word count as one only if they end like a place name.
   const PLACE_END = /(宮|苑|寺|神社|大社|稻荷|公園|大道|庭園|園|山|川|橋|塔|館|城|通|街|商店街|町|丁目|駅|站|庭|院|閣|堂|森|池|島|谷|坂|渓|峽|峡|瀑布|廣場|広場|市場|橫丁|横丁|Hills|Park|Garden|Gardens|Shrine|Temple|Tower|Street)$/i;
+  // a line that mentions some place somewhere (「…二條市場或三角市場買」)
+  const PLACE_WORD = new RegExp("[^\\s，。、：:]{1,10}" + PLACE_END.source.replace(/\$$/, ""), "i");
   function leadPlace(text){
-    const m = String(text || "").match(/^([^\d，。、：:\s「」]{2,16}?)(?=通常|一般|喺|係|入場|可以|有|最|嘅|會|都|而家|今年|每年|附近|一帶|就|嗰|的|是|在|，)/);
+    const t0 = String(text || "");
+    // 「大通公園白色燈樹節…」: the shortest opening that ends like a place
+    for (let k = 3; k <= 14 && k <= t0.length; k++){
+      const n = t0.slice(0, k);
+      if (/[\d，。、：:\s「」（(]/.test(n)) break;
+      if (PLACE_END.test(n) && !NOT_A_PLACE.test(n)) return n;
+    }
+    const m = t0.match(/^([^\d，。、：:\s「」]{2,16}?)(?=通常|一般|喺|係|入場|可以|有|最|嘅|會|都|而家|今年|每年|附近|一帶|就|嗰|的|是|在|，)/);
     if (!m) return "";
     const n = m[1].replace(/[（(][^）)]*[）)]/g, "").trim();
     return PLACE_END.test(n) && !NOT_A_PLACE.test(n) ? n : "";
@@ -5477,6 +5483,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const n = leadPlace(text);
     return n ? { name: n, region: "", body: text } : null;
   }
+  // a stop already on the plan that this text mentions by name
+  function dayNamedIn(text){
+    const t = loose(text);
+    if (!t) return null;
+    for (const d of state.snapshot.days || []) for (const it of d.items || []){
+      if (it.kind !== "stop") continue;
+      const n = loose(cleanPlaceName(plain(it.title)));
+      if (n && n.length >= 3 && t.includes(n)) return d;
+    }
+    return null;
+  }
   function placeFromHead(head){
     const region = (head.match(/[（(]([^）)]+)[）)]/) || [])[1] || "";
     return { name: head.replace(/[（(][^）)]*[）)]/g, "").trim(), region };
@@ -5485,13 +5502,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const { head, body, text } = splitLine(l);
     let tool = "";
     const lp = linePlace(sec, l);
-    if (lp){
-      const { name } = lp;
-      const inDay = findInItinerary(state.snapshot, { title: name });
-      tool = inDay
-        ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
-        : `<button type="button" class="usec-add" data-addplace="${si}|${li}">${icon("plus")}加去行程</button>`;
-    }
+    // already on the plan? by the place it names, else by any stop named in the line
+    const inDay = (lp && findInItinerary(state.snapshot, { title: lp.name })) || dayNamedIn(text);
+    const tipSec = sec && sec.source === "ai" && !/天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "");
+    if (inDay) tool = `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">${icon("check")}已喺 D${esc(inDay.id.replace("day", ""))}・去睇</button>`;
+    else if (lp || (tipSec && !(head && /[：:]/.test(text.slice(head.length, head.length + 2)) && NOT_A_PLACE.test(head)) && PLACE_WORD.test(text.replace(/交通|普通|通常|街頭|行街/g, "")))) tool = `<button type="button" class="usec-add" data-addplace="${si}|${li}">${icon("plus")}加去行程</button>`;
     return head ? `<li><b>${esc(head)}</b><span>${esc(body)}</span>${tool}</li>` : `<li><span>${esc(text)}</span>${tool}</li>`;
   }
   function sectionLinesHtml(lines, sec, si){
@@ -5510,7 +5525,18 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const line = sec && (sec.lines || [])[li];
     if (!line) return;
     const lp = linePlace(sec, line);
-    if (lp) openAddPlaceSheetFor(lp);
+    if (lp) return openAddPlaceSheetFor(lp);
+    // the tip doesn't name one place clearly: ask which, with a guess filled in
+    const text = splitLine(line).text;
+    const guess = (text.match(/^[^，。、：:\s]{2,12}/) || [""])[0];
+    openSheet(`<h3>加邊個地方去行程？</h3>
+      <p class="sec-sub">${esc(text)}</p>
+      <div class="askrow"><input class="input" id="tipname" value="${esc(guess)}" placeholder="地方名，例如：大通公園"><button class="btn primary" id="tipgo">下一步</button></div>`, sh => {
+      const inp = sh.querySelector("#tipname"), go = () => { const n = inp.value.trim(); if (!n) return; closeLayer(); openAddPlaceSheetFor({ name: n, region: "", body: text }); };
+      sh.querySelector("#tipgo").addEventListener("click", go);
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+      inp.focus(); inp.select();
+    });
   }
   // AI 助手's recommendations: each goes straight to the day and spot the AI
   // suggested, the sheet stays open for more, and 改位置 picks another day
@@ -6312,7 +6338,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           (sel || (i > 0 && i - 1 === lastStopIx) ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
-      ${units.length ? dayCostHtml(day) : `<p class="hint">呢日仲係空白嘅。撳上面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方），或者自己加地點。</p>`}
+      ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。撳上面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方），或者自己加地點。</p>`}
 
       ${sel ? `
         <div class="selectbar${sel.target ? " fortarget" : ""}">
@@ -6465,7 +6491,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ...(state.readonly ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
-      .concat(plain(s.cost) ? [`<span class="meta-chip cost" title="AI 估嘅大約使費，以當地為準">${icon("money")}${esc(costLabel(s.cost))}</span>`] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
       .concat(dayHoursChip(s, day))
@@ -11793,8 +11818,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // to choose from, so the model is asked for several for the same slot.
   // 「想行街」 is not a stop; the places to shop are. And a day should flow.
   const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
-  // every stop says roughly what it costs; a trip that wants to save is planned that way
-  const COST_HINT = "每個 stop 一定要加 \"cost\" 欄位：每人大約使幾多（入場費；食飯就係人均），用當地貨幣，例如「¥1,200」「¥800–1,500」「免費」。";
+  // a trip that wants to save is planned that way
   function budgetHint(){
     const t = briefText(state.snapshot) + " " + (((state.snapshot.meta || {}).budget) || "");
     return /慳|平價|平啲|便宜|budget|窮遊|預算有限|唔想使咁多/i.test(t)
@@ -11888,7 +11912,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + COST_HINT + "\n" + budgetHint();
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + budgetHint();
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
@@ -12554,70 +12578,6 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const n = Number(s.ratingCount);
     return `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}${Number.isFinite(n) && n > 0 ? `<small>${n.toLocaleString("en-US")} 個評價</small>` : ""}</span>`;
   }
-  // ---------- what it costs ----------
-  // Each AI-placed stop carries "cost": roughly what one person spends there,
-  // in the local money (¥1,200, 免費, ¥800–1,500). A day adds them up, the
-  // trip adds the days — an estimate for planning, never a quote.
-  function localCur(){ return destIsJapan() ? "¥" : destIsKorea() ? "₩" : /台|臺/.test(((state.snapshot || {}).meta || {}).destinationLocal || "") ? "NT$" : ""; }
-  function costLabel(c){ const t = plain(c); return /^(免費|free)/i.test(t) ? "免費" : /人/.test(t) ? t : "每人約 " + t.replace(/^約\s*/, ""); }
-  function costOf(st){
-    const t = plain(st && st.cost);
-    if (!t) return null;
-    if (/免費|free|唔使錢/i.test(t)) return { cur: "", n: 0 };
-    const m = t.replace(/,/g, "").match(/(HK\$|NT\$|US\$|[¥￥$₩€£])?\s*(\d+(?:\.\d+)?)\s*(萬)?(?:\s*[–\-~～至到]\s*(?:HK\$|NT\$|[¥￥$₩])?\s*(\d+(?:\.\d+)?)\s*(萬)?)?/);
-    if (!m) return null;
-    const a = +m[2] * (m[3] ? 10000 : 1), b = m[4] ? +m[4] * (m[5] ? 10000 : 1) : a;
-    let cur = (m[1] || "").replace("￥", "¥");
-    if (!cur && /円|日圓/.test(t)) cur = "¥";
-    if (!cur && /韓圜|韓元|원/.test(t)) cur = "₩";
-    return { cur: cur || localCur(), n: Math.round((a + b) / 2) };
-  }
-  function costSum(stops){
-    const got = stops.map(costOf).filter(Boolean);
-    if (!got.length) return null;
-    const cur = got.find(x => x.cur) ? got.find(x => x.cur).cur : localCur();
-    const n = got.filter(x => !x.cur || x.cur === cur).reduce((a, x) => a + x.n, 0);
-    return { cur, n, known: got.length, of: stops.length };
-  }
-  const fmtCost = (cur, n) => `${cur}${Math.round(n).toLocaleString("en-US")}`;
-  function dayStops(day){ return (day.items || []).filter(i => i.kind === "stop" && plain(i.title) && !/酒店|check.?in|機場|前往|抵達|返程|出發/i.test(plain(i.title))); }
-  function dayCostHtml(day){
-    const st = dayStops(day);
-    if (!st.length) return "";
-    const c = costSum(st);
-    const missing = st.filter(x => !costOf(x)).length;
-    return `<div class="daycost">
-      ${c ? `<div class="daycost-t">${icon("money")}今日大約每人 <b>${esc(fmtCost(c.cur, c.n))}</b><small>門票同食飯，未計酒店同交通${missing ? `；有 ${missing} 個未有估價` : ""}</small></div>` : `<div class="daycost-t">${icon("money")}未知今日大約要使幾多</div>`}
-      ${missing && !state.readonly ? `<button class="btn" data-costday="${esc(day.id)}">${c ? "估埋其餘" : "估吓使費"}</button>` : ""}
-    </div>`;
-  }
-  function tripCost(){
-    const all = (state.snapshot.days || []).flatMap(dayStops);
-    return costSum(all);
-  }
-  // one AI call for a day's missing prices
-  async function estimateCosts(day, btn){
-    const st = dayStops(day).filter(x => !costOf(x));
-    if (!st.length) return;
-    if (btn){ btn.disabled = true; btn.textContent = "估緊…"; }
-    let r = null;
-    try {
-      r = await callAi({ action: "ask", question: `估吓以下每個地方每人大約使幾多錢（入場費、食一餐人均；用當地貨幣，例如「¥1,200」「¥800–1,500」「免費」）。只回 JSON，唔好有其他字：{"costs":[{"title":"照抄名","cost":"¥1,200"}]}\n` + st.map(x => `- ${plain(x.title)}${x.type === "eat" ? "（食飯）" : ""}`).join("\n") });
-    } catch (_){}
-    const t = String((r && (r.aiSummary || r.answer)) || ""), a = t.indexOf("{"), b = t.lastIndexOf("}");
-    let j = null; try { j = a >= 0 ? JSON.parse(t.slice(a, b + 1)) : null; } catch (_){}
-    let n = 0;
-    ((j && j.costs) || []).forEach(x => { const hit = st.find(y => plain(y.title) === plain(x.title)) || st.find(y => plain(y.title).includes(plain(x.title)) || plain(x.title).includes(plain(y.title))); if (hit && plain(x.cost)){ hit.cost = plain(x.cost).slice(0, 30); n++; } });
-    render();
-    if (n) await saveNow(`AI 估咗 ${n} 個地方嘅使費`); else flash((r && r.message) || "今次估唔到，再試一次");
-  }
-  document.addEventListener("click", e => {
-    const b = e.target.closest && e.target.closest("[data-costday]");
-    if (!b) return;
-    e.preventDefault();
-    const day = dayById(b.dataset.costday);
-    if (day) estimateCosts(day, b);
-  });
   function ratingChip(s){
     if (!Number.isFinite(s.rating)) return "";
     const count = Number.isFinite(s.ratingCount) ? `（${s.ratingCount.toLocaleString("en-US")}）` : "";
@@ -12836,7 +12796,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     { const fl = flightsOf(state.snapshot), o = fl.find(f => f.dir === "out"), bk = fl.find(f => f.dir === "back");
       if (edges && edges.first && o && (o.arr || o.to)) notes.push(`佢哋${o.arr ? " " + o.arr : ""} 到${o.to ? " " + o.to : ""}：第一日嘅行程由落機之後先開始（過關、攞行李、去酒店大約要 1.5–2 個鐘）。`);
       if (edges && edges.last && bk && (bk.dep || bk.from)) notes.push(`佢哋最尾一日${bk.dep ? " " + bk.dep : ""} 喺${bk.from ? " " + bk.from : "機場"}起飛：要預 3 個鐘前到機場，之前嘅站要早啲完。`); }
-    notes.push(SHOP_HINT, ROUTE_HINT, COST_HINT, budgetHint());
+    notes.push(SHOP_HINT, ROUTE_HINT, budgetHint());
     const ap = state.areaPlan || {};
     const zones = dayIds.filter(id => ap[id]).map(id => `${id}：主要喺 ${ap[id].areas}${ap[id].theme ? `（${ap[id].theme}）` : ""}`);
     if (zones.length) notes.push("每日嘅區已經分配好，嗰日嘅地點同餐廳都要喺嗰啲區入面或者隔籬，唔好走去第二日嘅區：\n" + zones.join("\n"));

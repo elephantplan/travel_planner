@@ -75,9 +75,10 @@ const DAYS = {
 
   await p.goto('http://localhost:8799/index.html', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1200);
   await shot('01-home');
-  await step('dest', async () => { await p.fill('#f-dest', '大阪'); await p.waitForTimeout(1400); await shot('02-dest-suggest'); await p.locator('#dest-suggest [data-pick]').first().dispatchEvent('mousedown'); await p.waitForTimeout(300); });
+  await step('dest', async () => { await p.fill('#f-dest', '大阪'); await p.waitForTimeout(1400); await shot('02-dest-suggest'); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(400); });
   await step('dates', async () => { await p.locator('.datecell').first().click(); await p.waitForTimeout(400); await shot('03-datepicker');
     await p.locator('.rp-d[data-d="2026-12-18"]').click(); await p.locator('.rp-d[data-d="2026-12-21"]').click(); await p.waitForTimeout(200); await shot('04-dates-picked'); if (await p.locator('.rp-ok').isVisible().catch(() => false)) await p.locator('.rp-ok').click(); });
+  ok('打咗目的地唔揀都撳得「開始規劃」', !(await p.locator('#f-go').isDisabled()));
   await step('req', async () => { await p.fill('#f-req', '同老婆兩個人去，想慳啲錢，想食好嘢同行街，唔想太趕'); await shot('05-form-filled'); });
   await step('go', async () => { await p.locator('#f-go').click(); await p.waitForTimeout(500); await shot('06-asking'); await p.waitForTimeout(1800); await shot('07-questions');
     const g = p.locator('.pf-g'); await g.nth(0).locator('button').first().click(); await g.nth(1).locator('button').first().click(); await g.nth(2).locator('button').nth(0).click(); await g.nth(2).locator('button').nth(2).click(); await g.nth(3).locator('button').first().click();
@@ -92,11 +93,8 @@ const DAYS = {
   ok('要求入面講過到埗時間：航班自動填好', (snap().flights || []).some(f => f.dir === 'out' && f.arr === '13:00' && f.to === 'KIX'), snap().flights);
   ok('講過「同老婆兩個人、慳錢」：住宿要求自動填好', snap().stayPrefs && snap().stayPrefs.adults === 2 && /800 以下/.test(snap().stayPrefs.budget), snap().stayPrefs);
   ok('第一日跟住落機時間排', /13:00 到 KIX/.test(plans[0] || ''), (plans[0] || '').slice(0, 200));
-  ok('叫 AI 寫每個站使幾多', plans.every(q => /"cost"/.test(q)));
+  ok('冇估使費（唔準）', !/每人約|今日大約每人|成個行程大約/.test(await p.locator('#app').innerText()));
   ok('講過想慳錢：叫 AI 揀平嘅', plans.every(q => /想慳錢/.test(q)));
-  await p.evaluate(() => document.querySelector('.tripcost') && document.querySelector('.tripcost').scrollIntoView({ block: 'center' })); await shot('overview-cost');
-  ok('主頁有成個行程大約使費', /成個行程大約每人\s*¥/.test(await p.locator('.tripcost').innerText().catch(() => '')));
-  ok('主頁每日都有使費', /每人約 ¥/.test(await p.locator('.dayline').first().innerText()));
   await p.evaluate(() => document.querySelector('[data-go="day1"]').click()); await p.waitForTimeout(1000);
   await shot('day1');
   ok('入到日子：地圖預設收埋，一開就見到地點', await p.locator('.mapbox').count() === 0 && await p.locator('.stopcard').first().isVisible());
@@ -104,9 +102,6 @@ const DAYS = {
   await p.locator('#daymore').click(); await p.waitForTimeout(200);
   ok('撳「更多」先見其他工具', await p.locator('#selstart').count() === 1 && await p.locator('#clearday').count() === 1);
   ok('卡上淨係地圖同「更多」', await p.locator('.stopcard').nth(1).locator('.stopfoot > .maplink:visible, .stopfoot > a:visible, .stopfoot > button:visible').count() <= 2);
-  ok('卡上有使費', /每人約 ¥|免費/.test(await p.locator('.stopcard').nth(1).innerText()));
-  await p.evaluate(() => document.querySelector('.daycost').scrollIntoView({ block: 'center' })); await shot('day1-cost');
-  ok('今日大約使費', /今日大約每人\s*¥/.test(await p.locator('.daycost').innerText()));
   ok('交通說明短咗', !/車站係真嘅/.test(await p.locator('#app').innerText()) && /・估計/.test(await p.locator('#app').innerText()));
   // a stop without a price gets one on request
   // rainy version

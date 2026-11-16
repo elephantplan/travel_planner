@@ -847,7 +847,9 @@ html,body{overflow-x:clip;max-width:100%;}
   [startInput, endInput].forEach(el => { el.addEventListener("input", syncDatePh); el.addEventListener("change", syncDatePh); });
   setTimeout(syncDatePh, 0);
   function updateGoState(){
-    const ok = !!picked && !!startInput.value && !!endInput.value && endInput.value >= startInput.value;
+    // a typed destination is enough: if nothing was picked from the list,
+    // the first match is used when planning starts
+    const ok = (!!picked || destInput.value.trim().length >= 2) && !!startInput.value && !!endInput.value && endInput.value >= startInput.value;
     goBtn.disabled = !ok;
   }
   updateGoState();
@@ -964,6 +966,17 @@ html,body{overflow-x:clip;max-width:100%;}
     if (goBtn.disabled) return;
     if (needLogin()) return;
     errBox.innerHTML = "";
+    if (!picked){
+      const q = destInput.value.trim();
+      goBtn.disabled = true; goBtn.textContent = "搵緊目的地…";
+      let r = null;
+      try { r = await callAi({ action: "place-search", query: q }); } catch (_){}
+      goBtn.disabled = false; goBtn.textContent = "開始規劃";
+      const p0 = r && r.places && r.places[0];
+      if (!p0){ errBox.innerHTML = `<div class="errbox">搵唔到「${esc(q)}」，試吓打城市名，再喺下面揀一個。</div>`; return; }
+      picked = { name: q, address: p0.address || "", lat: p0.lat, lng: p0.lng };
+      renderPicked();
+    }
     const extra = await askMissing(reqInput.value);
     goBtn.disabled = true;
     goBtn.textContent = "開緊行程…";
