@@ -1958,6 +1958,14 @@ body.readonly .qa-del{display:none;}
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
 .ins-past{margin-top:8px;}
+.hintbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:70;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:12px 12px 12px 14px;border-radius:16px;background:var(--surface);border:1px solid color-mix(in srgb,var(--gold) 45%,var(--rule));
+  box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:13.5px;line-height:1.5;max-width:640px;margin:0 auto;}
+.hintbar > span{flex:1 1 200px;display:flex;gap:8px;align-items:flex-start;}
+.hintbar > span .i{width:16px;height:16px;flex:none;color:var(--gold);margin-top:2px;}
+.hintbar .btn{min-height:34px;padding:0 14px;}
+.hintbar .hb-x{background:none;border:0;color:var(--ink-faint);width:30px;height:30px;display:grid;place-items:center;cursor:pointer;}
+.hintbar .hb-x .i{width:14px;height:14px;}
 .reord{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 12px;}
 .reord ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.8;}
 .reord li.moved{color:var(--gold);font-weight:600;}
@@ -2232,7 +2240,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-6";
+  const BUILD = "2026-11-16-7";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5367,9 +5375,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   // Where a place fits best: the day and gap whose detour is smallest
   // (straight-line), and a time between its neighbours' times.
-  function bestSpotFor(p){
+  function bestSpotFor(p, exclude){
     let best = null;
-    const ok = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null;
+    const ok = x => x && x !== exclude && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null;
     (state.snapshot.days || []).forEach(day => {
       const us = toUnits(day.items);
       const stops = us.map((u, j) => ({ st: u.stop, j })).filter(x => ok(x.st));
@@ -6398,6 +6406,79 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = plain(s.title || "");
     return /行街|購物|购物|逛街|shopping|血拼|買嘢|掃貨/i.test(t) || (districtOf(t) >= 0 && cleanPlaceName(t).length <= 4 && !s.placeId);
   }
+  // The trip list shows a picture for each trip: the first real place with
+  // a photo (an airport's is skipped). Sent only when it changes.
+  function syncCover(){
+    if (state.readonly || state.offline || !state.tripId) return;
+    let url = "";
+    for (const d of state.snapshot.days || []){
+      const st = toUnits(d.items).map(u => u.stop).find(x => x && x.photoUrl && !airportOf(plain(x.title) + " " + plain(x.kr)));
+      if (st){ url = st.photoUrl; break; }
+    }
+    const k = "trip_cover_" + state.tripId;
+    let had = ""; try { had = localStorage.getItem(k) || ""; } catch (_){}
+    if (!url || url === had) return;
+    fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(state.tripId)}`, { method: "PATCH",
+      headers: Object.assign({ "Content-Type": "application/json" }, sbHeaders()), body: JSON.stringify({ cover_url: url }) })
+      .then(r => { if (r.ok) try { localStorage.setItem(k, url); } catch (_){} }).catch(() => {});
+  }
+  // ---------- 「放第二個位會順路啲」 ----------
+  // After a place is added by hand: if another day or gap is clearly less
+  // of a detour, say so, with one tap to move it there.
+  function detourAt(st){
+    for (const day of state.snapshot.days || []){
+      const ss = toUnits(day.items).map(u => u.stop).filter(x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null);
+      const k = ss.indexOf(st);
+      if (k < 0) continue;
+      const a = ss[k - 1], b = ss[k + 1];
+      return a && b ? metersBetween(a, st) + metersBetween(st, b) - metersBetween(a, b) : (a || b) ? metersBetween(a || b, st) * 1.6 : null;
+    }
+    return null;
+  }
+  function suggestBetterSpot(st){
+    if (!st || !Number.isFinite(Number(st.lat)) || st.lat === "") return;
+    const here = detourAt(st), best = bestSpotFor(st, st);
+    if (here == null || !best || here - best.cost < 1500 || best.cost > here * 0.6) return;
+    const where = best.afterIdx < 0 ? "最前" : `「${cleanPlaceName(plain(toUnits(best.day.items)[best.afterIdx].stop.title))}」之後`;
+    const save = ((here - best.cost) / 1000).toFixed(1);
+    hintBar(`「${cleanPlaceName(plain(st.title))}」放喺 Day ${best.day.id.replace("day", "")} ${where} 會順路啲（少行約 ${save} 公里）`, "搬過去", async () => {
+      // take it out of where it is, put it in the better gap
+      let fromDay = null;
+      for (const d of state.snapshot.days || []) if (toUnits(d.items).some(u => u.stop === st)){ fromDay = d; break; }
+      if (!fromDay) return;
+      const fu = toUnits(fromDay.items), fi = fu.findIndex(u => u.stop === st);
+      const [moved] = fu.splice(fi, 1);
+      for (let j = fi; j < fu.length; j++) if (fu[j].stop){ if (fu[j].seg) fu[j].seg = Object.assign({}, fu[j].seg, { stale: true }); break; }
+      fromDay.items = fromUnits(fu);
+      const target = best.afterIdx < 0 ? null : toUnits(best.day.items)[best.afterIdx] && toUnits(best.day.items)[best.afterIdx].stop;
+      const tu = toUnits(best.day.items);
+      const at = target ? tu.findIndex(u => u.stop === target) + 1 : 0;
+      moved.seg = { kind: "connector", html: "", stale: true };
+      tu.splice(at, 0, moved);
+      for (let j = at + 1; j < tu.length; j++) if (tu[j].stop){ if (tu[j].seg) tu[j].seg = Object.assign({}, tu[j].seg, { stale: true }); break; }
+      best.day.items = fromUnits(tu);
+      if (!plain(st.time) && best.time) st.time = best.time;
+      [fromDay, best.day].forEach(syncMapPoints);
+      render();
+      await saveNow(`將「${plain(st.title)}」搬去 Day ${best.day.id.replace("day", "")} ${where}（順路啲）`);
+      for (const d of new Set([fromDay, best.day])){
+        const us = toUnits(d.items);
+        refreshTransit(d, us.map((u, j) => j).filter(j => j > 0 && us[j].stop && us[j].seg && us[j].seg.stale));
+      }
+    });
+  }
+  // a bar above the bottom buttons with one action, for a few seconds
+  function hintBar(text, label, act){
+    document.querySelectorAll(".hintbar").forEach(x => x.remove());
+    const bar = document.createElement("div");
+    bar.className = "hintbar"; bar.setAttribute("role", "status");
+    bar.innerHTML = `<span>${icon("map")}${esc(text)}</span><button type="button" class="btn primary">${esc(label)}</button><button type="button" class="hb-x" aria-label="唔使">${icon("close")}</button>`;
+    document.body.appendChild(bar);
+    const close = () => bar.remove();
+    bar.querySelector(".btn").addEventListener("click", () => { close(); act(); });
+    bar.querySelector(".hb-x").addEventListener("click", close);
+    setTimeout(close, 12000);
+  }
   function lastStopIndex(day){
     const us = toUnits(day.items);
     for (let j = us.length - 1; j >= 0; j--) if (us[j].stop) return j;
@@ -6815,6 +6896,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     setTimeout(() => { if (state.view === day.id) backfillBriefs(day); }, 1500);
     setTimeout(() => { if (state.view === day.id) backfillCounts(day); }, 2500);
     setTimeout(() => { if (state.view === day.id) fixAirportStops(day); }, 800);
+    setTimeout(syncCover, 3000);
   }
 
   // ---------- insert a place or a note at an exact spot ----------
@@ -7452,6 +7534,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     briefLoading.delete(st);
     if (state.view === day.id) render();
     await saveNow(`補返「${p.name}」嘅相同介紹`);
+    suggestBetterSpot(st);
   }
 
   function wireNoteEditor(day){
@@ -11380,6 +11463,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     syncMapPoints(day);
     render();
     await saveNow(`加咗 AI 推介「${x.name}」去 ${day.title}`);
+    suggestBetterSpot(st);
     const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
     let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
     refreshTransit(day, [k, nx].filter(v => v > 0));
@@ -13390,6 +13474,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     saver.lastPersistedJson = snapJson();
     saver.lastVersionId = row.id;
+    setTimeout(syncCover, 4000);
     const back = readPlace();
     const resumeY = (back && back.trip === tripId) ? back.y : 0;
     if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes" || back.view === "stays"

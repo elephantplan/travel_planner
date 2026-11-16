@@ -341,6 +341,15 @@ section.triplist{margin-bottom:36px;}
 .pass-link{position:absolute;inset:0;z-index:1;border-radius:inherit;}
 .pass-link:focus-visible{outline:2px solid var(--gold);outline-offset:3px;}
 .pass .tripdel{top:12px;right:12px;opacity:.55;}
+.pass-cover{height:118px;border-radius:20px 20px 0 0;background:var(--surface-2) center/cover no-repeat;}
+.pass.hascover .tripdel{opacity:1;color:#fff;background:rgba(10,12,16,.6);border-radius:999px;}
+.bin > summary{list-style:none;cursor:pointer;}
+.bin > summary::-webkit-details-marker{display:none;}
+.bin-sub{font-size:13px;color:var(--ink-faint);margin:0 0 10px;}
+.binrow{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--rule);border-radius:14px;margin-bottom:8px;background:var(--surface);}
+.binrow b{flex:1;font-size:15px;}
+.binrow small{display:block;font-weight:400;color:var(--ink-faint);font-size:12px;}
+.binrow .btn{min-height:36px;padding:0 12px;font-size:13px;}
 .pass .tripdel:hover{opacity:1;}
 
 .pass-main{padding:18px 20px 18px;}
@@ -540,6 +549,12 @@ section.triplist{margin-bottom:36px;}
   <section class="triplist">
     <div class="triplist-head"><h2>去過嘅行程</h2><span class="count" id="pastcount"></span></div>
     <div class="tripgrid" id="past"></div>
+  </section>
+
+  <section class="triplist" id="binwrap" hidden>
+    <details class="bin"><summary class="triplist-head"><h2>最近刪除</h2><span class="count" id="bincount"></span></summary>
+      <p class="bin-sub">刪咗嘅行程喺度留 30 日，可以還原；之後先會真係刪走。</p>
+      <div id="bin"></div></details>
   </section>
 </main>
 
@@ -1176,7 +1191,8 @@ section.triplist{margin-bottom:36px;}
     const a = passDate(t.date_start), b = passDate(t.date_end || t.date_start);
     const nDays = t.date_start ? daysBetween(t.date_start, t.date_end || t.date_start) + 1 : 0;
     const st = passStatus(t);
-    return `<article class="pass ${st.cls}" style="--tc:${color}">
+    return `<article class="pass ${st.cls}${t.cover_url ? " hascover" : ""}" style="--tc:${color}">
+      ${t.cover_url ? `<div class="pass-cover" style="background-image:url('${esc(t.cover_url)}')"></div>` : ""}
       <a class="pass-link" href="trip.html?trip=${t.id}" aria-label="${esc(t.name)}"></a>
       <button class="tripdel" data-del="${t.id}" data-delname="${esc(dest)}" title="刪除呢個行程" aria-label="刪除呢個行程">${icon("trash")}</button>
       <div class="pass-main">
@@ -1199,19 +1215,20 @@ section.triplist{margin-bottom:36px;}
   // Deleting is irreversible (the DB cascades every version + AI note away),
   // so it asks for the destination name to be typed rather than a single
   // mis-tappable confirm.
-  function openDeleteSheet(id, name){
+  function openDeleteSheet(id, name, forever){
     const layer = $("#layer");
     layer.innerHTML = `
       <div class="scrim" data-close></div>
       <div class="sheet">
         <h3>刪除「${esc(name)}」？</h3>
-        <p class="sheet-sub">會連埋成個行程嘅所有版本紀錄同 AI 問答一齊永久刪除，<b>冇得復原</b>。</p>
+        ${forever ? `<p class="sheet-sub">會連埋成個行程嘅所有版本紀錄同 AI 問答一齊永久刪除，<b>冇得復原</b>。</p>
         <p class="sheet-sub">如果確定，請喺下面打返 <b>${esc(name)}</b>：</p>
-        <input class="input" id="del-confirm" autocomplete="off" placeholder="${esc(name)}">
+        <input class="input" id="del-confirm" autocomplete="off" placeholder="${esc(name)}">`
+        : `<p class="sheet-sub">會搬去下面「最近刪除」，<b>30 日內可以還原</b>，之後先會真係刪走。</p>`}
         <div id="del-err"></div>
         <div class="sheet-btns">
           <button class="btn" data-close>取消</button>
-          <button class="btn danger" id="del-go" disabled>永久刪除</button>
+          <button class="btn danger" id="del-go"${forever ? " disabled" : ""}>${forever ? "永久刪除" : "刪除"}</button>
         </div>
       </div>`;
     const inp = layer.querySelector("#del-confirm");
@@ -1219,20 +1236,19 @@ section.triplist{margin-bottom:36px;}
     const err = layer.querySelector("#del-err");
     const close = () => { layer.innerHTML = ""; };
     layer.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", close));
-    inp.addEventListener("input", () => { go.disabled = inp.value.trim() !== name; });
-    inp.focus();
+    if (inp){ inp.addEventListener("input", () => { go.disabled = inp.value.trim() !== name; }); inp.focus(); }
     go.addEventListener("click", async () => {
       go.disabled = true; go.textContent = "刪緊…";
       try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(id)}`, {
-          method: "DELETE", headers: sbHeaders(),
-        });
-        if (!res.ok) throw new Error("刪唔到 " + res.status + " " + (await res.text()));
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(id)}`, forever
+          ? { method: "DELETE", headers: sbHeaders() }
+          : { method: "PATCH", headers: Object.assign({ "Content-Type": "application/json" }, sbHeaders()), body: JSON.stringify({ deleted_at: new Date().toISOString() }) });
+        if (!res.ok){ const tx = await res.text(); throw new Error(/deleted_at|permission|42501|42703/.test(tx) ? "「最近刪除」功能仲未開通（資料庫要更新），遲啲再試。" : "刪唔到 " + res.status + " " + tx); }
         close();
         loadTrips();
       } catch (e){
         err.innerHTML = `<div class="errbox" style="margin-top:10px;">${esc(e.message)}</div>`;
-        go.disabled = false; go.textContent = "永久刪除";
+        go.disabled = false; go.textContent = forever ? "永久刪除" : "刪除";
       }
     });
   }
@@ -1271,6 +1287,10 @@ section.triplist{margin-bottom:36px;}
       return;
     }
     const today = todayIso();
+    // 刪除 only marks a trip; it sits in 最近刪除 for 30 days, then goes
+    const gone = trips.filter(t => t.deleted_at);
+    trips = trips.filter(t => !t.deleted_at);
+    paintBin(gone);
     // the next trip first; past trips stay most-recent-first
     const upcoming = trips.filter(t => (t.date_end || t.date_start) >= today)
       .sort((a, b) => String(a.date_start || "").localeCompare(String(b.date_start || "")));
@@ -1291,6 +1311,28 @@ section.triplist{margin-bottom:36px;}
       e.preventDefault(); e.stopPropagation();
       openDeleteSheet(b.dataset.del, b.dataset.delname);
     }));
+  }
+  function paintBin(gone){
+    const wrap = $("#binwrap");
+    const old = gone.filter(t => Date.now() - Date.parse(t.deleted_at) > 30 * 864e5);
+    old.forEach(t => fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(t.id)}`, { method: "DELETE", headers: sbHeaders() }).catch(() => {}));
+    const keep = gone.filter(t => !old.includes(t));
+    wrap.hidden = !keep.length;
+    if (!keep.length) return;
+    $("#bincount").textContent = keep.length + " 個";
+    $("#bin").innerHTML = keep.map(t => {
+      const left = Math.max(1, 30 - Math.floor((Date.now() - Date.parse(t.deleted_at)) / 864e5));
+      return `<div class="binrow"><b>${esc(t.name)}<small>${esc(t.date_start || "")}・仲有 ${left} 日先會刪走</small></b>
+        <button class="btn" data-restore="${t.id}">還原</button><button class="btn danger" data-purge="${t.id}" data-purgename="${esc(t.destination_local || t.name)}">永久刪除</button></div>`;
+    }).join("");
+    $("#bin").querySelectorAll("[data-restore]").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true;
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(b.dataset.restore)}`, {
+        method: "PATCH", headers: Object.assign({ "Content-Type": "application/json" }, sbHeaders()), body: JSON.stringify({ deleted_at: null }) }).catch(() => null);
+      if (!r || !r.ok){ b.disabled = false; alert("還原唔到，遲啲再試"); return; }
+      loadTrips();
+    }));
+    $("#bin").querySelectorAll("[data-purge]").forEach(b => b.addEventListener("click", () => openDeleteSheet(b.dataset.purge, b.dataset.purgename, true)));
   }
   // ==================================================================
   // PULL TO REFRESH — the same gesture as trip.html.
