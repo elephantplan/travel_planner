@@ -1848,6 +1848,23 @@ body.readonly .qa-del{display:none;}
 @keyframes genspin{to{transform:rotate(360deg);}}
 .genbanner .txt{flex:1;line-height:1.6;}
 
+/* ---------- AI 諗行程: thinking stage, summary bar, sticky footer ---------- */
+.dai-think{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 8px 30px;min-height:42vh;}
+.dai-think .ldr{width:190px;height:88px;}
+.dai-think-now{margin:18px 0 6px;font-size:17px;font-weight:600;color:var(--ink);min-height:1.6em;line-height:1.5;}
+.dai-think-now.in{animation:dai-in .4s ease-out;}
+.dai-think-secs{margin:0;font-size:12.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+@keyframes dai-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.dai-asked{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:4px 0 12px;border-radius:var(--r-lg);background:var(--surface-2);}
+.dai-asked-t{flex:1;min-width:0;font-size:14px;line-height:1.5;color:var(--ink);}
+.dai-asked-t span{display:block;font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--gold);}
+.dai-asked .btn{flex:none;}
+.dai-foot{position:sticky;bottom:calc(-24px - env(safe-area-inset-bottom));margin:14px -18px calc(-24px - env(safe-area-inset-bottom));
+  padding:12px 18px calc(16px + env(safe-area-inset-bottom));background:var(--paper);border-top:1px solid var(--rule);z-index:2;}
+.dai-foot p{margin:8px 0 0;font-size:12px;color:var(--ink-faint);text-align:center;}
+.stopcard.justadded{animation:dai-glow 3.6s ease-out;}
+@keyframes dai-glow{0%,30%{box-shadow:0 0 0 3px var(--gold),var(--shadow-1);}100%{box-shadow:var(--shadow-1);}}
+@media (prefers-reduced-motion:reduce){.dai-think-now.in,.stopcard.justadded{animation:none;}.stopcard.justadded{outline:3px solid var(--gold);}}
 /* ---------- in-app confirm (iOS can switch off the browser's own) ---------- */
 .cfm-scrim{position:fixed;inset:0;z-index:130;background:color-mix(in srgb,var(--ink) 45%,transparent);display:grid;place-items:center;padding:16px;}
 .cfm{width:min(380px,100%);background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:var(--r-xl);box-shadow:var(--shadow-2);padding:20px 18px 16px;}
@@ -2260,7 +2277,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-7";
+  const BUILD = "2026-11-17-8";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6327,7 +6344,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             <span class="stoptime">${timeLabelHtml(s.time)}</span>
             <span class="node${stopNums && stopNums.has(i) ? " numbered" : ""}" data-type="${esc(s.type||'normal')}">${stopNums && stopNums.has(i) ? stopNums.get(i) : ""}</span>
           </div>
-          <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}">
+          <div class="stopcard${open ? " open" : ""}${selecting ? " selecting" : ""}${checked ? " checked" : ""}${state.justAdded && state.justAdded.has(s) ? " justadded" : ""}">
             <div class="stopmain"${selecting ? ` data-select="${i}"` : ""}>
               ${selecting ? `<span class="selbox">${checked ? icon("check") : ""}</span>` : ""}
               ${thumb}
@@ -11319,7 +11336,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     return !!(c && c.op === "edit" && c.stop && c.matchTitle && plain(c.stop.title) &&
       cleanPlaceName(plain(c.stop.title)) !== cleanPlaceName(plain(c.matchTitle)));
   }
-  function wireApplyButtons(out, changes, onAll){
+  function wireApplyButtons(out, changes, onAll, opts = {}){
     // one change → one awaited apply, so "apply all" can reuse it
     const chosen = {};              // option group → the stop that was picked
     async function applyOne(ab){
@@ -11366,7 +11383,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => applyOne(ab)));
     const all = out.querySelector("[data-applyall]");
-    if (all) all.addEventListener("click", async () => {
+    if (all && opts.fast) all.addEventListener("click", () => applyAllFast(out, changes, all, opts.onDone));
+    else if (all) all.addEventListener("click", async () => {
       all.disabled = true; all.textContent = "套用緊…";
       let n = 0;
       // Awaited one at a time. This used to fire each button 60ms apart
@@ -11380,6 +11398,43 @@ ${stayBlock}${dayBlocks}${secBlocks}
       all.textContent = `已經全部套用（${n} 個）`;
       if (onAll) onAll();
     });
+  }
+
+  // 全部加入: every plain suggestion goes in at once and is saved straight
+  // away; the sheet closes and the day shows them. Photos, Google facts and
+  // the legs between are filled in afterwards, with a banner saying so —
+  // one at a time, each with its own save, took a minute for five places.
+  async function applyAllFast(out, changes, btn, onDone){
+    const btns = [...out.querySelectorAll('[data-apply]:not([data-mode="replace"]):not([data-opt])')].filter(b => !b.disabled && !/^已/.test(b.textContent));
+    const picked = btns.map(b => {
+      let c = changes[+b.dataset.apply];
+      if (b.dataset.mode === "add") c = Object.assign({}, c, { op: "add" });
+      return c;
+    }).filter(Boolean);
+    const adds = picked.filter(c => c.op === "add" && c.stop);
+    const rest = picked.filter(c => !(c.op === "add" && c.stop));
+    btn.disabled = true;
+    const touched = mergeChangesIntoDays(adds);
+    const newStops = [...touched.values()].flatMap(r => r.newStops);
+    state.justAdded = new Set(newStops);
+    const dayIds = [...new Set(picked.map(c => c.dayId))];
+    const label = dayIds.map(id => "Day " + String(id).replace("day", "")).join("、");
+    render();
+    onDone && onDone(newStops.length, dayIds);
+    genBanner(`${label} 加咗 ${newStops.length} 個地點，攞緊相、評分同交通…`);
+    await saveNow(`AI 建議：${label} 加咗 ${newStops.map(st => plain(st.title)).join("、")}`.slice(0, 200));
+    for (const c of rest) await applyAiChange(c).catch(() => {});
+    await runBounded(newStops, 4, enrichStop);
+    render();
+    for (const { day } of touched.values()){
+      for (const st of newStops) if (day.items.includes(st) && stopClosedOnDay(st, day)) await replaceClosedStop(day, st).catch(() => {});
+      const us = toUnits(day.items);
+      const idxs = us.map((u, i) => i).filter(i => us[i].stop && newStops.some(st => us[i].stop === st || (us[i - 1] && us[i - 1].stop === st)));
+      if (idxs.length) await refreshTransit(day, idxs);
+    }
+    await saveNow("補咗新地點嘅相、評分同交通");
+    genBanner(`${label} 加咗 ${newStops.length + rest.length} 個建議・唔啱可以撳頂部「上一步」還原`, { done: true });
+    setTimeout(() => genBanner(null), 6000);
   }
 
   // A "對調" swaps every stop between two days via ordinary add/edit changes,
@@ -11459,6 +11514,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         ? `「${esc(day.title)}」而家有 ${stops} 個站，AI 會補唔夠嘅位，唔會推介重複嘅地方。`
         : `「${esc(day.title)}」仲係空白嘅，AI 會由早到晚幫你砌一日出嚟。`}
         想連埋其他日一齊諗（例如兩日一齊避免食重複嘢），落面揀埋佢哋。</p>
+      <div class="dai-form">
       ${others.length ? `
         <p class="picker-label">仲想埋埋邊幾日一齊諗？</p>
         <div class="daypick daypick-compact">
@@ -11477,8 +11533,11 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <button class="btn primary" id="dayai-go">問</button>
       </div>
       <p class="sec-sub" style="margin-top:6px;">留空都得，AI 會自己睇住辦。</p>
+      </div>
       <div class="ai-out" id="dayai-out"></div>
     `, sheet => {
+      const form = sheet.querySelector(".dai-form");
+      const intro = sheet.querySelector("h3 + .sec-sub");
       const out = sheet.querySelector("#dayai-out");
       const q = sheet.querySelector("#dayai-q");
       const go = sheet.querySelector("#dayai-go");
@@ -11502,42 +11561,103 @@ ${stayBlock}${dayBlocks}${secBlocks}
         // it stays echoed above the answer so the two read together
         q.value = "";
         sheet.querySelectorAll("[data-want].on").forEach(b => b.classList.remove("on"));
-        const askedHtml = asked ? `<p class="askedecho">你啱先問：「${esc(asked)}」</p>` : "";
-        go.disabled = true; go.textContent = "諗緊…";
-        const stop = busyIn(out, { steps:[`AI 諗緊「${label}」`],
-          hint:`AI 會睇埋其他日子避開重複，大約 ${dayIds.length > 1 ? "20-40" : "15-30"} 秒。` });
+        // while it thinks, the questions fold away and the wait is the whole sheet
+        form.hidden = true; if (intro) intro.hidden = true;
+        const askedHtml = `<div class="dai-asked">
+          <div class="dai-asked-t"><span>${dayIds.map(id => "Day " + id.replace("day", "")).join("、")}</span>${asked ? esc(asked) : "由 AI 自己決定"}</div>
+          <button class="btn" data-reask>改要求</button></div>`;
+        go.disabled = true;
+        const stop = thinkingIn(out, dayIds, asked);
         let r;
         try {
           r = await callAi({ action:"day-plan", dayIds, question: asked + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT, itinerary: state.snapshot });
         } catch (e){
           stop(); out.innerHTML = askedHtml + `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
-          go.disabled = false; go.textContent = "問"; return;
+          go.disabled = false; wireReask(); return;
         }
         stop();
         go.disabled = false; go.textContent = "再問一次";
-        if (!r || r.ok === false){ out.innerHTML = askedHtml + `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; return; }
+        if (!out.isConnected) return;
+        if (!r || r.ok === false){ out.innerHTML = askedHtml + `<div class="ai-msg">${esc((r && r.message) || "冇回覆")}</div>`; wireReask(); return; }
         const changes = (r.changes || []).filter(c => c && (c.stop || c.matchTitle));
         const dayTitles = r.dayTitles && typeof r.dayTitles === "object" ? r.dayTitles : {};
         const titleCards = dayTitleCardsHtml(dayTitles);
         if (!changes.length && !titleCards){
           out.innerHTML = askedHtml + `<div class="ai-msg">${esc(r.notes || "AI 覺得呢幾日唔使改。")}</div>`;
+          wireReask();
           saveAiNote("day-plan", `${label}：AI 建議`, r.notes || "冇建議");
           return;
         }
         const plainCount = optionGroups(changes).filter(g => !g).length;
-        out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) +
-          (plainCount > 1 ? `<button class="btn wide primary" data-applyall style="margin-top:10px;">全部套用（${plainCount} 個${changes.some(swapsPlace) ? "，原本地點會保留" : ""}${plainCount < changes.length ? "；選擇要自己揀" : ""}）</button>` : "") +
-          titleCards;
-        wireApplyButtons(out, changes);
+        out.innerHTML = askedHtml + changeCardsHtml(changes, r.notes) + titleCards +
+          // always in reach at the bottom of the sheet, not after the last card
+          `<div class="dai-foot">${plainCount > 1
+            ? `<button class="btn primary wide" data-applyall>${icon("check")}全部加入行程（${plainCount} 個）</button>
+               <p>${changes.some(swapsPlace) ? "原本地點會保留。" : ""}${plainCount < changes.length ? "有「選擇」嘅要自己揀。" : ""}唔啱可以撳頂部「上一步」還原。</p>`
+            : `<button class="btn wide" data-donelook>完成，返去行程睇</button>`}</div>`;
+        wireReask();
+        wireApplyButtons(out, changes, null, { fast: true, onDone: (n, ids) => finishDayAi(n, ids) });
+        const look = out.querySelector("[data-donelook]");
+        if (look) look.addEventListener("click", () => finishDayAi(0, dayIds));
         wireDayTitleButtons(out, dayTitles);
         addGoogleFacts(out, changes);
         saveAiNote("day-plan", `${label}：AI 建議${asked ? "（" + asked + "）" : ""}`,
           [r.notes, ...changes.map(c => `【Day ${String(c.dayId||"").replace("day","")}・${c.op === "add" ? "加" : "改"}】${(c.stop && c.stop.title) || c.matchTitle || ""}（${(c.stop && c.stop.time) || ""}）\n${c.reason || ""}`)]
             .filter(Boolean).join("\n\n"));
       };
+      function wireReask(){
+        const b = out.querySelector("[data-reask]");
+        if (b) b.addEventListener("click", () => {
+          form.hidden = false; if (intro) intro.hidden = false;
+          out.innerHTML = "";
+          go.textContent = "問";
+          q.focus();
+        });
+      }
       go.addEventListener("click", run);
       q.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
     });
+  }
+  // The wait, made the whole sheet: the app's route drawing, large, with a
+  // line that says what it is looking at, so 20-30 seconds reads as work.
+  function thinkingIn(out, dayIds, asked){
+    const days = dayIds.map(id => dayById(id)).filter(Boolean);
+    const names = days.flatMap(d => d.items.filter(i => i.kind === "stop").map(i => cleanPlaceName(plain(i.title)))).filter(Boolean);
+    const lines = [
+      `睇緊 ${days.map(d => "Day " + d.id.replace("day", "")).join("、")} 已經有咩`,
+      names.length ? `諗緊「${names[0]}」附近有咩好去` : "諗緊呢日去邊區最順",
+      asked ? `跟住你講嘅：${asked.slice(0, 24)}` : "揀緊值得去嘅景點同餐廳",
+      "避開其他日已經去緊嘅地方",
+      "排緊順路嘅次序同時間",
+      "就快好",
+    ];
+    const t0 = Date.now();
+    out.innerHTML = `<div class="dai-think" role="status" aria-live="polite">
+      ${loaderSvg()}
+      <p class="dai-think-now" id="dai-now">${esc(lines[0])}</p>
+      <p class="dai-think-secs"><span id="dai-secs">0</span> 秒・通常 15–30 秒</p>
+    </div>`;
+    let k = 0;
+    const id = setInterval(() => {
+      const now = document.getElementById("dai-now"), secs = document.getElementById("dai-secs");
+      if (!now){ clearInterval(id); return; }
+      const sec = Math.round((Date.now() - t0) / 1000);
+      secs.textContent = sec;
+      const want = Math.min(lines.length - 1, Math.floor(sec / 5));
+      if (want !== k){ k = want; now.classList.remove("in"); void now.offsetWidth; now.textContent = lines[k]; now.classList.add("in"); }
+    }, 1000);
+    return () => clearInterval(id);
+  }
+  // Done with the sheet: back to the day, scrolled to what was just added.
+  function finishDayAi(n, dayIds){
+    closeLayer();
+    const first = (dayIds || [])[0];
+    if (first && state.view !== first){ state.view = first; render(); }
+    requestAnimationFrame(() => {
+      const el = document.querySelector(".stopcard.justadded");
+      if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    setTimeout(() => { if (state.justAdded){ state.justAdded = null; document.querySelectorAll(".stopcard.justadded").forEach(e => e.classList.remove("justadded")); } }, 4000);
   }
 
   // ---------- AI ----------
