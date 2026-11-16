@@ -88,3 +88,19 @@ end $$;
 
 grant execute on function public.trip_people(bigint) to anon, authenticated;
 grant execute on function public.my_trip_contacts(), public.add_trip_member(bigint, uuid), public.remove_trip_member(bigint, uuid) to authenticated;
+
+-- Leaving: removes the caller's login, name and picture. Their trips either
+-- stay (ownerless again, so they can be claimed after signing up afresh)
+-- or go with the account.
+create or replace function public.delete_my_account(keep_trips boolean default true) returns boolean
+language plpgsql security definer set search_path = public, auth as $$
+declare me uuid := auth.uid();
+begin
+  if me is null then return false; end if;
+  if keep_trips then update public.trips set owner_id = null where owner_id = me;
+  else delete from public.trips where owner_id = me; end if;
+  delete from auth.users where id = me;
+  return true;
+end $$;
+revoke execute on function public.delete_my_account(boolean) from public, anon;
+grant execute on function public.delete_my_account(boolean) to authenticated;

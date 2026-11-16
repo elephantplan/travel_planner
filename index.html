@@ -350,6 +350,8 @@ section.triplist{margin-bottom:36px;}
 .acct-avimg{width:68px;height:68px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:var(--surface-2);font:700 26px var(--f-body);color:var(--ink);}
 .acct-name{flex:1;} .acct-name label{display:block;font-size:12px;color:var(--ink-faint);margin-bottom:4px;} .acct-name .input{width:100%;}
 .acctbtn .av-letter{font-weight:700;}
+.acct-more{margin:6px 0 10px;font-size:13px;} .acct-more summary{cursor:pointer;color:var(--ink-faint);}
+.acct-keep{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0 10px;line-height:1.5;}
 .prefs{padding:14px 18px 4px;border-bottom:1px solid var(--rule);}
 .prefs-h{margin:0 0 10px;font-size:13px;color:var(--ink-faint);}
 .pf-g{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;}
@@ -573,8 +575,8 @@ section.triplist{margin-bottom:36px;}
           <button type="button">輕鬆，每日 2–3 個地方</button><button type="button">適中</button><button type="button">盡量去多啲</button></div>
         <div class="pf-g" data-pf="like"><span>想多啲</span>
           <button type="button">景點</button><button type="button">美食</button><button type="button">行街購物</button><button type="button">自然風景</button><button type="button">咖啡店</button><button type="button">博物館／藝術</button><button type="button">主題樂園</button><button type="button">溫泉</button></div>
-        <div class="pf-g" data-pf="eat"><span>想食</span>
-          <button type="button">當地名物</button><button type="button">海鮮／壽司</button><button type="button">燒肉</button><button type="button">拉麵／麵</button><button type="button">甜品</button><button type="button">高分／名店</button><button type="button">街頭小食</button></div>
+        <div class="pf-g" data-pf="eat"><span>想食</span><span class="pf-eatbtns" style="display:contents"></span></div>
+        <label class="pf-must">仲有咩想食<input class="input" id="pf-eatmore" placeholder="例如：鰻魚飯、壽喜燒、某間想去嘅餐廳"></label>
         <div class="pf-g" data-pf="budget" data-one><span>食飯預算</span>
           <button type="button">平啲</button><button type="button">中等</button><button type="button">貴啲都得</button></div>
         <div class="pf-times">
@@ -773,6 +775,7 @@ section.triplist{margin-bottom:36px;}
       e.preventDefault();
       const p = places[+btn.dataset.pick];
       picked = { name:p.name, address:p.address||"", lat:p.lat, lng:p.lng };
+      paintFoods();
       destInput.value = p.name;
       clearSuggest();
       renderPicked();
@@ -797,6 +800,26 @@ section.triplist{margin-bottom:36px;}
     if (g.hasAttribute("data-one")) g.querySelectorAll("button").forEach(x => { if (x !== b) x.classList.remove("on"); });
     b.classList.toggle("on");
   });
+  // what there is to eat depends on where: the choices follow the destination
+  const FOODS = [
+    [/japan|日本|tokyo|osaka|kyoto|東京|大阪|京都|福岡|北海道|沖繩|名古屋/i, ["壽司／海鮮丼", "拉麵", "燒肉／和牛", "壽喜燒／涮涮鍋", "鰻魚飯", "天婦羅", "居酒屋", "炸豬扒", "烏冬／蕎麥麵", "甜品／喫茶店", "Tabelog 百名店"]],
+    [/korea|韓國|seoul|busan|首爾|釜山|濟州/i, ["韓牛／烤肉", "炸雞啤酒", "醬油蟹", "人參雞", "部隊鍋", "冷麵", "一隻雞", "韓式刀削麵", "街頭小食", "咖啡店／甜品"]],
+    [/taiwan|台灣|臺灣|taipei|台北|台中|台南|高雄/i, ["牛肉麵", "小籠包", "滷肉飯", "夜市小食", "火鍋", "鹹酥雞", "早餐店", "珍珠奶茶／手搖", "芒果冰／甜品", "熱炒"]],
+    [/thailand|泰國|bangkok|曼谷|清邁|布吉/i, ["船麵／泰式粉麵", "冬陰功", "海鮮", "泰式炒河", "芒果糯米飯", "街頭小食", "米芝蓮推介", "泰北菜", "Rooftop bar", "咖啡店"]],
+    [/china|中國|上海|北京|成都|廣州|深圳|重慶/i, ["當地名菜", "火鍋", "小籠包／點心", "烤鴨", "麵食", "串串／燒烤", "小食街", "茶館", "甜品"]],
+    [/./, ["當地名物", "海鮮", "燒肉／扒房", "麵食", "街頭小食", "甜品／咖啡店", "高分／名店", "酒吧"]],
+  ];
+  function paintFoods(){
+    const where = picked ? `${picked.name} ${picked.address}` : $("#f-dest") ? $("#f-dest").value : "";
+    const row = FOODS.find(f => f[0].test(where || " "));
+    const box = document.querySelector(".pf-eatbtns");
+    const key = row[1].join("|");
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    box.innerHTML = row[1].map(x => `<button type="button">${esc(x)}</button>`).join("");
+  }
+  paintFoods();
+  $("#f-dest").addEventListener("input", paintFoods);
   function prefsText(){
     const pick = k => [...document.querySelectorAll(`.pf-g[data-pf="${k}"] button.on`)].map(b => b.textContent.trim());
     const out = [];
@@ -804,7 +827,8 @@ section.triplist{margin-bottom:36px;}
     if (who) out.push(`同行：${who}。`);
     if (pace) out.push(`節奏：${pace}。`);
     if (like.length) out.push(`想多啲：${like.join("、")}。`);
-    if (eat.length) out.push(`想食：${eat.join("、")}（每日午餐同晚餐都要安排具體餐廳）。`);
+    const eatMore = $("#pf-eatmore").value.trim();
+    if (eat.length || eatMore) out.push(`想食：${eat.concat(eatMore ? [eatMore] : []).join("、")}（每日午餐同晚餐都要安排具體餐廳，盡量包晒呢啲）。`);
     if (budget) out.push(`食飯預算：${budget}。`);
     const a = $("#pf-arrive").value, l = $("#pf-leave").value;
     if (a) out.push(`第一日大約 ${a} 先到埗（落機／落車），之後先開始行程，唔好排之前嘅活動。`);
@@ -1453,11 +1477,29 @@ section.triplist{margin-bottom:36px;}
         <div class="acct-name"><label for="acct-name">顯示名</label><input class="input" id="acct-name" maxlength="40" value="${esc(me.name || "")}" placeholder="例如：Tiffany"></div>
       </div>
       <p class="sheet-sub">同你一齊睇行程嘅人會見到呢個名同頭像，改動紀錄都會用佢。</p>
+      ${first === true ? "" : `<details class="acct-more"><summary>刪除 account</summary>
+        <p class="sheet-sub">會刪走你個登入資料、名同頭像。之後再用 Google 登入，就當係新人重新註冊。</p>
+        <label class="acct-keep"><input type="checkbox" id="acct-keep" checked> 保留我開嘅行程（會變返「未撥入 account」，再登入可以撥返入嚟）；唔剔就連行程一齊刪除</label>
+        <button class="btn danger" id="acct-del">刪除我個 account</button></details>`}
       <div id="acct-err"></div>
       <div class="sheet-btns"><button class="btn danger" id="logout">登出</button><button class="btn" data-close>取消</button><button class="btn primary" id="acct-save">儲存</button></div></div>`;
     const close = () => { layer.innerHTML = ""; };
     layer.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", close));
     layer.querySelector("#logout").addEventListener("click", async () => { await TripAuth.signOut(); close(); loadTrips(); });
+    const del = layer.querySelector("#acct-del");
+    if (del) del.addEventListener("click", async () => {
+      const keep = layer.querySelector("#acct-keep").checked;
+      if (!confirm(keep ? "刪除你個 account？你開嘅行程會保留。" : "刪除你個 account，連埋你開嘅所有行程？冇得復原。")) return;
+      del.disabled = true; del.textContent = "刪緊…";
+      try {
+        await TripAuth.rpc("delete_my_account", { keep_trips: keep });
+        try { localStorage.removeItem("profile_asked_" + me.id); localStorage.removeItem("trip_editor_name"); } catch (_){}
+        await TripAuth.signOut(); close(); loadTrips();
+      } catch (err){
+        layer.querySelector("#acct-err").innerHTML = `<div class="errbox">${esc(/404|PGRST202/.test(err.message) ? "呢個功能仲未開通（資料庫要更新）。" : err.message)}</div>`;
+        del.disabled = false; del.textContent = "刪除我個 account";
+      }
+    });
     layer.querySelector("#acct-file").addEventListener("change", async e => {
       const f = e.target.files[0]; if (!f) return;
       try { avatar = await TripAuth.shrinkImage(f, 128); layer.querySelector("#acct-avbox").innerHTML = avatarHtml({ avatar }, "acct-avimg"); }
