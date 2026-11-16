@@ -1137,13 +1137,13 @@ img{max-width:100%;}
   background:linear-gradient(to bottom,rgba(0,0,0,.38),transparent 30%,transparent 72%,rgba(0,0,0,.42));}
 .thumb-rate{position:absolute;left:12px;bottom:10px;z-index:1;display:inline-flex;align-items:center;gap:4px;
   padding:4px 9px;border-radius:999px;font-family:'Archivo',var(--f-mono);font-stretch:85%;font-weight:800;font-size:13px;
-  color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+  color:#fff;background:rgba(10,12,16,.62);}
 .thumb-rate small{font-size:11px;font-weight:500;opacity:.85;margin-left:4px;padding-left:6px;border-left:1px solid rgba(255,255,255,.35);}
 .thumb-rate .i{width:13px;height:13px;fill:var(--gold);stroke:var(--gold);}
 .stopcard:has(.thumb-rate) .meta-chip.rating{display:none;}
 .stopcard:has(> .stopmain > .thumb) > .cardtools{top:10px;right:10px;flex-direction:row;gap:6px;}
-.stopcard:has(> .stopmain > .thumb) > .cardtools > *{color:#fff;background:rgba(10,12,16,.4);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+.stopcard:has(> .stopmain > .thumb) > .cardtools > *{color:#fff;background:rgba(10,12,16,.6);
+  border-radius:999px;}
 .stopcard:has(> .stopmain > .thumb) .stopname{font-size:18px;font-weight:800;letter-spacing:-.015em;line-height:1.35;}
 .stopname .kr{display:block;margin:3px 0 0;font-size:12px;}
 
@@ -1358,7 +1358,7 @@ img{max-width:100%;}
 .fold-body .hsblock[data-hskey="acc"],.stayspage .hsblock[data-hskey="acc"]{padding:0;overflow:hidden;}
 .fold-body .hsblock[data-hskey="acc"] > .foldtools,.stayspage .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;right:10px;z-index:2;float:none;margin:0;}
 .fold-body .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit,.stayspage .hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1;color:#fff;
-  background:rgba(10,12,16,.4);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+  background:rgba(10,12,16,.6);border-radius:999px;}
 .fold-body .hsblock[data-hskey="acc"] > .hint,.stayspage .hsblock[data-hskey="acc"] > .hint{padding:16px;}
 .stayrow{border-top:1px dashed var(--rule);padding:18px 18px 16px;margin:0;}
 .stayrow:first-of-type{border-top:0;padding-top:18px;}
@@ -1575,7 +1575,7 @@ body.readonly [data-moneyitem]{pointer-events:none;}
 .stayacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
 .stayacts .btn{flex:1 1 auto;}
 body.readonly .stayacts{display:none !important;}
-.stayrow.hasphoto .staydel{color:#fff;background:rgba(10,12,16,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;}
+.stayrow.hasphoto .staydel{color:#fff;background:rgba(10,12,16,.62);border-radius:999px;}
 .stayrow:not(.hasphoto) .v{padding-right:44px;}
 .fold-body .hsblock[data-hskey="acc"] > .foldtools,.stayspage .hsblock[data-hskey="acc"] > .foldtools{left:12px;right:auto;}
 .sechide{display:flex;justify-content:flex-end;margin-top:10px;}
@@ -1599,7 +1599,7 @@ body.readonly .sechide{display:none;}
 .stayempty .hint{margin:0;}
 .sgh{position:relative;}
 .sgh-x{position:absolute;top:10px;right:10px;z-index:3;width:32px;height:32px;border-radius:50%;border:0;cursor:pointer;
-  font-size:20px;line-height:1;color:#fff;background:rgba(10,12,16,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+  font-size:20px;line-height:1;color:#fff;background:rgba(10,12,16,.65);}
 .sgh:not(:has(.sgh-photo)) .sgh-x{color:var(--ink-soft);background:var(--stock);}
 .sgh-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding-right:36px;}
 .sgh-top .sgd{min-width:0;}
@@ -1668,8 +1668,8 @@ body.readonly .sechide{display:none;}
 .stayspage .hsblock[data-hskey="acc"] > .foldtools{position:absolute;top:10px;left:12px;z-index:2;margin:0;}
 .stayspage .sgblock{background:var(--stock);border:1px solid var(--rule-soft);border-radius:18px;padding:16px;margin-top:14px;box-shadow:var(--shadow-1);}
 
-.hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1 !important;color:#fff;background:rgba(10,12,16,.45);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-radius:999px;width:32px;height:32px;display:inline-grid;place-items:center;}
+.hsblock[data-hskey="acc"]:has(.stayphoto) > .foldtools .secedit{opacity:1 !important;color:#fff;background:rgba(10,12,16,.62);
+  border-radius:999px;width:32px;height:32px;display:inline-grid;place-items:center;}
 
 .mn-addrow{display:flex;gap:8px;margin-bottom:12px;}
 .mn-addrow .input{flex:1;min-width:0;}
@@ -2213,7 +2213,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-15-5";
+  const BUILD = "2026-11-16-1";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5223,6 +5223,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (/天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "")) return false;
     return !NOT_A_PLACE.test(head);
   }
+  // A line written as a sentence (「明治神宮外苑銀杏大道通常喺11月下旬最金黃…」)
+  // has no 「名：」 head, but still starts with a place. The words before the
+  // first verb-ish word count as one only if they end like a place name.
+  const PLACE_END = /(宮|苑|寺|神社|大社|稻荷|公園|大道|庭園|園|山|川|橋|塔|館|城|通|街|商店街|町|丁目|駅|站|庭|院|閣|堂|森|池|島|谷|坂|渓|峽|峡|瀑布|廣場|広場|市場|橫丁|横丁|Hills|Park|Garden|Gardens|Shrine|Temple|Tower|Street)$/i;
+  function leadPlace(text){
+    const m = String(text || "").match(/^([^\d，。、：:\s「」]{2,16}?)(?=通常|一般|喺|係|入場|可以|有|最|嘅|會|都|而家|今年|每年|附近|一帶|就|嗰|的|是|在|，)/);
+    if (!m) return "";
+    const n = m[1].replace(/[（(][^）)]*[）)]/g, "").trim();
+    return PLACE_END.test(n) && !NOT_A_PLACE.test(n) ? n : "";
+  }
+  // the place a section line names, if any: its 「名：」 head, else its lead
+  function linePlace(sec, l){
+    const { head, body, text } = splitLine(l);
+    if (lineIsPlace(sec, head)) return Object.assign(placeFromHead(head), { body });
+    if (!sec || sec.source !== "ai" || /天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "")) return null;
+    const n = leadPlace(text);
+    return n ? { name: n, region: "", body: text } : null;
+  }
   function placeFromHead(head){
     const region = (head.match(/[（(]([^）)]+)[）)]/) || [])[1] || "";
     return { name: head.replace(/[（(][^）)]*[）)]/g, "").trim(), region };
@@ -5230,14 +5248,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function sectionLineHtml(l, sec, si, li){
     const { head, body, text } = splitLine(l);
     let tool = "";
-    if (lineIsPlace(sec, head)){
-      const { name } = placeFromHead(head);
+    const lp = linePlace(sec, l);
+    if (lp){
+      const { name } = lp;
       const inDay = findInItinerary(state.snapshot, { title: name });
       tool = inDay
         ? `<button type="button" class="usec-inday" data-inday-go="${esc(inDay.id)}" style="--lc:${dayColorVar(inDay.id)}">已喺 D${esc(inDay.id.replace("day", ""))}</button>`
         : `<button type="button" class="usec-add" data-addplace="${si}|${li}">${icon("plus")}加去行程</button>`;
     }
-    return head ? `<li><b>${esc(head)}</b><span>${esc(body)}</span>${tool}</li>` : `<li><span>${esc(text)}</span></li>`;
+    return head ? `<li><b>${esc(head)}</b><span>${esc(body)}</span>${tool}</li>` : `<li><span>${esc(text)}</span>${tool}</li>`;
   }
   function sectionLinesHtml(lines, sec, si){
     if (!lines.length) return "";
@@ -5254,8 +5273,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const sec = (snap.sections || [])[si];
     const line = sec && (sec.lines || [])[li];
     if (!line) return;
-    const { head, body } = splitLine(line);
-    openAddPlaceSheetFor(Object.assign(placeFromHead(head), { body }));
+    const lp = linePlace(sec, line);
+    if (lp) openAddPlaceSheetFor(lp);
   }
   // AI 助手's recommendations: each goes straight to the day and spot the AI
   // suggested, the sheet stays open for more, and 改位置 picks another day
@@ -12004,6 +12023,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
     return [
       { topic: `${where} 天氣同點著衫`, label: "天氣同著衫建議" },
       ...(mo ? [{ topic: `${where} ${mo} 月有咩季節限定（紅葉／櫻花／燈飾／祭典／當造美食），幾時去最好`, label: `${mo} 月限定` }] : []),
+      // what they said they came for (「想去睇紅葉/銀杏」) gets its own list
+      // of where to go, in 行前準備 with the rest
+      ...(() => {
+        const want = String(state.snapshot.tripBrief || "") + " " + String(m.requirements || "");
+        const kinds = ["紅葉", "銀杏", "櫻花", "賞楓", "梅花", "紫藤", "繡球花", "薰衣草", "燈飾", "雪景"].filter(k => want.includes(k));
+        return kinds.length ? [{ topic: `${where} ${kinds.join("／")}：邊度睇、幾時最靚（揀近行程每日去嘅地方，每個地點獨立一行，格式「地點名：點解好、幾時去」）`, label: `${kinds.join("／")}地點` }] : [];
+      })(),
       { topic: `${where} 交通、上網卡同貨幣`, label: "交通／上網／貨幣" },
       { topic: `${where} 行李同出發前準備清單`, label: "行李清單" },
     ];

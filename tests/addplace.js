@@ -16,7 +16,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   const cur = JSON.parse(JSON.stringify(snap));
   cur.sections = [{ id: 'k1', icon: '', title: '去邊睇紅葉好', sub: '', source: 'ai', topic: '去邊睇紅葉好', aiRefresh: true, where: 'prep', links: [],
-    lines: ['永觀堂（京都）：紅葉之王，12月初去睇尾聲', '景福宮：秋天銀杏好靚', '交通安排：大阪去京都搭京阪電車', '蟹季當造：12月松葉蟹最肥美', '當造士多啤梨：超市已上架'] }];
+    lines: ['永觀堂（京都）：紅葉之王，12月初去睇尾聲', '景福宮：秋天銀杏好靚', '交通安排：大阪去京都搭京阪電車', '蟹季當造：12月松葉蟹最肥美', '當造士多啤梨：超市已上架', '明治神宮外苑銀杏大道通常喺11月下旬最金黃，青山一丁目站行過去最快。', '11月下旬東京氣溫約10至15度，日夜溫差大。', '出發前1至2星期去Weather News睇紅葉最前線。'] }];
   const saved = [];
   await p.route('**/rest/v1/itinerary_versions**', r => {
     if (r.request().method() === 'POST'){ try { saved.push(JSON.parse(r.request().postData())); } catch (_){}
@@ -38,12 +38,14 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(400);
 
   const block = p.locator('.usec').filter({ hasText: '去邊睇紅葉好' });
-  ok('地點有「加去行程」', await block.locator('[data-addplace]').count() === 1, await block.locator('[data-addplace]').count());
+  ok('地點有「加去行程」（連句子開頭係地點嗰行）', await block.locator('[data-addplace]').count() === 2, await block.locator('[data-addplace]').count());
+  ok('句子開頭係地點都有掣', await block.locator('li', { hasText: '銀杏大道' }).locator('[data-addplace]').count() === 1);
+  ok('氣溫同出發前提醒冇掣', await block.locator('li', { hasText: '氣溫' }).locator('[data-addplace]').count() === 0 && await block.locator('li', { hasText: 'Weather News' }).locator('[data-addplace]').count() === 0);
   ok('已經喺行程嘅地點講明喺邊日', /已喺 D2/.test(await block.innerText()));
   ok('交通建議冇呢粒掣', await block.locator('li', { hasText: '交通安排' }).locator('[data-addplace]').count() === 0);
   ok('當造食物唔係地點，冇呢粒掣', await block.locator('li', { hasText: '當造' }).locator('[data-addplace]').count() === 0);
 
-  await block.locator('[data-addplace]').click();
+  await block.locator('[data-addplace]').first().click();
   await p.waitForTimeout(300);
   ok('揀日子', await p.locator('[data-addto]').count() === cur.days.length);
   await p.locator('[data-addto="day3"]').click();
