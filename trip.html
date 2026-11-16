@@ -785,7 +785,8 @@ img{max-width:100%;}
   flex:0 0 auto;width:62px;height:62px;border-radius:var(--r-md);overflow:hidden;
   background:var(--surface-2);position:relative;
 }
-.thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none;}
+.thumb{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
 .thumb.ghost{
   display:flex;align-items:center;justify-content:center;cursor:pointer;
   border:1px dashed var(--rule);background:transparent;color:var(--ink-faint);
@@ -1957,6 +1958,14 @@ body.readonly .qa-del{display:none;}
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
 .ins-past{margin-top:8px;}
+.ap-facts{margin:0 0 6px;}
+.ap-sug{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:12px;margin:6px 0 4px;font-size:13.5px;line-height:1.5;
+  background:color-mix(in srgb,var(--gold) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 35%,var(--rule));}
+.ap-sug .i{width:15px;height:15px;flex:none;margin-top:3px;color:var(--gold);}
+.ap-days button.on{outline:2px solid var(--lc);outline-offset:-2px;}
+.ap-spots .foldopt.on{outline:2px solid var(--gold);outline-offset:-2px;}
+.ap-spots .foldn small{display:block;font-size:11.5px;color:var(--ink-faint);font-weight:400;}
+.ap-go{margin-top:12px;position:sticky;bottom:calc(8px + env(safe-area-inset-bottom));z-index:2;}
 .ins-multi{margin:8px 2px 0;font-size:12px;}
 .ins-done{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));margin-top:12px;z-index:3;box-shadow:0 6px 20px rgba(0,0,0,.25);}
 .nr-add.added{background:var(--ok, #2e8b57);border-color:var(--ok, #2e8b57);color:#fff;}
@@ -2215,7 +2224,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-3";
+  const BUILD = "2026-11-16-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5348,30 +5357,112 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       });
     });
   }
-  function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr }){
+  // Where a place fits best: the day and gap whose detour is smallest
+  // (straight-line), and a time between its neighbours' times.
+  function bestSpotFor(p){
+    let best = null;
+    const ok = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null;
+    (state.snapshot.days || []).forEach(day => {
+      const us = toUnits(day.items);
+      const stops = us.map((u, j) => ({ st: u.stop, j })).filter(x => ok(x.st));
+      if (!stops.length) return;
+      for (let k = 0; k <= stops.length; k++){
+        const a = stops[k - 1], b = stops[k];
+        const cost = a && b ? metersBetween(a.st, p) + metersBetween(p, b.st) - metersBetween(a.st, b.st)
+          : (a || b) ? metersBetween((a || b).st, p) * 1.6 : Infinity;
+        if (Number.isFinite(cost) && (!best || cost < best.cost)){
+          const ta = a && timeToMinutes(a.st.time), tb = b && timeToMinutes(b.st.time);
+          const t = ta != null && tb != null ? Math.round((ta + tb) / 2 / 15) * 15 : ta != null ? ta + 90 : tb != null ? Math.max(0, tb - 90) : null;
+          best = { day, afterIdx: a ? a.j : -1, cost, near: (a || b).st, km: metersBetween((a || b).st, p) / 1000,
+            time: t != null ? `約 ${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}` : "" };
+        }
+      }
+    });
+    return best;
+  }
+  // Every 「加去行程」 for an AI-suggested place: the place on Google (score,
+  // reviews, map), the day and spot that is most on the way, and a free
+  // choice of any day and any spot before it is added.
+  function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr, place, kind, after }){
     const snap = state.snapshot;
     const boards = snap.boards || [];
+    const days = snap.days || [];
+    let found = null, chosenDay = preDay && dayById(preDay) || null, afterIdx = null, sugTime = time || "";
+    // a spot named with the suggestion (百名店: 「近北村」) wins over the guess
+    if (chosenDay && after){
+      const want = loose(after);
+      const j = toUnits(chosenDay.items).findIndex(u => u.stop && [loose(u.stop.title), loose(u.stop.kr)].some(t => t && (t === want || t.includes(want) || want.includes(t))));
+      if (j >= 0) afterIdx = j;
+    }
+    const fixedSpot = afterIdx != null;
     openSheet(`
       <h3>將「${esc(name)}」加去邊度？</h3>
-      <p class="sec-sub">${esc(body)}</p>
-      <p class="picker-label">行程日子</p>
-      <div class="daypick">
-        ${(snap.days || []).map(d => `<button data-addto="${d.id}" class="${d.id === preDay ? "suggested" : ""}" style="--lc:${dayColorVar(d.id)}">
+      ${body ? `<p class="sec-sub">${esc(body)}</p>` : ""}
+      <div class="rec-facts ap-facts">${loaderSvg()}<span>搵緊 Google 同最順路嘅位置…</span></div>
+      <div class="ap-sug" hidden></div>
+      <p class="picker-label">邊日</p>
+      <div class="daypick ap-days">
+        ${days.map(d => `<button data-apday="${d.id}" style="--lc:${dayColorVar(d.id)}">
           <span class="bullet"></span><span class="dcode">Day ${d.id.replace("day", "")}</span>
           <span>${esc(d.title)}${tabWeekday(d) ? ` · ${esc(tabWeekday(d))}` : ""}</span></button>`).join("")}
       </div>
-      ${boards.length ? `<p class="picker-label">心水清單（未決定邊日）</p>
+      <div class="ap-where" hidden><p class="picker-label">放喺邊個位</p><div class="foldlist ap-spots"></div></div>
+      <button class="btn primary wide ap-go" disabled>${icon("plus")}揀咗日子同位置先</button>
+      ${boards.length ? `<p class="picker-label">或者放入心水清單（未決定邊日）</p>
       <div class="daypick">${boards.map(b => `<button data-addboard="${b.id}" style="--lc:var(--bookmark)">
           <span class="bullet"></span><span class="dcode">${icon("pin")}</span><span>${esc(b.name)}</span></button>`).join("")}</div>` : ""}
     `, sheet => {
-      const make = () => Object.assign(blankStop(), { title: name, kr: kr || "", desc: body || "", time: time || "",
-        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([kr || name, region].filter(Boolean).join(" "))}` });
-      sheet.querySelectorAll("[data-addto]").forEach(b => b.addEventListener("click", async () => {
-        const day = dayById(b.dataset.addto);
-        const st = make();
+      const make = () => {
+        const st = Object.assign(blankStop(), { title: name, kr: kr || "", desc: body || "", time: sugTime || "", type: kind === "eat" ? "eat" : "normal",
+          mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([kr || name, region].filter(Boolean).join(" "))}` });
+        if (found && found.placeId) Object.assign(st, { placeId: found.placeId, lat: found.lat, lng: found.lng },
+          Number.isFinite(found.rating) ? { rating: found.rating, ratingCount: found.ratingCount } : {});
+        return st;
+      };
+      const go = sheet.querySelector(".ap-go");
+      const paintSpots = () => {
+        sheet.querySelectorAll("[data-apday]").forEach(b => b.classList.toggle("on", chosenDay && b.dataset.apday === chosenDay.id));
+        const w = sheet.querySelector(".ap-where");
+        if (!chosenDay){ w.hidden = true; return; }
+        w.hidden = false;
+        const us = toUnits(chosenDay.items);
+        const rows = [{ j: -1, label: "放喺最前" }].concat(us.map((u, j) => u.stop ? { j, label: `放喺「${cleanPlaceName(plain(u.stop.title)) || "未改名"}」之後`, t: plain(u.stop.time),
+          km: found && Number.isFinite(metersBetween(u.stop, found)) ? metersBetween(u.stop, found) / 1000 : null } : null).filter(Boolean));
+        if (afterIdx == null){ let last = -1; us.forEach((u, j) => { if (u.stop) last = j; }); afterIdx = last; }
+        sheet.querySelector(".ap-spots").innerHTML = rows.map(r => `<button class="foldopt${r.j === afterIdx ? " on" : ""}" data-apafter="${r.j}">
+          <span class="foldt">${esc(r.t || "")}</span><span class="foldn">${esc(r.label)}${r.km != null ? `<small>離佢約 ${r.km < 1 ? Math.round(r.km * 1000 / 10) * 10 + " 米" : r.km.toFixed(1) + " 公里"}</small>` : ""}</span></button>`).join("");
+        sheet.querySelectorAll("[data-apafter]").forEach(b => b.addEventListener("click", () => { afterIdx = +b.dataset.apafter; paintSpots(); }));
+        go.disabled = false;
+        go.innerHTML = `${icon("plus")}加去 Day ${chosenDay.id.replace("day", "")}`;
+      };
+      sheet.querySelectorAll("[data-apday]").forEach(b => b.addEventListener("click", () => { chosenDay = dayById(b.dataset.apday); afterIdx = null; paintSpots(); }));
+      paintSpots();
+      // the place on Google, then the spot most on the way
+      (async () => {
+        const facts = sheet.querySelector(".ap-facts");
+        const g = place && place.placeId ? place : await findPlaceNear(null, kr || name, name, null).catch(() => null);
+        if (!facts.isConnected) return;
+        if (!g){ facts.innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kr || name)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖搵</a>`; return; }
+        found = g;
+        const n = Number(g.ratingCount);
+        facts.innerHTML = `<a href="${esc(googlePlaceUrl({ title: g.name, placeId: g.placeId }))}" target="_blank" rel="noopener">${Number.isFinite(g.rating) ? `${icon("star")}<b>${g.rating.toFixed(1)}</b>${n > 0 ? `（${n.toLocaleString("en-US")} 個評價）` : ""}・` : ""}${icon("pin")}Google 地圖</a>`;
+        const best = Number.isFinite(Number(g.lat)) ? bestSpotFor(g) : null;
+        if (best){
+          const sug = sheet.querySelector(".ap-sug");
+          sug.hidden = false;
+          sug.innerHTML = `${icon("sparkle")}<span>最順路：<b>Day ${esc(best.day.id.replace("day", ""))}</b>，${best.afterIdx < 0 ? "放喺最前" : `喺「${esc(cleanPlaceName(plain(toUnits(best.day.items)[best.afterIdx].stop.title)))}」之後`}${best.time ? `，${esc(best.time)}` : ""}（離「${esc(cleanPlaceName(plain(best.near.title)))}」約 ${best.km < 1 ? Math.round(best.km * 100) * 10 + " 米" : best.km.toFixed(1) + " 公里"}）</span>`;
+          if (!fixedSpot && (!preDay || dayById(preDay) === best.day)){ chosenDay = best.day; afterIdx = best.afterIdx; if (!time) sugTime = best.time; }
+          sheet.querySelectorAll("[data-apday]").forEach(b => b.classList.toggle("suggested", b.dataset.apday === best.day.id));
+          paintSpots();
+        }
+      })();
+      go.addEventListener("click", async () => {
+        if (!chosenDay) return;
+        const day = chosenDay, st = make();
         const units = toUnits(day.items);
-        const at = time ? slotForTime(units, time) : units.length;
-        units.splice(at, 0, { seg: null, stop: st });
+        const at = Math.max(0, Math.min(afterIdx + 1, units.length));
+        units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
+        for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
         day.items = fromUnits(units);
         closeLayer();
         flash(`加咗「${name}」去 Day ${day.id.replace("day", "")}，搵緊地圖同相…`);
@@ -5380,8 +5471,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         syncMapPoints(day);
         render();
         await saveNow(`加咗 AI 推介「${name}」去 ${day.title}`);
-        if (at > 0) refreshTransit(day, [at]);
-      }));
+        if (stopClosedOnDay(st, day)) await replaceClosedStop(day, st).catch(() => {});
+        const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
+        let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
+        refreshTransit(day, [k, nx].filter(v => v > 0));
+      });
       sheet.querySelectorAll("[data-addboard]").forEach(b => b.addEventListener("click", async () => {
         const board = boardById(b.dataset.addboard);
         const st = make();
@@ -5390,9 +5484,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         flash(`加咗「${name}」去清單「${board.name}」`);
         await enrichStop(st);
         render();
-        await saveNow(`加咗 AI 推介「${name}」去清單「${board.name}」`);
+        await saveNow(`加咗 AI 推介「${name}」去清單 ${board.name}`);
       }));
-    });
+    }, { tall: true });
   }
   document.addEventListener("click", e => {
     const add = e.target.closest && e.target.closest("[data-addplace]");
@@ -9196,6 +9290,36 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       handle.addEventListener("pointerup", finish);
       handle.addEventListener("pointercancel", finish);
     });
+
+    // Hold the photo to move the card too. A long press on a picture used to
+    // open the phone's own image menu (Share / Save to Photos) instead; now
+    // holding still for a moment lifts the card, and a swipe still scrolls.
+    line.querySelectorAll(".unit .stopmain > .thumb").forEach(th => {
+      const handle = th.closest(".unit").querySelector("[data-drag]");
+      if (!handle) return;
+      let hold = null, on = false, y0 = 0, x0 = 0;
+      const fire = (type, y) => (type === "pointerup" ? document.body : handle).dispatchEvent(new PointerEvent(type,
+        { bubbles: true, cancelable: true, clientX: x0, clientY: y, pointerId: 91, pointerType: "touch", isPrimary: true }));
+      th.addEventListener("contextmenu", e => e.preventDefault());
+      th.addEventListener("touchstart", e => {
+        const t = e.touches[0]; y0 = t.clientY; x0 = t.clientX; on = false;
+        clearTimeout(hold);
+        hold = setTimeout(() => {
+          on = true;
+          fire("pointerdown", y0);
+          fire("pointermove", y0 + 7);          // past the 6px start, so it lifts now
+        }, 380);
+      }, { passive: true });
+      th.addEventListener("touchmove", e => {
+        const t = e.touches[0];
+        if (!on){ if (Math.abs(t.clientY - y0) > 8 || Math.abs(t.clientX - x0) > 8) clearTimeout(hold); return; }
+        e.preventDefault();                       // the card moves, not the page
+        fire("pointermove", t.clientY);
+      }, { passive: false });
+      const end = () => { clearTimeout(hold); if (on){ on = false; fire("pointerup", y0); } };
+      th.addEventListener("touchend", end);
+      th.addEventListener("touchcancel", end);
+    });
   }
 
   // Same long-press-then-drag gesture as wireDrag above, generalised for any
@@ -12647,12 +12771,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const h = ((state.snapshot.hyakumeiten || {}).items || [])[k];
     const day = h && dayById(h.dayId);
     if (!h || !day) return;
-    const units = toUnits(day.items);
-    const at = units.findIndex(u => u.stop && cleanPlaceName(plain(u.stop.title)) === h.near);
-    await insertPlaceAt(day, at >= 0 ? at + 1 : units.length,
-      { name: h.name_jp, name_zh: h.name_zh || "", placeId: h.placeId, lat: h.lat, lng: h.lng, rating: h.rating }, "eat");
-    state.view = "overview"; render();
-    flash(`加咗「${h.name_zh || h.name_jp}」去 Day ${String(day.id).replace("day", "")}`);
+    // same picker as every other AI place: suggested day and spot, free to change
+    openAddPlaceSheetFor({ name: h.name_zh || h.name_jp, kr: h.name_zh ? h.name_jp : "", body: h.why || "", day: h.dayId, kind: "eat", after: h.near,
+      place: h.placeId ? { placeId: h.placeId, name: h.name_jp, lat: h.lat, lng: h.lng, rating: h.rating, ratingCount: h.ratingCount } : null });
   }
   document.addEventListener("click", e => {
     if (state.readonly) return;

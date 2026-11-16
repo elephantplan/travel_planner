@@ -51,7 +51,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('百名店對返 Day 2，近北村', /麵屋一燈/.test(t) && /百名店 2025 ラーメン/.test(t) && /離「北村韓屋村」約/.test(t), t.slice(0, 400));
   ok('離行程太遠嘅唔要', !/遠い店/.test(t));
   ok('Tabelog 連結經 Google 搵（食べログ + 店名）', decodeURIComponent(await p.locator('.hycard a.tabelog').first().getAttribute('href')).includes('食べログ 麺屋 一燈'));
-  await p.click('[data-hyakuadd]'); await p.waitForTimeout(1500);
+  await p.click('[data-hyakuadd]'); await p.waitForTimeout(500);
+  ok('百名店都可以揀日子同位置，預先揀好', await p.locator('[data-apday="day2"].on').count() === 1 && await p.locator('[data-apafter].on').count() === 1);
+  await p.locator('.ap-go').click(); await p.waitForTimeout(1500);
   const last = [...saved].reverse().find(v => v.snapshot).snapshot;
   const d2 = last.days[1].items.filter(i => i.title && i.kind !== 'connector' && i.kind !== 'note').map(i => i.title);
   ok('一撳加入 Day 2，排喺北村後面', d2.join('|') === '景福宮|北村韓屋村|麵屋一燈|南山塔 韓牛燒肉', d2);

@@ -47,8 +47,11 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
 
   await block.locator('[data-addplace]').first().click();
   await p.waitForTimeout(300);
-  ok('揀日子', await p.locator('[data-addto]').count() === cur.days.length);
-  await p.locator('[data-addto="day3"]').click();
+  ok('揀日子', await p.locator('[data-apday]').count() === cur.days.length);
+  await p.locator('[data-apday="day3"]').click();
+  await p.waitForTimeout(200);
+  ok('揀日子之後揀位置', await p.locator('[data-apafter]').count() >= 1);
+  await p.locator('.ap-go').click();
   await p.waitForTimeout(2500);
   const last = [...saved].reverse().find(x => x.snapshot);
   const d3 = last ? last.snapshot.days.find(d => d.id === 'day3') : null;

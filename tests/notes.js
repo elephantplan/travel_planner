@@ -46,8 +46,8 @@ const NOTE = { id: 42, trip_id: 1, kind: 'day-plan', asked_by: 'tiffany', create
   ok('建議加嘅地點有「加去 D3」', await a.locator('[data-noteadd]').count() === 1 && /加去 D3/.test(await a.innerText()));
   await a.locator('[data-noteadd]').click();
   await p.waitForTimeout(300);
-  ok('預先揀好 Day 3', await p.locator('[data-addto="day3"].suggested').count() === 1);
-  await p.locator('[data-addto="day3"]').click();
+  ok('預先揀好 Day 3', await p.locator('[data-apday="day3"].on').count() === 1);
+  await p.locator('.ap-go').click();
   await p.waitForTimeout(2000);
   const last = [...saved].reverse().find(x => x.snapshot);
   const st = last && last.snapshot.days[2].items.find(i => i.kind === 'stop');
