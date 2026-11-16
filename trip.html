@@ -1958,6 +1958,10 @@ body.readonly .qa-del{display:none;}
 .ai-change .ttl{font-size:14.5px;font-weight:600;margin:4px 0;}
 .ai-change .why{font-size:12.5px;color:var(--ink-soft);line-height:1.65;}
 .ins-past{margin-top:8px;}
+.sharebox .input{width:100%;font-size:13px;}
+.sheet-row{display:flex;gap:8px;margin-top:10px;}
+.sheet-row .btn{flex:1;}
+@media (max-width:560px){ #btn-share{padding:0;width:34px;justify-content:center;} #btn-share span:last-child{display:none;} }
 .hintbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:70;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
   padding:12px 12px 12px 14px;border-radius:16px;background:var(--surface);border:1px solid color-mix(in srgb,var(--gold) 45%,var(--rule));
   box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:13.5px;line-height:1.5;max-width:640px;margin:0 auto;}
@@ -2195,6 +2199,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
       <nav class="topbtns" aria-label="行程工具">
         <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
+        <button class="topbtn" id="btn-share" hidden><span class="topbtn-i"></span><span>分享</span></button>
         <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
         <button class="topbtn" id="btn-undo" hidden aria-label="返上一步" title="返上一步"><span class="topbtn-i"></span><span>上一步</span></button>
         <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
@@ -2229,6 +2234,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 <div id="layer"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="auth.js"></script>
 <script>
 (function(){
   "use strict";
@@ -2240,7 +2246,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-7";
+  const BUILD = "2026-11-16-8";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2294,11 +2300,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
 
   function sbHeaders(extra){
-    return Object.assign({
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-      "Content-Type": "application/json"
-    }, extra || {});
+    return Object.assign({ "Content-Type": "application/json" },
+      window.TripAuth ? TripAuth.headers() : { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + SUPABASE_ANON_KEY }, extra || {});
   }
   // Emoji arrive in the data — hours chips, access badges, clothing tips, AI
   // prose — and every one of them made the page look like a group chat. They
@@ -2462,6 +2465,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     put("#btn-export .topbtn-i", "share");
     put("#btn-reload .topbtn-i", "refresh");
     put("#btn-undo .topbtn-i", "undo");
+    put("#btn-share .topbtn-i", "link");
     put("#btn-theme .topbtn-i", "contrast");
     put("#btn-boards .dockbtn-i", "pin");
     put("#btn-history .dockbtn-i", "clock");
@@ -6405,6 +6409,62 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function isShopArea(s){
     const t = plain(s.title || "");
     return /行街|購物|购物|逛街|shopping|血拼|買嘢|掃貨/i.test(t) || (districtOf(t) >= 0 && cleanPlaceName(t).length <= 4 && !s.placeId);
+  }
+  // ---------- account & 分享 ----------
+  // this trip's row: who owns it and its share link (only once accounts exist)
+  async function tripRow(){
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/trips?id=eq.${encodeURIComponent(state.tripId)}&select=*`, { headers: sbHeaders() }).catch(() => null);
+    if (!r || !r.ok) return { ok: false };
+    const rows = await r.json().catch(() => []);
+    return { ok: true, row: rows[0] || null };
+  }
+  async function tripHidden(){ const t = await tripRow(); return t.ok && !t.row; }
+  async function syncTripOwner(){
+    if (!window.TripAuth || state.offline) return;
+    const t = await tripRow();
+    if (!t.ok || !t.row || !("owner_id" in t.row)) return;        // accounts not switched on yet
+    state.tripRow = t.row;
+    const me = TripAuth.user();
+    const sb = $("#btn-share");
+    if (sb) sb.hidden = false;
+    if (me && !t.row.owner_id){
+      hintBar("呢個係開 account 之前嘅行程，未屬於任何人。撥入你個 account 之後，就淨係你同你分享咗嘅人先睇到。", "撥入我個 account", async () => {
+        try { await TripAuth.rpc("claim_trip", { tid: Number(state.tripId) }); flash("撥咗入你個 account"); syncTripOwner(); }
+        catch (e){ flash("撥唔到：" + e.message); }
+      });
+    } else if (me && t.row.owner_id !== me.id && TripAuth.shareToken(state.tripId)){
+      // opened from a share link while logged in: keep it in my list
+      TripAuth.rpc("join_trip", { tid: Number(state.tripId), tok: TripAuth.shareToken(state.tripId) }).catch(() => {});
+    }
+  }
+  function openShareSheet(){
+    const row = state.tripRow;
+    const me = window.TripAuth && TripAuth.user();
+    if (!row){ flash("分享功能未開通"); return; }
+    const mine = me && row.owner_id === me.id;
+    const link = `${location.origin}/trip.html?trip=${encodeURIComponent(state.tripId)}&s=${row.share_token}`;
+    openSheet(`
+      <h3>分享呢個行程</h3>
+      <p class="sec-sub">有呢條連結嘅人唔使登入都可以睇同改呢個行程；佢哋有登入嘅話，行程會出現喺佢哋主頁。唔想再俾人用，可以重設連結，舊嗰條就會失效。</p>
+      <div class="sharebox"><input class="input" id="sh-link" readonly value="${esc(link)}"></div>
+      <div class="sheet-row">
+        <button class="btn primary" id="sh-copy">${icon("link")}複製連結</button>
+        ${navigator.share ? `<button class="btn" id="sh-send">${icon("share")}傳送…</button>` : ""}
+      </div>
+      ${mine ? `<button class="btn wide" id="sh-reset" style="margin-top:12px;">${icon("refresh")}重設連結（舊連結失效）</button>` : `<p class="hint">只有擁有人先可以重設連結。</p>`}
+    `, sheet => {
+      sheet.querySelector("#sh-copy").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(link); flash("複製咗"); } catch (_){ sheet.querySelector("#sh-link").select(); document.execCommand("copy"); flash("複製咗"); }
+      });
+      const send = sheet.querySelector("#sh-send");
+      if (send) send.addEventListener("click", () => navigator.share({ title: plain((state.snapshot.meta || {}).title) || "行程", url: link }).catch(() => {}));
+      const reset = sheet.querySelector("#sh-reset");
+      if (reset) reset.addEventListener("click", async () => {
+        if (!confirm("重設之後，之前 send 出去嘅連結就用唔到，佢哋要攞新連結。確定？")) return;
+        try { const tok = await TripAuth.rpc("reset_share_link", { tid: Number(state.tripId) }); state.tripRow.share_token = tok; closeLayer(); openShareSheet(); flash("換咗新連結"); }
+        catch (e){ flash("重設唔到：" + e.message); }
+      });
+    });
   }
   // The trip list shows a picture for each trip: the first real place with
   // a photo (an airport's is skipped). Sent only when it changes.
@@ -13432,6 +13492,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     state.tripId = tripId;
     if (params.get("view") === "1"){ state.readonly = true; document.body.classList.add("readonly"); }
+    // a share link's token: kept for this trip on this device, sent with every
+    // database request, and taken out of the address bar
+    if (window.TripAuth){
+      TripAuth.useTrip(tripId, params.get("s") || "");
+      if (params.get("s")){ params.delete("s"); history.replaceState(null, "", location.pathname + "?" + params.toString()); }
+      await TripAuth.ready;
+    }
 
     let row, bootErr = null;
     const CACHE_KEY = "dumbofly_snap_" + tripId;
@@ -13452,6 +13519,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
         document.body.classList.add("readonly");
         window.addEventListener("online", () => location.reload(), { once: true });
       }
+    }
+    if (!row && window.TripAuth && await tripHidden()){
+      $("#app").innerHTML = `<div class="sec"><div class="errbox"><b>睇唔到呢個行程</b><br>佢屬於另一個 account。要問擁有人 send 「分享」連結俾你${TripAuth.loggedIn() ? "" : "，或者登入你自己個 account 再試"}。<br>
+        <div style="margin-top:10px;">${TripAuth.loggedIn() ? "" : `<button class="btn primary" id="loginhere">用 Google 登入</button>`}
+        <a class="btn" href="index.html">返去主頁</a></div></div></div>`;
+      const lh = $("#loginhere"); if (lh) lh.addEventListener("click", () => TripAuth.signIn());
+      return;
     }
     if (!row){
       $("#app").innerHTML = `<div class="sec"><div class="errbox">載入唔到行程：${esc(netMsg(bootErr))}<br>
@@ -13475,6 +13549,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     saver.lastPersistedJson = snapJson();
     saver.lastVersionId = row.id;
     setTimeout(syncCover, 4000);
+    setTimeout(syncTripOwner, 1200);
     const back = readPlace();
     const resumeY = (back && back.trip === tripId) ? back.y : 0;
     if (back && back.trip === tripId && (back.view === "overview" || back.view === "notes" || back.view === "stays"
@@ -13493,6 +13568,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     wirePullToRefresh();
     wireReloadButton();
     $("#btn-undo").addEventListener("click", undoLast);
+    $("#btn-share").addEventListener("click", openShareSheet);
     // ⌘Z / Ctrl+Z on a computer, unless typing in a box (that's the box's own undo)
     document.addEventListener("keydown", e => {
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;

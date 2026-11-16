@@ -19,7 +19,8 @@
 // v3: navigations revalidate instead of trusting the HTTP cache, so a deploy
 // reaches an installed app without it being reinstalled.
 // v4: push notifications.
-const VERSION = "v4";
+// v5: Google login and share links (auth.js).
+const VERSION = "v5";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
 const PHOTOS = `dumbofly-photos-${VERSION}`;
@@ -29,6 +30,7 @@ const SHELL_FILES = [
   "/",
   "/index.html",
   "/trip.html",
+  "/auth.js",
   "/manifest.webmanifest",
   "/icons/icon-192-v2.png",
   "/icons/icon-512-v2.png",
