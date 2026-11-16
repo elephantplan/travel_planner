@@ -23,7 +23,13 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/rest/v1/itinerary_versions**', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1,
     created_at: '2026-09-20T00:00:00Z', edited_by: 'x', source: 'seed', summary: 's', snapshot: cur, has_snapshot: true }]) }));
-  await p.route('**/functions/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }));
+  await p.route('**/functions/v1/**', r => {
+    const body = JSON.parse(r.request().postData() || '{}');
+    // 南大門市場 sits right by 景福宮 here, so the best spot is after it on Day 2
+    if (body.action === 'place-search' || body.mode === 'near-search') return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ ok: true, places: [{ name: '南大門市場', placeId: 'nm', lat: 37.5797, lng: 126.9772, rating: 4.2, ratingCount: 900 }] }) });
+    return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
   await p.route('**tile**', r => r.abort());
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
@@ -31,6 +37,13 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('喺行程入面嘅講明邊日', /已喺 D2/.test(await li(0).innerText()), await li(0).innerText());
   ok('未喺行程嘅有「加去行程」', await li(1).locator('[data-addplace]').count() === 1);
   await li(1).locator('[data-addplace]').click(); await p.waitForTimeout(300);
+  await p.waitForTimeout(1200);
+  const picked = async () => (await p.locator('.ap-spots .foldopt.on').innerText().catch(() => '')).replace(/\s+/g, ' ');
+  ok('揀咗建議嘅位置（唔係最尾）', /景福宮」之後/.test(await picked()), await picked());
+  await p.locator('[data-apday="day2"]').click(); await p.waitForTimeout(200);
+  ok('再撳同一日，位置唔會變返最尾', /景福宮」之後/.test(await picked()), await picked());
+  await p.locator('[data-apday="day1"]').click(); await p.waitForTimeout(200);
+  ok('揀第二日：放喺離佢最近嗰個站之後', /明洞/.test(await picked()), await picked());
   ok('開頭有 emoji 都認得出地方，唔使再問', /將「南大門市場」加去邊度/.test(await p.locator('.sheet').innerText()) && await p.locator('#tipname').count() === 0);
   await p.evaluate(() => { const c = document.querySelector('.sheet-close'); if (c) c.click(); }); await p.waitForTimeout(200);
   ok('中間先提到地方都有「加去行程」', await li(2).locator('[data-addplace]').count() === 1);

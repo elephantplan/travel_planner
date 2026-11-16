@@ -2306,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-16";
+  const BUILD = "2026-11-17-17";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5683,14 +5683,28 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const us = toUnits(chosenDay.items);
         const rows = [{ j: -1, label: "放喺最前" }].concat(us.map((u, j) => u.stop ? { j, label: `放喺「${cleanPlaceName(plain(u.stop.title)) || "未改名"}」之後`, t: plain(u.stop.time),
           km: found && Number.isFinite(metersBetween(u.stop, found)) ? metersBetween(u.stop, found) / 1000 : null } : null).filter(Boolean));
-        if (afterIdx == null){ let last = -1; us.forEach((u, j) => { if (u.stop) last = j; }); afterIdx = last; }
+        if (afterIdx == null) afterIdx = spotIn(chosenDay);
         sheet.querySelector(".ap-spots").innerHTML = rows.map(r => `<button class="foldopt${r.j === afterIdx ? " on" : ""}" data-apafter="${r.j}">
           <span class="foldt">${esc(r.t || "")}</span><span class="foldn">${esc(r.label)}${r.km != null ? `<small>離佢約 ${r.km < 1 ? Math.round(r.km * 1000 / 10) * 10 + " 米" : r.km.toFixed(1) + " 公里"}</small>` : ""}</span></button>`).join("");
-        sheet.querySelectorAll("[data-apafter]").forEach(b => b.addEventListener("click", () => { afterIdx = +b.dataset.apafter; paintSpots(); }));
+        sheet.querySelectorAll("[data-apafter]").forEach(b => b.addEventListener("click", () => { afterIdx = +b.dataset.apafter; userSpot = true; paintSpots(); }));
         go.disabled = false;
         go.innerHTML = `${icon("plus")}加去 Day ${chosenDay.id.replace("day", "")}`;
       };
-      sheet.querySelectorAll("[data-apday]").forEach(b => b.addEventListener("click", () => { chosenDay = dayById(b.dataset.apday); afterIdx = null; paintSpots(); }));
+      // the spot on a day: the suggested one on the suggested day, else right
+      // after the stop nearest the place, else the end of the day
+      let best = null, userSpot = false, userDay = false;
+      const spotIn = day => {
+        if (best && best.day === day) return best.afterIdx;
+        const us = toUnits(day.items);
+        let j0 = -1, dmin = Infinity, last = -1;
+        us.forEach((u, j) => { if (!u.stop) return; last = j; const m = found ? metersBetween(u.stop, found) : NaN; if (Number.isFinite(m) && m < dmin){ dmin = m; j0 = j; } });
+        return j0 >= 0 ? j0 : last;
+      };
+      sheet.querySelectorAll("[data-apday]").forEach(b => b.addEventListener("click", () => {
+        const d = dayById(b.dataset.apday);
+        if (d === chosenDay && afterIdx != null) return;      // same day again: keep the spot
+        chosenDay = d; afterIdx = null; userSpot = false; userDay = true; paintSpots();
+      }));
       paintSpots();
       // the place on Google, then the spot most on the way
       (async () => {
@@ -5701,12 +5715,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         found = g;
         const n = Number(g.ratingCount);
         facts.innerHTML = `<a href="${esc(googlePlaceUrl({ title: g.name, placeId: g.placeId }))}" target="_blank" rel="noopener">${Number.isFinite(g.rating) ? `${icon("star")}<b>${g.rating.toFixed(1)}</b>${n > 0 ? `（${n.toLocaleString("en-US")} 個評價）` : ""}・` : ""}${icon("pin")}Google 地圖</a>`;
-        const best = Number.isFinite(Number(g.lat)) ? bestSpotFor(g) : null;
+        best = Number.isFinite(Number(g.lat)) ? bestSpotFor(g) : null;
         if (best){
           const sug = sheet.querySelector(".ap-sug");
           sug.hidden = false;
           sug.innerHTML = `${icon("sparkle")}<span>最順路：<b>Day ${esc(best.day.id.replace("day", ""))}</b>，${best.afterIdx < 0 ? "放喺最前" : `喺「${esc(cleanPlaceName(plain(toUnits(best.day.items)[best.afterIdx].stop.title)))}」之後`}${best.time ? `，${esc(best.time)}` : ""}（離「${esc(cleanPlaceName(plain(best.near.title)))}」約 ${best.km < 1 ? Math.round(best.km * 100) * 10 + " 米" : best.km.toFixed(1) + " 公里"}）</span>`;
-          if (!fixedSpot && (!preDay || dayById(preDay) === best.day)){ chosenDay = best.day; afterIdx = best.afterIdx; if (!time) sugTime = best.time; }
+          // unless a spot was already chosen by hand (or came with the suggestion)
+          if (!fixedSpot && !userSpot && !userDay && (!preDay || dayById(preDay) === best.day)){ chosenDay = best.day; afterIdx = best.afterIdx; if (!time) sugTime = best.time; }
+          else if (!fixedSpot && !userSpot && chosenDay) afterIdx = spotIn(chosenDay);
           sheet.querySelectorAll("[data-apday]").forEach(b => b.classList.toggle("suggested", b.dataset.apday === best.day.id));
           paintSpots();
         }
