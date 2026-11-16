@@ -59,6 +59,7 @@
       save(Object.assign(back, { user: userOf(u) }));
     }
     if (session && !fresh()) await refresh();
+    if (session) loadProfile();                     // not awaited: the cached one shows meanwhile
   })();
   // keep it fresh while the page is open, and when it comes back
   setInterval(() => { if (session && !fresh()) refresh(); }, 60000);
@@ -83,9 +84,57 @@
   function getShare(tripId){ return (get(SHARES, {}) || {})[String(tripId)] || ""; }
   function setShare(tripId, tok){ const m = get(SHARES, {}); if (tok) m[String(tripId)] = tok; else delete m[String(tripId)]; put(SHARES, m); }
 
+  // The name and picture the person chose (else Google's). Kept on the
+  // device so pages can show them at once; refreshed from the database.
+  const PROFILE = "trip_profile_v1";
+  let profile = get(PROFILE, null);
+  function me(){
+    const u = (session && session.user) || null;
+    if (!u) return null;
+    const p = profile && profile.user_id === u.id ? profile : null;
+    return Object.assign({}, u, { name: (p && p.display_name) || u.name, avatar: (p && p.avatar) || u.avatar, custom: !!(p && (p.display_name || p.avatar)) });
+  }
+  async function loadProfile(){
+    const u = session && session.user;
+    if (!u) return null;
+    try {
+      const r = await realFetch(URL_ + "/rest/v1/trip_profiles?user_id=eq." + u.id + "&select=*", { headers: window.TripAuth.headers() });
+      if (!r.ok) return null;                       // accounts not switched on yet
+      const row = (await r.json())[0] || { user_id: u.id, display_name: "", avatar: "" };
+      profile = row; put(PROFILE, row);
+      return row;
+    } catch (_){ return null; }
+  }
+  async function saveProfile(name, avatar){
+    const u = session && session.user;
+    if (!u) throw new Error("未登入");
+    const row = { user_id: u.id, display_name: String(name || "").trim().slice(0, 40), avatar: avatar || "", updated_at: new Date().toISOString() };
+    const r = await realFetch(URL_ + "/rest/v1/trip_profiles?on_conflict=user_id", { method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }, window.TripAuth.headers()), body: JSON.stringify(row) });
+    if (!r.ok) throw new Error("儲唔到 " + r.status);
+    profile = row; put(PROFILE, row);
+    return row;
+  }
+  // a chosen photo, cropped square and shrunk, as a data: URL small enough for a row
+  function shrinkImage(file, size){
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const n = size || 128, c = document.createElement("canvas"); c.width = c.height = n;
+        const s = Math.min(img.width, img.height);
+        c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, n, n);
+        URL.revokeObjectURL(url);
+        res(c.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("讀唔到張相")); };
+      img.src = url;
+    });
+  }
+
   window.TripAuth = {
     ready,
-    user: () => (session && session.user) || null,
+    loadProfile, saveProfile, shrinkImage,
+    user: me,
     loggedIn: () => !!(session && session.access_token),
     error: () => lastError,
     headers(){
@@ -97,7 +146,7 @@
     },
     async signOut(){
       try { if (session) await realFetch(URL_ + "/auth/v1/logout", { method: "POST", headers: this.headers() }); } catch (_){}
-      save(null);
+      save(null); profile = null; put(PROFILE, null);
     },
     // the trip this page is about, so its share token rides along
     useTrip(tripId, tokFromLink){

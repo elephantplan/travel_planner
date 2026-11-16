@@ -60,14 +60,14 @@ begin
   return true;
 end $$;
 
--- the owner can make the old link stop working
+-- the owner can make the old link stop working (for people not logged in)
 create or replace function public.reset_share_link(tid bigint) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare t uuid := gen_random_uuid();
 begin
   update public.trips set share_token = t where id = tid and owner_id = auth.uid();
   if not found then return null; end if;
-  delete from public.trip_members where trip_id = tid;
+  -- people already on the trip stay; the owner removes them one by one
   return t;
 end $$;
 

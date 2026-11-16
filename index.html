@@ -345,6 +345,11 @@ section.triplist{margin-bottom:36px;}
 .acctbtn{height:34px;min-width:34px;padding:0 12px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);
   font:600 13px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;}
 .acctbtn img{width:34px;height:34px;margin:0 -12px;border-radius:50%;object-fit:cover;}
+.acct-row{display:flex;gap:14px;align-items:center;margin:8px 0 10px;}
+.acct-av{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11.5px;color:var(--ink-faint);}
+.acct-avimg{width:68px;height:68px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:var(--surface-2);font:700 26px var(--f-body);color:var(--ink);}
+.acct-name{flex:1;} .acct-name label{display:block;font-size:12px;color:var(--ink-faint);margin-bottom:4px;} .acct-name .input{width:100%;}
+.acctbtn .av-letter{font-weight:700;}
 .logincard{margin:18px 0 6px;padding:18px;border-radius:20px;background:var(--surface);border:1px solid var(--rule);}
 .logincard b{font-size:17px;display:block;margin-bottom:6px;}
 .logincard p{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px;line-height:1.6;}
@@ -1363,20 +1368,49 @@ section.triplist{margin-bottom:36px;}
     const me = TripAuth.user();
     const b = $("#btn-acct");
     b.hidden = false;
-    b.innerHTML = me ? (me.avatar ? `<img src="${esc(me.avatar)}" alt="" referrerpolicy="no-referrer">` : `<span>${esc((me.name || "?").slice(0, 1))}</span>`) : "登入";
+    b.innerHTML = me ? avatarHtml(me) : "登入";
     b.title = me ? `${me.name}（${me.email}）` : "用 Google 登入";
     $("#logincard").hidden = !!me || !accounts;
     const err = TripAuth.error(); if (err) $("#loginerr").textContent = "登入唔到：" + err;
   }
+  const avatarHtml = (p, cls) => p && p.avatar
+    ? `<img class="${cls || ""}" src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer">`
+    : `<span class="${cls || ""} av-letter">${esc(((p && p.name) || "?").slice(0, 1))}</span>`;
+  // name and picture: what other people on your trips see, and what
+  // 改動紀錄 says when you change something
   function openAccountSheet(){
     const me = TripAuth.user();
     if (!me) return TripAuth.signIn();
+    let avatar = me.avatar || "";
     const layer = $("#layer");
     layer.innerHTML = `<div class="scrim" data-close></div><div class="sheet">
-      <h3>${esc(me.name)}</h3><p class="sheet-sub">${esc(me.email)}</p>
-      <div class="sheet-btns"><button class="btn" data-close>收埋</button><button class="btn danger" id="logout">登出</button></div></div>`;
-    layer.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", () => { layer.innerHTML = ""; }));
-    layer.querySelector("#logout").addEventListener("click", async () => { await TripAuth.signOut(); layer.innerHTML = ""; loadTrips(); });
+      <h3>我嘅 account</h3><p class="sheet-sub">${esc(me.email)}</p>
+      <div class="acct-row">
+        <label class="acct-av" title="換頭像"><input type="file" id="acct-file" accept="image/*" hidden><span id="acct-avbox">${avatarHtml(me, "acct-avimg")}</span><small>換相</small></label>
+        <div class="acct-name"><label for="acct-name">顯示名</label><input class="input" id="acct-name" maxlength="40" value="${esc(me.name || "")}" placeholder="例如：Tiffany"></div>
+      </div>
+      <p class="sheet-sub">同你一齊睇行程嘅人會見到呢個名同頭像，改動紀錄都會用佢。</p>
+      <div id="acct-err"></div>
+      <div class="sheet-btns"><button class="btn danger" id="logout">登出</button><button class="btn" data-close>取消</button><button class="btn primary" id="acct-save">儲存</button></div></div>`;
+    const close = () => { layer.innerHTML = ""; };
+    layer.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", close));
+    layer.querySelector("#logout").addEventListener("click", async () => { await TripAuth.signOut(); close(); loadTrips(); });
+    layer.querySelector("#acct-file").addEventListener("change", async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { avatar = await TripAuth.shrinkImage(f, 128); layer.querySelector("#acct-avbox").innerHTML = avatarHtml({ avatar }, "acct-avimg"); }
+      catch (err){ layer.querySelector("#acct-err").innerHTML = `<div class="errbox">${esc(err.message)}</div>`; }
+    });
+    layer.querySelector("#acct-save").addEventListener("click", async () => {
+      const b = layer.querySelector("#acct-save"); b.disabled = true; b.textContent = "儲緊…";
+      try {
+        await TripAuth.saveProfile(layer.querySelector("#acct-name").value, /^data:/.test(avatar) ? avatar : "");
+        try { localStorage.setItem("trip_editor_name", TripAuth.user().name); } catch (_){}
+        close(); syncAccountUi(true);
+      } catch (err){
+        layer.querySelector("#acct-err").innerHTML = `<div class="errbox">${esc(/404|42P01/.test(err.message) ? "呢個功能仲未開通（資料庫要更新）。" : err.message)}</div>`;
+        b.disabled = false; b.textContent = "儲存";
+      }
+    });
   }
   function paintBin(gone){
     const wrap = $("#binwrap");
