@@ -101,7 +101,10 @@
       const r = await realFetch(URL_ + "/rest/v1/trip_profiles?user_id=eq." + u.id + "&select=*", { headers: window.TripAuth.headers() });
       if (!r.ok) return null;                       // accounts not switched on yet
       const row = (await r.json())[0] || { user_id: u.id, display_name: "", avatar: "" };
+      const changed = JSON.stringify(profile) !== JSON.stringify(row);
       profile = row; put(PROFILE, row);
+      // a device that has not seen this account's name and picture yet
+      if (changed) window.dispatchEvent(new Event("tripauth:profile"));
       return row;
     } catch (_){ return null; }
   }
@@ -134,6 +137,7 @@
   window.TripAuth = {
     ready,
     loadProfile, saveProfile, shrinkImage,
+    async isAdmin(){ if (!session) return false; try { return (await this.rpc("is_trip_admin", {})) === true; } catch (_){ return false; } },
     user: me,
     loggedIn: () => !!(session && session.access_token),
     error: () => lastError,

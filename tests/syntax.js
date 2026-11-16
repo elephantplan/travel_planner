@@ -5,7 +5,7 @@
 //   node tests/syntax.js
 const fs = require('fs'), vm = require('vm'), path = require('path');
 let pass = 0, fail = 0;
-for (const f of ['trip.html', 'index.html']){
+for (const f of ['trip.html', 'index.html', 'admin.html']){
   const html = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g)]
     .filter(m => !/type="(application\/ld\+json|text\/template)"/.test(m[1]));

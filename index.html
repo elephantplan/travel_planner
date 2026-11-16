@@ -360,7 +360,11 @@ section.triplist{margin-bottom:36px;}
 .pf-g > span{flex-basis:100%;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);}
 .pf-g button{min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:500 13.5px var(--f-body);cursor:pointer;}
 .pf-g button.on{background:var(--ink);color:var(--surface);border-color:var(--ink);}
-.pf-times{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.pf-times{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:12px;}
+.pf-times label{min-width:0;}
+.pf-times input{min-width:0;max-width:100%;box-sizing:border-box;-webkit-appearance:none;appearance:none;min-height:44px;}
+.prefsheet{overflow-x:hidden;}
+html,body{overflow-x:clip;max-width:100%;}
 .pf-times label,.pf-must{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);}
 .prefs .input{display:block;width:100%;margin-top:4px;border:1px solid var(--rule);border-radius:12px;padding:8px 10px;font-size:15px;font-weight:500;}
 .pf-must{margin-bottom:12px;}
@@ -1482,6 +1486,7 @@ section.triplist{margin-bottom:36px;}
         <div class="acct-name"><label for="acct-name">顯示名</label><input class="input" id="acct-name" maxlength="40" value="${esc(me.name || "")}" placeholder="例如：Tiffany"></div>
       </div>
       <p class="sheet-sub">同你一齊睇行程嘅人會見到呢個名同頭像，改動紀錄都會用佢。</p>
+      <a class="btn wide" id="acct-admin" href="admin.html" hidden style="margin-bottom:10px;">管理用戶同行程（admin）</a>
       ${first === true ? "" : `<details class="acct-more"><summary>刪除 account</summary>
         <p class="sheet-sub">會刪走你個登入資料、名同頭像。之後再用 Google 登入，就當係新人重新註冊。</p>
         <label class="acct-keep"><input type="checkbox" id="acct-keep" checked> 保留我開嘅行程（會變返「未撥入 account」，再登入可以撥返入嚟）；唔剔就連行程一齊刪除</label>
@@ -1491,6 +1496,7 @@ section.triplist{margin-bottom:36px;}
     const close = () => { layer.innerHTML = ""; };
     layer.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", close));
     layer.querySelector("#logout").addEventListener("click", async () => { await TripAuth.signOut(); close(); loadTrips(); });
+    TripAuth.isAdmin().then(a => { const l = layer.querySelector("#acct-admin"); if (l && a) l.hidden = false; });
     const del = layer.querySelector("#acct-del");
     if (del) del.addEventListener("click", async () => {
       const keep = layer.querySelector("#acct-keep").checked;
@@ -1655,6 +1661,7 @@ section.triplist{margin-bottom:36px;}
   $("#btn-acct").addEventListener("click", openAccountSheet);
   $("#btn-login").addEventListener("click", () => TripAuth.signIn());
   TripAuth.ready.then(loadTrips);
+  window.addEventListener("tripauth:profile", () => syncAccountUi(true));
 })();
 </script>
 </body>
