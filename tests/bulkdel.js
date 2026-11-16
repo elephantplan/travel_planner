@@ -43,6 +43,23 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-select="2"]').click(); await p.waitForTimeout(150);
   await p.locator('#selkeep').click(); await p.waitForTimeout(1500);
   ok('淨係留低揀咗嗰個', JSON.stringify(stops(last())) === JSON.stringify(['北村韓屋村']), stops(last()));
+  ok('留低之後問要唔要 AI 再諗', /再諗過/.test(await p.locator('#sheet, .sheet, [role=dialog]').last().innerText().catch(() => '')));
+  await p.locator('#rp-yes').click(); await p.waitForTimeout(400);
+  ok('跟住開 AI 諗行程，有類型可以揀', await p.locator('[data-want]').count() >= 5);
+  await p.locator('[data-want="行街購物"]').click();
+  await p.locator('[data-want="夜景"]').click();
+  ok('揀咗嘅類型入咗個格', await p.locator('#dayai-q').inputValue() === '行街購物、夜景', await p.locator('#dayai-q').inputValue());
+  await p.locator('[data-want="行街購物"]').click();
+  ok('再撳一次就拎走', await p.locator('#dayai-q').inputValue() === '夜景');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  await p.evaluate(() => { const c = document.querySelector('.sheet-close, [data-close], #sheet-close'); if (c) c.click(); });
+  await p.waitForTimeout(300);
+
+  // 清走成日 (at the top of the day)
+  await p.locator('#btn-undo').click(); await p.waitForTimeout(1500);
+  await p.locator('#clearday').click(); await p.waitForTimeout(1500);
+  ok('清走成日', last().days[1].items.filter(i => i.kind === 'stop' || i.kind === 'note').length === 0, last().days[1].items);
+  ok('問要唔要重新諗', await p.locator('#rp-yes').count() === 1);
   ok('冇 JS error', !errs.length, errs);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
