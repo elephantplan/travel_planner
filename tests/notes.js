@@ -55,7 +55,7 @@ const NOTE = { id: 42, trip_id: 1, kind: 'day-plan', asked_by: 'tiffany', create
 
   await p.evaluate(() => document.querySelector('[data-go="notes"]').click());
   await p.waitForTimeout(800);
-  p.once('dialog', d => d.accept());
+  p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
   await p.locator('[data-notedel="0"]').click();
   await p.waitForTimeout(600);
   ok('刪紀錄會叫 server 刪嗰條', deleted.length === 1 && /id=eq\.42/.test(deleted[0]), deleted);

@@ -20,7 +20,7 @@
 // reaches an installed app without it being reinstalled.
 // v4: push notifications.
 // v5: Google login and share links (auth.js).
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
 const PHOTOS = `dumbofly-photos-${VERSION}`;

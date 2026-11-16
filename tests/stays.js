@@ -122,7 +122,7 @@ const SUGGEST = { ok: true, stays: {
   ok('連埋 Google 地點同車站', stays[0] && stays[0].placeId && stays[0].station === '명동역');
   ok('揀咗嘅酒店卡唔再標「AI 建議」', !/AI 建議/.test(await p.locator('[data-hskey="acc"]').innerText()));
   // the trash on a hotel removes that hotel, not the whole 住宿 section
-  p.once('dialog', d => d.accept());
+  p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
   await p.locator('[data-staydelete="0"]').click();
   await p.waitForTimeout(900);
   const after = [...saved].reverse().find(x => x.snapshot);
@@ -195,7 +195,7 @@ const SUGGEST = { ok: true, stays: {
     await p.waitForTimeout(400);
     if (!(await p.locator('[data-stayunpick]').count())){ await p.locator('[data-staypick]').first().click(); await p.waitForTimeout(900); }
     const pickedName = await p.locator('.stayrow .v').first().innerText();
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     const n0 = await p.locator('.sgh').count();
     ok('揀咗嘅酒店有「改日子／資料」同「唔揀呢間」', await p.locator('.stayacts [data-editsec="acc"]').count() >= 1 && await p.locator('[data-stayunpick]').count() >= 1);
     await p.locator('[data-stayunpick="0"]').click();

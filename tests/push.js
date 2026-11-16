@@ -66,7 +66,7 @@ async function setup(b, opts){
     await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
     await p.waitForTimeout(800);
     await p.locator('[data-stopmenu]').first().click(); await p.waitForTimeout(200);
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     await p.locator('#stopdel').click(); await p.waitForTimeout(1500);
     ok('未離開之前唔會即刻發', !calls.some(c => c.mode === 'notify'));
     await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
@@ -80,7 +80,7 @@ async function setup(b, opts){
     await p.evaluate(() => localStorage.setItem('trip_push_on_1_me', '1'));
     await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); });
     await p.locator('[data-stopmenu]').first().click(); await p.waitForTimeout(200);
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     await p.locator('#stopdel').click(); await p.waitForTimeout(1500);
     await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
     await p.waitForTimeout(500);

@@ -134,6 +134,26 @@
     });
   }
 
+  // A confirm the page draws itself (iPhone Safari can switch off the
+  // browser's own after a few, and then every confirm() says "no").
+  window.appConfirm = function(msg, okLabel){
+    return new Promise(res => {
+      const el = document.createElement("div");
+      el.style.cssText = "position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.45);";
+      el.innerHTML = '<div role="alertdialog" aria-modal="true" style="width:min(380px,100%);background:var(--surface,#fff);color:var(--ink,#111);border:1px solid var(--rule,#ddd);border-radius:18px;padding:20px 18px 16px;font:15px/1.6 system-ui,sans-serif;">' +
+        '<p style="margin:0 0 16px;white-space:pre-line;"></p><div style="display:flex;gap:10px;justify-content:flex-end;">' +
+        '<button data-no style="min-height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--rule,#ccc);background:transparent;color:inherit;font:inherit;">取消</button>' +
+        '<button data-yes style="min-height:40px;padding:0 16px;border-radius:999px;border:0;background:var(--gold,#B8860B);color:#14110A;font:600 15px system-ui,sans-serif;"></button></div></div>';
+      el.querySelector("p").textContent = msg;
+      el.querySelector("[data-yes]").textContent = okLabel || "確定";
+      const done = v => { el.remove(); res(v); };
+      el.addEventListener("click", e => { if (e.target === el) done(false); });
+      el.querySelector("[data-no]").addEventListener("click", () => done(false));
+      el.querySelector("[data-yes]").addEventListener("click", () => done(true));
+      document.body.appendChild(el);
+    });
+  };
+
   window.TripAuth = {
     ready,
     loadProfile, saveProfile, shrinkImage,

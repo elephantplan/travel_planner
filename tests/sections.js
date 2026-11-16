@@ -130,7 +130,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.locator('[data-ecancel]').click();
     await p.waitForTimeout(300);
 
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     await second.locator('[data-usecdel]').click();
     await p.waitForTimeout(900);
     const left = ((lastSnap(saved) || {}).sections || []).map(x => x.title);
@@ -289,7 +289,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
   {
     const { p, errs } = await boot([sec('電子入境卡', 'prep')]);
     await openFold(p, 'prep');
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     await p.locator('[data-delsec="prep"]').click();
     await p.waitForTimeout(1000);
     ok('整段冇咗', await p.locator('[data-fold="prep"]').count() === 0);
@@ -347,7 +347,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     ok('入面啲卡冇蝕', /T-money/.test(await p.locator('#app').innerText()));
     ok('存低咗', ((lastSnap(saved) || {}).transitInfo || {}).title === '車錢點計');
 
-    p.once('dialog', d => d.accept());
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); }));
     await p.locator('[data-hskey="transit"] .secdel').first().click();
     await p.waitForTimeout(1000);
     ok('收埋到成段', await p.locator('[data-hskey="transit"]').count() === 0);

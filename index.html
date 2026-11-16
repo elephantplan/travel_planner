@@ -1490,7 +1490,7 @@ html,body{overflow-x:clip;max-width:100%;}
     const del = layer.querySelector("#acct-del");
     if (del) del.addEventListener("click", async () => {
       const keep = layer.querySelector("#acct-keep").checked;
-      if (!confirm(keep ? "刪除你個 account？你開嘅行程會保留。" : "刪除你個 account，連埋你開嘅所有行程？冇得復原。")) return;
+      if (!await appConfirm(keep ? "刪除你個 account？你開嘅行程會保留。" : "刪除你個 account，連埋你開嘅所有行程？冇得復原。")) return;
       del.disabled = true; del.textContent = "刪緊…";
       try {
         await TripAuth.rpc("delete_my_account", { keep_trips: keep });

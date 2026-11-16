@@ -13,6 +13,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   p.on('dialog', d => d.accept());
+  // the app's own confirm box: answer yes
+  await p.addInitScript(() => setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y) y.click(); }, 50));
   let rows = [3, 2, 1].map(id => ({ id, created_at: `2026-09-2${id}T00:00:00Z`, edited_by: 'x', source: 'edit', summary: '改咗 ' + id, trivial: false, has_snapshot: true }));
   const deletes = []; let allow = false;
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));

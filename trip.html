@@ -1848,6 +1848,12 @@ body.readonly .qa-del{display:none;}
 @keyframes genspin{to{transform:rotate(360deg);}}
 .genbanner .txt{flex:1;line-height:1.6;}
 
+/* ---------- in-app confirm (iOS can switch off the browser's own) ---------- */
+.cfm-scrim{position:fixed;inset:0;z-index:130;background:color-mix(in srgb,var(--ink) 45%,transparent);display:grid;place-items:center;padding:16px;}
+.cfm{width:min(380px,100%);background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:var(--r-xl);box-shadow:var(--shadow-2);padding:20px 18px 16px;}
+.cfm p{margin:0 0 16px;white-space:pre-line;line-height:1.6;font-size:15px;}
+.cfm-btns{display:flex;gap:10px;justify-content:flex-end;}
+.cfm-btns .btn{min-width:90px;justify-content:center;}
 /* ---------- sheet + modal ---------- */
 .scrim{position:fixed;inset:0;z-index:80;background:color-mix(in srgb,var(--ink) 42%,transparent);backdrop-filter:blur(3px);}
 .sheet{
@@ -2254,7 +2260,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-6";
+  const BUILD = "2026-11-17-7";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2879,7 +2885,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const r = await fetch(`${SUPABASE_URL}/rest/v1/itinerary_versions?trip_id=eq.${state.tripId}&select=id,edited_by&order=created_at.desc&limit=1`, { headers: sbHeaders() });
         const top = r.ok ? (await r.json())[0] : null;
         if (top && saver.lastVersionId && top.id !== saver.lastVersionId &&
-            !confirm(`${plain(top.edited_by) || "其他人"} 之後改過行程。返上一步會連佢嘅改動一齊蓋過，照做？`)) return;
+            !await askConfirm(`${plain(top.edited_by) || "其他人"} 之後改過行程。返上一步會連佢嘅改動一齊蓋過，照做？`)) return;
       } catch (_){}
       undo.stack.pop();
       state.snapshot = normalizeSnapshot(JSON.parse(e.json));
@@ -3614,7 +3620,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         refreshTransit(day, [r.targetIdx, r.targetIdx + 1]);
       }));
       sheet.querySelector("#stopdel").addEventListener("click", async () => {
-        if (!confirm(`刪走「${name}」？刪咗都可以喺改動紀錄還原。`)) return;
+        if (!await askConfirm(`刪走「${name}」？刪咗都可以喺改動紀錄還原。`)) return;
         closeLayer();
         const us = toUnits(day.items);
         if (us[ui] && us[ui].stop === me) us.splice(ui, 1); else return;
@@ -4886,7 +4892,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     </div>`;
   }
   async function hideSection(key, label){
-    if (!confirm(`隱藏「${label}」呢段？資料唔會刪，隨時可以喺主頁最底「顯示返」。`)) return;
+    if (!await askConfirm(`隱藏「${label}」呢段？資料唔會刪，隨時可以喺主頁最底「顯示返」。`)) return;
     const snap = state.snapshot;
     if (!Array.isArray(snap.hiddenSections)) snap.hiddenSections = [];
     if (!snap.hiddenSections.includes(key)) snap.hiddenSections.push(key);
@@ -5681,7 +5687,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const msg = kept.length
       ? `刪走「${g.title || "呢個大段落"}」？入面 ${kept.length} 個 section 會搬返落「自己加嘅資料」，唔會冇咗。`
       : `刪走「${g.title || "呢個大段落"}」？`;
-    if (!confirm(msg)) return;
+    if (!await askConfirm(msg)) return;
     kept.forEach(s => { s.where = "extra"; });
     d.groups = userGroups(d).filter(x => x.id !== id);
     state.foldOpen.delete("g:" + id);
@@ -5810,7 +5816,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const i = +b.dataset.usecdel;
       const s = (state.snapshot.sections || [])[i];
       if (!s) return;
-      if (!confirm(`刪走「${s.title || "呢個 section"}」？舊版本仲會記住，隨時喺歷史紀錄還原返。`)) return;
+      if (!await askConfirm(`刪走「${s.title || "呢個 section"}」？舊版本仲會記住，隨時喺歷史紀錄還原返。`)) return;
       state.snapshot.sections.splice(i, 1);
       render();
       await saveNow(`刪咗 section：${s.title || "未命名"}`);
@@ -6507,7 +6513,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (send) send.addEventListener("click", () => navigator.share({ title: plain((state.snapshot.meta || {}).title) || "行程", url: link }).catch(() => {}));
       const reset = sheet.querySelector("#sh-reset");
       if (reset) reset.addEventListener("click", async () => {
-        if (!confirm("重設之後，之前 send 出去嘅連結就用唔到，未登入嘅人要攞新連結。確定？")) return;
+        if (!await askConfirm("重設之後，之前 send 出去嘅連結就用唔到，未登入嘅人要攞新連結。確定？")) return;
         try { const tok = await TripAuth.rpc("reset_share_link", { tid: Number(state.tripId) }); state.tripRow.share_token = tok; closeLayer(); openShareSheet(); flash("換咗新連結"); }
         catch (e){ flash("重設唔到：" + e.message); }
       });
@@ -6521,7 +6527,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <small>${p.role === "owner" ? "擁有人" : "可以改"}</small>${mine && p.role !== "owner" ? `<button class="pp-x" data-rm="${esc(p.id)}" aria-label="移除 ${esc(p.name || "")}">${icon("close")}</button>` : ""}</div>`).join("")
           || `<p class="hint">未有登入咗嘅人加入。</p>`}</div>`;
         box.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", async () => {
-          if (!confirm("移除佢？佢就唔會再喺主頁見到呢個行程。")) return;
+          if (!await askConfirm("移除佢？佢就唔會再喺主頁見到呢個行程。")) return;
           try { await TripAuth.rpc("remove_trip_member", { tid: Number(state.tripId), uid: b.dataset.rm }); paint(); } catch (e){ flash("移除唔到：" + e.message); }
         }));
         if (!me) { cbox.innerHTML = ""; return; }
@@ -6764,7 +6770,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const gone = us.filter((u, j) => drop.has(j));
       if (!gone.length) return;
       const names = gone.map(u => u.stop ? cleanPlaceName(plain(u.stop.title)) || "地點" : "note");
-      if (!confirm(opts.all
+      if (!await askConfirm(opts.all
         ? `清走「${plain(day.title) || "呢日"}」全部 ${gone.length} 個地點同 note？\n撳頂部「上一步」可以還原。`
         : `刪走 ${gone.length} 個：${names.slice(0, 6).join("、")}${names.length > 6 ? "…" : ""}？\n撳頂部「上一步」可以還原。`)) return;
       const left = us.filter((u, j) => !drop.has(j));
@@ -6968,7 +6974,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const s = units[ui] && units[ui].stop;
       const a = s && altsOf(s)[ai];
       if (!a) return;
-      if (!confirm(`刪走後備「${altName(a)}」？`)) return;
+      if (!await askConfirm(`刪走後備「${altName(a)}」？`)) return;
       s.alts.splice(ai, 1);
       if (!s.alts.length) delete s.alts;
       day.items = fromUnits(units);
@@ -7733,7 +7739,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     box.querySelectorAll("[data-nact]").forEach(btn => btn.addEventListener("click", async () => {
       if (btn.dataset.nact === "close"){ state.open.clear(); render(); return; }
       if (btn.dataset.nact === "remove"){
-        if (!confirm("刪走呢個 note？")) return;
+        if (!await askConfirm("刪走呢個 note？")) return;
         const units = toUnits(day.items);
         units.splice(i, 1);
         day.items = fromUnits(units);
@@ -7878,7 +7884,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const ai = +btn.dataset.ai;
         const a = altsOf(s)[ai];
         if (!a) return;
-        if (!confirm(`刪走後備「${altName(a)}」？`)) return;
+        if (!await askConfirm(`刪走後備「${altName(a)}」？`)) return;
         s.alts.splice(ai, 1);
         if (!s.alts.length) delete s.alts;
         render();
@@ -7899,7 +7905,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (act === "foldpick"){ openFoldPicker(day, i); return; }
 
       if (act === "remove"){
-        if (!confirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
+        if (!await askConfirm("刪走「" + (s.title || "呢個地點") + "」？")) return;
         units.splice(i,1);
         day.items = fromUnits(units);
         syncMapPoints(day);
@@ -8462,7 +8468,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         closeLayer(); render();
         await saveNow(res.summary);
         if (res.notices.length) alert(res.notices.join("\n\n"));
-        if (plan.added.length && confirm(`加咗 ${plan.added.length} 日空白行程，而家叫 AI 幫你諗返呢幾日？`)){
+        if (plan.added.length && await askConfirm(`加咗 ${plan.added.length} 日空白行程，而家叫 AI 幫你諗返呢幾日？`)){
           const ids = plan.added.map(a => "day" + a.n);
           genBanner("AI 幫你諗緊新加嗰幾日…");
           try {
@@ -9312,7 +9318,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!b || state.readonly) return;
     e.preventDefault(); e.stopPropagation();
     const snap = state.snapshot, i = +b.dataset.staydelete, st = (snap.stays || [])[i];
-    if (!st || !confirm(`刪走「${st.name || "呢間酒店"}」？（只係刪呢間，住宿呢段會保留）`)) return;
+    if (!st || !await askConfirm(`刪走「${st.name || "呢間酒店"}」？（只係刪呢間，住宿呢段會保留）`)) return;
     snap.stays.splice(i, 1);
     syncAccommodation(snap);
     render();
@@ -9325,7 +9331,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!b || state.readonly) return;
     e.preventDefault(); e.stopPropagation();
     const snap = state.snapshot, i = +b.dataset.stayunpick, st = (snap.stays || [])[i];
-    if (!st || !confirm(`唔揀「${st.name || "呢間酒店"}」？佢會返去下面嘅推薦列表，想揀返隨時撳「揀呢間」。`)) return;
+    if (!st || !await askConfirm(`唔揀「${st.name || "呢間酒店"}」？佢會返去下面嘅推薦列表，想揀返隨時撳「揀呢間」。`)) return;
     const sg = snap.staySuggest = snap.staySuggest || { at: new Date().toISOString(), plan: [], areas: [], hotels: [] };
     sg.hotels = sg.hotels || [];
     const same = h => (st.placeId && h.placeId === st.placeId) || plain(h.name) === plain(st.name);
@@ -10417,7 +10423,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     const delBtn = $("#delboard");
     if (delBtn) delBtn.addEventListener("click", async () => {
-      if (!confirm(`刪除成個「${board.name}」清單？入面 ${board.items.length} 個地點都會一齊冇。`)) return;
+      if (!await askConfirm(`刪除成個「${board.name}」清單？入面 ${board.items.length} 個地點都會一齊冇。`)) return;
       state.snapshot.boards = (state.snapshot.boards || []).filter(b => b.id !== board.id);
       state.view = "overview";
       render();
@@ -10545,7 +10551,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (act === "close"){ state.open.clear(); render(); return; }
 
       if (act === "remove"){
-        if (!confirm("刪走「" + (plain(s.title) || "呢個地點") + "」？")) return;
+        if (!await askConfirm("刪走「" + (plain(s.title) || "呢個地點") + "」？")) return;
         board.items.splice(i,1);
         state.open.clear();
         render();
@@ -10747,6 +10753,27 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") repinDock(); });
   document.addEventListener("focusout", e => { if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) setTimeout(repinDock, 250); });
   function onLayerKey(e){ if (e.key === "Escape") closeLayer(); }
+  // A confirm the app draws itself. After a few of the browser's own,
+  // iPhone Safari offers to stop the page showing them — and once that is
+  // ticked, every await askConfirm() answers "no" at once and the button seems dead.
+  function askConfirm(msg, okLabel){
+    return new Promise(res => {
+      const el = document.createElement("div");
+      el.className = "cfm-scrim";
+      el.innerHTML = `<div class="cfm" role="alertdialog" aria-modal="true"><p></p>
+        <div class="cfm-btns"><button class="btn" data-no>取消</button><button class="btn primary" data-yes></button></div></div>`;
+      el.querySelector("p").textContent = msg;
+      el.querySelector("[data-yes]").textContent = okLabel || "確定";
+      const done = v => { el.remove(); document.removeEventListener("keydown", key, true); res(v); };
+      const key = e => { if (e.key === "Escape"){ e.stopPropagation(); done(false); } else if (e.key === "Enter"){ e.preventDefault(); done(true); } };
+      el.addEventListener("click", e => { if (e.target === el) done(false); });
+      el.querySelector("[data-no]").addEventListener("click", () => done(false));
+      el.querySelector("[data-yes]").addEventListener("click", () => done(true));
+      document.addEventListener("keydown", key, true);
+      document.body.appendChild(el);
+      el.querySelector("[data-yes]").focus();
+    });
+  }
   function openSheet(inner, after, opts){
     const layer = $("#layer");
     layer.innerHTML = `<div class="scrim" data-close></div>
@@ -11744,7 +11771,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       list.querySelectorAll("[data-notedel]").forEach(btn => btn.addEventListener("click", async e => {
         e.stopPropagation();
         const r = shown[+btn.dataset.notedel];
-        if (!r || !confirm(`刪走呢條紀錄？\n「${(r.question || "").slice(0, 40)}」\n刪咗冇得返轉頭。`)) return;
+        if (!r || !await askConfirm(`刪走呢條紀錄？\n「${(r.question || "").slice(0, 40)}」\n刪咗冇得返轉頭。`)) return;
         btn.disabled = true;
         try {
           const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?id=eq.${encodeURIComponent(r.id)}`, { method: "DELETE", headers: sbHeaders() });
@@ -12600,7 +12627,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
           e.preventDefault();
           const keep = rows.find(r => r.has_snapshot !== false) || rows[0];
           const n = rows.filter(r => r.id !== keep.id).length;
-          if (!confirm(`刪走 ${n} 個舊紀錄，淨係留低而家呢個版本？刪咗就還原唔到。`)) return;
+          if (!await askConfirm(`刪走 ${n} 個舊紀錄，淨係留低而家呢個版本？刪咗就還原唔到。`)) return;
           prune.disabled = true; prune.textContent = "刪緊…";
           let gone = 0;
           try {
@@ -12632,7 +12659,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
         list.querySelectorAll("[data-restore]").forEach(b => b.addEventListener("click", async e => {
           e.preventDefault();
-          if (!confirm("還原到呢個版本？（唔會刪走中間嘅紀錄）")) return;
+          if (!await askConfirm("還原到呢個版本？（唔會刪走中間嘅紀錄）")) return;
           try {
             const snap = await fetchVersionSnapshot(b.dataset.restore);
             if (!snap) return;

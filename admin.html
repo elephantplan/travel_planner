@@ -113,9 +113,9 @@ select{min-height:36px;border-radius:10px;border:1px solid var(--rule);backgroun
       });
       const del = card.querySelector("[data-del]");
       if (del) del.addEventListener("click", async () => {
-        const keep = confirm(`刪除「${u.name}」？\n\n撳「確定」：保留佢開嘅 ${u.trips} 個行程（轉俾你）。\n撳「取消」之後會再問你係咪連行程一齊刪。`);
+        const keep = await appConfirm(`刪除「${u.name}」？\n\n撳「確定」：保留佢開嘅 ${u.trips} 個行程（轉俾你）。\n撳「取消」之後會再問你係咪連行程一齊刪。`);
         let keepTrips = true;
-        if (!keep){ if (!confirm(`連埋「${u.name}」開嘅行程一齊永久刪除？撳「取消」就乜都唔做。`)) return; keepTrips = false; }
+        if (!keep){ if (!await appConfirm(`連埋「${u.name}」開嘅行程一齊永久刪除？撳「取消」就乜都唔做。`)) return; keepTrips = false; }
         try { await TripAuth.rpc("admin_delete_user", { uid, keep_trips: keepTrips }); toast("刪除咗"); load(); } catch (e){ toast("刪唔到：" + e.message); }
       });
     });

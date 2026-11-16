@@ -128,7 +128,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     await p.locator('[data-fold="g:gTEST"]').click();
     await p.waitForTimeout(400);
     let asked = '';
-    p.once('dialog', d => { asked = d.message(); d.accept(); });
+    p.evaluate(() => new Promise(r => { const t = setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y){ const m = y.closest('[role=alertdialog]').querySelector('p').textContent; y.click(); clearInterval(t); r(m); } }, 30); })).then(m => { asked = m; });
     await p.locator('[data-groupdel="gTEST"]').click();
     await p.waitForTimeout(1000);
     ok('刪之前講明入面啲嘢會點', /搬返落「自己加嘅資料」/.test(asked), asked);

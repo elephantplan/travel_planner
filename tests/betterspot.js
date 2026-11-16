@@ -13,6 +13,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   p.on('dialog', d => d.accept());
+  // the app's own confirm box: answer yes
+  await p.addInitScript(() => setInterval(() => { const y = document.querySelector('[role=alertdialog] [data-yes]'); if (y) y.click(); }, 50));
   const saved = [];
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/rest/v1/itinerary_versions**', r => {
