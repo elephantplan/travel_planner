@@ -17,7 +17,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const cur = JSON.parse(JSON.stringify(snap));
   cur.sections = [{ icon: '', title: '12月限定攻略', sub: '', source: 'ai', topic: '12月限定攻略', aiRefresh: false, links: [], lines: [
     '景福宮夜間開放好靚，記得早啲去。',
-    '南大門市場夜晚好熱鬧，可以食小食。',
+    '❄️ 南大門市場夜晚好熱鬧，可以食小食。',
     '12月當造必食鱈場蟹，二條市場或三角市場買。',
     '記得帶暖包同頸巾。'] }];
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
@@ -27,9 +27,12 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.route('**tile**', r => r.abort());
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
-  const li = k => p.locator('li', { hasText: cur.sections[0].lines[k].slice(0, 6) }).first();
+  const li = k => p.locator('li', { hasText: cur.sections[0].lines[k].replace(/^\S+ /, '').slice(0, 6) }).first();
   ok('喺行程入面嘅講明邊日', /已喺 D2/.test(await li(0).innerText()), await li(0).innerText());
   ok('未喺行程嘅有「加去行程」', await li(1).locator('[data-addplace]').count() === 1);
+  await li(1).locator('[data-addplace]').click(); await p.waitForTimeout(300);
+  ok('開頭有 emoji 都認得出地方，唔使再問', /將「南大門市場」加去邊度/.test(await p.locator('.sheet').innerText()) && await p.locator('#tipname').count() === 0);
+  await p.evaluate(() => { const c = document.querySelector('.sheet-close'); if (c) c.click(); }); await p.waitForTimeout(200);
   ok('中間先提到地方都有「加去行程」', await li(2).locator('[data-addplace]').count() === 1);
   ok('純粹提醒冇掣', await li(3).locator('[data-addplace], [data-inday-go]').count() === 0);
   await li(2).locator('[data-addplace]').click(); await p.waitForTimeout(300);

@@ -2306,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-15";
+  const BUILD = "2026-11-17-16";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5462,8 +5462,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const PLACE_END = /(宮|苑|寺|神社|大社|稻荷|公園|大道|庭園|園|山|川|橋|塔|館|城|通|街|商店街|町|丁目|駅|站|庭|院|閣|堂|森|池|島|谷|坂|渓|峽|峡|瀑布|廣場|広場|市場|橫丁|横丁|Hills|Park|Garden|Gardens|Shrine|Temple|Tower|Street)$/i;
   // a line that mentions some place somewhere (「…二條市場或三角市場買」)
   const PLACE_WORD = new RegExp("[^\\s，。、：:]{1,10}" + PLACE_END.source.replace(/\$$/, ""), "i");
+  // AI lines often open with an emoji (「❄️ 大通公園…」), which hides the place behind it
+  const stripLead = t => String(t || "").replace(/^[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{20E3}\s•·\-*]+/u, "");
   function leadPlace(text){
-    const t0 = String(text || "");
+    const t0 = stripLead(text);
     // 「大通公園白色燈樹節…」: the shortest opening that ends like a place
     for (let k = 3; k <= 14 && k <= t0.length; k++){
       const n = t0.slice(0, k);
@@ -5478,7 +5480,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // the place a section line names, if any: its 「名：」 head, else its lead
   function linePlace(sec, l){
     const { head, body, text } = splitLine(l);
-    if (lineIsPlace(sec, head)) return Object.assign(placeFromHead(head), { body });
+    // a 「名：…」 head is a name; a 「…，…」 opening is only one if it ends like a place
+    const h = stripLead(head), colon = !!head && /[：:]/.test(text.slice(head.length, head.length + 2));
+    if (lineIsPlace(sec, h) && (colon || PLACE_END.test(h))) return Object.assign(placeFromHead(h), { body });
     if (!sec || sec.source !== "ai" || /天氣同點著衫|交通、上網卡同貨幣|行李同出發前準備清單/.test(sec.topic || "")) return null;
     const n = leadPlace(text);
     return n ? { name: n, region: "", body: text } : null;
@@ -5528,7 +5532,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (lp) return openAddPlaceSheetFor(lp);
     // the tip doesn't name one place clearly: ask which, with a guess filled in
     const text = splitLine(line).text;
-    const guess = (text.match(/^[^，。、：:\s]{2,12}/) || [""])[0];
+    const guess = (stripLead(text).match(/^[^，。、：:\s]{2,12}/) || [""])[0];
     openSheet(`<h3>加邊個地方去行程？</h3>
       <p class="sec-sub">${esc(text)}</p>
       <div class="askrow"><input class="input" id="tipname" value="${esc(guess)}" placeholder="地方名，例如：大通公園"><button class="btn primary" id="tipgo">下一步</button></div>`, sh => {
