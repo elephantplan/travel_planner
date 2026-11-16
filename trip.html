@@ -2213,7 +2213,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-1";
+  const BUILD = "2026-11-16-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6625,6 +6625,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     setTimeout(() => { if (state.view === day.id) autoTransit(day); }, 0);
     setTimeout(() => { if (state.view === day.id) backfillBriefs(day); }, 1500);
     setTimeout(() => { if (state.view === day.id) backfillCounts(day); }, 2500);
+    setTimeout(() => { if (state.view === day.id) fixAirportStops(day); }, 800);
   }
 
   // ---------- insert a place or a note at an exact spot ----------
@@ -6800,6 +6801,45 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (b.food && st.type !== "eat") st.type = "eat";
     if (Number.isFinite(b.rating) && !Number.isFinite(st.rating)){ st.rating = b.rating; st.ratingCount = b.ratingCount; }
     return true;
+  }
+  // An airport stop matched to the wrong airport (before airports were
+  // pinned) is put right: its place, map link and the legs either side.
+  let airportBusy = false;
+  async function fixAirportStops(day){
+    if (airportBusy || state.readonly || state.offline) return;
+    const units = toUnits(day.items);
+    const bad = units.map((u, i) => ({ u, i })).filter(({ u }) => {
+      const ap = u.stop && airportOf(u.stop.title + " " + (u.stop.kr || ""));
+      if (!ap) return false;
+      const m = metersBetween(ap, u.stop);
+      return !(Number.isFinite(m) && m <= 15000);
+    });
+    if (!bad.length) return;
+    airportBusy = true;
+    const fixed = [];
+    try {
+      for (const { u } of bad){
+        const st = u.stop, ap = airportOf(st.title + " " + (st.kr || ""));
+        const p = await findAirport(ap);
+        Object.assign(st, { placeId: p.placeId || "", lat: p.lat, lng: p.lng, photoUrl: "", rating: p.rating ?? null, ratingCount: p.ratingCount ?? null,
+          mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ap.name)}` });
+        st.eatMeta = (st.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
+        fixed.push(plain(st.title));
+      }
+      syncMapPoints(day);
+      if (state.view === day.id) render();
+      await saveNow(`改正機場位置：${fixed.join("、")}`);
+      const us = toUnits(day.items), redo = [];
+      bad.forEach(({ u }) => {
+        const k = us.findIndex(x => x.stop === u.stop);
+        if (k > 0) redo.push(k);
+        for (let j = k + 1; j < us.length; j++) if (us[j].stop){ redo.push(j); break; }
+      });
+      if (redo.length) await refreshTransit(day, redo);
+      for (const { u } of bad) await enrichPhoto(u.stop, plain(u.stop.title)).catch(() => {});
+      if (state.view === day.id) render();
+      flash(`改正咗機場位置：${fixed.join("、")}`);
+    } finally { airportBusy = false; }
   }
   // Places saved before the number of reviews was kept show a score with no
   // idea how many people gave it; ask Google once for each.
@@ -11156,7 +11196,38 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // on a day trip from Osaka came back as a same-named shop in Osaka, an hour
   // away. Only when nothing is found near the day does it fall back to that,
   // and even then takes whichever result is closest to the day.
+  // Airports are never left to a name search: 「成田」 near a Tokyo day came
+  // back as Haneda, the nearer airport. Each one is pinned to where it is.
+  const AIRPORTS = [
+    { re: /成田|narita|\bNRT\b/i, name: "Narita International Airport", lat: 35.7720, lng: 140.3929 },
+    { re: /羽田|haneda|\bHND\b/i, name: "Haneda Airport", lat: 35.5494, lng: 139.7798 },
+    { re: /關西|関西|kansai|\bKIX\b/i, name: "Kansai International Airport", lat: 34.4320, lng: 135.2304 },
+    { re: /伊丹|itami|\bITM\b/i, name: "Osaka International Airport Itami", lat: 34.7855, lng: 135.4382 },
+    { re: /新千歲|新千歳|chitose|\bCTS\b/i, name: "New Chitose Airport", lat: 42.7752, lng: 141.6923 },
+    { re: /福岡|fukuoka|\bFUK\b/i, name: "Fukuoka Airport", lat: 33.5859, lng: 130.4507 },
+    { re: /那霸|那覇|naha|\bOKA\b/i, name: "Naha Airport", lat: 26.1958, lng: 127.6459 },
+    { re: /中部國際|中部国際|セントレア|chubu|centrair|\bNGO\b/i, name: "Chubu Centrair International Airport", lat: 34.8584, lng: 136.8054 },
+    { re: /仁川|incheon|인천|\bICN\b/i, name: "Incheon International Airport", lat: 37.4602, lng: 126.4407 },
+    { re: /金浦|gimpo|김포|\bGMP\b/i, name: "Gimpo International Airport", lat: 37.5583, lng: 126.7906 },
+    { re: /金海|gimhae|김해|\bPUS\b/i, name: "Gimhae International Airport", lat: 35.1795, lng: 128.9382 },
+    { re: /濟州|济州|jeju|제주|\bCJU\b/i, name: "Jeju International Airport", lat: 33.5104, lng: 126.4914 },
+    { re: /桃園|taoyuan|\bTPE\b/i, name: "Taiwan Taoyuan International Airport", lat: 25.0797, lng: 121.2342 },
+    { re: /松山機場|songshan|\bTSA\b/i, name: "Taipei Songshan Airport", lat: 25.0694, lng: 121.5525 },
+    { re: /香港國際機場|香港機場|赤鱲角|hong kong international airport|\bHKG\b/i, name: "Hong Kong International Airport", lat: 22.3080, lng: 113.9185 },
+  ];
+  function airportOf(text){
+    const t = plain(text || "");
+    if (!/機場|机场|空港|airport|공항|\b[A-Z]{3}\b/i.test(t)) return null;
+    return AIRPORTS.find(a => a.re.test(t)) || null;
+  }
+  async function findAirport(ap){
+    const r = await withTimeout(callAi({ action:"place-search", query: ap.name }), 20000, null).catch(() => null);
+    const hit = ((r && r.places) || []).find(x => x.placeId && metersBetween(ap, x) <= 15000);
+    return hit || { placeId: "", name: ap.name, lat: ap.lat, lng: ap.lng };
+  }
   async function findPlaceNear(s, query, plainQuery, refAt){
+    const ap = airportOf([s && s.title, s && s.kr, query, plainQuery].filter(Boolean).join(" "));
+    if (ap) return findAirport(ap);
     const ref = refAt || stopAnchor(s);
     if (ref){
       const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
@@ -11187,6 +11258,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         if (Number.isFinite(p.lat)) s.lat = p.lat;
         if (Number.isFinite(p.lng)) s.lng = p.lng;
         if (!s.mapUrl) s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
+        if (!p.placeId) s.mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}`;
         // text search carries the rating already — no extra request for it
         if (Number.isFinite(p.rating)) s.rating = p.rating;
         if (Number.isFinite(p.ratingCount)) s.ratingCount = p.ratingCount;
