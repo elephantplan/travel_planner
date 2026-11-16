@@ -59,6 +59,8 @@ const TRIP = {
   await p.route('**/rest/v1/trips**', r => {
     if (r.request().method() === 'POST'){ createdTrip = JSON.parse(r.request().postData());
       return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([{ id: 77, ...createdTrip }]) }); }
+    // today's database: no accounts yet, so the owner_id column is unknown
+    if (/select=owner_id/.test(r.request().url())) return r.fulfill({ status: 400, contentType: 'application/json', body: '{"code":"42703"}' });
     return r.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
   await p.route('**/rest/v1/itinerary_versions**', r => {
