@@ -73,7 +73,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('.sheet-close').first().click().catch(() => {}); await p.waitForTimeout(300);
 
   // 清走成日 → 再諗過: a fresh plan and a new name
-  await p.locator('#clearday').click(); await p.waitForTimeout(1200);
+  await p.locator('#daymore').click(); await p.waitForTimeout(200); await p.locator('#clearday').click(); await p.waitForTimeout(1200);
   ok('清咗之後標題都清埋', /第 2 日/.test(await p.locator('.dayhead h2').innerText()));
   await p.locator('#rp-yes').click(); await p.waitForTimeout(300);
   await p.locator('#dayai-q').fill('壽司同 outlet');

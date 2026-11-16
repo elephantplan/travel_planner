@@ -46,7 +46,7 @@ const shuffle = o => Array.isArray(o) ? o.map(shuffle) : o && typeof o === 'obje
   theirs(s2 => { s2.days[0].title = '阿明第二次改'; });
   await p.evaluate(() => document.querySelector('[data-go="day2"]').click());
   await p.waitForTimeout(800);
-  await p.locator('#selstart').click(); await p.waitForTimeout(200);
+  await p.locator('#daymore').click(); await p.waitForTimeout(200); await p.locator('#selstart').click(); await p.waitForTimeout(200);
   await p.locator('[data-select="0"]').click(); await p.waitForTimeout(150);
   await p.locator('#seldel').click(); await p.waitForTimeout(2500);
   const last = saved[saved.length - 1].snapshot;
@@ -56,7 +56,7 @@ const shuffle = o => Array.isArray(o) ? o.map(shuffle) : o && typeof o === 'obje
   // 3. both change the same day: ours kept, and we're told
   theirs(s2 => { s2.days[1].title = '阿明改 Day 2'; });
   await p.locator('.dayhead h2').waitFor();
-  await p.locator('#clearday').click(); await p.waitForTimeout(2500);
+  await p.locator('#daymore').click(); await p.waitForTimeout(200); await p.locator('#clearday').click(); await p.waitForTimeout(2500);
   const last2 = saved[saved.length - 1].snapshot;
   ok('兩個都改同一日：用自己嘅', !last2.days[1].items.some(i => i.kind === 'stop'), last2.days[1].title);
   ok('冇 JS error', !errs.length, errs);

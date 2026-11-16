@@ -51,7 +51,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   // the other way: 揀幾個 → 做後備 → choose the stop
   await p.locator('#btn-undo').click();
   await p.waitForTimeout(1500);
-  await p.locator('#selstart').click(); await p.waitForTimeout(300);
+  await p.locator('#daymore').click(); await p.waitForTimeout(200); await p.locator('#selstart').click(); await p.waitForTimeout(300);
   await p.locator('[data-select="0"]').click(); await p.waitForTimeout(150);
   await p.locator('[data-select="2"]').click(); await p.waitForTimeout(150);
   await p.locator('#selbackup').click(); await p.waitForTimeout(300);

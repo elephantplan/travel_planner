@@ -17,6 +17,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); } else { f
   await p.route('**tile**', r => r.abort());
   await p.goto('http://localhost:8799/trip.html?trip=1', { waitUntil:'domcontentloaded' }); await p.waitForTimeout(1000);
   await p.evaluate(() => document.querySelector('.dayline[data-go="day2"]').click()); await p.waitForTimeout(700);
+  await p.evaluate(() => document.querySelectorAll('.morewrap').forEach(w => { w.hidden = false; }));   // behind 更多
   const btn = p.locator('[data-copyname="경복궁"]');
   ok('韓文地點有「複製韓文名」', /複製韓文名/.test(await btn.innerText()));
   await btn.click(); await p.waitForTimeout(300);

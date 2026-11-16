@@ -1931,6 +1931,20 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .ai-msg.ok{border-color:color-mix(in srgb,var(--ok) 40%,transparent);}
 .dayai{margin-top:10px;}
 .cleardaybtn{color:var(--danger,#BE3E28);}
+.daycost{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 6px;padding:12px 14px;border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--rule);}
+.daycost-t{flex:1 1 200px;font-size:14px;line-height:1.5;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.daycost-t .i,.tripcost .i{width:16px;height:16px;align-self:center;color:var(--gold);}
+.daycost-t small,.tripcost small{flex-basis:100%;font-size:12px;color:var(--ink-faint);}
+.tripcost{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:10px 0 0;padding:12px 14px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--gold) 9%,var(--surface));font-size:14px;}
+.meta-chip.cost .i{width:13px;height:13px;}
+.dayline-count .spin{display:inline-block;width:11px;height:11px;margin-right:5px;vertical-align:-1px;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--lc,var(--gold));animation:genspin .8s linear infinite;}
+.daytools{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.daytools .btn{flex:1 1 auto;justify-content:center;min-height:42px;}
+.daytools #dayai{flex:2 1 150px;}
+.hintbtn{margin-top:8px;font-size:13px;background:color-mix(in srgb,var(--gold) 10%,var(--surface));border-color:color-mix(in srgb,var(--gold) 40%,var(--rule));}
+.dayhead .toollist{margin-top:8px;}
+.morewrap{display:contents;}
+.morewrap[hidden]{display:none;}
 .askedecho{font-size:12px;color:var(--ink-faint);margin:0 0 3px;}
 
 /* free-form sections the family adds themselves */
@@ -2292,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-13";
+  const BUILD = "2026-11-17-14";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2377,6 +2391,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     sparkle:   '<path d="M12 3.6 13.7 9 19 10.7 13.7 12.4 12 17.8 10.3 12.4 5 10.7 10.3 9z"/><path d="M18 16.4l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>',
     pencil:    '<path d="M4.5 19.5h3.2L18.4 8.8a1.6 1.6 0 0 0 0-2.3l-.9-.9a1.6 1.6 0 0 0-2.3 0L4.5 16.3z"/>',
     more:      '<path d="M6.4 12h.01M12 12h.01M17.6 12h.01"/>',
+    money:     '<rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/>',
+    umbrella:  '<path d="M3.5 12a8.5 8.5 0 0 1 17 0z"/><path d="M12 12v6.2a2 2 0 0 1-4 0"/><path d="M12 3.5v-1"/>',
     trash:     '<path d="M4.8 6.8h14.4"/><path d="M9.3 6.8V4.9h5.4v1.9"/><path d="M6.6 6.8 7.5 20h9l.9-13.2"/>',
     plus:      '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
     check:     '<path d="m5 12.6 4.6 4.4L19 6.8"/>',
@@ -2449,6 +2465,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (m.dateStart && m.dateEnd && !head.includes(m.dateStart)) facts.push(`日期：${m.dateStart} 至 ${m.dateEnd}`);
     return facts.length ? `${head}\n（今次行程 —— ${facts.join("；")}）` : head;
   }
+  // a day opens on its places; the map is one tap away (and stays open once chosen)
+  function dayMapOpen(id){
+    if (state.mapsOpen.has(id)) return true;
+    if (state.mapsShut.has(id)) return false;
+    try { return localStorage.getItem("trip_maps_open") === "1"; } catch (_){ return false; }
+  }
   function plain(s){
     return String(s == null ? "" : s).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
   }
@@ -2460,7 +2482,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     tripId: null,                  // which row in `trips` this page is showing — set once in boot()
     view: "overview",              // "overview" | dayId
     open: new Set(),               // "dayId:unitIndex" currently expanded
-    mapsShut: new Set(),           // dayIds whose map the reader collapsed; open by default
+    mapsShut: new Set(),           // dayIds whose map the reader collapsed
+    mapsOpen: new Set(),           // …or opened; otherwise it follows their last choice (shut at first)
     editedBy: (() => { try { return localStorage.getItem("trip_editor_name") || localStorage.getItem("seoul_trip_name") || ""; } catch (_){ return ""; } })(),
     readOnlyLabel: null,           // set when previewing an old version
     renamingBoard: null,           // boardId currently showing its rename input
@@ -3330,7 +3353,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     // a view/selection pointing at a day that no longer exists
     if (!dayById(state.view) && state.view !== "overview" && state.view !== "notes" && !boardById(state.view)) state.view = "overview";
-    state.open.clear(); state.mapsShut.clear(); state.selectMode = null;
+    state.open.clear(); state.mapsShut.clear(); state.mapsOpen.clear(); state.selectMode = null;
 
     const bits = [];
     if (plan.added.length) bits.push(`加咗 ${plan.added.length} 日`);
@@ -3492,9 +3515,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return `<span class="rr-ln"${c ? ` style="--line:${c}"` : ""}><span class="rc-pill">${esc(name)}</span>${rest.length ? `<small>${esc(rest.join(" · "))}</small>` : ""}<i>→</i></span>`;
     }).join("")}</span>`;
   }
+  // 「（估計，車站係真嘅，路線出發前喺 Google 確認）」 on every leg was noise:
+  // shown as a short 「・估計」 with the explanation on long-press
+  const EST_NOTE = "估計：車站係 Google 搵到嘅真車站，路線係 AI 查，出發前喺 Google 確認";
+  function shortSegText(t){ return String(t || "").replace(/（估計[^）]*）/, "・估計"); }
   function segHtmlOf(seg){
     const mode = segMode(seg);
-    const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
+    const text = shortSegText(seg && seg.text != null ? seg.text : segPlain(seg && seg.html));
     return `<span class="icon">${icon(MODE_ICON[mode] || "walk")}</span>${esc(text)}`;
   }
   // The time column only works if the digits line up, so pull the clock time
@@ -4032,9 +4059,23 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // the mode disc doubles as the switch between 行路 / 大眾運輸 / 揸車
   function segModeBtn(seg, attr){
     const mode = segMode(seg);
-    const text = seg && seg.text != null ? seg.text : segPlain(seg && seg.html);
-    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${esc(text)}`;
+    const text = shortSegText(seg && seg.text != null ? seg.text : segPlain(seg && seg.html));
+    const est = /・估計/.test(text);
+    return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${est ? `<span title="${esc(EST_NOTE)}">${esc(text)}</span>` : esc(text)}`;
   }
+  // A card shows its map link; the rest (search, copy name, taxi card,
+  // photo…) sit behind 「更多」, so a day of cards doesn't read as a wall of buttons
+  function footLinks(links){
+    if (links.length <= 2) return links.join("");
+    return links[0] + `<button type="button" class="maplink morelinks" data-morelinks aria-expanded="false">${icon("more")}更多</button><span class="morewrap" hidden>${links.slice(1).join("")}</span>`;
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("[data-morelinks]");
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const w = b.nextElementSibling;
+    if (w){ w.hidden = !w.hidden; b.setAttribute("aria-expanded", String(!w.hidden)); b.innerHTML = w.hidden ? `${icon("more")}更多` : `${icon("close")}收埋`; }
+  }, true);
   // Google everywhere; Naver in Korea
   function legLinks(gFrom, gTo, nFrom, nTo, mode, seg){
     const g = gmapsDirUrl(gFrom, gTo, mode);
@@ -4979,8 +5020,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
               <button class="btn" data-stayunpick="${si}">${icon("close")}唔揀呢間</button>
             </div>
           </div>`; }).join("")
-          : `<div class="stayempty"><p class="hint">仲未填住宿。自己加，或者叫 AI 建議邊幾晚住邊區。</p>
-              <button class="btn" data-editsec="acc">${icon("plus")}自己加酒店</button></div>`}
+          : `<div class="stayempty"><p class="hint">仲未填住宿。已經訂咗就自己加；未訂可以叫下面嘅 AI 推薦。</p>
+              <button class="btn" data-editsec="acc">${icon("plus")}已經訂咗，自己加</button></div>`}
       </div>
       ${staySuggestHtml(d)}
       <div class="sechide"><button class="secedit wordy secdel" data-delsec="acc" data-seclabel="住宿">${icon("trash")}喺主頁收埋「住宿」</button></div>`;
@@ -5225,11 +5266,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.names.length ? `<span class="dayline-stops">${
               st.names.map(x => `<span>${esc(x)}</span>`).join("")
             }${st.more ? `<span class="dayline-more">＋${st.more}</span>` : ""}</span>` : ""}
-            <span class="dayline-count">${count} 站</span>
+            <span class="dayline-count">${state.genStatus && state.genStatus[day.id] === "doing" ? `<span class="spin"></span>AI 排緊呢日…`
+              : state.genStatus && state.genStatus[day.id] === "wait" && !count ? "等緊排…"
+              : `${count} 站${(() => { const c = costSum(dayStops(day)); return c && c.n ? `・每人約 ${esc(fmtCost(c.cur, c.n))}` : ""; })()}`}</span>
           </span>
         </button>`;
     }).join("");
 
+    const tc = tripCost();
+    const costLine = tc && tc.n ? `<div class="tripcost">${icon("money")}成個行程大約每人 <b>${esc(fmtCost(tc.cur, tc.n))}</b><small>門票同食飯嘅估計；未計機票、酒店同交通</small></div>` : "";
     const prep = [
       groupToolsHtml(d, "prep"),
       addSectionBtn(d, "prep"),
@@ -5267,6 +5312,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>
+      ${costLine}
       ${state.readonly ? "" : `<div class="ovtools"><button type="button" class="btn ovupdate" id="ov-update">${icon("camera")}用相或者文字更新行程</button>
         <button type="button" class="btn ovpush${pushOn() ? " on" : ""}" id="ov-push">${icon(pushOn() ? "check" : "clock")}${pushOn() ? "通知已開" : "開通知"}</button></div>`}
 
@@ -6207,7 +6253,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const lc = dayColorVar(day.id);
     const units = toUnits(day.items);
     const lastStopIx = lastStopIndex(day);
-    const mapOpen = !state.mapsShut.has(day.id);
+    const mapOpen = dayMapOpen(day.id);
     const sel = inSelectMode(day) ? state.selectMode : null;
     const firstStop = firstStopUnit(units);
     const stopNums = dayStopNumbers(day);
@@ -6243,13 +6289,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
                        <p class="mapcap">${esc(day.mapCap||"")}</p>` : ""}
         ` : ""}
         ${sel ? "" : `
-          <div class="toollist">
-            <button class="btn wide dayai" id="dayai">${icon("sparkle")}AI 諗行程</button>
+          <div class="daytools">
+            <button class="btn primary" id="dayai">${icon("sparkle")}AI 諗行程</button>
+            ${units.some(u => u.stop) ? `<button class="btn" id="rainplan" title="落雨或者太凍：將戶外嘅換做附近室內">${icon("umbrella")}落雨版</button>` : ""}
+            <button class="btn" id="daymore" aria-expanded="${state.toolsOpen === day.id}">${icon("more")}更多</button>
+          </div>
+          ${routeSaving(day) ? `<button class="btn wide hintbtn" id="reorder">${icon("map")}可以排得順路啲：少行約 ${routeSaving(day).saveKm} 公里</button>` : ""}
+          ${state.toolsOpen === day.id ? `<div class="toollist">
             ${units.length ? `<button class="btn wide" id="selstart">${icon("check")}揀幾個：刪除／搬去第度／做後備</button>
             <button class="btn wide cleardaybtn" id="clearday">${icon("trash")}清走成日，再諗過</button>` : ""}
-            ${routeSaving(day) ? `<button class="btn wide" id="reorder">${icon("map")}按距離排順路（可以少行約 ${routeSaving(day).saveKm} 公里）</button>` : ""}
             <button class="btn wide" id="swapday">${icon("refresh")}同另一日成日對調</button>
-          </div>
+          </div>` : ""}
         `}
       </section>
 
@@ -6262,7 +6312,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           (sel || (i > 0 && i - 1 === lastStopIx) ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
-      ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。自己加地點，或者撳下面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方）。</p>`}
+      ${units.length ? dayCostHtml(day) : `<p class="hint">呢日仲係空白嘅。撳上面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方），或者自己加地點。</p>`}
 
       ${sel ? `
         <div class="selectbar${sel.target ? " fortarget" : ""}">
@@ -6415,6 +6465,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ...(state.readonly ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
+      .concat(plain(s.cost) ? [`<span class="meta-chip cost" title="AI 估嘅大約使費，以當地為準">${icon("money")}${esc(costLabel(s.cost))}</span>`] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
       .concat(dayHoursChip(s, day))
@@ -6480,7 +6531,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${!selecting && !state.readonly && isShopArea(s) ? `<div class="shophere"><span>${icon("bag")}呢個係一個購物區，唔係一間店</span><button class="btn" data-shophere="${i}">推介呢度嘅商場同店舖</button></div>` : ""}
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
-            ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
+            ${links.length ? `<div class="stopfoot">${footLinks(links)}</div>` : ""}
             ${selecting ? "" : altsHtmlFor(day, s, i)}
             ${!selecting && open ? editorHtml(day, u, i, total) : ""}
           </div>
@@ -6856,10 +6907,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     const toggle = $("#maptoggle");
     if (toggle) toggle.addEventListener("click", () => {
-      if (state.mapsShut.has(day.id)) state.mapsShut.delete(day.id); else state.mapsShut.add(day.id);
+      const nowOpen = !dayMapOpen(day.id);
+      state.mapsShut.delete(day.id); state.mapsOpen.delete(day.id);
+      (nowOpen ? state.mapsOpen : state.mapsShut).add(day.id);
+      try { localStorage.setItem("trip_maps_open", nowOpen ? "1" : "0"); } catch (_){}
       render();
     });
-    if (!state.mapsShut.has(day.id)) initDayMap(day);
+    if (dayMapOpen(day.id)) initDayMap(day);
     autoGeocodeDay(day);          // fire-and-forget; it re-renders as it fills in
 
     wireOpenToggles();
@@ -6877,6 +6931,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     const dayAi = $("#dayai");
     if (dayAi) dayAi.addEventListener("click", () => openDayAiSheet(day));
+    const more = $("#daymore");
+    if (more) more.addEventListener("click", () => { state.toolsOpen = state.toolsOpen === day.id ? null : day.id; render(); });
+    const rain = $("#rainplan");
+    if (rain) rain.addEventListener("click", () => openDayAiSheet(day, { ask: RAIN_ASK, auto: true }));
 
     const reorderBtn = $("#reorder");
     if (reorderBtn) reorderBtn.addEventListener("click", () => openReorderSheet(day));
@@ -6890,6 +6948,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // ---------- 選幾個地點一齊搬 ----------
     const selStart = $("#selstart");
     if (selStart) selStart.addEventListener("click", () => {
+      state.toolsOpen = null;
       state.selectMode = { dayId: day.id, selected: new Set() };
       render();
     });
@@ -6929,6 +6988,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
     const clearBtn = $("#clearday");
     if (clearBtn) clearBtn.addEventListener("click", () => {
+      state.toolsOpen = null;
       dropUnits(new Set(toUnits(day.items).map((u, j) => j)), { all: true, offer: true });
     });
     const selDel = $("#seldel");
@@ -8984,7 +9044,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (loading) return loading;
       return `<div class="sgcta">
         <button class="btn${(d.stays || []).length ? "" : " primary"}" data-stayprefs>${icon("sparkle")}${(d.stays || []).length ? "唔鍾意？叫 AI 推薦其他酒店" : "叫 AI 推薦邊幾晚住邊區"}</button>
-        <button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button></div>`;
+        ${(d.stays || []).length ? `<button class="btn" data-staymanual>${icon("plus")}自己加一間去比較</button>` : ""}</div>`;
     }
     const pf = d.stayPrefs;
     const bk = h => {
@@ -9278,7 +9338,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   function openStayPrefsSheet(){
     const snap = state.snapshot;
-    const pf = Object.assign({ adults: 2, kids: 0, rooms: 1, budget: "唔限", kind: "酒店", focus: ["近車站（行 5 分鐘內）"], other: "" }, snap.stayPrefs || {});
+    const said = snap.stayPrefs ? {} : factsFromText(briefText(snap) || "");
+    const pf = Object.assign({ adults: 2, kids: 0, rooms: 1, budget: "唔限", kind: "酒店", focus: ["近車站（行 5 分鐘內）"], other: "" },
+      said.adults ? { adults: said.adults } : {}, said.kids ? { kids: said.kids } : {}, said.budget ? { budget: said.budget } : {}, snap.stayPrefs || {});
     const num = (k, label, min) => `<div class="field"><label>${label}</label>
       <div class="stepper" data-step="${k}"><button type="button" data-d="-1">−</button><input class="input" inputmode="numeric" data-pf="${k}" value="${pf[k]}" data-min="${min}"><button type="button" data-d="1">＋</button></div></div>`;
     openSheet(`
@@ -10610,7 +10672,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             </div>
             ${s.tip ? `<div class="tipbox">${esc(s.tip)}</div>` : ""}
             ${bookingBoxHtml(s)}
-            ${links.length ? `<div class="stopfoot">${links.join("")}</div>` : ""}
+            ${links.length ? `<div class="stopfoot">${footLinks(links)}</div>` : ""}
             <button class="btn copyrow" data-copyitem="${i}">複製去某一日…${inItin ? "" : suggestLabel(s)}</button>
             ${open ? boardItemEditorHtml(board, s, i) : ""}
           </div>
@@ -11731,6 +11793,13 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // to choose from, so the model is asked for several for the same slot.
   // 「想行街」 is not a stop; the places to shop are. And a day should flow.
   const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
+  // every stop says roughly what it costs; a trip that wants to save is planned that way
+  const COST_HINT = "每個 stop 一定要加 \"cost\" 欄位：每人大約使幾多（入場費；食飯就係人均），用當地貨幣，例如「¥1,200」「¥800–1,500」「免費」。";
+  function budgetHint(){
+    const t = briefText(state.snapshot) + " " + (((state.snapshot.meta || {}).budget) || "");
+    return /慳|平價|平啲|便宜|budget|窮遊|預算有限|唔想使咁多/i.test(t)
+      ? "佢哋想慳錢：優先揀免費或者平嘅景點（公園、神社、街道、市場），食飯揀平價好食嘅（拉麵、定食、市場小食、迴轉壽司），唔好排高級餐廳或者貴嘅體驗；交通揀電車唔好揀的士。" : "";
+  }
   const ROUTE_HINT = "排每日嘅地點要順路：同一區嘅放埋一齊，由一頭行去另一頭，唔好喺幾個區之間來回走。時間只係用嚟排先後，app 會顯示成上晝／下晝；如果某個地方要早啲去（例如排隊、人少、日落），喺 reason 或者 tip 講「建議早啲去」就得。";
   const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店、景點或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。如果問緊幾個唔同時段（例如上晝景點、晏晝食飯），每個時段都俾 3 至 5 個選擇。）";
   function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|推薦|建議|邊度|邊間|店|去邊|去哪|哪裡|哪裏|邊個地方|逛|行街|景點|好去處|地方|睇紅葉|賞|寺|神社|公園|購物|買/i.test(q || ""); }
@@ -11748,9 +11817,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
       sheet.querySelector("#rp-no").addEventListener("click", () => closeLayer());
     });
   }
+  const RAIN_ASK = "落雨或者太凍版：將呢日戶外嘅站（公園、街道、觀景台、市集）換做附近室內嘅（商場、博物館、水族館、室內市場、溫泉），用 edit 換，matchTitle 照抄原本個站；室內嘅、餐廳同酒店唔使郁；區域同順序盡量唔變";
   // what kind of day, one tap each (added to the box, which can still be typed in)
-  const DAY_WANTS = ["多啲景點", "想食好嘢", "行街購物", "自然風景", "文化／寺廟", "輕鬆啲、唔好太趕", "啱小朋友", "室內為主（落雨／太凍）", "影相打卡", "夜景"];
-  function openDayAiSheet(day){
+  const DAY_WANTS = ["多啲景點", "想食好嘢", "行街購物", "自然風景", "文化／寺廟", "輕鬆啲、唔好太趕", "啱小朋友", "室內為主（落雨／太凍）", "影相打卡", "夜景", "慳錢：免費同平價優先"];
+  function openDayAiSheet(day, opts = {}){
     const stops = day.items.filter(i => i.kind === "stop").length;
     const others = (state.snapshot.days || []).filter(d => d.id !== day.id);
     openSheet(`
@@ -11809,7 +11879,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         // while it thinks, the questions fold away and the wait is the whole sheet
         form.hidden = true; if (intro) intro.hidden = true;
         const askedHtml = `<div class="dai-asked">
-          <div class="dai-asked-t"><span>${dayIds.map(id => "Day " + id.replace("day", "")).join("、")}</span>${asked ? esc(asked) : "由 AI 自己決定"}</div>
+          <div class="dai-asked-t"><span>${dayIds.map(id => "Day " + id.replace("day", "")).join("、")}</span>${asked === RAIN_ASK ? "落雨／太凍版：戶外換室內" : asked ? esc(asked) : "由 AI 自己決定"}</div>
           <button class="btn" data-reask>改要求</button></div>`;
         go.disabled = true;
         const stop = thinkingIn(out, dayIds, asked);
@@ -11818,7 +11888,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT;
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + COST_HINT + "\n" + budgetHint();
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
@@ -11876,6 +11946,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       }
       go.addEventListener("click", run);
       q.addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+      if (opts.ask){ q.value = opts.ask; if (opts.auto) run(); }
     });
   }
   // The wait, made the whole sheet: the app's route drawing, large, with a
@@ -12483,6 +12554,70 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const n = Number(s.ratingCount);
     return `<span class="thumb-rate">${icon("star")}${s.rating.toFixed(1)}${Number.isFinite(n) && n > 0 ? `<small>${n.toLocaleString("en-US")} 個評價</small>` : ""}</span>`;
   }
+  // ---------- what it costs ----------
+  // Each AI-placed stop carries "cost": roughly what one person spends there,
+  // in the local money (¥1,200, 免費, ¥800–1,500). A day adds them up, the
+  // trip adds the days — an estimate for planning, never a quote.
+  function localCur(){ return destIsJapan() ? "¥" : destIsKorea() ? "₩" : /台|臺/.test(((state.snapshot || {}).meta || {}).destinationLocal || "") ? "NT$" : ""; }
+  function costLabel(c){ const t = plain(c); return /^(免費|free)/i.test(t) ? "免費" : /人/.test(t) ? t : "每人約 " + t.replace(/^約\s*/, ""); }
+  function costOf(st){
+    const t = plain(st && st.cost);
+    if (!t) return null;
+    if (/免費|free|唔使錢/i.test(t)) return { cur: "", n: 0 };
+    const m = t.replace(/,/g, "").match(/(HK\$|NT\$|US\$|[¥￥$₩€£])?\s*(\d+(?:\.\d+)?)\s*(萬)?(?:\s*[–\-~～至到]\s*(?:HK\$|NT\$|[¥￥$₩])?\s*(\d+(?:\.\d+)?)\s*(萬)?)?/);
+    if (!m) return null;
+    const a = +m[2] * (m[3] ? 10000 : 1), b = m[4] ? +m[4] * (m[5] ? 10000 : 1) : a;
+    let cur = (m[1] || "").replace("￥", "¥");
+    if (!cur && /円|日圓/.test(t)) cur = "¥";
+    if (!cur && /韓圜|韓元|원/.test(t)) cur = "₩";
+    return { cur: cur || localCur(), n: Math.round((a + b) / 2) };
+  }
+  function costSum(stops){
+    const got = stops.map(costOf).filter(Boolean);
+    if (!got.length) return null;
+    const cur = got.find(x => x.cur) ? got.find(x => x.cur).cur : localCur();
+    const n = got.filter(x => !x.cur || x.cur === cur).reduce((a, x) => a + x.n, 0);
+    return { cur, n, known: got.length, of: stops.length };
+  }
+  const fmtCost = (cur, n) => `${cur}${Math.round(n).toLocaleString("en-US")}`;
+  function dayStops(day){ return (day.items || []).filter(i => i.kind === "stop" && plain(i.title) && !/酒店|check.?in|機場|前往|抵達|返程|出發/i.test(plain(i.title))); }
+  function dayCostHtml(day){
+    const st = dayStops(day);
+    if (!st.length) return "";
+    const c = costSum(st);
+    const missing = st.filter(x => !costOf(x)).length;
+    return `<div class="daycost">
+      ${c ? `<div class="daycost-t">${icon("money")}今日大約每人 <b>${esc(fmtCost(c.cur, c.n))}</b><small>門票同食飯，未計酒店同交通${missing ? `；有 ${missing} 個未有估價` : ""}</small></div>` : `<div class="daycost-t">${icon("money")}未知今日大約要使幾多</div>`}
+      ${missing && !state.readonly ? `<button class="btn" data-costday="${esc(day.id)}">${c ? "估埋其餘" : "估吓使費"}</button>` : ""}
+    </div>`;
+  }
+  function tripCost(){
+    const all = (state.snapshot.days || []).flatMap(dayStops);
+    return costSum(all);
+  }
+  // one AI call for a day's missing prices
+  async function estimateCosts(day, btn){
+    const st = dayStops(day).filter(x => !costOf(x));
+    if (!st.length) return;
+    if (btn){ btn.disabled = true; btn.textContent = "估緊…"; }
+    let r = null;
+    try {
+      r = await callAi({ action: "ask", question: `估吓以下每個地方每人大約使幾多錢（入場費、食一餐人均；用當地貨幣，例如「¥1,200」「¥800–1,500」「免費」）。只回 JSON，唔好有其他字：{"costs":[{"title":"照抄名","cost":"¥1,200"}]}\n` + st.map(x => `- ${plain(x.title)}${x.type === "eat" ? "（食飯）" : ""}`).join("\n") });
+    } catch (_){}
+    const t = String((r && (r.aiSummary || r.answer)) || ""), a = t.indexOf("{"), b = t.lastIndexOf("}");
+    let j = null; try { j = a >= 0 ? JSON.parse(t.slice(a, b + 1)) : null; } catch (_){}
+    let n = 0;
+    ((j && j.costs) || []).forEach(x => { const hit = st.find(y => plain(y.title) === plain(x.title)) || st.find(y => plain(y.title).includes(plain(x.title)) || plain(x.title).includes(plain(y.title))); if (hit && plain(x.cost)){ hit.cost = plain(x.cost).slice(0, 30); n++; } });
+    render();
+    if (n) await saveNow(`AI 估咗 ${n} 個地方嘅使費`); else flash((r && r.message) || "今次估唔到，再試一次");
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest && e.target.closest("[data-costday]");
+    if (!b) return;
+    e.preventDefault();
+    const day = dayById(b.dataset.costday);
+    if (day) estimateCosts(day, b);
+  });
   function ratingChip(s){
     if (!Number.isFinite(s.rating)) return "";
     const count = Number.isFinite(s.ratingCount) ? `（${s.ratingCount.toLocaleString("en-US")}）` : "";
@@ -12698,7 +12833,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
     onProgress && onProgress(`AI 諗緊「${label}」…`);
     const notes = [];
     if (edges && edges.first) notes.push("呢批入面有成個行程嘅第一日：一定要留返啱啱抵達目的地嘅安排（例如「抵達機場／車站」、「前往酒店」），唔好一開波就當人已經喺市中心。");
-    notes.push(SHOP_HINT, ROUTE_HINT);
+    { const fl = flightsOf(state.snapshot), o = fl.find(f => f.dir === "out"), bk = fl.find(f => f.dir === "back");
+      if (edges && edges.first && o && (o.arr || o.to)) notes.push(`佢哋${o.arr ? " " + o.arr : ""} 到${o.to ? " " + o.to : ""}：第一日嘅行程由落機之後先開始（過關、攞行李、去酒店大約要 1.5–2 個鐘）。`);
+      if (edges && edges.last && bk && (bk.dep || bk.from)) notes.push(`佢哋最尾一日${bk.dep ? " " + bk.dep : ""} 喺${bk.from ? " " + bk.from : "機場"}起飛：要預 3 個鐘前到機場，之前嘅站要早啲完。`); }
+    notes.push(SHOP_HINT, ROUTE_HINT, COST_HINT, budgetHint());
     const ap = state.areaPlan || {};
     const zones = dayIds.filter(id => ap[id]).map(id => `${id}：主要喺 ${ap[id].areas}${ap[id].theme ? `（${ap[id].theme}）` : ""}`);
     if (zones.length) notes.push("每日嘅區已經分配好，嗰日嘅地點同餐廳都要喺嗰啲區入面或者隔籬，唔好走去第二日嘅區：\n" + zones.join("\n"));
@@ -12747,10 +12885,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
     if (!ids.length) return;
     const firstId = days[0] && days[0].id;
     const lastId = days[days.length - 1] && days[days.length - 1].id;
-    const CHUNK = 3;
+    // two days a call: each day shows up soon after the one before it,
+    // and the pair still avoids repeating each other
+    const CHUNK = 2;
+    state.genStatus = state.genStatus || {};
+    ids.forEach(id => { state.genStatus[id] = "wait"; });
+    render();
     for (let i = 0; i < ids.length; i += CHUNK){
       const chunk = ids.slice(i, i + CHUNK);
-      await generateDaysChunk(chunk, onProgress, { first: chunk.includes(firstId), last: chunk.includes(lastId) });
+      chunk.forEach(id => { state.genStatus[id] = "doing"; });
+      if (state.view === "overview") render();
+      try { await generateDaysChunk(chunk, onProgress, { first: chunk.includes(firstId), last: chunk.includes(lastId) }); }
+      finally { chunk.forEach(id => { delete state.genStatus[id]; }); render(); }
     }
   }
   // First decide which part of town each day is for, so a day stays in one
@@ -12773,7 +12919,50 @@ ${stayBlock}${dayBlocks}${secBlocks}
       if (m && dayById(m[1].toLowerCase())) state.areaPlan[m[1].toLowerCase()] = { areas: m[2].trim().slice(0, 40), theme: (m[3] || "").trim().slice(0, 40) };
     });
   }
+  // Read once from what they wrote and answered: who's going, the budget,
+  // and when they land and leave — so the flight card, the hotel questions
+  // and the plan all start from it instead of asking again.
+  function factsFromText(t){
+    const f = {};
+    const n = (re) => { const m = t.match(re); return m ? +m[1] : null; };
+    const zh = { 一: 1, 兩: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
+    const z = (re) => { const m = t.match(re); return m ? (zh[m[1]] || +m[1] || null) : null; };
+    f.adults = n(/(\d+)\s*個?\s*(?:大人|成人|人去|人行)/) || z(/([一兩二三四五六])\s*個?(?:大人|成人|人去|人行)/) || (/老婆|老公|情侶|兩公婆|男朋友|女朋友|另一半|夫妻/.test(t) ? 2 : null);
+    f.kids = n(/(\d+)\s*個?\s*(?:小朋友|小童|細路|小孩|BB)/i) || z(/([一兩二三四五六])\s*個?(?:小朋友|小童|細路|小孩)/) || 0;
+    if (/慳|平價|平啲|便宜|budget|窮遊|預算有限/i.test(t)) f.budget = "HK$800 以下";
+    else if (/豪|奢華|高級|五星/.test(t)) f.budget = "HK$1,500–2,500";
+    return f;
+  }
+  async function learnTripFacts(onProgress){
+    const snap = state.snapshot;
+    if (snap.factsLearned) return;
+    const text = briefText(snap) || "";
+    const f = factsFromText(text);
+    // landing and leaving times need reading, not matching
+    if (!flightsOf(snap).length && /機|航班|flight|到埗|落機|抵達|走|返香港|返港/i.test(text)){
+      onProgress && onProgress("睇緊你幾時到、幾時走…");
+      try {
+        const r = await withTimeout(callAi({ action: "ask", question: `由下面嘅旅客要求，抽出到埗同離開嘅機場同時間。只回 JSON，唔好有其他字，冇講就留空字串：{"arrive":{"airport":"三字代號例如 KIX","time":"HH:MM"},"depart":{"airport":"三字代號","time":"HH:MM"}}\n要求：${text.slice(0, 1500)}` }), 20000, null);
+        const t2 = String((r && (r.aiSummary || r.answer)) || ""), a = t2.indexOf("{"), b = t2.lastIndexOf("}");
+        const j = a >= 0 ? JSON.parse(t2.slice(a, b + 1)) : null;
+        const hhmm = x => /^\d{1,2}:\d{2}$/.test(String(x || "").trim()) ? String(x).trim().padStart(5, "0") : "";
+        const ap = x => /^[A-Za-z]{3}$/.test(String(x || "").trim()) ? String(x).trim().toUpperCase() : "";
+        const fl = [];
+        if (j && j.arrive && (hhmm(j.arrive.time) || ap(j.arrive.airport))) fl.push({ dir: "out", from: "HKG", to: ap(j.arrive.airport), arr: hhmm(j.arrive.time), date: (snap.meta || {}).dateStart || "", guessed: true });
+        if (j && j.depart && (hhmm(j.depart.time) || ap(j.depart.airport))) fl.push({ dir: "back", from: ap(j.depart.airport), to: "HKG", dep: hhmm(j.depart.time), date: (snap.meta || {}).dateEnd || "", guessed: true });
+        if (fl.length) snap.flights = fl;
+      } catch (_){}
+    }
+    if (!snap.stayPrefs && (f.adults || f.budget)){
+      const ppl = (f.adults || 2) + (f.kids || 0);
+      snap.stayPrefs = { adults: f.adults || 2, kids: f.kids || 0, rooms: ppl <= 3 ? 1 : Math.ceil(ppl / 3), budget: f.budget || "唔限",
+        kind: "酒店", focus: ["近車站（行 5 分鐘內）"], other: "", auto: true };
+    }
+    if (f.budget === "HK$800 以下") snap.meta.budget = "慳";
+    snap.factsLearned = true;
+  }
   async function generateTripFromScratch(onProgress){
+    await learnTripFacts(onProgress);
     const blankDayIds = state.snapshot.days.filter(d => !(d.items || []).length).map(d => d.id);
     await planAreas(blankDayIds, onProgress);
     await generateDaysFor(blankDayIds, onProgress);
