@@ -1850,6 +1850,8 @@ body.readonly .qa-del{display:none;}
 @keyframes genspin{to{transform:rotate(360deg);}}
 .genbanner .txt{flex:1;line-height:1.6;}
 
+.sgpending{display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px 12px;border-radius:var(--r-lg);background:var(--surface-2);font-size:13px;color:var(--ink-soft);}
+.sgpending .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--gold);flex:none;animation:genspin .8s linear infinite;}
 /* ---------- AI 諗行程: thinking stage, summary bar, sticky footer ---------- */
 .dai-think{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 8px 30px;min-height:42vh;}
 .dai-think .ldr{width:190px;height:88px;}
@@ -2281,7 +2283,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-10";
+  const BUILD = "2026-11-17-11";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -8884,7 +8886,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const sg = d.staySuggest;
     const days = d.days || [];
     const dLab = (a, b) => `Day ${a}${b && b !== a ? "–" + b : ""}`;
-    const loading = state.stayLoading ? `<div class="sgloading">${hotelLoaderHtml("AI 搵緊適合你哋嘅住宿區同酒店…")}</div>` : "";
+    const loading = state.stayLoading ? `<div class="sgloading">${hotelLoaderHtml(state.stayLoadingText || "AI 諗緊住邊區最方便…")}</div>` : "";
+    // areas still being filled in, once some hotels are already showing
+    const pend = (state.stayPending || []).length && sg && (sg.hotels || []).length
+      ? `<div class="sgpending"><span class="spin"></span>仲搵緊「${esc(state.stayPending.join("、"))}」嘅酒店，搵到會即刻加入嚟</div>` : "";
     if (!sg || !(sg.hotels || []).length){
       if (loading) return loading;
       return `<div class="sgcta">
@@ -8943,6 +8948,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         `<button type="button" class="pfchip${(state.staySort || "ai") === k ? " on" : ""}" data-staysort="${k}">${l}</button>`).join("")}</div>
       ${(sg.areas || []).length > 1 ? `<div class="sgsort sgfilter">${[["", "全部區"]].concat(sg.areas.map(a => [a.area, a.area])).map(([k, l]) =>
         `<button type="button" class="pfchip${(state.stayArea || "") === k ? " on" : ""}" data-stayarea="${esc(k)}">${esc(l)}</button>`).join("")}</div>` : ""}
+      ${pend}
       <div class="sghotels">${sortedStayIdx(sg.hotels).filter(k => !state.stayArea || sg.hotels[k].area === state.stayArea).map(k => { const h = sg.hotels[k]; return `
         <div class="sgh${h.fresh ? " fresh" : ""}">
           <button class="sgh-x" data-stayskip="${k}" title="唔要呢間" aria-label="唔要「${esc(h.name)}」">×</button>
@@ -9243,35 +9249,87 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         stops: (d.items || []).filter(x => x.kind === "stop").map(x => plain(x.title)).filter(Boolean) })),
     });
     onProgress && onProgress("AI 諗緊邊幾晚住邊區…");
-    state.stayLoading = true;
+    state.stayLoading = true; state.stayLoadingText = "AI 諗緊住邊區最方便…";
     if (state.view === "overview" || state.view === "stays"){ render(); requestAnimationFrame(() => { const el = document.querySelector(".sgloading"); if (el) el.scrollIntoView({ block: "center", behavior: "smooth" }); }); }
-    let r;
-    try {
-      // quick: names and areas first (no web search), the price, room and
-      // station for each hotel are looked up after, one card at a time
-      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "stay-suggest", quick: true, text: trip, today: localIso(new Date()) }) });
-      r = await res.json().catch(() => ({ ok: false, message: "伺服器冇回覆" }));
-    } finally { state.stayLoading = false; }
-    if (!r || r.ok === false || !r.stays) throw new Error((r && r.message) || "建議唔到");
-    const sg = r.stays;
-    // show the AI's list straight away; the Google checks (place, rating,
-    // photo, the walk to the station) fill in behind it, several at once
+    const repaint = () => { if (state.view === "overview" || state.view === "stays") render(); };
+    const post = async (body, ms) => {
+      try {
+        const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+          body: JSON.stringify(Object.assign({ today: localIso(new Date()) }, body)) }), ms, null);
+        if (!res) return { ok: false, message: "AI 太耐冇回覆，再撳一次試吓" };
+        return await res.json().catch(() => ({ ok: false, message: res.status === 546 ? "AI 今次諗得太耐，再撳一次試吓" : "伺服器冇回覆" }));
+      } catch (e){ return { ok: false, message: e.message }; }
+    };
     const old = ((snap.staySuggest || {}).hotels || []).map(h => Object.assign(h, { fresh: false }));
     const nameKey = h => plain(h.local || h.name).toLowerCase();
     const seenName = new Set(old.map(nameKey));
-    const added = sg.hotels.filter(h => !seenName.has(nameKey(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
-    // areas: the latest description of each wins, areas seen before stay
     const areas = new Map(((snap.staySuggest || {}).areas || []).map(a => [a.area, a]));
-    if ((sg.areas || []).some(a => a.best)) areas.forEach(a => { a.best = false; });
-    (sg.areas || []).forEach(a => areas.set(a.area, a));
-    snap.staySuggest = { at: new Date().toISOString(), plan: (sg.plan || []).length ? sg.plan : ((snap.staySuggest || {}).plan || []),
-      areas: [...areas.values()], hotels: [...added, ...old] };
-    state.stayArea = "";
-    render();
-    scrollToFreshStay();
-    onProgress && onProgress(`喺 Google 地圖核實緊 ${added.length} 間酒店…`);
-    await runBounded(added, 6, async h => {
+    const addAreas = list => {
+      if ((list || []).some(a => a.best)) areas.forEach(a => { a.best = false; });
+      (list || []).forEach(a => areas.set(a.area, a));
+    };
+    const allAdded = [];
+    // hotels from one answer: shown at once, then checked on Google behind them
+    const takeHotels = async (sg) => {
+      const added = (sg.hotels || []).filter(h => !seenName.has(nameKey(h))).map(h => Object.assign(h, { fresh: true, at: new Date().toISOString() }));
+      added.forEach(h => seenName.add(nameKey(h)));
+      if (!added.length) return;
+      allAdded.push(...added);
+      snap.staySuggest.hotels = [...added, ...snap.staySuggest.hotels];
+      if (allAdded.length === added.length){ state.stayLoading = false; }
+      repaint();
+      if (allAdded.length === added.length) scrollToFreshStay();
+      await verifyHotels(added);
+      repaint();
+    };
+    let ok = false, why = "";
+    try {
+      // 1. which areas — small and quick, so there is something to read
+      const a = await post({ mode: "stay-areas", text: trip }, 70000);
+      const areaList = a && a.ok !== false && a.stays ? (a.stays.areas || []) : [];
+      if (areaList.length){
+        addAreas(areaList);
+        snap.staySuggest = { at: new Date().toISOString(), plan: (a.stays.plan || []).length ? a.stays.plan : ((snap.staySuggest || {}).plan || []),
+          areas: [...areas.values()], hotels: [...old] };
+        const names = areaList.map(x => x.area).slice(0, 4);
+        state.stayPending = names.slice();
+        state.stayLoadingText = `揀咗住宿區：${names.join("、")}。逐區搵緊酒店…`;
+        state.stayArea = "";
+        repaint();
+        onProgress && onProgress(`逐區搵緊酒店：${names.join("、")}`);
+        // 2. each area's hotels, all at once; whichever answers first shows first
+        const base = JSON.parse(trip);
+        await Promise.all(names.map(async area => {
+          const t = JSON.stringify(Object.assign({}, base, { "今次只要": `淨係「${area}」呢一區，2–3 間酒店；areas 只寫呢區，plan 留空陣列` }));
+          const r = await post({ mode: "stay-suggest", quick: true, text: t }, 100000);
+          state.stayPending = (state.stayPending || []).filter(x => x !== area);
+          if (r && r.ok !== false && r.stays){ ok = true; await takeHotels(r.stays); }
+          else { why = (r && r.message) || why; repaint(); }
+        }));
+      } else {
+        // the areas step failed: the one-go search, as before
+        state.stayLoadingText = "AI 搵緊適合你哋嘅住宿區同酒店…";
+        repaint();
+        const r = await post({ mode: "stay-suggest", quick: true, text: trip }, 140000);
+        if (r && r.ok !== false && r.stays){
+          addAreas(r.stays.areas);
+          snap.staySuggest = { at: new Date().toISOString(), plan: (r.stays.plan || []).length ? r.stays.plan : ((snap.staySuggest || {}).plan || []),
+            areas: [...areas.values()], hotels: [...old] };
+          ok = true; await takeHotels(r.stays);
+        } else why = (r && r.message) || (a && a.message) || "";
+      }
+    } finally { state.stayLoading = false; state.stayPending = []; }
+    if (!ok && !allAdded.length) throw new Error(why || "建議唔到，再試一次");
+    // the same hotel twice (now that Google has named it) is kept once
+    const byPlace = new Map();
+    snap.staySuggest.hotels = snap.staySuggest.hotels.filter(h => { if (!h.placeId) return true; if (byPlace.has(h.placeId)) return false; byPlace.set(h.placeId, 1); return true; });
+    if (state.view === "overview" || state.view === "stays") render();
+    return allAdded.length;
+  }
+  // each hotel found on Google: its place, rating, photo, and the walk to
+  // the station timed for real rather than trusted from the AI
+  async function verifyHotels(list){
+    await runBounded(list, 6, async h => {
       try {
         const q = [h.local || h.name, h.area].filter(Boolean).join(" ");
         const pr = await callAi({ action: "place-search", query: q });
@@ -9283,17 +9341,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (Number.isFinite(p.rating)){ h.rating = p.rating; h.ratingCount = p.ratingCount; }
         await Promise.all([
           fetchStoredPhoto({ placeId: p.placeId, title: h.name }).then(ph => { if (ph && ph.url) h.photoUrl = ph.url; }).catch(() => {}),
-          // time the walk to the station ourselves rather than trust a guess
           h.station ? callAi({ action: "transit", from: { placeId: p.placeId }, to: { text: h.station } })
             .then(t => { if (t && t.ok !== false && t.text) h.walk = t.text; }).catch(() => {}) : null,
         ]);
       } catch (_){}
     });
-    // the same hotel twice (now that Google has named it) is kept once
-    const byPlace = new Map();
-    snap.staySuggest.hotels = snap.staySuggest.hotels.filter(h => { if (!h.placeId) return true; if (byPlace.has(h.placeId)) return false; byPlace.set(h.placeId, 1); return true; });
-    if (state.view === "overview" || state.view === "stays") render();
-    return added.length;
   }
   function scrollToFreshStay(){
     requestAnimationFrame(() => {

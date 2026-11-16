@@ -43,26 +43,52 @@ const fallbackModel = () => (Deno.env.get("GEMINI_FALLBACK_MODEL") || "").trim()
 const retryable = (m: string) =>
   /429|RESOURCE_EXHAUSTED|quota|503|UNAVAILABLE|high demand|overloaded/i.test(m);
 
-async function callGemini(parts: unknown[], search = false): Promise<string> {
+// fast: a short list the model doesn't need to deliberate over (hotel names,
+// areas) — it is told to think less, which is most of the wait. Every call
+// gives up before Supabase's own limit (~150 s, which answers 546 and nothing
+// the app can show), so the family gets a message instead of an empty page.
+let noThinkingLevel = false;     // a model that rejects thinkingLevel, once seen
+async function callGemini(parts: unknown[], search = false, opts: { fast?: boolean; ms?: number } = {}): Promise<string> {
   let last = "Gemini key 未設定";
   let firstErr = "";        // the configured model's own failure is the one worth reporting
   const models = [...new Set([model(), fallbackModel()])];
   const keys = geminiKeys();
+  const started = Date.now();
+  const budget = opts.ms || 115000;
   models: for (const m of models) for (const [ki, key] of keys.entries()) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Search grounding and JSON mode can't be combined, so a searched
-        // answer comes back as text and is parsed the same forgiving way.
-        body: JSON.stringify(search
-          ? { contents: [{ parts }], tools: [{ google_search: {} }] }
-          : { contents: [{ parts }], generationConfig: { responseMimeType: "application/json" } }),
-      },
-    );
+    const left = budget - (Date.now() - started);
+    if (left < 5000) throw new Error("TIMEOUT");
+    const gen: Record<string, unknown> = search ? {} : { responseMimeType: "application/json" };
+    if (opts.fast && !noThinkingLevel) gen.thinkingConfig = { thinkingLevel: "low" };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), left);
+    let res: Response;
+    try {
+      res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ac.signal,
+          // Search grounding and JSON mode can't be combined, so a searched
+          // answer comes back as text and is parsed the same forgiving way.
+          body: JSON.stringify({ contents: [{ parts }], ...(search ? { tools: [{ google_search: {} }] } : {}),
+            ...(Object.keys(gen).length ? { generationConfig: gen } : {}) }),
+        },
+      );
+    } catch (e) {
+      clearTimeout(timer);
+      if (ac.signal.aborted) throw new Error("TIMEOUT");
+      throw e;
+    }
+    clearTimeout(timer);
     if (!res.ok) {
       last = `Gemini error ${res.status} (model=${m}${search ? ", search" : ""}, key ${ki + 1}/${keys.length}): ${(await res.text()).slice(0, 300)}`;
+      // a model without thinkingLevel: drop it and ask the same key again
+      if (res.status === 400 && /thinking/i.test(last) && gen.thinkingConfig && !noThinkingLevel) {
+        noThinkingLevel = true;
+        return callGemini(parts, search, { ...opts, ms: budget - (Date.now() - started) });
+      }
       console.error(last);
       if (!firstErr) firstErr = last;
       if (retryable(last)) continue;
@@ -81,6 +107,7 @@ async function callGemini(parts: unknown[], search = false): Promise<string> {
 // The family needs to know whether to wait a minute or whether something is
 // misconfigured, so the status and the model ride along in the message.
 function whyFailed(m: string): string {
+  if (/TIMEOUT/.test(m)) return "AI 今次諗得太耐（超過兩分鐘），再撳一次通常會快啲。";
   const mod = (m.match(/model=([^,)]+)/) || [])[1] || "";
   const tag = mod ? `（${mod}）` : "";
   if (/\b503\b|UNAVAILABLE|high demand|overloaded/i.test(m)) return `AI 模型而家太多人用緊${tag}，後備模型都試過，等一兩分鐘再撳。`;
@@ -561,6 +588,18 @@ ${trip}
 只回覆一個 JSON（唔好有其他字、唔好 code fence）：
 {"areas":[{"area":"梅田","best":true,"pros":"","cons":"","goodFor":""}],"plan":[{"fromDay":1,"toDay":3,"area":"梅田","why":""}],"hotels":[{"name":"中文名","local":"當地語言名","area":"梅田","fromDay":1,"toDay":3,"price":"每晚約 HK$900–1,300","highlights":["",""],"station":"最近車站名（當地語言）","walk":"步行約 5 分鐘","roomSize":"約 25㎡，3 人住得落","score":8,"scoreWhy":"一句"}]}`;
 
+// Step one of a hotel search: only which areas suit the trip (and which
+// nights where). Small and quick, so the page has something to show while
+// each area's hotels are being picked, one request per area.
+const STAY_AREAS_PROMPT = (trip: string, today: string) => `你係香港人嘅旅遊顧問。下面係一個家庭嘅行程（JSON），今日係 ${today}。
+淨係答住宿區，唔使揀酒店：
+1. areas：3 個最適合呢個行程嘅住宿區（如果 JSON 有「想住嘅區」就只寫嗰區）。每區寫 pros（一句）、cons（一句）、goodFor（啱咩人），最適合嗰個 best:true（得一個）。
+2. plan：如果有幾晚喺第二個城市住會慳好多車程，寫邊幾晚（fromDay / toDay，第幾日，toDay 係退房嗰日）住邊區；全程住同一區就留空陣列。
+全部用廣東話，每句最多 30 字。
+行程：
+${trip}
+只回覆 JSON：{"areas":[{"area":"","best":true,"pros":"","cons":"","goodFor":""}],"plan":[{"fromDay":1,"toDay":3,"area":"","why":""}]}`;
+
 // One hotel the family found themselves, given the same analysis as the
 // AI's own picks so they compare like for like.
 const STAY_CHECK_PROMPT = (q: string, today: string) => `你係香港人嘅旅遊顧問，今日係 ${today}。下面 JSON 有一間佢哋自己揀嘅酒店（hotel）同佢哋嘅行程、人數、要求。
@@ -642,6 +681,15 @@ Deno.serve(async (req) => {
   if (!text && !images.length) return json({ ok: false, message: "冇收到任何檔案或者文字。" });
   const today = iso(body?.today) || new Date().toISOString().slice(0, 10);
 
+  if (body?.mode === "stay-areas") {
+    let raw = "";
+    try { raw = await callGemini([{ text: STAY_AREAS_PROMPT(str(text, 12000), today) }], false, { fast: true, ms: 60000 }); }
+    catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
+    const out = cleanStays(parseJson(raw));
+    if (!out.areas.length) return json({ ok: false, message: "AI 今次諗唔到住邊區，再試一次。" });
+    return json({ ok: true, stays: { areas: out.areas, plan: out.plan } });
+  }
+
   if (body?.mode === "stay-suggest") {
     // quick: names, areas and nights only, from the model's own knowledge —
     // a few seconds instead of a web search; the app then checks each hotel
@@ -649,7 +697,7 @@ Deno.serve(async (req) => {
     const quick = body?.quick === true;
     const QUICK = "\n【快速模式】唔使上網搜尋。price、station、walk、roomSize、scoreWhy 留空字串，score 用 null。只寫你肯定真實存在、仲營業緊嘅酒店，唔肯定就唔好寫。";
     let raw = "";
-    try { raw = await callGemini([{ text: STAY_PROMPT(str(text, 12000), today) + (quick ? QUICK : "") }], !quick); }
+    try { raw = await callGemini([{ text: STAY_PROMPT(str(text, 12000), today) + (quick ? QUICK : "") }], !quick, { fast: quick, ms: quick ? 90000 : 115000 }); }
     catch (e) { return json({ ok: false, message: whyFailed(String(e)) }); }
     const out = cleanStays(parseJson(raw));
     if (!out.hotels.length) return json({ ok: false, message: "AI 今次冇建議到酒店，再試一次。" });

@@ -10,6 +10,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   else { fail++; console.log('  FAIL ' + n + (x !== undefined ? '  → ' + JSON.stringify(x) : '')); } };
 
 const quickFlags = [];
+  const areaAsks = [];
 const SUGGEST = { ok: true, stays: {
   areas: [{ area: '明洞', best: true, pros: '三日都喺市中心，唔使搬酒店', cons: '晚上人多', goodFor: '第一次去' },
           { area: '弘大', best: false, pros: '後生熱鬧', cons: '去景福宮要轉車', goodFor: '鍾意夜生活' }],
@@ -43,6 +44,8 @@ const SUGGEST = { ok: true, stays: {
         station: 'なんば駅', walk: '步行約 5 分鐘', highlights: ['近道頓堀'], convenience: '去京都要轉車，但食嘢行街好方便',
         score: 7, scoreWhy: '行街方便，但離梅田景點遠少少' } }) });
     }
+    if (/trip-import/.test(url) && body.mode === 'stay-areas'){ areaAsks.push(body.text || '');
+      return new Promise(res => setTimeout(res, 300)).then(() => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, stays: { areas: SUGGEST.stays.areas, plan: SUGGEST.stays.plan || [] } }) })); }
     if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); suggestText.push(body.text || ''); quickFlags.push(body.quick === true);
       return new Promise(res => setTimeout(res, 600)).then(() => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) })); }
     if (/place-photo-store/.test(url)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'http://localhost:8799/icons/icon-v2.svg' }) });
@@ -143,7 +146,8 @@ const SUGGEST = { ok: true, stays: {
   await p.waitForTimeout(2500);
   ok('先攞酒店名（快速模式），詳情之後逐間補', quickFlags.length > 0 && quickFlags.every(Boolean), quickFlags);
   ok('搵完動畫就走', await p.locator('.sgloading').count() === 0);
-  ok('唔使打字都撳得「AI 推介」', sentText.length === n0 + 1 && !/今次額外要求/.test(sentText[sentText.length - 1] || ''));
+  ok('唔使打字都撳得「AI 推介」', sentText.length > n0 && sentText.slice(n0).every(t => !/今次額外要求/.test(t)));
+  ok('先問住邊區，再逐區搵酒店', areaAsks.length >= 1 && sentText.slice(n0).every(t => /淨係「/.test(t)), sentText.slice(n0).map(t => (t.match(/淨係「[^」]+」/) || [''])[0]));
   ok('要求擺喺掣上面', await p.evaluate(() => { const a = document.querySelector('.sgprefs'), b = document.querySelector('[data-sgask]'); return !!(a && b && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)); }));
   // searching again keeps what was found and asks for different ones
   // the questions can be saved without starting a search
