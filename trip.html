@@ -1151,6 +1151,8 @@ img{max-width:100%;}
 .stopcard .meta-chip,.stopcard .niecepick{border:0;background:var(--surface-2);border-radius:999px;padding:4px 10px;font-size:12px;}
 .stopcard .meta-chip.rating{background:transparent;padding-left:0;}
 .stopcard .meta-chip.closed{background:var(--danger-bg);}
+.btn.findopen{min-height:34px;padding:0 12px;font-size:12.5px;border-color:color-mix(in srgb,var(--danger) 40%,var(--rule));color:var(--danger);}
+.btn.findopen .ldr{width:34px;height:16px;}
 /* the tip: a labelled note, not a quotation */
 .faroff{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 16px 4px;padding:10px 12px;border-radius:12px;
   background:var(--warn-bg);color:var(--warn);font-size:13px;line-height:1.55;}
@@ -2213,7 +2215,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-2";
+  const BUILD = "2026-11-16-3";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6131,7 +6133,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const closedToday = stopClosedOnDay(s, day);
     const chips = []
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
-      .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`] : [])
+      .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`,
+        ...(state.readonly ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
@@ -6477,6 +6480,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       st.farOk = true; render(); saveNow(`確認「${plain(st.title)}」個位置冇錯`);
     }));
 
+    document.querySelectorAll("[data-findopen]").forEach(el => el.addEventListener("click", async ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const st = toUnits(day.items)[+el.dataset.findopen].stop;
+      el.disabled = true; el.innerHTML = `${loaderSvg()}搵緊附近有開嘅…`;
+      const ok = await replaceClosedStop(day, st);
+      if (!ok){ el.disabled = false; el.innerHTML = `${icon("refresh")}再試`; flash("附近搵唔到嗰日有開、評分好嘅，可以撳 ＋ 自己揀"); }
+    }));
+
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", ev => {
       ev.preventDefault();
       ev.stopPropagation();          // sits inside the card button; don't open the editor
@@ -6801,6 +6812,69 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (b.food && st.type !== "eat") st.type = "eat";
     if (Number.isFinite(b.rating) && !Number.isFinite(st.rating)){ st.rating = b.rating; st.ratingCount = b.ratingCount; }
     return true;
+  }
+  // After the AI plans the days: anything it put on a day it is shut is
+  // swapped for an open one nearby (the AI can't know opening days).
+  async function fixClosedAcrossTrip(onProgress){
+    for (const day of state.snapshot.days || []){
+      if (!weekdayCharOfDate(day.date)) continue;
+      for (const st of toUnits(day.items).map(u => u.stop).filter(x => x && x.placeId)){
+        if (!Array.isArray(st.weekdayText)) await enrichHours(st);
+        if (stopClosedOnDay(st, day)){
+          onProgress && onProgress(`「${cleanPlaceName(plain(st.title))}」嗰日休息，搵緊附近有開嘅…`);
+          await replaceClosedStop(day, st).catch(() => {});
+        }
+      }
+    }
+  }
+  // A place that is shut on its day is swapped for a well-rated one nearby
+  // that is open then, of the same kind (「鰻魚飯」 for an eel lunch). The
+  // shut one is kept as a backup under it, not thrown away.
+  async function replaceClosedStop(day, st){
+    const units = toUnits(day.items), i = units.findIndex(u => u.stop === st);
+    if (i < 0) return false;
+    const pt = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" ? { lat: Number(x.lat), lng: Number(x.lng), name: cleanPlaceName(plain(x.title)) } : null;
+    let prev = null, next = null;
+    for (let j = i - 1; j >= 0; j--) if (units[j].stop && pt(units[j].stop)){ prev = units[j].stop; break; }
+    for (let j = i + 1; j < units.length; j++) if (units[j].stop && pt(units[j].stop)){ next = units[j].stop; break; }
+    const anchors = [pt(st) || pt(prev), pt(next)].filter(Boolean);
+    if (!anchors.length) return false;
+    const eat = st.type === "eat" || st.isFood;
+    const kind = eat ? "eat" : "see";
+    // what it was for: the words after 「午餐：」, else its own name's kind
+    const label = (plain(st.title).match(/^(早餐|午餐|晏晝|晚餐|宵夜|下午茶|甜品)\s*[：:]/) || [])[1] || "";
+    const want = (plain(st.title).split(/[：:]/)[1] || "").replace(/傳統|地道|正宗|人氣|高級|名店|老店|特色/g, "").trim().slice(-6);
+    const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean);
+    let list = await suggestFor(anchors, kind, skip, want, {});
+    if (!list.length && want) list = await suggestFor(anchors, kind, skip, "", {});
+    for (const p of list.slice(0, 6)){
+      const probe = { placeId: p.placeId, eatMeta: [] };
+      await enrichHours(probe);
+      if (!Array.isArray(probe.weekdayText) || stopClosedOnDay(probe, day)) continue;
+      // keep the shut one as a backup, then become the new place
+      const old = {};
+      Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) old[k] = st[k]; });
+      const name = p.name_zh || p.name;
+      Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) delete st[k]; });
+      Object.assign(st, blankStop(), { kind: "stop", time: st.time, type: st.type, alts: [...(st.alts || []), old],
+        title: label ? `${label}：${name}` : name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "",
+        placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount,
+        weekdayText: probe.weekdayText, eatMeta: probe.eatMeta,
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+      syncMapPoints(day);
+      render();
+      await saveNow(`「${plain(old.title)}」星期${weekdayCharOfDate(day.date)}休息，換咗做「${name}」（原本嗰間做咗後備）`);
+      flash(`換咗做「${name}」，原本嗰間收埋做後備`);
+      const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
+      let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
+      refreshTransit(day, [k, nx].filter(v => v > 0));
+      await Promise.all([enrichPhoto(st, name), enrichLocalName(st).catch(() => {}),
+        fetchBrief(st, kind).then(b => applyBrief(st, b, kind)).catch(() => {})]);
+      if (state.view === day.id) render();
+      await saveNow(`補返「${name}」嘅相同介紹`, true);
+      return true;
+    }
+    return false;
   }
   // An airport stop matched to the wrong airport (before airports were
   // pinned) is put right: its place, map link and the legs either side.
@@ -11507,6 +11581,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       day.items = fromUnits(units);
       render();
       await saveNow(c.reason || `加咗「${plain(stop.title) || "一個地點"}」`);
+      // the AI can't know opening days; Google can
+      if (stopClosedOnDay(stop, day)) await replaceClosedStop(day, stop).catch(() => {});
       // the AI's own travel note assumed a different neighbour; ask Google instead
       await refreshTransit(day, [at, at + 1]);
       return "";
@@ -12100,7 +12176,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
       ...(() => {
         const want = String(state.snapshot.tripBrief || "") + " " + String(m.requirements || "");
         const kinds = ["紅葉", "銀杏", "櫻花", "賞楓", "梅花", "紫藤", "繡球花", "薰衣草", "燈飾", "雪景"].filter(k => want.includes(k));
-        return kinds.length ? [{ topic: `${where} ${kinds.join("／")}：邊度睇、幾時最靚（揀近行程每日去嘅地方，每個地點獨立一行，格式「地點名：點解好、幾時去」）`, label: `${kinds.join("／")}地點` }] : [];
+        const k = kinds.join("／");
+        return kinds.length ? [{ topic: `${where} ${k}：邊度睇、幾時最靚（淨係寫可以睇${k}嘅地點，唔好寫購物、餐廳、眼鏡店或者行程入面其他唔係睇${k}嘅地方；揀近行程每日去嘅地方，每個地點獨立一行，格式「地點名：點解好、幾時去」）`, label: `${k}地點` }] : [];
       })(),
       { topic: `${where} 交通、上網卡同貨幣`, label: "交通／上網／貨幣" },
       { topic: `${where} 行李同出發前準備清單`, label: "行李清單" },
@@ -12110,6 +12187,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
   async function recommendStandardSections(onProgress){
     const snap = state.snapshot;
     if (!Array.isArray(snap.sections)) snap.sections = [];
+    // an earlier wording of the 紅葉／銀杏 list let shops on the plan (an
+    // OWNDAYS) in; that version is written again with the stricter one
+    const now = new Set(standardSectionTopics().map(x => x.topic));
+    snap.sections = snap.sections.filter(x => !(x && x.source === "ai" && /：邊度睇、幾時最靚（/.test(x.topic || "") && !now.has(x.topic)));
     for (const { topic, label } of standardSectionTopics()){
       if (snap.sections.some(s => s.topic === topic)) continue;
       onProgress && onProgress(`AI 幫你寫緊${label}…`);
@@ -12131,6 +12212,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     genBanner("AI 幫你砌緊行程，可以留喺呢版等，或者切去第日睇——完成會有提示。");
     try {
       await generateTripFromScratch(msg => genBanner(msg));
+      await fixClosedAcrossTrip(msg => genBanner(msg));
       await recommendAccommodation(msg => genBanner(msg));
       await fillWeatherRows(msg => genBanner(msg));
       await recommendStandardSections(msg => genBanner(msg));
