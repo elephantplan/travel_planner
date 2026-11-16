@@ -344,7 +344,8 @@ section.triplist{margin-bottom:36px;}
 .topbar-r{display:flex;gap:8px;align-items:center;}
 .acctbtn{height:34px;min-width:34px;padding:0 12px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);
   font:600 13px var(--f-body);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;}
-.acctbtn img{width:34px;height:34px;margin:0 -12px;border-radius:50%;object-fit:cover;}
+.acctbtn:has(img){padding:0;width:34px;flex:0 0 34px;}
+.acctbtn img{width:34px;height:34px;flex:0 0 34px;border-radius:50%;object-fit:cover;display:block;}
 .acct-row{display:flex;gap:14px;align-items:center;margin:8px 0 10px;}
 .acct-av{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11.5px;color:var(--ink-faint);}
 .acct-avimg{width:68px;height:68px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:var(--surface-2);font:700 26px var(--f-body);color:var(--ink);}
@@ -352,7 +353,8 @@ section.triplist{margin-bottom:36px;}
 .acctbtn .av-letter{font-weight:700;}
 .acct-more{margin:6px 0 10px;font-size:13px;} .acct-more summary{cursor:pointer;color:var(--ink-faint);}
 .acct-keep{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0 10px;line-height:1.5;}
-.prefs{padding:14px 18px 4px;border-bottom:1px solid var(--rule);}
+.prefs{padding:4px 0;}
+.prefsheet{max-height:86vh;overflow-y:auto;}
 .prefs-h{margin:0 0 10px;font-size:13px;color:var(--ink-faint);}
 .pf-g{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;}
 .pf-g > span{flex-basis:100%;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);}
@@ -567,27 +569,9 @@ section.triplist{margin-bottom:36px;}
       </div>
     </div>
     <div class="field">
-      <div class="prefs" id="prefs">
-        <p class="prefs-h">話俾 AI 知你想點玩（揀幾多都得，唔揀都得）</p>
-        <div class="pf-g" data-pf="who" data-one><span>同邊個去</span>
-          <button type="button">自己</button><button type="button">情侶</button><button type="button">朋友</button><button type="button">有小朋友</button><button type="button">有長者</button></div>
-        <div class="pf-g" data-pf="pace" data-one><span>節奏</span>
-          <button type="button">輕鬆，每日 2–3 個地方</button><button type="button">適中</button><button type="button">盡量去多啲</button></div>
-        <div class="pf-g" data-pf="like"><span>想多啲</span>
-          <button type="button">景點</button><button type="button">美食</button><button type="button">行街購物</button><button type="button">自然風景</button><button type="button">咖啡店</button><button type="button">博物館／藝術</button><button type="button">主題樂園</button><button type="button">溫泉</button></div>
-        <div class="pf-g" data-pf="eat"><span>想食</span><span class="pf-eatbtns" style="display:contents"></span></div>
-        <label class="pf-must">仲有咩想食<input class="input" id="pf-eatmore" placeholder="例如：鰻魚飯、壽喜燒、某間想去嘅餐廳"></label>
-        <div class="pf-g" data-pf="budget" data-one><span>食飯預算</span>
-          <button type="button">平啲</button><button type="button">中等</button><button type="button">貴啲都得</button></div>
-        <div class="pf-times">
-          <label>第一日幾點到<input class="input" type="time" id="pf-arrive"></label>
-          <label>最後一日幾點走<input class="input" type="time" id="pf-leave"></label>
-        </div>
-        <label class="pf-must">一定要去／要做嘅嘢<input class="input" id="pf-must" placeholder="例如：澀谷 OWNDAYS 攞眼鏡、睇紅葉"></label>
-      </div>
-      <label for="f-req">仲有咩要求？</label>
-      <textarea class="input" id="f-req" placeholder="例如：3個大人1個小朋友、想輕鬆啲唔好行太多路、預算中等、鍾意食海鮮…"></textarea>
-      <div class="hint">留空都得，AI 會自己睇住辦。</div>
+      <label for="f-req">有咩要求？</label>
+      <textarea class="input" id="f-req" placeholder="例如：2 個人，朝早 8 點機 1 點到成田，星期日 6 點機走。想去澀谷行街、睇紅葉、食好嘢，唔好太趕…"></textarea>
+      <div class="hint">寫得越多 AI 排得越啱。你冇提到嘅嘢，開始之前會問你幾條（可以略過）。</div>
     </div>
     <div id="form-err"></div>
     <button class="btn primary wide" id="f-go">開始規劃</button>
@@ -775,7 +759,6 @@ section.triplist{margin-bottom:36px;}
       e.preventDefault();
       const p = places[+btn.dataset.pick];
       picked = { name:p.name, address:p.address||"", lat:p.lat, lng:p.lng };
-      paintFoods();
       destInput.value = p.name;
       clearSuggest();
       renderPicked();
@@ -792,14 +775,6 @@ section.triplist{margin-bottom:36px;}
   const errBox = $("#form-err");
 
   function todayIso(){ return new Date().toISOString().slice(0,10); }
-  // The quick choices, as sentences the AI plans from. Arrival and leaving
-  // times matter most: they decide how much fits on the first and last day.
-  $("#prefs").addEventListener("click", e => {
-    const b = e.target.closest(".pf-g button"); if (!b) return;
-    const g = b.parentElement;
-    if (g.hasAttribute("data-one")) g.querySelectorAll("button").forEach(x => { if (x !== b) x.classList.remove("on"); });
-    b.classList.toggle("on");
-  });
   // what there is to eat depends on where: the choices follow the destination
   const FOODS = [
     [/japan|日本|tokyo|osaka|kyoto|東京|大阪|京都|福岡|北海道|沖繩|名古屋/i, ["壽司／海鮮丼", "拉麵", "燒肉／和牛", "壽喜燒／涮涮鍋", "鰻魚飯", "天婦羅", "居酒屋", "炸豬扒", "烏冬／蕎麥麵", "甜品／喫茶店", "Tabelog 百名店"]],
@@ -809,17 +784,47 @@ section.triplist{margin-bottom:36px;}
     [/china|中國|上海|北京|成都|廣州|深圳|重慶/i, ["當地名菜", "火鍋", "小籠包／點心", "烤鴨", "麵食", "串串／燒烤", "小食街", "茶館", "甜品"]],
     [/./, ["當地名物", "海鮮", "燒肉／扒房", "麵食", "街頭小食", "甜品／咖啡店", "高分／名店", "酒吧"]],
   ];
-  function paintFoods(){
-    const where = picked ? `${picked.name} ${picked.address}` : $("#f-dest") ? $("#f-dest").value : "";
-    const row = FOODS.find(f => f[0].test(where || " "));
-    const box = document.querySelector(".pf-eatbtns");
-    const key = row[1].join("|");
-    if (box.dataset.key === key) return;
-    box.dataset.key = key;
-    box.innerHTML = row[1].map(x => `<button type="button">${esc(x)}</button>`).join("");
+  function foodsFor(){
+    const where = picked ? `${picked.name} ${picked.address}` : "";
+    return FOODS.find(f => f[0].test(where || " "))[1];
   }
-  paintFoods();
-  $("#f-dest").addEventListener("input", paintFoods);
+  // Before planning: only what the request did not already say. Each test
+  // is what would count as "they told us".
+  const ASKS = [
+    { k: "who", one: true, label: "同邊個去", said: /大人|小朋友|細路|BB|長者|老人|情侶|朋友|自己|一個人|家人|屋企|爸|媽|老公|老婆|男朋友|女朋友|\d\s*個?人|蜜月/i,
+      opts: ["自己", "情侶", "朋友", "有小朋友", "有長者"] },
+    { k: "pace", one: true, label: "節奏", said: /輕鬆|緊密|慢慢|趕|悠閒|唔好行太多|chill|去多啲|盡量/i,
+      opts: ["輕鬆，每日 2–3 個地方", "適中", "盡量去多啲"] },
+    { k: "like", label: "想多啲", said: /景點|購物|行街|買嘢|風景|咖啡|博物館|樂園|溫泉|紅葉|櫻花|銀杏|shopping|影相/i,
+      opts: ["景點", "美食", "行街購物", "自然風景", "咖啡店", "博物館／藝術", "主題樂園", "溫泉"] },
+    { k: "eat", label: "想食", said: /食|餐廳|拉麵|壽司|燒肉|海鮮|甜品|美食/i, opts: null, more: true },
+    { k: "budget", one: true, label: "食飯預算", said: /預算|平啲|貴|budget|\$|蚊|円|¥/i, opts: ["平啲", "中等", "貴啲都得"] },
+    { k: "times", label: "", said: /機|到埗|抵達|落機|起飛|航班|flight|新幹線|check.?in/i, times: true },
+  ];
+  function askMissing(text){
+    const miss = ASKS.filter(a => !a.said.test(text));
+    if (!miss.length) return Promise.resolve("");
+    return new Promise(resolve => {
+      const layer = $("#layer");
+      layer.innerHTML = `<div class="scrim"></div><div class="sheet prefsheet">
+        <h3>開始之前，想問多少少</h3>
+        <p class="sheet-sub">你冇提到呢幾樣，話俾 AI 知會排得啱啲。唔揀都得。</p>
+        <div class="prefs">${miss.map(a => a.times
+          ? `<div class="pf-times"><label>第一日幾點到<input class="input" type="time" id="pf-arrive"></label><label>最後一日幾點走<input class="input" type="time" id="pf-leave"></label></div>`
+          : `<div class="pf-g" data-pf="${a.k}"${a.one ? " data-one" : ""}><span>${a.label}</span>${(a.opts || foodsFor()).map(x => `<button type="button">${esc(x)}</button>`).join("")}</div>
+             ${a.more ? `<label class="pf-must">仲有咩想食<input class="input" id="pf-eatmore" placeholder="例如：鰻魚飯、某間想去嘅餐廳"></label>` : ""}`).join("")}</div>
+        <div class="sheet-btns"><button class="btn" id="pf-skip">略過</button><button class="btn primary" id="pf-ok">開始規劃</button></div></div>`;
+      layer.querySelector(".prefs").addEventListener("click", e => {
+        const b = e.target.closest(".pf-g button"); if (!b) return;
+        const g = b.parentElement;
+        if (g.hasAttribute("data-one")) g.querySelectorAll("button").forEach(x => { if (x !== b) x.classList.remove("on"); });
+        b.classList.toggle("on");
+      });
+      const done = t => { layer.innerHTML = ""; resolve(t); };
+      layer.querySelector("#pf-skip").addEventListener("click", () => done(""));
+      layer.querySelector("#pf-ok").addEventListener("click", () => done(prefsText()));
+    });
+  }
   function prefsText(){
     const pick = k => [...document.querySelectorAll(`.pf-g[data-pf="${k}"] button.on`)].map(b => b.textContent.trim());
     const out = [];
@@ -827,14 +832,13 @@ section.triplist{margin-bottom:36px;}
     if (who) out.push(`同行：${who}。`);
     if (pace) out.push(`節奏：${pace}。`);
     if (like.length) out.push(`想多啲：${like.join("、")}。`);
-    const eatMore = $("#pf-eatmore").value.trim();
+    const eatMore = ($("#pf-eatmore") ? $("#pf-eatmore").value.trim() : "");
     if (eat.length || eatMore) out.push(`想食：${eat.concat(eatMore ? [eatMore] : []).join("、")}（每日午餐同晚餐都要安排具體餐廳，盡量包晒呢啲）。`);
     if (budget) out.push(`食飯預算：${budget}。`);
-    const a = $("#pf-arrive").value, l = $("#pf-leave").value;
+    const val = id => { const el = $(id); return el ? el.value.trim() : ""; };
+    const a = val("#pf-arrive"), l = val("#pf-leave");
     if (a) out.push(`第一日大約 ${a} 先到埗（落機／落車），之後先開始行程，唔好排之前嘅活動。`);
     if (l) out.push(`最後一日 ${l} 要走（起飛／開車），要預早 3 個鐘去機場，之後唔好再排嘢。`);
-    const must = $("#pf-must").value.trim();
-    if (must) out.push(`一定要安排：${must}。`);
     return out.join("\n");
   }
   startInput.min = todayIso();
@@ -966,12 +970,13 @@ section.triplist{margin-bottom:36px;}
     if (goBtn.disabled) return;
     if (needLogin()) return;
     errBox.innerHTML = "";
+    const extra = await askMissing(reqInput.value);
     goBtn.disabled = true;
     goBtn.textContent = "開緊行程…";
     try {
       const destinationLocal = picked.name;
       const dateStart = startInput.value, dateEnd = endInput.value;
-      const requirements = [prefsText(), reqInput.value.trim()].filter(Boolean).join("\n");
+      const requirements = [reqInput.value.trim(), extra].filter(Boolean).join("\n");
       const days = buildDaySkeleton(dateStart, dateEnd);
 
       // 1) create the trip row

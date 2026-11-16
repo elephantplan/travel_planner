@@ -142,7 +142,7 @@
     },
     signIn(){
       const back = location.origin + location.pathname + location.search;
-      location.href = URL_ + "/auth/v1/authorize?provider=google&redirect_to=" + encodeURIComponent(back);
+      location.href = URL_ + "/auth/v1/authorize?provider=google&prompt=select_account&redirect_to=" + encodeURIComponent(back);
     },
     async signOut(){
       try { if (session) await realFetch(URL_ + "/auth/v1/logout", { method: "POST", headers: this.headers() }); } catch (_){}
