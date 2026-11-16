@@ -2224,7 +2224,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-16-4";
+  const BUILD = "2026-11-16-5";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6970,11 +6970,47 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
     return false;
   }
+  // 「澀谷 OWNDAYS」 matched to the Shinjuku branch: the name asks for one
+  // area, Google's own name for the match (kept in kr) says another. Looked
+  // up again inside the asked-for area; the legs either side are re-timed.
+  async function fixDistrictStops(day){
+    const units = toUnits(day.items);
+    const bad = units.map(u => u.stop).filter(st => {
+      if (!st || !st.placeId) return false;
+      const want = districtOf(plain(st.title)), got = districtOf(plain(st.kr));
+      return want >= 0 && got >= 0 && want !== got;
+    });
+    if (!bad.length) return;
+    const fixed = [];
+    for (const st of bad){
+      const keep = { placeId: st.placeId, lat: st.lat, lng: st.lng, kr: st.kr };
+      st.placeId = ""; st.kr = "";
+      const p = await findPlaceNear(st, cleanPlaceName(plain(st.title)), plain(st.title), null).catch(() => null);
+      if (!p || !p.placeId || p.placeId === keep.placeId){ Object.assign(st, keep); continue; }
+      Object.assign(st, { placeId: p.placeId, lat: p.lat, lng: p.lng, photoUrl: "", rating: p.rating ?? null, ratingCount: p.ratingCount ?? null,
+        weekdayText: undefined, mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+      st.eatMeta = (st.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
+      fixed.push(plain(st.title));
+    }
+    if (!fixed.length) return;
+    syncMapPoints(day);
+    if (state.view === day.id) render();
+    await saveNow(`改正地點分店：${fixed.join("、")}`);
+    const us = toUnits(day.items), redo = [];
+    bad.forEach(st => { const k = us.findIndex(u => u.stop === st); if (k > 0) redo.push(k);
+      for (let j = k + 1; j < us.length; j++) if (us[j].stop){ redo.push(j); break; } });
+    if (redo.length) await refreshTransit(day, redo);
+    for (const st of bad){ await enrichHours(st).catch(() => {}); await enrichLocalName(st).catch(() => {}); await enrichPhoto(st, plain(st.title)).catch(() => {}); }
+    if (state.view === day.id) render();
+    await saveNow("補返改正咗嘅地點資料", true);
+    flash(`改正咗分店：${fixed.join("、")}`);
+  }
   // An airport stop matched to the wrong airport (before airports were
   // pinned) is put right: its place, map link and the legs either side.
   let airportBusy = false;
   async function fixAirportStops(day){
     if (airportBusy || state.readonly || state.offline) return;
+    await fixDistrictStops(day);
     const units = toUnits(day.items);
     const bad = units.map((u, i) => ({ u, i })).filter(({ u }) => {
       const ap = u.stop && airportOf(u.stop.title + " " + (u.stop.kr || ""));
@@ -11423,22 +11459,59 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const hit = ((r && r.places) || []).find(x => x.placeId && metersBetween(ap, x) <= 15000);
     return hit || { placeId: "", name: ap.name, lat: ap.lat, lng: ap.lng };
   }
+  // Neighbourhoods a name can carry (「澀谷 OWNDAYS」). When the name says
+  // one, the branch must be in it: the nearest branch of a chain is not the
+  // one that was asked for. Each row is one area in the ways it is written.
+  const DISTRICTS = [
+    ["澀谷", "渋谷", "涩谷", "shibuya"], ["新宿", "shinjuku"], ["池袋", "ikebukuro"], ["銀座", "银座", "ginza"],
+    ["原宿", "harajuku"], ["表參道", "表参道", "omotesando"], ["上野", "ueno"], ["淺草", "浅草", "asakusa"],
+    ["秋葉原", "akihabara"], ["六本木", "roppongi"], ["台場", "お台場", "odaiba"], ["品川", "shinagawa"],
+    ["有樂町", "有楽町", "yurakucho"], ["日本橋", "nihonbashi"], ["吉祥寺", "kichijoji"], ["中目黑", "中目黒", "nakameguro"],
+    ["代官山", "daikanyama"], ["自由之丘", "自由が丘", "jiyugaoka"], ["下北澤", "下北沢", "shimokitazawa"], ["惠比壽", "恵比寿", "ebisu"],
+    ["東京站", "東京駅", "tokyo station"], ["丸之內", "丸の内", "marunouchi"], ["築地", "tsukiji"], ["豐洲", "豊洲", "toyosu"],
+    ["難波", "なんば", "namba"], ["梅田", "umeda"], ["心齋橋", "心斎橋", "shinsaibashi"], ["道頓堀", "dotonbori"], ["天王寺", "tennoji"],
+    ["新世界", "shinsekai"], ["祇園", "gion"], ["河原町", "kawaramachi"], ["嵐山", "arashiyama"], ["京都站", "京都駅", "kyoto station"],
+    ["明洞", "명동", "myeongdong"], ["弘大", "홍대", "hongdae"], ["江南", "강남", "gangnam"], ["東大門", "동대문", "dongdaemun"],
+    ["聖水", "성수", "seongsu"], ["梨泰院", "이태원", "itaewon"], ["西門", "ximen"], ["信義", "xinyi"],
+  ];
+  function districtOf(text){
+    const t = String(text || "").toLowerCase();
+    return DISTRICTS.findIndex(row => row.some(w => t.includes(w.toLowerCase())));
+  }
+  const inDistrict = (p, d) => d < 0 || DISTRICTS[d].some(w => (String(p.name || "") + " " + String(p.address || "")).toLowerCase().includes(w.toLowerCase()));
+  async function nearSearchAt(query, ref){
+    const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+      body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
+    const j = rs ? await rs.json().catch(() => null) : null;
+    return ((j && j.places) || []).filter(x => x.placeId);
+  }
   async function findPlaceNear(s, query, plainQuery, refAt){
     const ap = airportOf([s && s.title, s && s.kr, query, plainQuery].filter(Boolean).join(" "));
     if (ap) return findAirport(ap);
+    const want = districtOf([s && s.title, query, plainQuery].filter(Boolean).join(" "));
+    // a chain asked for by brand and area: search by those two words alone
+    const brand = (String(plainQuery || query || "").match(/[A-Za-z][A-Za-z0-9&'.\- ]{1,30}/) || [""])[0].trim();
+    const short = want >= 0 && brand ? `${brand} ${DISTRICTS[want][1] || DISTRICTS[want][0]}` : "";
     const ref = refAt || stopAnchor(s);
     if (ref){
-      const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
-      const j = rs ? await rs.json().catch(() => null) : null;
-      const near = ((j && j.places) || []).filter(x => x.placeId && Number.isFinite(x.meters) && x.meters <= 40000);
-      if (near.length) return near.slice(0, 3).sort((x, y) => x.meters - y.meters)[0];
+      let near = (await nearSearchAt(query, ref)).filter(x => Number.isFinite(x.meters) && x.meters <= 40000);
+      if (want >= 0 && !near.some(x => inDistrict(x, want)) && short)
+        near = near.concat((await nearSearchAt(short, ref)).filter(x => Number.isFinite(x.meters) && x.meters <= 40000));
+      const fit = near.filter(x => inDistrict(x, want));
+      if (fit.length) return want >= 0 ? fit[0] : fit.slice(0, 3).sort((x, y) => x.meters - y.meters)[0];
     }
-    const r = await withTimeout(callAi({ action:"place-search", query: plainQuery || query }), 20000, null);
-    const list = ((r && r.places) || []).filter(x => x.placeId);
-    if (!ref) return list[0] || null;
+    let list = [];
+    for (const q of [plainQuery || query, short].filter(Boolean)){
+      const r = await withTimeout(callAi({ action:"place-search", query: q }), 20000, null);
+      list = list.concat(((r && r.places) || []).filter(x => x.placeId));
+      if (list.some(x => inDistrict(x, want))) break;
+    }
+    const fit = list.filter(x => inDistrict(x, want));
+    // named an area and nothing there: better no match than the wrong branch
+    if (want >= 0 && !fit.length) return null;
+    if (!ref) return fit[0] || null;
     const far = x => { const m = metersBetween(ref, x); return Number.isFinite(m) ? m : Infinity; };
-    return list.slice().sort((x, y) => far(x) - far(y))[0] || null;
+    return want >= 0 ? fit[0] : (fit.slice().sort((x, y) => far(x) - far(y))[0] || null);
   }
   async function enrichStop(s){
     const name = plain(s.title);
