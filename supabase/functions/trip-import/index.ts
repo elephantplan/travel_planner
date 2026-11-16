@@ -113,7 +113,8 @@ async function gDirections(o: string, d: string, mode: string, lang: string) {
     const data = await (await fetch(url)).json();
     const leg = data?.status === "OK" && data?.routes?.[0]?.legs?.[0];
     if (!leg) return { problem: String(data?.status || "UNKNOWN") };
-    return { seconds: Number(leg.duration?.value) || 0, meters: Number(leg.distance?.value) || 0, steps: leg.steps || [] };
+    return { seconds: Number(leg.duration?.value) || 0, meters: Number(leg.distance?.value) || 0, steps: leg.steps || [],
+      start: leg.start_location || null, end: leg.end_location || null };
   } catch (e) { return { problem: String(e) }; }
 }
 function rideOf(steps: any[]) {
@@ -131,6 +132,49 @@ function rideOf(steps: any[]) {
     from: rides[0].transit_details.departure_stop?.name || "", to: rides[rides.length - 1].transit_details.arrival_stop?.name || "" };
 }
 const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
+
+// Japan: Google's API has no trains. The stations are real (the nearest
+// ones Google knows to each end, with the walk to them); only the line
+// between those two stations is asked of the AI, with web search, and it
+// is shown as an estimate. A route that doesn't add up is not shown.
+async function nearestStation(at: any): Promise<{ name: string; ref: string } | null> {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key || !at || !Number.isFinite(at.lat)) return null;
+  for (const type of ["train_station", "subway_station"]) {
+    try {
+      const j = await (await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${at.lat},${at.lng}&rankby=distance&type=${type}&language=ja&key=${key}`)).json();
+      const r = j?.results?.[0];
+      if (r?.place_id) return { name: String(r.name || ""), ref: "place_id:" + r.place_id };
+    } catch { /* next type */ }
+  }
+  return null;
+}
+async function trainEstimate(o: string, d: string, car: any, city: string, lang: string) {
+  if (!car?.start || !car?.end) return null;
+  const [a, b] = await Promise.all([nearestStation(car.start), nearestStation(car.end)]);
+  if (!a || !b || a.name === b.name) return null;
+  const [wa, wb] = await Promise.all([gDirections(o, a.ref, "walking", lang), gDirections(b.ref, d, "walking", lang)]) as any[];
+  if (!wa.seconds || !wb.seconds || wa.seconds > 1500 || wb.seconds > 1500) return null;
+  let j: any = null;
+  try {
+    j = parseJson(await callGemini([{ text:
+      `日本${city ? "「" + city + "」" : ""}：由「${a.name}」站搭電車／地鐵去「${b.name}」站，平時點搭？上網查清楚路線。\n` +
+      `只回 JSON：{"legs":[{"line":"路線名（日文原名）","from":"上車站","to":"落車站","stops":站數}],"minutes":車上大約分鐘（唔計行路同等車）}\n` +
+      `如果兩個站之間冇合理嘅電車路線（例如要行好遠或者冇直接關係），回 {"none":true}。` }], true));
+  } catch { return null; }
+  const legs = Array.isArray(j?.legs) ? j.legs.filter((x: any) => x && x.line && x.from && x.to).slice(0, 4) : [];
+  const ride = Math.round(Number(j?.minutes) || 0);
+  if (j?.none || !legs.length || ride < 1) return null;
+  const total = mins(wa.seconds) + ride + mins(wb.seconds) + 3 * legs.length;     // + waiting
+  // a train trip that takes far longer than a taxi is a wrong guess
+  if (car.seconds && total > Math.max(25, mins(car.seconds) * 3)) return null;
+  let chain = `行${mins(wa.seconds)}分 → ` + str(legs[0].from, 30);
+  legs.forEach((x: any) => { chain += ` ─${str(x.line, 30)}${Number(x.stops) > 0 ? `・${Math.round(x.stops)}站` : ""}─ ${str(x.to, 30)}`; });
+  chain += ` → 行${mins(wb.seconds)}分`;
+  return { ok: true, mode: "metro", estimated: true,
+    text: `電車約 ${total} 分鐘${legs.length > 1 ? `・轉${legs.length - 1}次` : ""}（估計，車站係真嘅，路線出發前喺 Google 確認）`,
+    route: chain, long: total >= 45 };
+}
 async function legBetween(body: any) {
   const o = legRef(body?.from), d = legRef(body?.to);
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
@@ -163,6 +207,11 @@ async function legBetween(body: any) {
   // have Japanese timetables.
   const c: any = await gDirections(o, d, "driving", lang);
   if (!w) w = await gDirections(o, d, "walking", lang);
+  // too far to walk: try the nearest real stations at each end
+  if (!(w?.seconds && w.seconds <= 900)) {
+    const est = await trainEstimate(o, d, c, str(body?.city, 40), lang).catch(() => null);
+    if (est) return est;
+  }
   const bits = [c.seconds ? `的士約 ${mins(c.seconds)} 分鐘` : "", w?.seconds && w.seconds <= 2700 ? `行路約 ${mins(w.seconds)} 分鐘` : ""].filter(Boolean);
   // a trip to another city (Osaka → Kyoto) is worth asking how to do it
   const long = (c.seconds || 0) >= 40 * 60 || (c.meters || 0) >= 25000;

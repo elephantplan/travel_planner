@@ -2253,7 +2253,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-3";
+  const BUILD = "2026-11-17-4";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -3939,7 +3939,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function segFromLookup(r, prefer){
     const seg = buildSeg(r.mode || "walk", r.text, r.route);
     if (prefer && prefer !== "auto") seg.prefer = prefer;
-    if (r.noTime){ seg.noTime = true; seg.stv = 3; }
+    // stv 4: looked up by the build that tries the nearest real stations
+    seg.stv = 4;
+    if (r.noTime) seg.noTime = true;
+    if (r.estimated) seg.trainEst = true;
     if (r.long) seg.long = true;
     return seg;
   }
@@ -4108,8 +4111,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!seg || seg.prefer) return false;
     if (seg.est) return true;
     if (!destIsJapan()) return false;
-    // from the builds that guessed station names
-    if (seg.noTime) return seg.stv !== 3;
+    // this build's own answer (a station-based estimate, or none found)
+    if (seg.stv === 4) return false;
+    // 「撳 Google 睇班次」from before: try the stations once
+    if (seg.noTime) return true;
     // Google's API has no trains in Japan: any timed train leg is from an old build
     if (/^(metro|bus|other)$/.test(segMode(seg))) return true;
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
