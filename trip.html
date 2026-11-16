@@ -2253,7 +2253,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-1";
+  const BUILD = "2026-11-17-2";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -12196,7 +12196,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // reach the airport. Spelling it out here (client-side, via `question`)
   // fixes that without touching the shared day-plan prompt every other
   // caller also uses (which usually isn't planning a trip's bookend days).
-  async function generateDaysChunk(dayIds, onProgress, edges){
+  async function generateDaysChunk(dayIds, onProgress, edges, attempt = 0){
     if (!dayIds.length) return;
     const label = dayIds.map(id => (dayById(id) || {}).title || id).join("、");
     onProgress && onProgress(`AI 諗緊「${label}」…`);
@@ -12219,7 +12219,18 @@ ${stayBlock}${dayBlocks}${secBlocks}
       render();
       return;
     }
-    const msg = (r && r.message) || "";
+    const msg = (r && r.message) || (r && r.error) || "";
+    // the AI was busy or over its per-minute limit: wait and try again,
+    // then a day at a time, rather than leave days empty
+    if (attempt < 2 && /429|503|quota|額度|太多人|太密|RESOURCE|UNAVAILABLE|overloaded|timeout|超時|失敗|fetch/i.test(msg + " " + (!r ? "timeout" : ""))){
+      onProgress && onProgress(`AI 而家好多人用，等一陣再試「${label}」…`);
+      await new Promise(res => setTimeout(res, 25000 * (attempt + 1)));
+      if (dayIds.length > 1 && attempt === 1){
+        for (const id of dayIds) await generateDaysChunk([id], onProgress, { first: edges && edges.first && id === dayIds[0], last: edges && edges.last && id === dayIds[dayIds.length - 1] }, attempt + 1);
+        return;
+      }
+      return generateDaysChunk(dayIds, onProgress, edges, attempt + 1);
+    }
     if (dayIds.length > 1 && /太長|截斷/.test(msg)){
       const mid = Math.ceil(dayIds.length / 2);
       const firstHalf = dayIds.slice(0, mid), secondHalf = dayIds.slice(mid);
@@ -12270,6 +12281,14 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const blankDayIds = state.snapshot.days.filter(d => !(d.items || []).length).map(d => d.id);
     await planAreas(blankDayIds, onProgress);
     await generateDaysFor(blankDayIds, onProgress);
+    // anything still empty gets one more go, a day at a time
+    const still = blankDayIds.filter(id => { const d = dayById(id); return d && !(d.items || []).some(i => i.kind === "stop"); });
+    for (const id of still){
+      onProgress && onProgress(`補返 Day ${id.replace("day", "")}…`);
+      await generateDaysChunk([id], onProgress, { first: id === state.snapshot.days[0].id, last: id === state.snapshot.days[state.snapshot.days.length - 1].id }, 1);
+    }
+    const empty = blankDayIds.filter(id => { const d = dayById(id); return d && !(d.items || []).some(i => i.kind === "stop"); });
+    if (empty.length) state.genEmpty = empty;
     // then each day in the order that walks least (meals keep their slots)
     let n = 0;
     blankDayIds.map(id => dayById(id)).filter(Boolean).forEach(day => {
@@ -12738,7 +12757,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
       await fillWeatherRows(msg => genBanner(msg));
       await recommendStandardSections(msg => genBanner(msg));
       await saveNow("AI 補齊咗住宿、天氣、著衫、交通同行李清單");
-      genBanner("行程生成完成，可以逐日睇同再微調。", { done:true });
+      genBanner(state.genEmpty && state.genEmpty.length
+        ? `行程生成完成，但 ${state.genEmpty.map(id => "Day " + id.replace("day", "")).join("、")} AI 太忙排唔到，入去嗰日撳「AI 諗行程」補返。`
+        : "行程生成完成，可以逐日睇同再微調。", { done:true });
     } catch (e){
       genBanner("生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「AI 諗行程」補返）", { done:true });
     }

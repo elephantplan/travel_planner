@@ -355,6 +355,7 @@ section.triplist{margin-bottom:36px;}
 .acct-keep{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:8px 0 10px;line-height:1.5;}
 .prefs{padding:4px 0;}
 .prefsheet{max-height:86vh;overflow-y:auto;}
+.pf-own{flex-basis:100%;margin-top:2px;}
 .prefs-h{margin:0 0 10px;font-size:13px;color:var(--ink-faint);}
 .pf-g{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;}
 .pf-g > span{flex-basis:100%;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);}
@@ -779,72 +780,61 @@ html,body{overflow-x:clip;max-width:100%;}
   const errBox = $("#form-err");
 
   function todayIso(){ return new Date().toISOString().slice(0,10); }
-  // what there is to eat depends on where: the choices follow the destination
-  const FOODS = [
-    [/japan|日本|tokyo|osaka|kyoto|東京|大阪|京都|福岡|北海道|沖繩|名古屋/i, ["壽司／海鮮丼", "拉麵", "燒肉／和牛", "壽喜燒／涮涮鍋", "鰻魚飯", "天婦羅", "居酒屋", "炸豬扒", "烏冬／蕎麥麵", "甜品／喫茶店", "Tabelog 百名店"]],
-    [/korea|韓國|seoul|busan|首爾|釜山|濟州/i, ["韓牛／烤肉", "炸雞啤酒", "醬油蟹", "人參雞", "部隊鍋", "冷麵", "一隻雞", "韓式刀削麵", "街頭小食", "咖啡店／甜品"]],
-    [/taiwan|台灣|臺灣|taipei|台北|台中|台南|高雄/i, ["牛肉麵", "小籠包", "滷肉飯", "夜市小食", "火鍋", "鹹酥雞", "早餐店", "珍珠奶茶／手搖", "芒果冰／甜品", "熱炒"]],
-    [/thailand|泰國|bangkok|曼谷|清邁|布吉/i, ["船麵／泰式粉麵", "冬陰功", "海鮮", "泰式炒河", "芒果糯米飯", "街頭小食", "米芝蓮推介", "泰北菜", "Rooftop bar", "咖啡店"]],
-    [/china|中國|上海|北京|成都|廣州|深圳|重慶/i, ["當地名菜", "火鍋", "小籠包／點心", "烤鴨", "麵食", "串串／燒烤", "小食街", "茶館", "甜品"]],
-    [/./, ["當地名物", "海鮮", "燒肉／扒房", "麵食", "街頭小食", "甜品／咖啡店", "高分／名店", "酒吧"]],
-  ];
-  function foodsFor(){
-    const where = picked ? `${picked.name} ${picked.address}` : "";
-    return FOODS.find(f => f[0].test(where || " "))[1];
+  // Before planning, the AI reads what was written (and where and when)
+  // and asks only what it still needs to plan well — like a travel agent
+  // would. Nothing to ask, or the AI is busy: planning just starts.
+  async function aiQuestions(text){
+    const ds = startInput.value, de = endInput.value;
+    const ask = `有人想由香港去「${picked ? picked.name + "（" + picked.address + "）" : ""}」旅行，${ds} 至 ${de}。佢哋寫嘅要求：「${text || "（冇寫）"}」。
+你係經驗豐富嘅旅行社顧問，準備幫佢哋排每日行程。睇吓仲欠咩資料會令行程排得明顯好啲（例如：幾多人同咩人、到埗同離開時間同機場、想住邊區或者已訂酒店、節奏、最想做嘅事、想食咩、預算、要避開嘅嘢、呢個季節同目的地特有嘅選擇例如滑雪場、溫泉旅館、祭典），佢哋已經講咗嘅就唔好再問。
+最多問 4 條最重要嘅問題，每條俾 2 至 6 個簡短建議答案（跟返目的地同季節，例如北海道冬天就係二世古、富良野滑雪場）。如果資料已經夠就唔好問。
+只回覆一個 JSON，唔好有其他字、唔好 code fence：{"questions":[{"q":"問題","options":["答案"],"multi":false}]}`;
+    try {
+      const r = await Promise.race([callAi({ action: "ask", question: ask }), new Promise(res => setTimeout(() => res(null), 25000))]);
+      const t = String((r && (r.aiSummary || r.answer)) || "");
+      const a = t.indexOf("{"), b = t.lastIndexOf("}");
+      const j = a >= 0 && b > a ? JSON.parse(t.slice(a, b + 1)) : null;
+      return ((j && j.questions) || []).filter(x => x && x.q).slice(0, 4).map(x => ({
+        q: String(x.q).slice(0, 80), multi: !!x.multi, options: (Array.isArray(x.options) ? x.options : []).map(o => String(o).slice(0, 30)).filter(Boolean).slice(0, 6) }));
+    } catch (_){ return []; }
   }
-  // Before planning: only what the request did not already say. Each test
-  // is what would count as "they told us".
-  const ASKS = [
-    { k: "who", one: true, label: "同邊個去", said: /大人|小朋友|細路|BB|長者|老人|情侶|朋友|自己|一個人|家人|屋企|爸|媽|老公|老婆|男朋友|女朋友|\d\s*個?人|蜜月/i,
-      opts: ["自己", "情侶", "朋友", "有小朋友", "有長者"] },
-    { k: "pace", one: true, label: "節奏", said: /輕鬆|緊密|慢慢|趕|悠閒|唔好行太多|chill|去多啲|盡量/i,
-      opts: ["輕鬆，每日 2–3 個地方", "適中", "盡量去多啲"] },
-    { k: "like", label: "想多啲", said: /景點|購物|行街|買嘢|風景|咖啡|博物館|樂園|溫泉|紅葉|櫻花|銀杏|shopping|影相/i,
-      opts: ["景點", "美食", "行街購物", "自然風景", "咖啡店", "博物館／藝術", "主題樂園", "溫泉"] },
-    { k: "eat", label: "想食", said: /食|餐廳|拉麵|壽司|燒肉|海鮮|甜品|美食/i, opts: null, more: true },
-    { k: "budget", one: true, label: "食飯預算", said: /預算|平啲|貴|budget|\$|蚊|円|¥/i, opts: ["平啲", "中等", "貴啲都得"] },
-    { k: "times", label: "", said: /機|到埗|抵達|落機|起飛|航班|flight|新幹線|check.?in/i, times: true },
-  ];
   function askMissing(text){
-    const miss = ASKS.filter(a => !a.said.test(text));
-    if (!miss.length) return Promise.resolve("");
-    return new Promise(resolve => {
-      const layer = $("#layer");
+    const layer = $("#layer");
+    layer.innerHTML = `<div class="scrim"></div><div class="sheet prefsheet"><h3>AI 睇緊你嘅要求…</h3>
+      <p class="sheet-sub">如果仲有想知嘅嘢，佢會問你幾條，等排得啱啲。</p>${loaderHtml("諗緊有咩要問", true)}
+      <div class="sheet-btns"><button class="btn" id="pf-skip">唔使問，直接開始</button></div></div>`;
+    return new Promise(async resolve => {
+      let settled = false;
+      const done = t => { if (settled) return; settled = true; layer.innerHTML = ""; resolve(t); };
+      layer.querySelector("#pf-skip").addEventListener("click", () => done(""));
+      const qs = await aiQuestions(text);
+      if (settled) return;
+      if (!qs.length) return done("");
       layer.innerHTML = `<div class="scrim"></div><div class="sheet prefsheet">
         <h3>開始之前，想問多少少</h3>
-        <p class="sheet-sub">你冇提到呢幾樣，話俾 AI 知會排得啱啲。唔揀都得。</p>
-        <div class="prefs">${miss.map(a => a.times
-          ? `<div class="pf-times"><label>第一日幾點到<input class="input" type="time" id="pf-arrive"></label><label>最後一日幾點走<input class="input" type="time" id="pf-leave"></label></div>`
-          : `<div class="pf-g" data-pf="${a.k}"${a.one ? " data-one" : ""}><span>${a.label}</span>${(a.opts || foodsFor()).map(x => `<button type="button">${esc(x)}</button>`).join("")}</div>
-             ${a.more ? `<label class="pf-must">仲有咩想食<input class="input" id="pf-eatmore" placeholder="例如：鰻魚飯、某間想去嘅餐廳"></label>` : ""}`).join("")}</div>
-        <div class="sheet-btns"><button class="btn" id="pf-skip">略過</button><button class="btn primary" id="pf-ok">開始規劃</button></div></div>`;
+        <p class="sheet-sub">答咗會排得啱啲，唔答都得。</p>
+        <div class="prefs">${qs.map((x, i) => `<div class="pf-g" data-q="${i}"${x.multi ? "" : " data-one"}><span>${esc(x.q)}</span>
+          ${x.options.map(o => `<button type="button">${esc(o)}</button>`).join("")}
+          <input class="input pf-own" placeholder="或者自己打…" maxlength="120"></div>`).join("")}</div>
+        <div class="sheet-btns"><button class="btn" id="pf-skip2">略過</button><button class="btn primary" id="pf-ok">開始規劃</button></div></div>`;
       layer.querySelector(".prefs").addEventListener("click", e => {
         const b = e.target.closest(".pf-g button"); if (!b) return;
         const g = b.parentElement;
         if (g.hasAttribute("data-one")) g.querySelectorAll("button").forEach(x => { if (x !== b) x.classList.remove("on"); });
         b.classList.toggle("on");
       });
-      const done = t => { layer.innerHTML = ""; resolve(t); };
-      layer.querySelector("#pf-skip").addEventListener("click", () => done(""));
-      layer.querySelector("#pf-ok").addEventListener("click", () => done(prefsText()));
+      layer.querySelector("#pf-skip2").addEventListener("click", () => done(""));
+      layer.querySelector("#pf-ok").addEventListener("click", () => {
+        const lines = qs.map((x, i) => {
+          const g = layer.querySelector(`[data-q="${i}"]`);
+          const ans = [...g.querySelectorAll("button.on")].map(b => b.textContent.trim()).concat(g.querySelector(".pf-own").value.trim() || []).filter(Boolean);
+          return ans.length ? `${x.q}：${ans.join("、")}` : "";
+        }).filter(Boolean);
+        done(lines.join("\n"));
+      });
     });
   }
-  function prefsText(){
-    const pick = k => [...document.querySelectorAll(`.pf-g[data-pf="${k}"] button.on`)].map(b => b.textContent.trim());
-    const out = [];
-    const who = pick("who")[0], pace = pick("pace")[0], like = pick("like"), eat = pick("eat"), budget = pick("budget")[0];
-    if (who) out.push(`同行：${who}。`);
-    if (pace) out.push(`節奏：${pace}。`);
-    if (like.length) out.push(`想多啲：${like.join("、")}。`);
-    const eatMore = ($("#pf-eatmore") ? $("#pf-eatmore").value.trim() : "");
-    if (eat.length || eatMore) out.push(`想食：${eat.concat(eatMore ? [eatMore] : []).join("、")}（每日午餐同晚餐都要安排具體餐廳，盡量包晒呢啲）。`);
-    if (budget) out.push(`食飯預算：${budget}。`);
-    const val = id => { const el = $(id); return el ? el.value.trim() : ""; };
-    const a = val("#pf-arrive"), l = val("#pf-leave");
-    if (a) out.push(`第一日大約 ${a} 先到埗（落機／落車），之後先開始行程，唔好排之前嘅活動。`);
-    if (l) out.push(`最後一日 ${l} 要走（起飛／開車），要預早 3 個鐘去機場，之後唔好再排嘢。`);
-    return out.join("\n");
-  }
+
   startInput.min = todayIso();
   startInput.addEventListener("change", () => { endInput.min = startInput.value || todayIso(); updateGoState(); });
   endInput.addEventListener("change", updateGoState);
