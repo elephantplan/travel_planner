@@ -2328,6 +2328,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
   const BUILD = "2026-11-17-29";
+  const NEW_GOOGLE = false;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2697,7 +2698,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       // hours and ratings go through trip-import, which keeps Google's
       // answer for each place so it is only paid for once
       // travel times too (the Routes API), kept per pair of places
-      const kept = body.action === "place-hours" || body.action === "place-rating" || body.action === "transit";
+      // (NEW_GOOGLE: switched on once the server runs Places API (New) and Routes)
+      const kept = body.action === "place-hours" || (body.action === "place-rating" && (NEW_GOOGLE || body.placeId)) || (NEW_GOOGLE && body.action === "transit");
       if (kept) body.mode = body.action === "transit" ? "leg" : body.action;
       if (body.action === "transit"){ body.city = m.destinationLocal || ""; body.lang = destIsJapan() ? "ja" : destIsKorea() ? "ko" : "zh-TW"; }
       res = await fetch(kept ? SUPABASE_URL + "/functions/v1/trip-import" : FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
