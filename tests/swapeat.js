@@ -67,9 +67,14 @@ async function run(b, japan){
     ok('撳咗搵：表格收埋，喺頂度顯示食物動畫', await p.locator('#sw-form').isHidden() && await p.locator('#sw-out .ldrfood').count() === 1);
     await p.waitForTimeout(1500);
     ok('有結果之後有「改條件再搵」', await p.locator('#sw-edit').isVisible());
-    ok('有剔格問要唔要留低做後備，預設剔咗', await p.locator('#sw-keep').isChecked() && /搵到嘅都留低做「.*」嘅後備/.test(await p.locator('#sw-out').innerText()));
+    ok('每間都有「留做後備」，底下有計數同「全部留低」', await p.locator('[data-swkeep]').count() === 2 && /想之後再考慮嘅/.test(await p.locator('.sw-tray').innerText()) && await p.locator('#sw-keepall').count() === 1);
+    await p.locator('.swcard', { hasText: 'Ramen C' }).locator('[data-swkeep]').click(); await p.waitForTimeout(300);
+    ok('撳咗即刻變「已留做後備」，張卡有絲帶，底下計 1 間', await p.locator('.swcard.kept', { hasText: 'Ramen C' }).count() === 1
+      && /已留做後備/.test(await p.locator('.swcard', { hasText: 'Ramen C' }).innerText()) && /已留 1 間/.test(await p.locator('.sw-tray').innerText()));
+    await p.screenshot({ path: '/tmp/claude-0/swkeep.png' });
     await p.waitForTimeout(1600);
-    ok('未閂未揀之前唔會自己加', !last() || !(last().days[1].items.find(i => i.placeId === 'pOLD') || {}).alts);
+    { const s0 = last() && last().days[1].items.find(i => i.placeId === 'pOLD');
+      ok('只係撳咗嗰間做咗後備', s0 && JSON.stringify((s0.alts || []).map(a => a.placeId)) === '["pC"]', s0 && s0.alts); }
     ok('揀咗幾類就逐類搵，用當地語言（韓文）', wants.includes('스시') && wants.includes('라멘'), wants);
     const txt = await p.locator('#sw-out').innerText();
     ok('嗰陣冇開嘅唔出', !/Sushi Lunch/.test(txt) && /跳過咗 1 間/.test(txt), txt.slice(0, 200));
@@ -81,25 +86,30 @@ async function run(b, japan){
     const st = last().days[1].items.find(i => i.placeId === 'pB');
     ok('揀咗嗰間取代原本', st && st.title === '晚餐：夜鮨', st && st.title);
     ok('揀咗嗰間唔會再喺後備度', st && !(st.alts || []).some(a => a.placeId === st.placeId), st && (st.alts || []).map(a => a.placeId));
-    ok('揀咗一間，其他結果都自動做咗後備', st && (st.alts || []).filter(a => a.placeId === 'pC').length === 1, st && (st.alts || []).map(a => a.placeId));
+    ok('揀咗一間，留咗嗰間仲喺後備', st && (st.alts || []).filter(a => a.placeId === 'pC').length === 1, st && (st.alts || []).map(a => a.placeId));
     ok('原本嗰間同另一間都做咗後備', st && (st.alts || []).some(a => a.placeId === 'pOLD') && (st.alts || []).some(a => a.placeId === 'pC'), st && (st.alts || []).map(a => a.placeId));
     ok('新嗰間顯示壽司', /🍣 壽司/.test(await p.locator('.meta-chip.cuisine').first().innerText().catch(() => '')));
     ok('冇 JS error', !errs.length, errs);
   }
-  // close without picking: ticked keeps them, unticked keeps nothing
-  for (const keep of [true, false]){
+  // closing adds nothing by itself; 全部留低 keeps them all, tapping one again takes it out
+  for (const all of [false, true]){
     const { p, errs, last } = await run(b, false);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
     await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
     await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
-    if (!keep) await p.locator('#sw-keep').uncheck();
+    if (all){
+      await p.locator('#sw-keepall').click(); await p.waitForTimeout(300);
+      ok('全部留低之後顯示「完成」', /已留 2 間/.test(await p.locator('.sw-tray').innerText()) && await p.locator('.sw-tray [data-close]').count() === 1);
+      await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swkeep]').click(); await p.waitForTimeout(300);
+      ok('再撳一次就唔留', /已留 1 間/.test(await p.locator('.sw-tray').innerText()) && await p.locator('#sw-keepall').count() === 1);
+    }
     await p.locator('.sheet-close').click(); await p.waitForTimeout(1800);
     const s0 = last() && last().days[1].items.find(i => i.placeId === 'pOLD');
     const ids = s0 ? (s0.alts || []).map(a => a.placeId) : [];
-    if (keep) ok('閂咗冇揀：搵到嘅留咗做後備（冇開嗰間唔收）', ['pB', 'pC'].every(id => ids.includes(id)) && !ids.includes('pA'), ids);
-    else ok('剔走咗就閂咗都唔加', !ids.includes('pB') && !ids.includes('pC'), ids);
-    ok('冇 JS error（閂' + (keep ? '・留' : '・唔留') + '）', !errs.length, errs);
+    if (all) ok('閂咗：只留低剔咗嘅（Ramen C）', JSON.stringify(ids) === '["pC"]', ids);
+    else ok('冇撳就閂：乜都唔加', !ids.length, ids);
+    ok('冇 JS error（' + (all ? '全部留低' : '直接閂') + '）', !errs.length, errs);
     await p.context().close();
   }
   // Japan: 百名店 only
