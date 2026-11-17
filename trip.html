@@ -2341,7 +2341,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-33";
+  const BUILD = "2026-11-17-34";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -3146,6 +3146,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       delete s[k];
     });
     Object.keys(alt).forEach(k => { if (!SLOT_KEYS.includes(k)) s[k] = alt[k]; });
+    // once chosen it is the family's own pick, never pruned as a search leftover
+    delete s.found; delete demoted.found;
     s.alts[idx] = demoted;
     return was;
   }
@@ -7702,7 +7704,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
           ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed || p.fit ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
           ${p.mustTry ? `<p class="sc-must"><i>必食</i>${esc(p.mustTry)}</p>` : ""}
-          <div class="sw-acts"><button class="btn primary" data-swpick="${k}">揀呢間</button><button class="btn" data-swalt="${k}">做後備</button>
+          <div class="sw-acts"><button class="btn primary" data-swpick="${k}">揀呢間</button>
             ${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}</div>
         </div>`;
       };
@@ -7710,29 +7712,30 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         rating: p.rating, ratingCount: p.ratingCount, desc: p.what || p.fit || "", ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
         ...(Array.isArray(p.probe && p.probe.weekdayText) ? { weekdayText: p.probe.weekdayText } : {}),
         mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+      // Everything a search recommends is kept under this stop as a backup,
+      // picked or not, so nothing it found is lost when the sheet closes.
+      // Only the newest KEEP_FOUND of these kept ones stay; backups added
+      // by hand are never dropped.
+      const KEEP_FOUND = 8;
+      const keyOf = p => p.placeId || p.name_zh || p.name || p.title;
+      const altKey = a => a.placeId || a.title;
+      const keepFound = () => {
+        const have = new Set([st.placeId, ...(st.alts || []).map(altKey)].filter(Boolean));
+        const add = found.filter(p => !have.has(keyOf(p))).map(p => Object.assign(asAlt(p), { found: 1 }));
+        if (!add.length) return 0;
+        const all = [...(st.alts || []), ...add], auto = all.filter(a => a.found);
+        const drop = new Set(auto.slice(0, Math.max(0, auto.length - KEEP_FOUND)));
+        st.alts = all.filter(a => !drop.has(a));
+        return add.length;
+      };
       const paint = (note) => {
         out.innerHTML = (note ? `<p class="hint">${esc(note)}</p>` : "") +
-          (found.length > 1 ? `<p class="hint">揀咗一間之後，其他幾間會自動收埋做後備，之後隨時換得返。</p>` : "") + found.map(row).join("");
+          (found.length ? `<p class="hint">搵到嘅${found.length > 1 ? "幾" : "呢"}間已經收埋做「${esc(cleanPlaceName(plain(st.title)))}」嘅後備，唔揀都唔會唔見；揀一間就即刻換做佢。</p>` : "") + found.map(row).join("");
         out.querySelectorAll("[data-swpick]").forEach(b => b.addEventListener("click", async () => {
           const p = found[+b.dataset.swpick]; closeLayer();
+          // the chosen one leaves the backups; the old stop joins them
+          if (Array.isArray(st.alts)) st.alts = st.alts.filter(a => altKey(a) !== keyOf(p));
           await swapStopTo(day, st, p, p.probe, "");
-          // the rest of this list stays with it as backups, to switch to later
-          const have = new Set((st.alts || []).map(a => a.placeId || a.title));
-          const rest = found.filter(x => x !== p && !have.has(x.placeId || x.name_zh || x.name)).slice(0, 5);
-          if (rest.length){
-            st.alts = [...(st.alts || []), ...rest.map(asAlt)];
-            render();
-            await saveNow(`其他 ${rest.length} 間做咗「${plain(st.title)}」嘅後備`, true);
-            flash(`換咗，其他 ${rest.length} 間都收埋做後備`);
-          }
-        }));
-        out.querySelectorAll("[data-swalt]").forEach(b => b.addEventListener("click", async () => {
-          const p = found[+b.dataset.swalt];
-          if (!Array.isArray(st.alts)) st.alts = [];
-          st.alts.push(asAlt(p));
-          b.disabled = true; b.textContent = "已做後備";
-          render();
-          await saveNow(`加咗「${p.name_zh || p.name}」做「${cleanPlaceName(plain(st.title))}」嘅後備`);
         }));
       };
       go.addEventListener("click", async () => {
@@ -7821,10 +7824,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           return;
         }
         const head = (other ? `附近冇${esc(wants.join("、"))}喺 ${t != null ? esc(fmtMin(t)) : "嗰陣"}有開；以下係附近嗰陣有開嘅其他餐廳。` : "") + (shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+        const kept = keepFound();
+        if (kept){ render(); saveSoon(`搵到 ${kept} 間收埋做「${cleanPlaceName(plain(st.title))}」嘅後備`); }
         paint(head);
         out.insertAdjacentHTML("beforeend", diag);
         out.scrollIntoView({ block: "start", behavior: "smooth" });
-        if (await briefsFor(found, "eat") && out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
+        if (await briefsFor(found, "eat")){
+          // the backups get the descriptions that just arrived
+          let more = false;
+          found.forEach(p => { const a = (st.alts || []).find(x => x.found && altKey(x) === keyOf(p)), d = p.what || p.fit || "";
+            if (a && d && !a.desc){ a.desc = d; more = true; } });
+          if (more) saveNow("後備餐廳加咗介紹", true);
+          if (out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
+        }
       });
       // shut then: the same kind is ticked, but nothing is searched until
       // they have had a chance to change it

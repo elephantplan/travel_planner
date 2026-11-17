@@ -67,7 +67,10 @@ async function run(b, japan){
     ok('撳咗搵：表格收埋，喺頂度顯示食物動畫', await p.locator('#sw-form').isHidden() && await p.locator('#sw-out .ldrfood').count() === 1);
     await p.waitForTimeout(1500);
     ok('有結果之後有「改條件再搵」', await p.locator('#sw-edit').isVisible());
-    ok('講明揀咗一間其他會做後備', /其他幾間會自動收埋做後備/.test(await p.locator('#sw-out').innerText()));
+    ok('講明搵到嘅已經收埋做後備', /已經收埋做「.*」嘅後備，唔揀都唔會唔見/.test(await p.locator('#sw-out').innerText()));
+    await p.waitForTimeout(1600);
+    { const s0 = last().days[1].items.find(i => i.placeId === 'pOLD');
+      ok('未揀都已經做咗後備（冇開嗰間唔收）', s0 && !(s0.alts || []).some(a => a.placeId === 'pA') && ['pB', 'pC'].every(id => (s0.alts || []).some(a => a.placeId === id)), s0 && (s0.alts || []).map(a => a.placeId)); }
     ok('揀咗幾類就逐類搵，用當地語言（韓文）', wants.includes('스시') && wants.includes('라멘'), wants);
     const txt = await p.locator('#sw-out').innerText();
     ok('嗰陣冇開嘅唔出', !/Sushi Lunch/.test(txt) && /跳過咗 1 間/.test(txt), txt.slice(0, 200));
@@ -75,10 +78,10 @@ async function run(b, japan){
     ok('列表唔會為每間攞 Google 評論', manyBodies.every(b => !b.placeIds), manyBodies);
     ok('名店有標明，講埋點解值得去', /名店/.test(txt) && /當地人專程去嘅老店/.test(txt));
     ok('名店排先', txt.indexOf('夜鮨') >= 0 && txt.indexOf('夜鮨') < txt.indexOf('Ramen C'));
-    await p.locator('.swcard', { hasText: 'Ramen C' }).locator('[data-swalt]').click(); await p.waitForTimeout(500);
     await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(1500);
     const st = last().days[1].items.find(i => i.placeId === 'pB');
     ok('揀咗嗰間取代原本', st && st.title === '晚餐：夜鮨', st && st.title);
+    ok('揀咗嗰間唔會再喺後備度', st && !(st.alts || []).some(a => a.placeId === st.placeId), st && (st.alts || []).map(a => a.placeId));
     ok('揀咗一間，其他結果都自動做咗後備', st && (st.alts || []).filter(a => a.placeId === 'pC').length === 1, st && (st.alts || []).map(a => a.placeId));
     ok('原本嗰間同另一間都做咗後備', st && (st.alts || []).some(a => a.placeId === 'pOLD') && (st.alts || []).some(a => a.placeId === 'pC'), st && (st.alts || []).map(a => a.placeId));
     ok('新嗰間顯示壽司', /🍣 壽司/.test(await p.locator('.meta-chip.cuisine').first().innerText().catch(() => '')));
