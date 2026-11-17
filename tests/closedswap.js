@@ -51,7 +51,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('.swcard', { hasText: '韓牛乙' }).locator('[data-swpick]').click();
   await p.waitForTimeout(1500);
   const st = last() && last().days[1].items.find(i => i.placeId === 'pB');
-  ok('用同類嘢搵（燒肉）', asked[0] && /燒肉/.test(asked[0].want) && asked[0].kind === 'eat', asked[0]);
+  ok('用同類嘢搵（燒肉，韓國用韓文）', asked[0] && /고기구이/.test(asked[0].want) && asked[0].kind === 'eat', asked[0]);
   ok('跳過嗰日都休息嘅，換咗做有開嗰間', st && st.title === '晚餐：韓牛乙', st && st.title);
   ok('原本嗰間做咗後備', st && (st.alts || []).some(a => a.placeId === 'pSHUT'), st && st.alts);
   ok('公休提示冇咗', await p.locator('.meta-chip.closed').count() === 0);
