@@ -1942,6 +1942,7 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .btn.swapeat{min-height:30px;padding:4px 12px;font-size:12.5px;}
 .swcard .sc-top{justify-content:flex-start;}
 .sw-hy{color:var(--gold);}
+.sw-unv{color:var(--warn,#c9822b);font-weight:700;}
 .sw-diag{margin-top:10px;font-size:12px;color:var(--ink-faint);}
 .sw-diag summary{cursor:pointer;}
 .sw-diag div{margin-top:3px;}
@@ -2327,7 +2328,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-31";
+  const BUILD = "2026-11-17-32";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -6494,7 +6495,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const showSeg = u.seg && i !== firstStop;
     const segBody = !showSeg ? "" :
       u.seg.checking && transitRunning ? `<span class="seg-note">計緊交通時間…</span>` :
-      u.seg.stale || u.seg.checking ? `<span class="seg-note warn">${icon("warn")}次序改咗，交通時間要再確認${state.transitProblem ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
+      u.seg.stale || u.seg.checking ? `<span class="seg-note warn">${icon("warn")}${/用量限額|RESOURCE_EXHAUSTED|OVER_QUERY_LIMIT/.test(state.transitProblem || "") ? "Google 暫時計唔到交通時間，撳下面嘅地圖睇路線" : "次序改咗，交通時間要再確認"}${state.transitProblem && !/用量限額/.test(state.transitProblem) ? `<br><span class="seg-why">${esc(state.transitProblem)}</span>` : ""}</span>` :
       `<span class="seg-head">${state.readonly ? segHtmlOf(u.seg) : segModeBtn(u.seg, `data-segmode="${i}"`)}</span>` + (u.seg.route ? routeChainHtml(u.seg.route) : "");
     // one segment, one button — refreshing all of a day's legs to update just
     // one used to burn a Google Directions call per leg every time
@@ -7498,6 +7499,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const r = await res.json().catch(() => null);
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       list.ask = (r && r.ask) || "";
+      // Google refused; these came from the AI alone
+      if (r && r.unverified){ list.unverified = true; googleRefusal = r.message || googleRefusal; }
       // the server has already ordered it (famous first, then what fits)
       if (!list.ask || (r && r.ranked)) list.forEach(p => { p.briefed = true; });
       if (!r || r.ok === false){ list.failed = (r && r.message) || `伺服器答 ${res.status}`; if (/Google/.test(list.failed)) googleRefusal = list.failed; }
@@ -7532,14 +7535,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(title)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a>
         <button type="button" class="nr-add" data-pick="${esc(k)}" data-kind="${kind}" aria-label="加「${esc(title)}」入行程">${icon("plus")}</button>
       </div>
-      <div class="sc-facts">${[p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
+      <div class="sc-facts">${[p.unverified ? `<b class="sw-unv">AI 推介・未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
         Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
-      <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
+      ${p.walk ? `<div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>` : ""}
       ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
       ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
       ${p.mustTry ? `<p class="sc-must"><i>${MUST_LABEL[kind] || "推介"}</i>${esc(p.mustTry)}</p>` : ""}
-      ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}Google 睇相同評論</a>` : ""}
+      ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}${p.unverified ? "喺 Google 地圖確認吓" : "Google 睇相同評論"}</a>` : ""}
     </div>`;
   }
   // a line on what a place is (and, for food, what to order), from its own
@@ -7662,7 +7665,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const c = cuisineOf({ type: "eat", title: p.name, kr: p.name_zh || "", cuisine: p.cuisine || "", desc: p.what || "" });
         return `<div class="sugcard swcard">
           <div class="sc-top"><a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name_zh || p.name)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a></div>
-          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : p.famous ? `<b class="sw-hy">名店</b>` : "",
+          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : p.unverified ? `<b class="sw-unv">未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">名店</b>` : "",
             Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
             Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "", p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).join("・")}</div>
           ${p.openNote ? `<div class="sw-open">${icon("check")}${esc(p.openNote)}</div>` : ""}
@@ -7719,12 +7722,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             return l;
           }));
           const seen = new Set();
-          lists.forEach((l, k) => l.forEach(p => { if (!seen.has(p.placeId)){ seen.add(p.placeId); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
+          lists.forEach((l, k) => l.forEach(p => { const key = p.placeId || "n:" + p.name; if (!seen.has(key)){ seen.add(key); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
           // famous ones first, then Google's rating and how many rated it
           const sc = p => (p.famous ? 1000 : 0) + (p.rating || 0) * Math.log((p.ratingCount || 0) + 1);
           cands.sort((a, b) => sc(b) - sc(a));
         }
-        cands = cands.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
+        cands = cands.filter(p => (p.placeId || p.unverified) && !skip.includes(p.placeId)).slice(0, 10);
         // open when we'd be there
         // Opening hours are a dear lookup: checked three at a time, best
         // first, only until enough are open — not for every place found.
@@ -7755,7 +7758,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           steps.push({ w: "（任何餐廳）", kw: any.length, why: any.failed || "" });
           if (any.failed) failed.push(any.failed);
           if (!any.length){ const r = (await nearSearchAt(destIsJapan() ? "レストラン" : "restaurant", anchors[0]).catch(() => null)) || []; any = r.filter(x => x.placeId && x.meters <= 2500).map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) })); steps[steps.length - 1].text = any.length; }
-          const extra = any.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
+          const extra = any.filter(p => (p.placeId || p.unverified) && !skip.includes(p.placeId)).slice(0, 10);
           found = await firstOpen(extra, 5);
           shut += extra.filter(p => p.shut).length;
           other = found.length > 0;
@@ -8241,6 +8244,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (Number.isFinite(p.rating)){ st.rating = p.rating; st.ratingCount = p.ratingCount; }
     if (p.name_zh && p.name_zh !== p.name){ st.title = p.name_zh; st.kr = p.name; }
     if (p.what || p.mustTry){ st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n"); st.briefV = BRIEF_V; }
+    else if (p.unverified && p.fit) st.desc = p.fit;
     units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
     for (let j = at + 1; j < units.length; j++) if (units[j].stop){ if (units[j].seg) units[j].seg = Object.assign({}, units[j].seg, { stale:true }); break; }
     day.items = fromUnits(units);

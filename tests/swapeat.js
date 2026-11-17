@@ -29,6 +29,7 @@ async function run(b, japan){
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.mode === 'suggest-add'){ wants.push(body.want);
       if (body.want === 'ラーメン') return j({ ok: true, places: [] });
+      if (/そば|うどん/.test(body.want)) return j({ ok: true, unverified: true, ranked: true, message: 'Google 地點搜尋冇答（OVER_QUERY_LIMIT）', places: [{ placeId: '', name: '二八そば 本店', name_zh: '二八蕎麥', fit: '當地人推介嘅手打蕎麥', unverified: true, famous: true }] });
       if (/カフェ/.test(body.want)) return j({ ok: false, message: 'Google 出錯' });      // nothing by keyword in Japan
       return j({ ok: true, places: /壽司|스시|寿司/.test(body.want)
         ? [{ placeId: 'pA', name: 'Sushi Lunch', lat: 37.551, lng: 126.988, rating: 4.7, ratingCount: 900 }, { placeId: 'pB', name: 'Sushi Night', name_zh: '夜鮨', lat: 37.5512, lng: 126.9881, rating: 4.5, ratingCount: 700, walk: 3, famous: true, fit: '當地人專程去嘅老店' }]
@@ -96,6 +97,12 @@ async function run(b, japan){
     await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
     ok('百名店有標明', /百名店 2025 ラーメン/.test(txt) && /名店H/.test(txt), txt.slice(0, 200));
+    // Google refusing: the AI's own picks, marked, and still pickable
+    await p.locator('#sw-hyaku').click();
+    await p.locator('#sw-kind .pfchip', { hasText: '蕎麥' }).click();
+    await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
+    const tU = await p.locator('#sw-out').innerText();
+    ok('Google 唔肯答：照出 AI 推介，標明未經 Google 核實', /二八蕎麥/.test(tU) && /未經 Google 核實/.test(tU) && /揀呢間/.test(tU), tU.slice(0, 200));
     ok('冇 JS error（日本）', !errs.length, errs);
   }
   await b.close();

@@ -387,6 +387,8 @@ async function legFresh(body: any, o: string, d: string) {
   const long = (c.seconds || 0) >= 40 * 60 || (c.meters || 0) >= 25000;
   if (prefer === "transit" || c.seconds || w?.seconds)
     return { ok: true, mode: "metro", noTime: true, long, text: `電車／巴士：撳 Google 睇班次${bits.length ? "（" + bits.join("，") + "）" : ""}` };
+  if ([c, w, t].some((x: any) => /RESOURCE_EXHAUSTED|PERMISSION_DENIED|429|403/.test(String(x?.problem || ""))))
+    return { ok: false, refused: true, message: "Google 交通查詢暫時用唔到（用量限額），撳下面 Google Maps 睇路線。" };
   return { ok: false, message: "計唔到呢段交通。" };
 }
 
@@ -704,7 +706,9 @@ async function suggestFresh(kind: string, pts: any[], want: string, budget: numb
       }
     } catch { /* one search failing leaves the others */ }
   }));
-  if (!raw.size && refused.length) return { ok: false, places: [], message: refused[0] };
+  // Google refusing (quota, key): the model's own picks, plainly marked as
+  // not checked on Google, so the family still has something to choose from
+  if (!raw.size && refused.length) return await suggestUnverified(kind, pts, want, ask, refused[0]);
   if (seen.size < 3) for (const r of raw.values()) if (!seen.has(r.place_id) && keep(r, 3.7, 10)) seen.set(r.place_id, r);
   const direct = pts.length === 2 ? dist(pts[0], pts[1]) : 0;
   const shape = (r: any, extra: any = {}) => {
@@ -749,6 +753,26 @@ async function suggestFresh(kind: string, pts: any[], want: string, budget: numb
     } catch (e) { console.error("famous", String(e)); }
   }
   return { ok: true, places: list.slice(0, 10) };
+}
+// When Google won't answer: names from the model alone, each with a Google
+// Maps search to check it. Never kept in the cache, so the real list comes
+// back as soon as Google does.
+async function suggestUnverified(kind: string, pts: any[], want: string, ask: string, why: string) {
+  if (!geminiKeys().length) return { ok: false, places: [], message: why };
+  const area = pts.map((p: any) => p.name).filter(Boolean).join("、") || `${pts[0].lat.toFixed(4)},${pts[0].lng.toFixed(4)}`;
+  const what = kind === "eat" ? "餐廳" : kind === "shop" ? "購物地方" : "景點";
+  try {
+    const j = parseJson(await callGemini([{ text: `你係熟悉當地嘅香港旅遊達人。喺「${area}」附近（座標 ${pts[0].lat.toFixed(4)},${pts[0].lng.toFixed(4)}，行 15 分鐘內），推介最多 6 間出名、口碑好嘅${what}${ask ? `，要求：${ask}` : ""}。
+只寫你肯定真實存在、仲營業緊嘅。name 寫當地語言原名（同 Google 地圖上面一樣），name_zh 寫中文名，fit 一句講點解值得去（最多 24 字，廣東話）。
+只回覆 JSON：{"places":[{"name":"","name_zh":"","fit":""}]}` }], false, { fast: true, ms: 30000 }));
+    const places = (Array.isArray(j?.places) ? j.places : []).slice(0, 6).map((x: any) => ({
+      name: str(x?.name, 60), name_zh: str(x?.name_zh, 40), fit: str(x?.fit, 40), placeId: "", lat: null, lng: null,
+      rating: null, ratingCount: 0, types: KIND_TYPE[kind].slice(0, 1), walk: null, nearName: pts[0]?.name || "",
+      onTheWay: false, what: "", mustTry: "", famous: true, unverified: true,
+    })).filter((x: any) => x.name);
+    if (!places.length) return { ok: false, places: [], message: why };
+    return { ok: true, places, ask, ranked: true, unverified: true, message: why };
+  } catch { return { ok: false, places: [], message: why }; }
 }
 // Intros for a list already on screen: facts and reviews for each place,
 // then one model call. With a request (ask) the order the model gives back,
