@@ -62,6 +62,12 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(800);
   ok('一開始就存咗', saved.length > n0 && ['仁寺洞', '廣藏市場', '清溪川'].every(t => last().days[1].items.some(i => i.title === t)), Date.now() - t0);
   ok('有 banner 講緊補相同交通', /加咗 3 個/.test(await p.locator('#genbanner').innerText()));
+  await p.locator('.notice').waitFor({ timeout: 15000 }).catch(() => {});
+  ok('做完喺中間講，有符號同「知道喇」', /加咗 3 個建議/.test(await p.locator('.notice').innerText().catch(() => '')) && await p.locator('.notice .notice-i').count() === 1);
+  await p.waitForTimeout(8000);
+  ok('唔會自己消失，要撳先關', await p.locator('.notice').count() === 1);
+  await p.locator('.notice button').click(); await p.waitForTimeout(200);
+  ok('撳「知道喇」就關', await p.locator('.notice').count() === 0);
 
   // 改要求 brings the questions back
   await p.locator('#dayai').click(); await p.waitForTimeout(200);

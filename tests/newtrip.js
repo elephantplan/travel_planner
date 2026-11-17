@@ -88,6 +88,8 @@ const DAYS = {
   for (let k = 0; k < 40 && !seenDoing; k++){ seenDoing = /AI 排緊呢日/.test(await p.locator('#app').innerText().catch(() => '')); await p.waitForTimeout(250); }
   ok('排緊嗰陣主頁講明邊日排緊', seenDoing);
   await p.waitForFunction(() => /行程生成完成/.test(document.body.innerText), null, { timeout: 60000 }).catch(() => {});
+  ok('排完喺中間講', await p.locator('.notice.ok').count() === 1);
+  await p.locator('.notice button').click().catch(() => {});
   await p.waitForTimeout(1200);
   const snap = () => versions[0].snapshot;
   ok('要求入面講過到埗時間：航班自動填好', (snap().flights || []).some(f => f.dir === 'out' && f.arr === '13:00' && f.to === 'KIX'), snap().flights);

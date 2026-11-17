@@ -1942,6 +1942,15 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .btn.swapeat{min-height:30px;padding:4px 12px;font-size:12.5px;}
 .swcard .sc-top{justify-content:flex-start;}
 .sw-hy{color:var(--gold);}
+.notice-scrim{position:fixed;inset:0;z-index:128;display:grid;place-items:center;padding:20px;background:color-mix(in srgb,var(--ink) 38%,transparent);animation:fadein .15s ease-out;}
+.notice{width:min(360px,100%);background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:var(--r-xl);box-shadow:var(--shadow-2);padding:22px 20px 18px;text-align:center;}
+.notice-i{display:inline-grid;place-items:center;width:52px;height:52px;border-radius:50%;margin-bottom:10px;}
+.notice-i .i{width:26px;height:26px;}
+.notice.ok .notice-i{background:color-mix(in srgb,var(--ok,#2A7355) 16%,transparent);color:var(--ok,#2A7355);}
+.notice.warn .notice-i{background:var(--danger-bg,#F6E7E4);color:var(--danger,#BE3E28);}
+.notice.info .notice-i{background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--gold);}
+.notice p{margin:0 0 16px;font-size:15.5px;line-height:1.6;white-space:pre-line;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
 .sw-shut{display:flex;gap:7px;align-items:flex-start;margin:0 0 8px;padding:10px 12px;border-radius:var(--r-lg);background:var(--danger-bg,#F6E7E4);color:var(--danger,#BE3E28);font-size:13.5px;line-height:1.5;}
 .sw-shut .i{width:15px;height:15px;flex:none;margin-top:2px;}
 .sw-open{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ok,#2A7355);margin-top:4px;}
@@ -2315,7 +2324,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-21";
+  const BUILD = "2026-11-17-22";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7206,7 +7215,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const st = toUnits(day.items)[+el.dataset.findopen].stop;
       el.disabled = true; el.innerHTML = `${loaderSvg()}搵緊附近有開嘅…`;
       const ok = await replaceClosedStop(day, st);
-      if (!ok){ el.disabled = false; el.innerHTML = `${icon("refresh")}再試`; flash("附近搵唔到嗰日有開、評分好嘅，可以撳 ＋ 自己揀"); }
+      if (!ok){ el.disabled = false; el.innerHTML = `${icon("refresh")}再試`; notice("附近搵唔到嗰日有開、評分好嘅。可以撳卡之間嘅 ＋ 自己揀一個。", "warn"); }
     }));
 
     document.querySelectorAll("[data-getphoto]").forEach(el => el.addEventListener("click", ev => {
@@ -7765,7 +7774,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       genBanner(`搵緊 ${shut.length} 個有開嘅…`);
       let n = 0;
       for (const st of shut) if (await replaceClosedStop(day, st).catch(() => false)) n++;
-      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到有開嘅，可以自己揀` : ""}` : "附近搵唔到嗰陣有開、評分好嘅，可以撳 ＋ 自己揀", { done: true });
+      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到有開嘅，可以自己揀` : ""}` : "附近搵唔到嗰陣有開、評分好嘅。可以撳餐廳卡上嘅「換一間嗰陣有開嘅」自己揀類型再搵。", { done: true });
       setTimeout(() => genBanner(null), 7000);
     });
   }
@@ -13510,10 +13519,31 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // ==================================================================
   // BOOT
   // ==================================================================
+  // How something the family started ended: in the middle of the screen,
+  // with a mark that says good or not, until they close it — a line at the
+  // top was easy to miss and gone before it was read.
+  function notice(text, kind){
+    document.querySelectorAll(".notice-scrim").forEach(x => x.remove());
+    const k = kind || (/搵唔到|唔到|失敗|出咗問題|冇開|未能|太耐|唔得/.test(text) ? "warn" : "ok");
+    const el = document.createElement("div");
+    el.className = "notice-scrim";
+    el.innerHTML = `<div class="notice ${k}" role="alertdialog" aria-modal="true" aria-live="assertive">
+      <span class="notice-i">${icon(k === "warn" ? "warn" : k === "info" ? "sparkle" : "check")}</span>
+      <p></p><button type="button" class="btn primary wide">知道喇</button></div>`;
+    el.querySelector("p").textContent = text;
+    const close = () => { el.remove(); document.removeEventListener("keydown", key, true); };
+    const key = e => { if (e.key === "Escape"){ e.stopPropagation(); close(); } };
+    el.querySelector("button").addEventListener("click", close);
+    document.addEventListener("keydown", key, true);
+    document.body.appendChild(el);
+    el.querySelector("button").focus();
+  }
   function genBanner(text, opts){
     const el = $("#genbanner");
     if (!el) return;
     if (text == null){ el.className = "genbanner"; el.innerHTML = ""; return; }
+    // the end of a job is told in the middle, not left in the banner
+    if (opts && opts.done){ el.className = "genbanner"; el.innerHTML = ""; notice(text); return; }
     el.className = "genbanner on" + (opts && opts.done ? " done" : "");
     el.innerHTML = `<span class="spin"></span><span class="txt">${esc(text)}</span>`;
   }
