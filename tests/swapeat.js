@@ -68,6 +68,9 @@ async function run(b, japan){
     await p.waitForTimeout(1500);
     ok('有結果之後有「改條件再搵」', await p.locator('#sw-edit').isVisible());
     ok('每間都有「留做後備」，底下有計數同「全部留低」', await p.locator('[data-swkeep]').count() === 2 && /想之後再考慮嘅/.test(await p.locator('.sw-tray').innerText()) && await p.locator('#sw-keepall').count() === 1);
+    ok('「全部留低」嗰條喺結果上面，唔會遮住', await p.evaluate(() => { const t = document.querySelector('.sw-tray'), c = document.querySelector('.swcard');
+      return !!t && !!c && t.getBoundingClientRect().bottom <= c.getBoundingClientRect().top && getComputedStyle(t).position === 'static'; }));
+    ok('搵完彈返去最頂', await p.evaluate(() => document.querySelector('#layer .sheet').scrollTop) === 0);
     await p.locator('.swcard', { hasText: 'Ramen C' }).locator('[data-swkeep]').click(); await p.waitForTimeout(300);
     ok('撳咗即刻變「已留做後備」，張卡有絲帶，底下計 1 間', await p.locator('.swcard.kept', { hasText: 'Ramen C' }).count() === 1
       && /已留做後備/.test(await p.locator('.swcard', { hasText: 'Ramen C' }).innerText()) && /已留 1 間/.test(await p.locator('.sw-tray').innerText()));
