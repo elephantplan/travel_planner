@@ -212,6 +212,7 @@ const sec = (title, where) => ({ icon: '', title, sub: '', lines: [title + ' 內
     const moved = await names();
     ok('交通都郁得', moved.findIndex(x => /交通/.test(x)) === lifted.findIndex(x => /交通/.test(x)) - 1, moved);
 
+    await p.waitForTimeout(1800);           // the move is saved after a short pause
     const snap = lastSnap(saved) || {};
     const id = ((snap.sections || []).find(x => x.title === '準備') || {}).id;
     ok('次序存低咗', Array.isArray(snap.homeOrder) && snap.homeOrder.includes('s:' + id)

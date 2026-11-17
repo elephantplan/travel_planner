@@ -11,7 +11,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
 
 async function run(b, japan){
   const snap = JSON.parse(JSON.stringify(base));
-  if (japan) Object.assign(snap.meta, { destinationLocal: '札幌' });
+  if (japan) Object.assign(snap.meta, { destinationLocal: 'Hokkaido', title: 'Hokkaido 行程' });
   Object.assign(snap.days[1].items.find(i => i.title === '南山塔 韓牛燒肉'), { title: '晚餐：韓牛燒肉', type: 'eat', time: '約 19:00', placeId: 'pOLD', weekdayText: ['星期六: 11:00–22:00'] });
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
@@ -74,7 +74,7 @@ async function run(b, japan){
   // Japan: 百名店 only
   { const { p, errs } = await run(b, true);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
-    ok('日本行程有「淨係百名店」', await p.locator('#sw-hyaku').count() === 1);
+    ok('英文寫「Hokkaido」都認得係日本，有「淨係百名店」', await p.locator('#sw-hyaku').count() === 1);
     await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
     ok('百名店有標明', /百名店 2025 ラーメン/.test(txt) && /名店H/.test(txt), txt.slice(0, 200));

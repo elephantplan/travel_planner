@@ -43,7 +43,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
 
   ok('卡上講明嗰陣已經收咗', /19:00 到，佢 14:00 已經關門/.test(await p.locator('.meta-chip.closed').first().innerText()));
-  ok('卡上有「搵過一間嗰陣有開嘅」', await p.locator('[data-findopen]').count() === 1);
+  ok('卡上有「換一間嗰陣有開嘅」', await p.locator('[data-swapeat][data-shut]').count() === 1);
   await p.waitForTimeout(2200);
   ok('開呢日會問要唔要換', /去嗰陣冇開/.test(await p.locator('.hintbar').innerText().catch(() => '')));
   await p.locator('.hintbar .btn').click();

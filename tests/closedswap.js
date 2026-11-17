@@ -42,11 +42,16 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(1000);
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
 
-  ok('休息嗰日有「搵過一間有開嘅」', await p.locator('[data-findopen]').count() === 1, [await p.locator('.meta-chip.closed').count(), await p.evaluate(() => document.querySelector('.line') && document.querySelector('.line').innerText.slice(0,300))]);
-  await p.locator('[data-findopen]').click();
-  await p.waitForTimeout(2500);
+  ok('休息嗰日：餐廳卡有「換一間嗰陣有開嘅」', await p.locator('[data-swapeat][data-shut]').count() === 1);
+  await p.locator('[data-swapeat][data-shut]').click();
+  await p.waitForTimeout(400);
+  ok('即刻搵緊，有動畫', await p.locator('#sw-out .ldrbox, #sw-out .ldr').count() >= 1 || /韓牛乙/.test(await p.locator('#sw-out').innerText()));
+  ok('講明點解要換', /星期六休息/.test(await p.locator('.sw-shut').innerText().catch(() => '')));
+  await p.waitForTimeout(2000);
+  await p.locator('.swcard', { hasText: '韓牛乙' }).locator('[data-swpick]').click();
+  await p.waitForTimeout(1500);
   const st = last() && last().days[1].items.find(i => i.placeId === 'pB');
-  ok('用同類嘢搵（韓牛燒肉）', asked[0] && /韓牛燒肉/.test(asked[0].want) && asked[0].kind === 'eat', asked[0]);
+  ok('用同類嘢搵（燒肉）', asked[0] && /燒肉/.test(asked[0].want) && asked[0].kind === 'eat', asked[0]);
   ok('跳過嗰日都休息嘅，換咗做有開嗰間', st && st.title === '晚餐：韓牛乙', st && st.title);
   ok('原本嗰間做咗後備', st && (st.alts || []).some(a => a.placeId === 'pSHUT'), st && st.alts);
   ok('公休提示冇咗', await p.locator('.meta-chip.closed').count() === 0);
