@@ -2327,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-25";
+  const BUILD = "2026-11-17-26";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7692,6 +7692,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             if (!l.length){
               const r = (await nearSearchAt(w || "レストラン", anchors[0]).catch(() => null)) || [];
               step.text = r.length;
+              if (r.failed){ failed.push(r.failed); step.why = [step.why, r.failed].filter(Boolean).join("；"); }
               l = r.filter(x => x.placeId && Number(x.rating) >= 3.5 && (!near || x.meters <= 450) && x.meters <= 2500)
                 .map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) }));
               step.kept = l.length;
@@ -7722,6 +7723,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           out.innerHTML = loaderHtml("你揀嗰幾類冇，搵緊附近其他嗰陣有開嘅…");
           let any = await suggestFor(anchors, "eat", skip, "", { budget: price, near }, 45000);
           steps.push({ w: "（任何餐廳）", kw: any.length, why: any.failed || "" });
+          if (any.failed) failed.push(any.failed);
           if (!any.length){ const r = (await nearSearchAt(destIsJapan() ? "レストラン" : "restaurant", anchors[0]).catch(() => null)) || []; any = r.filter(x => x.placeId && x.meters <= 2500).map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) })); steps[steps.length - 1].text = any.length; }
           const extra = any.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
           await Promise.all(extra.map(async p => {
@@ -7740,6 +7742,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (!found.length){
           out.innerHTML = (failed.length && !shut
             ? `<p class="sw-shut">${icon("warn")}${failed.includes("timeout") ? "Google 今次太耐冇回覆" : "搵嘅時候出咗問題（" + esc(failed[0]).slice(0, 80) + "）"}，唔係附近冇嘢。撳「再搵過」再試。</p>`
+            : failed.length ? `<p class="sw-shut">${icon("warn")}${esc(String(failed.find(f => /Google/.test(f)) || failed[0]).slice(0, 120))}。唔係附近冇餐廳，等一陣撳「再搵過」。</p>`
             : `<p class="hint">附近搵唔到${t != null ? " " + esc(fmtMin(t)) + " " : ""}${shut ? "有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳。試吓揀多幾類${near ? "，或者唔揀「行 5 分鐘內」" : ""}${price ? "，或者價錢揀「唔理」" : ""}。</p>`) + diag;
           return;
         }
@@ -12686,7 +12689,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const rs = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
       body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
     const j = rs ? await rs.json().catch(() => null) : null;
-    return ((j && j.places) || []).filter(x => x.placeId);
+    const out = ((j && j.places) || []).filter(x => x.placeId);
+    if (!rs) out.failed = "timeout"; else if (!j || j.ok === false) out.failed = (j && j.message) || `伺服器答 ${rs.status}`;
+    return out;
   }
   async function findPlaceNear(s, query, plainQuery, refAt){
     const ap = airportOf([s && s.title, s && s.kr, query, plainQuery].filter(Boolean).join(" "));

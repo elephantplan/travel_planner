@@ -269,6 +269,25 @@ async function placeContact(body: any) {
   } catch { return { ok: false }; }
 }
 
+// Google Places answers 200 even when it refuses (OVER_QUERY_LIMIT when too
+// many requests arrive at once, REQUEST_DENIED for key or billing trouble),
+// with a status in the body. Read as "no results", a refusal looked exactly
+// like "nothing nearby". A busy answer is tried again; any refusal is passed on.
+const G_OK = new Set(["OK", "ZERO_RESULTS"]);
+async function gplaces(url: string): Promise<any> {
+  for (let k = 0; k < 3; k++) {
+    let data: any = null;
+    try { data = await (await fetch(url)).json(); } catch (e) { data = { status: "FETCH_FAILED", error_message: String(e) }; }
+    if (!data || G_OK.has(data.status) || !/OVER_QUERY_LIMIT|UNKNOWN_ERROR|FETCH_FAILED/.test(String(data.status)) || k === 2) {
+      if (data && !G_OK.has(data.status)) console.error(`Google Places ${data.status}: ${String(data.error_message || "").slice(0, 200)}`);
+      return data || {};
+    }
+    await new Promise(r => setTimeout(r, 900 * (k + 1)));
+  }
+  return {};
+}
+const gRefused = (d: any) => d && d.status && !G_OK.has(d.status) ? `Google 地點搜尋冇答（${d.status}${d.error_message ? "：" + String(d.error_message).slice(0, 80) : ""}）` : "";
+
 // A name typed by hand, looked up around a point — for chains (一蘭,
 // Starbucks) Google then returns the branches close to the previous stop
 // instead of the most famous ones, each with its distance in metres.
@@ -285,7 +304,8 @@ async function nearSearch(body: any) {
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}` +
     `&location=${lat},${lng}&radius=3000&language=${encodeURIComponent(str(body?.lang, 8) || "zh-TW")}&key=${key}`;
   try {
-    const data = await (await fetch(url)).json();
+    const data = await gplaces(url);
+    if (gRefused(data)) return { ok: false, places: [], message: gRefused(data) };
     const places = (data?.results || [])
       .filter((r: any) => r?.place_id && r?.geometry?.location && r.business_status !== "CLOSED_PERMANENTLY")
       .map((r: any) => ({ placeId: r.place_id, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 120),
@@ -406,18 +426,23 @@ async function suggestAdd(body: any) {
   const keep = (r: any, rating: number, count: number) =>
     r?.place_id && !skip.has(r.place_id) && r.business_status !== "CLOSED_PERMANENTLY" && !notShopping(r)
     && Number(r.rating) >= rating && Number(r.user_ratings_total) >= count;
+  const refused: string[] = [];
   await Promise.all(centres.flatMap((c: any) => KIND_TYPE[kind].map(async (type) => {
     try {
       const radius = near ? (kind === "eat" ? 450 : 700) : (kind === "eat" ? 800 : 1500);
       const price = kind === "eat" && budget ? `&minprice=${budget === 3 ? 2 : 0}&maxprice=${budget === 1 ? 1 : budget === 2 ? 2 : 4}` : "";
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${c.lat},${c.lng}` +
         `&radius=${radius}&type=${type}${want ? "&keyword=" + encodeURIComponent(want) : ""}${price}&language=zh-TW&key=${key}`;
-      for (const r of (await (await fetch(url)).json())?.results || []) {
+      const data = await gplaces(url);
+      if (gRefused(data)) refused.push(gRefused(data));
+      for (const r of data?.results || []) {
         if (r?.place_id && !raw.has(r.place_id)) raw.set(r.place_id, r);
         if (!seen.has(r?.place_id) && keep(r, 4, minCount)) seen.set(r.place_id, r);
       }
     } catch { /* one search failing leaves the others */ }
   })));
+  // every search refused: say so, rather than "nothing nearby"
+  if (!raw.size && refused.length) return { ok: false, places: [], message: refused[0] };
   // too few? take what Google has with a lower bar rather than say "nothing nearby"
   if (seen.size < 3) for (const r of raw.values()) if (!seen.has(r.place_id) && keep(r, 3.7, 10)) seen.set(r.place_id, r);
   const direct = pts.length === 2 ? dist(pts[0], pts[1]) : 0;
