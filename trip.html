@@ -2306,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-17";
+  const BUILD = "2026-11-17-18";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5707,11 +5707,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       }));
       paintSpots();
       // the place on Google, then the spot most on the way
-      (async () => {
+      // the phone queues requests while a trip is loading, so a lookup can run
+      // out of time: try again before giving up, and offer 再搵 after that
+      const lookup = async () => {
         const facts = sheet.querySelector(".ap-facts");
-        const g = place && place.placeId ? place : await findPlaceNear(null, kr || name, name, null).catch(() => null);
+        let g = place && place.placeId ? place : null;
+        for (let k = 0; !g && k < 2 && facts.isConnected; k++){
+          if (k) facts.innerHTML = `${loaderSvg()}<span>仲搵緊「${esc(name)}」喺 Google 地圖嘅位置…</span>`;
+          g = await findPlaceNear(null, kr || name, name, null).catch(() => null);
+        }
         if (!facts.isConnected) return;
-        if (!g){ facts.innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kr || name)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖搵</a>`; return; }
+        if (!g){
+          facts.innerHTML = `<span>搵唔到「${esc(name)}」嘅位置，所以未能建議放邊。</span><button type="button" class="btn" data-aplook>${icon("refresh")}再搵</button>
+            <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(kr || name)}" target="_blank" rel="noopener">${icon("pin")}Google 地圖</a>`;
+          facts.querySelector("[data-aplook]").addEventListener("click", () => { facts.innerHTML = `${loaderSvg()}<span>搵緊…</span>`; lookup(); });
+          return;
+        }
         found = g;
         const n = Number(g.ratingCount);
         facts.innerHTML = `<a href="${esc(googlePlaceUrl({ title: g.name, placeId: g.placeId }))}" target="_blank" rel="noopener">${Number.isFinite(g.rating) ? `${icon("star")}<b>${g.rating.toFixed(1)}</b>${n > 0 ? `（${n.toLocaleString("en-US")} 個評價）` : ""}・` : ""}${icon("pin")}Google 地圖</a>`;
@@ -5726,7 +5737,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           sheet.querySelectorAll("[data-apday]").forEach(b => b.classList.toggle("suggested", b.dataset.apday === best.day.id));
           paintSpots();
         }
-      })();
+      };
+      lookup();
       go.addEventListener("click", async () => {
         if (!chosenDay) return;
         const day = chosenDay, st = make();

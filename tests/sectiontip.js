@@ -14,6 +14,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
+  let lookups = 0;
   const cur = JSON.parse(JSON.stringify(snap));
   cur.sections = [{ icon: '', title: '12月限定攻略', sub: '', source: 'ai', topic: '12月限定攻略', aiRefresh: false, links: [], lines: [
     '景福宮夜間開放好靚，記得早啲去。',
@@ -26,6 +27,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.route('**/functions/v1/**', r => {
     const body = JSON.parse(r.request().postData() || '{}');
     // 南大門市場 sits right by 景福宮 here, so the best spot is after it on Day 2
+    // the first lookup comes back empty (as when it times out on a busy phone)
+    if (body.action === 'place-search' && !(lookups++)) return r.fulfill({ status: 200, contentType: 'application/json', body: '{"places":[]}' });
     if (body.action === 'place-search' || body.mode === 'near-search') return r.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify({ ok: true, places: [{ name: '南大門市場', placeId: 'nm', lat: 37.5797, lng: 126.9772, rating: 4.2, ratingCount: 900 }] }) });
     return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
@@ -39,6 +42,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await li(1).locator('[data-addplace]').click(); await p.waitForTimeout(300);
   await p.waitForTimeout(1200);
   const picked = async () => (await p.locator('.ap-spots .foldopt.on').innerText().catch(() => '')).replace(/\s+/g, ' ');
+  ok('第一次搵唔到會自己再搵', lookups >= 2 && /最順路/.test(await p.locator('.ap-sug').innerText().catch(() => '')), lookups);
   ok('揀咗建議嘅位置（唔係最尾）', /景福宮」之後/.test(await picked()), await picked());
   await p.locator('[data-apday="day2"]').click(); await p.waitForTimeout(200);
   ok('再撳同一日，位置唔會變返最尾', /景福宮」之後/.test(await picked()), await picked());
