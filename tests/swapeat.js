@@ -28,9 +28,12 @@ async function run(b, japan){
     let body = {}; try { body = JSON.parse(r.request().postData() || '{}'); } catch (_){}
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.mode === 'suggest-add'){ wants.push(body.want);
-      return j({ ok: true, places: body.want === '壽司'
+      if (body.want === 'ラーメン') return j({ ok: true, places: [] });      // nothing by keyword in Japan
+      return j({ ok: true, places: /壽司|스시|寿司/.test(body.want)
         ? [{ placeId: 'pA', name: 'Sushi Lunch', lat: 37.551, lng: 126.988, rating: 4.7, ratingCount: 900 }, { placeId: 'pB', name: 'Sushi Night', name_zh: '夜鮨', lat: 37.5512, lng: 126.9881, rating: 4.5, ratingCount: 700, walk: 3 }]
         : [{ placeId: 'pC', name: 'Ramen C', lat: 37.5513, lng: 126.9883, rating: 4.3, ratingCount: 400, walk: 4 }] }); }
+    if (body.mode === 'near-search'){ wants.push('near:' + body.query);
+      return j({ ok: true, places: [{ placeId: 'pN', name: '札幌ラーメン横丁 N', lat: 37.5515, lng: 126.9885, rating: 4.1, ratingCount: 3000, meters: 300 }] }); }
     if (body.mode === 'brief-many') return j({ ok: true, briefs: { pB: { what: '夜晚先開嘅鮨店', mustTry: '海膽' } } });
     if (body.mode === 'hyakumeiten') return j({ ok: true, places: [{ name_jp: '名店H', genre: 'ラーメン', award: '百名店 2025 ラーメン', why: '湯底濃' }] });
     if (body.action === 'place-search') return j({ places: [{ name: body.query, placeId: 'pH', lat: 37.5514, lng: 126.9884, rating: 4.6, ratingCount: 2000 }] });
@@ -58,7 +61,7 @@ async function run(b, japan){
     await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
     await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
-    ok('揀咗幾類就逐類搵', wants.includes('壽司') && wants.includes('拉麵'), wants);
+    ok('揀咗幾類就逐類搵，用當地語言（韓文）', wants.includes('스시') && wants.includes('라멘'), wants);
     const txt = await p.locator('#sw-out').innerText();
     ok('嗰陣冇開嘅唔出', !/Sushi Lunch/.test(txt) && /跳過咗 1 間/.test(txt), txt.slice(0, 200));
     ok('列出幾間有開嘅，講埋類型同幾時開', /夜鮨/.test(txt) && /Ramen C/.test(txt) && /嗰陣有開（17:00–23:00）/.test(txt), txt.slice(0, 300));
@@ -72,9 +75,14 @@ async function run(b, japan){
     ok('冇 JS error', !errs.length, errs);
   }
   // Japan: 百名店 only
-  { const { p, errs } = await run(b, true);
+  { const { p, errs, wants: wantsJ } = await run(b, true);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
     ok('英文寫「Hokkaido」都認得係日本，有「淨係百名店」', await p.locator('#sw-hyaku').count() === 1);
+    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
+    const t0 = await p.locator('#sw-out').innerText();
+    ok('日本用日文搵（ラーメン）；搵唔到就擴大用文字搜尋', wantsJ.includes('ラーメン') && wantsJ.includes('near:ラーメン') && /札幌ラーメン横丁/.test(t0), [wantsJ, t0.slice(0, 120)]);
+    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
     await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
     ok('百名店有標明', /百名店 2025 ラーメン/.test(txt) && /名店H/.test(txt), txt.slice(0, 200));

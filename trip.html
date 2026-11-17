@@ -2324,7 +2324,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-22";
+  const BUILD = "2026-11-17-23";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7667,6 +7667,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (!anchors.length){ out.innerHTML = `<p class="hint">呢個站未有位置，搵唔到附近。可以撳筆改個名，等佢搵到 Google 地點先。</p>`; return; }
         const own = sheet.querySelector("#sw-own").value.trim();
         const wants = [...kinds].map(k => k.split("／")[0]).concat(own ? [own] : []);
+        const words = [...kinds].map(cuisineWord).concat(own ? [own] : []);
         const near = !!(sheet.querySelector("#sw-near") || {}).classList?.contains("on");
         const hyakuOnly = !!(sheet.querySelector("#sw-hyaku") || {}).classList?.contains("on");
         go.disabled = true;
@@ -7675,7 +7676,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         let cands = [];
         if (hyakuOnly) cands = await hyakuNear(anchors[0], wants, day);
         else {
-          const lists = await Promise.all((wants.length ? wants : [""]).map(w => suggestFor(anchors, "eat", skip, w, { budget: price, near })));
+          const lists = await Promise.all((words.length ? words : [""]).map(async w => {
+            let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near });
+            // nothing by keyword: Google's text search around the same spot
+            if (!l.length && w){
+              const r = (await nearSearchAt(w, anchors[0]).catch(() => [])) || [];
+              l = r.filter(x => x.placeId && Number(x.rating) >= 3.6 && (!near || x.meters <= 450) && x.meters <= 1500)
+                .map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) }));
+            }
+            return l;
+          }));
           const seen = new Set();
           lists.forEach((l, k) => l.forEach(p => { if (!seen.has(p.placeId)){ seen.add(p.placeId); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
           cands.sort((a, b) => (b.rating || 0) * Math.log((b.ratingCount || 0) + 1) - (a.rating || 0) * Math.log((a.ratingCount || 0) + 1));
@@ -12069,6 +12079,19 @@ ${stayBlock}${dayBlocks}${secBlocks}
     ["西餐", "🍝", /意粉|pasta|pizza|薄餅|西餐|漢堡|burger|bistro/i],
     ["咖啡／甜品", "🍰", /カフェ|咖啡|cafe|café|甜品|パフェ|スイーツ|ケーキ|麵包|パン|bakery/i],
   ];
+  // what to search for in the place's own language — Google matches the
+  // words fairly literally, and 「拉麵」 finds little in Sapporo
+  const CUISINE_LOCAL = {
+    "拉麵": ["ラーメン", "라멘"], "壽司": ["寿司", "스시"], "燒肉": ["焼肉", "고기구이"], "海鮮": ["海鮮", "해산물"],
+    "壽喜燒／火鍋": ["すき焼き しゃぶしゃぶ", "전골"], "居酒屋／串燒": ["居酒屋", "이자카야"], "湯咖哩／咖哩": ["スープカレー", "카레"],
+    "蕎麥／烏冬": ["そば うどん", "우동"], "炸物／天婦羅": ["天ぷら とんかつ", "돈까스"], "大阪燒／章魚燒": ["お好み焼き", "오코노미야키"],
+    "韓國菜": ["韓国料理", "한식"], "中菜／點心": ["中華料理", "중식"], "西餐": ["イタリアン 洋食", "양식"], "咖啡／甜品": ["カフェ スイーツ", "카페 디저트"],
+  };
+  function cuisineWord(name){
+    const row = CUISINE_LOCAL[name];
+    if (!row) return name;
+    return destIsJapan() ? row[0] : destIsKorea() ? row[1] : name.split("／")[0];
+  }
   function cuisineOf(st){
     if (!st || !(st.type === "eat" || st.isFood)) return null;
     const t = [plain(st.cuisine), plain(st.title), plain(st.kr), plain(st.desc).slice(0, 80)].join(" ");
