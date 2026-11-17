@@ -630,9 +630,6 @@ async function briefs(facts: any[], kind: string, ask = "") {
 }
 // Shops on a shopping street are mostly small "store"s, not malls, so all three count.
 const KIND_TYPE: Record<string, string[]> = { eat: ["restaurant"], see: ["tourist_attraction"], shop: ["store", "shopping_mall", "department_store"] };
-// Places worth adding between two stops: candidates from Google around both
-// (and the middle), ranked by rating, how many rated it and how far off the
-// way it is; then the best few are described from their reviews.
 // Places worth adding between two stops, in one list that mixes two kinds of
 // good: what Google rates highly right there, and what is famous (a 名店
 // people travel for). Google gives the real places nearby; the model, which
