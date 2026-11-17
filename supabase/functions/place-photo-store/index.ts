@@ -47,10 +47,6 @@ function publicUrl(base: string, name: string): string {
   return `${base}/storage/v1/object/public/${BUCKET}/${name}`;
 }
 
-// Google reports failures in the BODY, not the HTTP status, so a refused key
-// and a place that genuinely has no pictures both arrive as 200 with an empty
-// list. Carrying the status back is what stops "your key is switched off"
-// from being reported to the family as "this place has no photos".
 // Places API (New). A refusal comes back as an HTTP error with a status
 // word, which is carried back so "your key is switched off" is never
 // reported to the family as "this place has no photos".
