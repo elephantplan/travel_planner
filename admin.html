@@ -40,6 +40,19 @@ h2 small{font-weight:400;color:var(--ink-faint);}
 select{min-height:36px;border-radius:10px;border:1px solid var(--rule);background:var(--paper);color:var(--ink);font:inherit;padding:0 8px;max-width:100%;}
 .msg{padding:12px 14px;border-radius:12px;background:var(--danger-bg);color:var(--danger);margin:14px 0;}
 .note{color:var(--ink-faint);font-size:13px;}
+.g-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 0;border-top:1px solid var(--rule);font-size:13.5px;}
+.g-row:first-of-type{border-top:0;}
+.g-row b{font-weight:600;}
+.g-row em{font-style:normal;color:var(--ink-faint);font-size:12.5px;text-align:right;}
+.g-bar{grid-column:1/-1;height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
+.g-bar i{display:block;height:100%;background:var(--ok);border-radius:inherit;}
+.g-bar i.warn{background:var(--gold);}
+.g-bar i.over{background:var(--danger);}
+.g-sum{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;margin-bottom:8px;}
+.g-sum strong{font-size:22px;}
+.g-days{display:flex;align-items:flex-end;gap:2px;height:48px;margin:10px 0 2px;}
+.g-days i{flex:1;background:color-mix(in srgb,var(--gold) 70%,transparent);border-radius:2px 2px 0 0;min-height:1px;}
+.g-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 16px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;}
 #toast.on{opacity:1;}
 </style>
@@ -47,6 +60,7 @@ select{min-height:36px;border-radius:10px;border:1px solid var(--rule);backgroun
 <body>
 <main>
   <header><h1>DumboFly 管理</h1><a class="btn" href="index.html">返主頁</a></header>
+  <section id="gusage" hidden></section>
   <div id="app"><p class="note">載入緊…</p></div>
 </main>
 <div id="toast"></div>
@@ -125,6 +139,64 @@ select{min-height:36px;border-radius:10px;border:1px solid var(--rule);backgroun
     }));
   }
   load();
+
+  // ---- Google 用量：each billed call the edge functions made, counted by
+  // billing tier. An estimate (Google's own console has the real bill), but
+  // enough to see a free allowance running out before the family does.
+  // Free calls a month and US$ per 1,000 after that, as Google listed them in
+  // 2025; change here if Google changes its price list.
+  const G_TIERS = {
+    ids:                   { name: "只攞 ID",         free: Infinity, per1k: 0 },
+    essentials:            { name: "Essentials",      free: 10000,    per1k: 5 },
+    pro:                   { name: "Pro",             free: 5000,     per1k: 32 },
+    enterprise:            { name: "Enterprise",      free: 1000,     per1k: 35 },
+    enterprise_atmosphere: { name: "Enterprise + 評論", free: 1000,   per1k: 40 },
+  };
+  const G_APIS = { text_search: "地點搜尋 (Text Search)", nearby: "附近搜尋 (Nearby)", details: "地點詳情 (Details)" };
+  // Details cost less than searches at the same tier
+  const DETAIL_PER1K = { essentials: 5, pro: 17, enterprise: 20, enterprise_atmosphere: 25 };
+  function gSku(sku){
+    if (sku === "photo") return { label: "相片 (Place Photos)", free: 1000, per1k: 7 };
+    if (sku === "routes") return { label: "交通路線 (Routes)", free: 10000, per1k: 5 };
+    const [api, tier] = sku.split(":"), t = G_TIERS[tier] || { name: tier, free: 1000, per1k: 35 };
+    return { label: `${G_APIS[api] || api}・${t.name}`, free: t.free,
+      per1k: api === "details" && tier in DETAIL_PER1K ? DETAIL_PER1K[tier] : t.per1k };
+  }
+  async function loadUsage(){
+    const box = $("#gusage");
+    let u;
+    try { u = await TripAuth.rpc("admin_google_usage", {}); } catch { return; }  // not an admin, or not set up: the rest of the page says so
+    const skus = (u && u.skus || []).map(r => ({ ...r, ...gSku(r.sku) })).sort((a, b) => b.calls - a.calls);
+    const total = skus.reduce((n, r) => n + r.calls, 0);
+    const cost = skus.reduce((n, r) => n + Math.max(0, r.calls - r.free) / 1000 * r.per1k, 0);
+    const days = u && u.days || [];
+    const month = new Date((u && u.month) || Date.now());
+    const dim = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const perDay = Array.from({ length: dim }, (_, i) => (days.find(d => new Date(d.day).getDate() === i + 1) || {}).calls || 0);
+    const peak = Math.max(1, ...perDay);
+    const today = perDay[new Date().getDate() - 1] || 0;
+    box.hidden = false;
+    box.innerHTML = `<h2>Google 用量 <small>${month.getMonth() + 1} 月・估計</small></h2>
+      <div class="card">
+        <div class="g-sum"><strong>${total.toLocaleString()}</strong><span>次收費 call</span>
+          <span>今日 ${today.toLocaleString()} 次</span>
+          <span>超出免費額估計 <b>US$${cost.toFixed(2)}</b></span></div>
+        ${skus.length ? skus.map(r => {
+          const pct = r.free === Infinity ? 0 : Math.min(100, r.calls / r.free * 100);
+          return `<div class="g-row"><b>${esc(r.label)}</b>
+            <em>${r.calls.toLocaleString()}${r.free === Infinity ? "・免費" : ` / ${r.free.toLocaleString()} 免費`}</em>
+            ${r.free === Infinity ? "" : `<div class="g-bar"><i class="${pct >= 100 ? "over" : pct >= 80 ? "warn" : ""}" style="width:${Math.max(pct, 1)}%"></i></div>`}</div>`;
+        }).join("") : `<p class="note">今個月仲未有 call 記錄。</p>`}
+        <div class="g-days" aria-label="每日 call 數">${perDay.map((n, i) => `<i style="height:${n / peak * 100}%" title="${i + 1} 號：${n} 次"></i>`).join("")}</div>
+        <p class="note">由 app 自己數（2026 年 11 月 17 日開始），價錢同免費額係 Google 公佈嘅大約數。真正帳單、餘額同增值要去 Google Cloud 睇。</p>
+        <div class="g-links">
+          <a class="btn primary" href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google 帳單</a>
+          <a class="btn" href="https://console.cloud.google.com/billing/budgets" target="_blank" rel="noopener">預算提示</a>
+          <a class="btn" href="https://console.cloud.google.com/google/maps-apis/quotas" target="_blank" rel="noopener">每日上限 (Quotas)</a>
+        </div>
+      </div>`;
+  }
+  loadUsage();
 })();
 </script>
 </body>
