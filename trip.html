@@ -1956,6 +1956,9 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .swcard .sc-top{justify-content:flex-start;}
 .sw-hy{color:var(--gold);}
 .sw-unv{color:var(--warn,#c9822b);font-weight:700;}
+.sw-keep{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 10px;border-radius:12px;background:var(--surface-2,rgba(127,127,127,.08));font-size:13.5px;cursor:pointer;}
+.sw-keep input{width:18px;height:18px;margin:1px 0 0;flex:none;accent-color:var(--gold,#B8860B);}
+.sw-keep small{display:block;color:var(--ink-faint);font-size:12px;}
 .sw-diag{margin-top:10px;font-size:12px;color:var(--ink-faint);}
 .sw-diag summary{cursor:pointer;}
 .sw-diag div{margin-top:3px;}
@@ -2341,7 +2344,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-34";
+  const BUILD = "2026-11-17-35";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -7712,30 +7715,51 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         rating: p.rating, ratingCount: p.ratingCount, desc: p.what || p.fit || "", ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
         ...(Array.isArray(p.probe && p.probe.weekdayText) ? { weekdayText: p.probe.weekdayText } : {}),
         mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
-      // Everything a search recommends is kept under this stop as a backup,
-      // picked or not, so nothing it found is lost when the sheet closes.
-      // Only the newest KEEP_FOUND of these kept ones stay; backups added
-      // by hand are never dropped.
+      // What a search recommends can be kept under this stop as backups,
+      // picked or not — asked with a tick box (remembered), and done only
+      // when the sheet goes, so unticking first adds nothing. Only the
+      // newest KEEP_FOUND of these kept ones stay; backups added by hand
+      // are never dropped.
       const KEEP_FOUND = 8;
+      let keepOn = true, picked = null;
+      const shown = [];   // every place shown, across 再搵過, oldest first
+      try { keepOn = localStorage.getItem("sw_keep_found") !== "0"; } catch {}
       const keyOf = p => p.placeId || p.name_zh || p.name || p.title;
       const altKey = a => a.placeId || a.title;
       const keepFound = () => {
         const have = new Set([st.placeId, ...(st.alts || []).map(altKey)].filter(Boolean));
-        const add = found.filter(p => !have.has(keyOf(p))).map(p => Object.assign(asAlt(p), { found: 1 }));
+        const add = shown.filter(p => !(picked && keyOf(p) === keyOf(picked)) && !have.has(keyOf(p))).map(p => Object.assign(asAlt(p), { found: 1 }));
         if (!add.length) return 0;
         const all = [...(st.alts || []), ...add], auto = all.filter(a => a.found);
         const drop = new Set(auto.slice(0, Math.max(0, auto.length - KEEP_FOUND)));
         st.alts = all.filter(a => !drop.has(a));
         return add.length;
       };
+      layerCloseHook = () => {
+        if (!keepOn || !shown.length) return;
+        const n = keepFound();
+        if (!n || picked) return;     // a pick saves it all together
+        render();
+        saveSoon(`搵到嘅 ${n} 間留咗做「${cleanPlaceName(plain(st.title))}」嘅後備`);
+        flash(`搵到嘅 ${n} 間留咗做後備`);
+      };
       const paint = (note) => {
+        found.forEach(p => { const i = shown.findIndex(x => keyOf(x) === keyOf(p)); if (i >= 0) shown[i] = p; else shown.push(p); });
+        const nm = esc(cleanPlaceName(plain(st.title)) || "呢個站");
         out.innerHTML = (note ? `<p class="hint">${esc(note)}</p>` : "") +
-          (found.length ? `<p class="hint">搵到嘅${found.length > 1 ? "幾" : "呢"}間已經收埋做「${esc(cleanPlaceName(plain(st.title)))}」嘅後備，唔揀都唔會唔見；揀一間就即刻換做佢。</p>` : "") + found.map(row).join("");
+          (found.length ? `<label class="sw-keep"><input type="checkbox" id="sw-keep"${keepOn ? " checked" : ""}>
+            <span>搵到嘅都留低做「${nm}」嘅後備<small>唔揀都會留，之後一撳就換得返；唔想要就剔走。</small></span></label>` : "") + found.map(row).join("");
+        const kb = out.querySelector("#sw-keep");
+        if (kb) kb.addEventListener("change", () => { keepOn = kb.checked; try { localStorage.setItem("sw_keep_found", keepOn ? "1" : "0"); } catch {} });
         out.querySelectorAll("[data-swpick]").forEach(b => b.addEventListener("click", async () => {
-          const p = found[+b.dataset.swpick]; closeLayer();
-          // the chosen one leaves the backups; the old stop joins them
+          const p = found[+b.dataset.swpick];
+          picked = p;
+          // the chosen one is not a backup of itself; the old stop becomes one
           if (Array.isArray(st.alts)) st.alts = st.alts.filter(a => altKey(a) !== keyOf(p));
+          const n = keepOn ? shown.filter(x => keyOf(x) !== keyOf(p)).length : 0;
+          closeLayer();
           await swapStopTo(day, st, p, p.probe, "");
+          if (n) flash(`換咗做「${p.name_zh || p.name}」，原本嗰間同其他 ${n} 間搵到嘅都留咗做後備`);
         }));
       };
       go.addEventListener("click", async () => {
@@ -7824,19 +7848,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           return;
         }
         const head = (other ? `附近冇${esc(wants.join("、"))}喺 ${t != null ? esc(fmtMin(t)) : "嗰陣"}有開；以下係附近嗰陣有開嘅其他餐廳。` : "") + (shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
-        const kept = keepFound();
-        if (kept){ render(); saveSoon(`搵到 ${kept} 間收埋做「${cleanPlaceName(plain(st.title))}」嘅後備`); }
         paint(head);
         out.insertAdjacentHTML("beforeend", diag);
         out.scrollIntoView({ block: "start", behavior: "smooth" });
-        if (await briefsFor(found, "eat")){
-          // the backups get the descriptions that just arrived
-          let more = false;
-          found.forEach(p => { const a = (st.alts || []).find(x => x.found && altKey(x) === keyOf(p)), d = p.what || p.fit || "";
-            if (a && d && !a.desc){ a.desc = d; more = true; } });
-          if (more) saveNow("後備餐廳加咗介紹", true);
-          if (out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
-        }
+        if (await briefsFor(found, "eat") && out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
       });
       // shut then: the same kind is ticked, but nothing is searched until
       // they have had a chance to change it
@@ -11460,7 +11475,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // ==================================================================
   // LAYERS (sheet / modal)
   // ==================================================================
+  // a sheet that has something to settle when it goes, however it goes
+  // (the ✕, the dark backdrop, Escape, or another sheet opening over it)
+  let layerCloseHook = null;
+  function runLayerCloseHook(){ const h = layerCloseHook; layerCloseHook = null; if (h) try { h(); } catch (e){ console.error(e); } }
   function closeLayer(){
+    runLayerCloseHook();
     $("#layer").innerHTML = "";
     document.body.style.overflow = "";
     repinDock();
@@ -11508,6 +11528,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     });
   }
   function openSheet(inner, after, opts){
+    runLayerCloseHook();
     const layer = $("#layer");
     layer.innerHTML = `<div class="scrim" data-close></div>
       <div class="sheet${opts && opts.tall ? " tall" : ""}" role="dialog" aria-modal="true"><div class="sheet-wide">
