@@ -27,6 +27,8 @@ async function run(b, japan){
   await p.route('**/functions/v1/**', r => {
     let body = {}; try { body = JSON.parse(r.request().postData() || '{}'); } catch (_){}
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    // a real place-brief takes seconds: nothing on screen may wait for it
+    if (body.mode === 'place-brief') return new Promise(res => setTimeout(res, 6000)).then(() => j({ ok: true, brief: null })).catch(() => {});
     if (body.mode === 'suggest-add'){ wants.push(body.want);
       if (body.want === 'ラーメン') return j({ ok: true, places: [] });
       if (/そば|うどん/.test(body.want)) return j({ ok: true, unverified: true, ranked: true, message: 'Google 地點搜尋冇答（OVER_QUERY_LIMIT）', places: [{ placeId: '', name: '二八そば 本店', name_zh: '二八蕎麥', fit: '當地人推介嘅手打蕎麥', unverified: true, famous: true }] });
@@ -102,8 +104,8 @@ async function run(b, japan){
     await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
     ok('結果卡都冇 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('#sw-out').innerText()));
-    await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(600);
-    ok('揀咗之後問其他要唔要留做後備', /換咗做「夜鮨」/.test(await p.locator('.sheet h3').innerText()) && /其他 1 間都留做後備/.test(await p.locator('#sw-keeprest').innerText()));
+    await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(400);
+    ok('揀咗即刻有反應（唔等介紹）', /換咗做「夜鮨」/.test(await p.locator('.sheet h3').innerText()) && /其他 1 間都留做後備/.test(await p.locator('#sw-keeprest').innerText()));
     await p.screenshot({ path: '/tmp/claude-0/swdone.png' });
     await p.locator('#sw-keeprest').click(); await p.waitForTimeout(1800);
     const st = last().days[1].items.find(i => i.placeId === 'pB');

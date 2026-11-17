@@ -2361,7 +2361,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-38";
+  const BUILD = "2026-11-17-39";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -7768,7 +7768,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           const was = cleanPlaceName(plain(st.title));
           // the chosen one is not a backup of itself; the old stop becomes one
           if (isKept(p)) st.alts = st.alts.filter(a => altKey(a) !== keyOf(p));
-          await swapStopTo(day, st, p, p.probe, "");
+          out.querySelectorAll("[data-swpick]").forEach(x => { x.disabled = true; });
+          // the swap itself happens at once; the photo, hours and intro that
+          // follow take seconds, so they are not waited for here
+          swapStopTo(day, st, p, p.probe, "").catch(e => console.error(e));
           // the sheet stays to ask, once, about the rest of the list
           const rest = found.filter(x => x !== p);
           const loose = rest.filter(x => !isKept(x) && keyOf(x) !== st.placeId);
