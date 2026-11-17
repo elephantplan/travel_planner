@@ -15,6 +15,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await (await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 1000 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const manyBodies = [];
   const saved = [], notes = [], noteGets = [];
   await p.route('**/rest/v1/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await p.route('**/rest/v1/itinerary_versions**', r => {
@@ -37,8 +38,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.mode === 'suggest-add') return j({ ok: true, places: [
       { name: 'Sushi A', placeId: 'sA', lat: 37.58, lng: 126.98, rating: 4.5, ratingCount: 300, walk: 4, nearName: '景福宮', types: ['restaurant'] },
-      { name: 'Sushi B', placeId: 'sB', lat: 37.581, lng: 126.981, rating: 4.3, ratingCount: 120, walk: 6, nearName: '景福宮', types: ['restaurant'] }] });
-    if (body.mode === 'brief-many') return new Promise(res => setTimeout(res, 2000)).then(() => j({ ok: true, briefs: { sA: { name_zh: '壽司甲', what: '好新鮮', mustTry: '吞拿魚', rank: 0 }, sB: { name_zh: '壽司乙', what: '平', mustTry: '', rank: 1 } } }));
+      { name: 'Sushi B', placeId: 'sB', lat: 37.581, lng: 126.981, rating: 4.3, ratingCount: 120, walk: 6, nearName: '景福宮', types: ['restaurant'] }], ask: '壽司' });
+    if (body.mode === 'brief-many'){ manyBodies.push(body); } if (body.mode === 'brief-many') return new Promise(res => setTimeout(res, 2000)).then(() => j({ ok: true, briefs: { sA: { name_zh: '壽司甲', what: '好新鮮', mustTry: '吞拿魚', rank: 0 }, sB: { name_zh: '壽司乙', what: '平', mustTry: '', rank: 1 } } }));
     return j({ ok: true });
   });
   await p.route('**tile**', r => r.abort());
@@ -54,13 +55,14 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-instab="ai"]').click();
   await p.locator('#ins-go').click();
   await p.waitForTimeout(600);
-  ok('介紹未寫好', /寫緊介紹/.test(await p.locator('#ins-nearres').innerText()));
+  ok('排緊次序', /睇緊邊間最啱你/.test(await p.locator('#ins-nearres').innerText()));
   await p.locator('#ins-nearres [data-pick]').nth(0).click();
   await p.waitForTimeout(300);
   ok('揀咗一間個 sheet 唔會關', await p.locator('#ins-nearres').isVisible());
   ok('揀咗嗰間變剔', await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
   await p.waitForTimeout(2500);
-  ok('介紹寫好之後', /好新鮮/.test(await p.locator('#ins-nearres').innerText()));
+  ok('排好之後見到中文名', /壽司甲/.test(await p.locator('#ins-nearres').innerText()));
+  ok('列表唔會為每間攞 Google 評論（淨係排次序）', manyBodies.length && manyBodies.every(b => Array.isArray(b.places) && !b.placeIds), manyBodies);
   ok('揀咗嗰間仲係剔住', await p.locator('#ins-nearres .nr-add.added').count() === 1 && await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
   await p.locator('#ins-nearres [data-pick]').nth(1).click();
   await p.waitForTimeout(300);

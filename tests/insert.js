@@ -78,7 +78,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(800);
   const q0 = near[0] || {};
   ok('用前後兩個地點搵順路', q0.kind === 'eat' && (q0.points || []).length === 2 && q0.skip.includes('p4'), q0);
-  ok('先攞 Google 名單，介紹之後先寫', q0.brief === false && many.length === 1 && many[0].placeIds.includes('pN1') && /參雞湯/.test(many[0].ask || ''), many);
+  ok('先攞 Google 名單，之後淨係按要求排次序（唔逐間攞評論）', q0.brief === false && many.length === 1 && !many[0].placeIds && (many[0].places || []).some(x => x.placeId === 'pN1') && /參雞湯/.test(many[0].ask || ''), many);
   ok('想要嘅嘢同選項都傳埋過去', q0.want === '參雞湯' && q0.prefs && q0.prefs.budget === 2 && q0.prefs.kids === true, q0);
   const st2 = await sh.innerText();
   ok('有中文名、Google 評分同幾多人評', /土俗村參雞湯/.test(st2) && /4\.4（21,000 人評）/.test(st2), st2.slice(0, 300));

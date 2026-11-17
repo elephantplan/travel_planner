@@ -34,7 +34,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.mode === 'suggest-add') return j({ ok: true, places: [
       { name: 'Sushi A', placeId: 'sA', lat: 37.58, lng: 126.98, rating: 4.5, ratingCount: 300, walk: 4, nearName: '景福宮', types: ['restaurant'] },
-      { name: 'Sushi B', placeId: 'sB', lat: 37.581, lng: 126.981, rating: 4.3, ratingCount: 120, walk: 6, nearName: '景福宮', types: ['restaurant'] }] });
+      { name: 'Sushi B', placeId: 'sB', lat: 37.581, lng: 126.981, rating: 4.3, ratingCount: 120, walk: 6, nearName: '景福宮', types: ['restaurant'] }], ask: '壽司' });
     if (body.mode === 'brief-many') return j({ ok: true, briefs: { sA: { name_zh: '壽司甲', what: '好新鮮', mustTry: '吞拿魚', rank: 0 }, sB: { name_zh: '壽司乙', what: '平', mustTry: '', rank: 1 } } });
     return j({ ok: true });
   });

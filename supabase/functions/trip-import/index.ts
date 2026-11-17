@@ -119,6 +119,81 @@ function whyFailed(m: string): string {
   return "AI 出錯：" + m.slice(0, 160);
 }
 
+// ---------- what Google said about a place, kept ----------
+// Reviews, contact details and nearest stations don't change from one day
+// to the next; once Google has answered, every trip reads the same answer
+// from the place_cache table instead of paying for it again.
+function sbAdmin() {
+  const k = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  return { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" };
+}
+async function cacheGet(key: string, maxDays: number): Promise<any> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/place_cache?key=eq.${encodeURIComponent(key)}&select=data,updated_at`, { headers: sbAdmin() });
+    if (!res.ok) return null;
+    const row = (await res.json())[0];
+    if (!row || (Date.now() - new Date(row.updated_at).getTime()) / 86400000 > maxDays) return null;
+    return row.data;
+  } catch { return null; }
+}
+async function cachePut(key: string, data: unknown) {
+  try {
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/place_cache?on_conflict=key`, {
+      method: "POST", headers: { ...sbAdmin(), Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key, data, updated_at: new Date().toISOString() }) });
+  } catch { /* the answer is still returned */ }
+}
+
+// ---------- opening hours and ratings, kept ----------
+// Hours only (Contact data) or rating only (Atmosphere data), never both in
+// one ask, and each kept per place: a place Google has no hours for is
+// remembered too, so it isn't asked again.
+function summarizeHours(weekdayText: string[]): string {
+  const parts = weekdayText.map(line => {
+    const idx = line.indexOf(":");
+    return idx < 0 ? { day: line.trim(), hours: "" } : { day: line.slice(0, idx).trim(), hours: line.slice(idx + 1).trim() };
+  });
+  const groups = new Map<string, string[]>();
+  for (const p of parts) {
+    const key = p.hours || "休息";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p.day);
+  }
+  if (groups.size === 1) return `${[...groups.keys()][0]}（每日）`;
+  if (groups.size > 3) return "每日時間唔同，詳情請睇 Google 地圖";
+  return [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+    .map(([hours, days]) => `${days.join("、")}：${hours}`).join("；");
+}
+async function placeHours(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const pid = str(body?.placeId, 200);
+  if (!key || !pid) return { ok: false, message: "冇地點資料，攞唔到營業時間。" };
+  let hit = await cacheGet("hours:" + pid, 30);
+  if (!hit) {
+    const data = await gplaces(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=opening_hours&language=zh-TW&key=${key}`);
+    if (gRefused(data) && data.status !== "NOT_FOUND" && data.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(data) };
+    const wd = data?.result?.opening_hours?.weekday_text;
+    hit = { weekdayText: Array.isArray(wd) && wd.length === 7 ? wd : null };
+    await cachePut("hours:" + pid, hit);
+  }
+  const wd = hit.weekdayText;
+  return { ok: true, weekdayText: wd || null, summary: wd ? summarizeHours(wd) : "" };
+}
+async function placeRating(body: any) {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  const pid = str(body?.placeId, 200);
+  if (!key || !pid) return { ok: false, message: "冇地點資料，攞唔到評分。" };
+  let hit = await cacheGet("rating:" + pid, 30);
+  if (!hit) {
+    const data = await gplaces(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=rating,user_ratings_total&key=${key}`);
+    if (gRefused(data) && data.status !== "NOT_FOUND" && data.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(data) };
+    const r = data?.result || {};
+    hit = { rating: typeof r.rating === "number" ? r.rating : null, ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null };
+    await cachePut("rating:" + pid, hit);
+  }
+  return { ok: true, rating: hit.rating, ratingCount: hit.ratingCount, placeId: pid };
+}
+
 // ---------- one leg between two places ----------
 // Google's Directions API returns no public transport at all in Japan, so the
 // old lookup could only offer a 60-minute walk. Walking, driving and (where
@@ -167,6 +242,14 @@ const mins = (sec: number) => Math.max(1, Math.round(sec / 60));
 async function nearestStation(at: any): Promise<{ name: string; ref: string } | null> {
   const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   if (!key || !at || !Number.isFinite(at.lat)) return null;
+  const ck = `station:${Number(at.lat).toFixed(3)},${Number(at.lng).toFixed(3)}`;
+  const hit = await cacheGet(ck, 180);
+  if (hit) return hit.name ? hit : null;
+  const found = await nearestStationFromGoogle(at, key);
+  await cachePut(ck, found || { name: "" });
+  return found;
+}
+async function nearestStationFromGoogle(at: any, key: string): Promise<{ name: string; ref: string } | null> {
   for (const type of ["train_station", "subway_station"]) {
     try {
       const j = await (await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${at.lat},${at.lng}&rankby=distance&type=${type}&language=ja&key=${key}`)).json();
@@ -254,6 +337,8 @@ async function placeContact(body: any) {
   const lang = str(body?.lang, 8) || "ja";
   let pid = str(body?.placeId, 200);
   if (!key) return { ok: false };
+  const ck = pid ? `contact:${lang}:${pid}` : "";
+  if (ck) { const hit = await cacheGet(ck, 90); if (hit) return hit; }
   try {
     if (!pid) {
       const q = str(body?.query, 80);
@@ -264,8 +349,10 @@ async function placeContact(body: any) {
     }
     const r = (await (await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=name,formatted_address,formatted_phone_number,international_phone_number&language=${lang}&key=${key}`)).json())?.result;
     if (!r) return { ok: false };
-    return { ok: true, name: String(r.name || ""), address: String(r.formatted_address || "").replace(/^日本、?\s*/, "").replace(/^대한민국\s*/, ""),
+    const out = { ok: true, name: String(r.name || ""), address: String(r.formatted_address || "").replace(/^日本、?\s*/, "").replace(/^대한민국\s*/, ""),
       phone: String(r.formatted_phone_number || ""), intl: String(r.international_phone_number || "") };
+    if (ck) await cachePut(ck, out);
+    return out;
   } catch { return { ok: false }; }
 }
 
@@ -360,15 +447,19 @@ async function nearbyPlaces(body: any) {
 async function placeFacts(placeId: string) {
   const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   if (!key || !placeId) return null;
+  const hit = await cacheGet("facts:" + placeId, 60);
+  if (hit) return hit;
   try {
     const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
       `&fields=name,types,formatted_address,rating,user_ratings_total,price_level,editorial_summary,reviews&reviews_sort=most_relevant&language=zh-TW&key=${key}`;
     const r = (await (await fetch(url)).json())?.result;
     if (!r) return null;
-    return { placeId, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 80), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
+    const out = { placeId, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 80), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
       ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
       summary: String(r.editorial_summary?.overview || "").slice(0, 200),
       reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
+    await cachePut("facts:" + placeId, out);
+    return out;
   } catch { return null; }
 }
 const BRIEF_PROMPT = (items: string, kind: string, ask = "") => `下面係一啲 Google 地圖上面嘅地點，有 Google 自己嘅簡介同真實評論（JSON）。
@@ -475,6 +566,17 @@ async function suggestAdd(body: any) {
 // and which it leaves out, says which fit best.
 async function briefMany(body: any) {
   const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
+  // a list on screen: only ranked against the request, from what the
+  // search already returned (name, kind, rating) — no review lookups, which
+  // are the dearest Google call; the intro comes once a place is added
+  if (Array.isArray(body?.places)) {
+    const ask = str(body?.ask, 120);
+    const facts = body.places.slice(0, 10).map((p: any) => ({ placeId: str(p?.placeId, 200), name: str(p?.name, 80),
+      types: (Array.isArray(p?.types) ? p.types : []).slice(0, 5).map((t: unknown) => str(t, 30)),
+      rating: Number(p?.rating) || null, ratingCount: Number(p?.ratingCount) || 0 })).filter((p: any) => p.placeId);
+    if (!facts.length || !ask) return { ok: true, briefs: {} };
+    return { ok: true, briefs: await briefs(facts, kind, ask) };
+  }
   const ids = (Array.isArray(body?.placeIds) ? body.placeIds : []).map((x: unknown) => str(x, 200)).filter(Boolean).slice(0, 8);
   if (!ids.length) return { ok: false, briefs: {} };
   const facts = (await Promise.all(ids.map((id: string) => placeFacts(id)))).filter(Boolean) as any[];
@@ -482,12 +584,18 @@ async function briefMany(body: any) {
 }
 async function placeBrief(body: any) {
   const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
-  const f = await placeFacts(str(body?.placeId, 200));
+  const pid = str(body?.placeId, 200);
+  const ck = `brief2:${kind}:${pid}`;
+  const hit = pid ? await cacheGet(ck, 90) : null;
+  if (hit) return { ok: true, brief: hit };
+  const f = await placeFacts(pid);
   if (!f) return { ok: false, message: "搵唔到呢個地點嘅資料。" };
   const isFood = kind === "eat" || (f.types || []).some((t: string) => /restaurant|food|cafe|bakery|bar|meal/.test(t));
   const x = (await briefs([f], isFood ? "eat" : kind))[f.placeId] || {};
-  return { ok: true, brief: { name_zh: x.name_zh || "", what: x.what || "", mustTry: x.mustTry || "", food: isFood,
-    rating: f.rating, ratingCount: f.ratingCount, price: f.price } };
+  const brief = { name_zh: x.name_zh || "", what: x.what || "", mustTry: x.mustTry || "", food: isFood,
+    rating: f.rating, ratingCount: f.ratingCount, price: f.price };
+  if (brief.what) await cachePut(ck, brief);
+  return { ok: true, brief };
 }
 
 // A long leg — another city, an airport — asked the way a travel agent
@@ -694,6 +802,8 @@ Deno.serve(async (req) => {
   if (body?.mode === "nearby") return json(await nearbyPlaces(body));
   if (body?.mode === "near-search") return json(await nearSearch(body));
   if (body?.mode === "place-contact") return json(await placeContact(body));
+  if (body?.mode === "place-hours") return json(await placeHours(body));
+  if (body?.mode === "place-rating") return json(await placeRating(body));
   if (body?.mode === "suggest-add") return json(await suggestAdd(body));
   if (body?.mode === "place-brief") return json(await placeBrief(body));
   if (body?.mode === "brief-many") return json(await briefMany(body));

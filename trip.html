@@ -2327,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-27";
+  const BUILD = "2026-11-17-28";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2694,7 +2694,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const timer = setTimeout(() => ctl.abort(), 60000);
     let res;
     try {
-      res = await fetch(FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
+      // hours and ratings go through trip-import, which keeps Google's
+      // answer for each place so it is only paid for once
+      const kept = body.action === "place-hours" || (body.action === "place-rating" && body.placeId);
+      if (kept) body.mode = body.action;
+      res = await fetch(kept ? SUPABASE_URL + "/functions/v1/trip-import" : FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
     } catch (e){
       if (e && e.name === "AbortError"){
         throw new Error("AI 諗咗超過 60 秒都未有回音，可能係 Gemini 塞緊車。等一陣再撳多次。");
@@ -7485,19 +7489,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const r = await res.json().catch(() => null);
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       list.ask = (r && r.ask) || "";
+      if (!list.ask) list.forEach(p => { p.briefed = true; });
       if (!r || r.ok === false){ list.failed = (r && r.message) || `伺服器答 ${res.status}`; if (/Google/.test(list.failed)) googleRefusal = list.failed; }
       if (list.length) sugCache.set(k, list);
       return list;
     } catch (e){ const l = []; l.failed = e.message || "error"; return l; }
   }
-  // the intros for a list already on screen, written from each place's
-  // Google reviews; with a request, the order says which fit best
+  // A list on screen is only ranked against what they asked for, from what
+  // the search already returned — reviews (Google's dearest lookup) are read
+  // once a place is actually added to the day, not for every place shown.
   async function briefsFor(list, kind){
     const todo = list.filter(p => p.placeId && !p.briefed);
     if (!todo.length) return false;
+    if (!list.ask){ todo.forEach(p => { p.briefed = true; }); return false; }
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "brief-many", kind, ask: list.ask || "", placeIds: todo.map(p => p.placeId) }) }), 45000, null);
+        body: JSON.stringify({ mode: "brief-many", kind, ask: list.ask, places: todo.map(p => ({ placeId: p.placeId, name: p.name, types: p.types || [], rating: p.rating, ratingCount: p.ratingCount })) }) }), 45000, null);
       const r = res ? await res.json() : null;
       const b = (r && r.briefs) || {};
       todo.forEach(p => { const x = b[p.placeId]; p.briefed = true;
@@ -7520,7 +7527,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
       <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
       ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
-      ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊 Google 評論，寫緊介紹…</span></p>`}
+      ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
       ${p.mustTry ? `<p class="sc-must"><i>${MUST_LABEL[kind] || "推介"}</i>${esc(p.mustTry)}</p>` : ""}
       ${g ? `<a class="sc-g" href="${esc(g)}" target="_blank" rel="noopener">${icon("link")}Google 睇相同評論</a>` : ""}
     </div>`;
@@ -7649,7 +7656,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
             Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "", p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).join("・")}</div>
           ${p.openNote ? `<div class="sw-open">${icon("check")}${esc(p.openNote)}</div>` : ""}
-          ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊 Google 評論…</span></p>`}
+          ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
           ${p.mustTry ? `<p class="sc-must"><i>必食</i>${esc(p.mustTry)}</p>` : ""}
           <div class="sw-acts"><button class="btn primary" data-swpick="${k}">揀呢間</button><button class="btn" data-swalt="${k}">做後備</button>
             ${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}</div>
@@ -7706,17 +7713,27 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }
         cands = cands.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
         // open when we'd be there
-        let shut = 0;
-        await Promise.all(cands.map(async p => {
+        // Opening hours are a dear lookup: checked three at a time, best
+        // first, only until enough are open — not for every place found.
+        const checkHours = async p => {
           const probe = { placeId: p.placeId, eatMeta: [], time: st.time };
           await enrichHours(probe);
           p.probe = probe;
-          const why = stopShutThen(probe, day);
-          if (why) p.shut = true;
+          if (stopShutThen(probe, day)) p.shut = true;
           else if (Array.isArray(probe.weekdayText) && t != null){ const r = openRanges(probe, day); const hit = r && r.find(([o, c]) => t >= o && t <= c); p.openNote = hit ? `嗰陣有開（${fmtMin(hit[0])}–${fmtMin(hit[1] % 1440)}）` : "嗰陣有開"; }
-        }));
+        };
+        const firstOpen = async (list, n) => {
+          const ok = [];
+          for (let i = 0; i < list.length && ok.length < n; i += 3){
+            const part = list.slice(i, i + 3);
+            await Promise.all(part.map(checkHours));
+            part.forEach(p => { if (!p.shut && ok.length < n) ok.push(p); });
+          }
+          return ok;
+        };
+        let shut = 0;
+        found = await firstOpen(cands, 5);
         shut = cands.filter(p => p.shut).length;
-        found = cands.filter(p => !p.shut).slice(0, 6);
         // none of those kinds open then: any restaurant nearby that is, said so plainly
         let other = false;
         if (!found.length && !hyakuOnly){
@@ -7726,14 +7743,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           if (any.failed) failed.push(any.failed);
           if (!any.length){ const r = (await nearSearchAt(destIsJapan() ? "レストラン" : "restaurant", anchors[0]).catch(() => null)) || []; any = r.filter(x => x.placeId && x.meters <= 2500).map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) })); steps[steps.length - 1].text = any.length; }
           const extra = any.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
-          await Promise.all(extra.map(async p => {
-            const probe = { placeId: p.placeId, eatMeta: [], time: st.time };
-            await enrichHours(probe);
-            p.probe = probe;
-            if (stopShutThen(probe, day)){ p.shut = true; shut++; }
-            else if (Array.isArray(probe.weekdayText) && t != null){ const r = openRanges(probe, day); const hit = r && r.find(([o, c]) => t >= o && t <= c); p.openNote = hit ? `嗰陣有開（${fmtMin(hit[0])}–${fmtMin(hit[1] % 1440)}）` : "嗰陣有開"; }
-          }));
-          found = extra.filter(p => !p.shut).slice(0, 6);
+          found = await firstOpen(extra, 5);
+          shut += extra.filter(p => p.shut).length;
           other = found.length > 0;
         }
         go.disabled = false; go.innerHTML = `${icon("refresh")}再搵過`;
@@ -12786,9 +12797,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
   async function enrichHours(s){
     if (!s.placeId) return;
-    if ((s.eatMeta || []).some(c => c.cls === "meta-chip hours")) return;
+    if ((s.eatMeta || []).some(c => c.cls === "meta-chip hours") || s.noHours === s.placeId) return;
     try {
       const r = await callAi({ action:"place-hours", placeId:s.placeId });
+      if (r && r.ok !== false && !r.summary && !Array.isArray(r.weekdayText)) s.noHours = s.placeId;
       if (r && r.ok !== false && r.summary){
         s.eatMeta = (s.eatMeta || []).filter(c => c.cls !== "meta-chip hours");
         s.eatMeta.push({ text:r.summary, cls:"meta-chip hours" });
