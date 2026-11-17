@@ -165,30 +165,35 @@ function summarizeHours(weekdayText: string[]): string {
     .map(([hours, days]) => `${days.join("、")}：${hours}`).join("；");
 }
 async function placeHours(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   const pid = str(body?.placeId, 200);
-  if (!key || !pid) return { ok: false, message: "冇地點資料，攞唔到營業時間。" };
+  if (!pid) return { ok: false, message: "冇地點資料，攞唔到營業時間。" };
   let hit = await cacheGet("hours:" + pid, 30);
   if (!hit) {
-    const data = await gplaces(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=opening_hours&language=zh-TW&key=${key}`);
-    if (gRefused(data) && data.status !== "NOT_FOUND" && data.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(data) };
-    const wd = data?.result?.opening_hours?.weekday_text;
-    hit = { weekdayText: Array.isArray(wd) && wd.length === 7 ? wd : null };
+    const d = await gDetails(pid, "regularOpeningHours", "zh-TW");
+    if (gRefused(d) && d.status !== "NOT_FOUND" && d.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(d) };
+    hit = { weekdayText: gWeekLines(d.result?.regularOpeningHours) };
     await cachePut("hours:" + pid, hit);
   }
   const wd = hit.weekdayText;
   return { ok: true, weekdayText: wd || null, summary: wd ? summarizeHours(wd) : "" };
 }
 async function placeRating(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
-  const pid = str(body?.placeId, 200);
-  if (!key || !pid) return { ok: false, message: "冇地點資料，攞唔到評分。" };
+  let pid = str(body?.placeId, 200);
+  // no place id yet: find it by name first (an id-only search costs nothing)
+  if (!pid) {
+    const q = [str(body?.query, 80), str(body?.destinationLocal, 40)].filter(Boolean).join(" ");
+    if (!q) return { ok: false, message: "冇地點資料，攞唔到評分。" };
+    const f = await gTextSearch(q, { fields: "places.id", max: 1 });
+    if (gRefused(f)) return { ok: false, message: gRefused(f) };
+    pid = f.results[0]?.place_id || "";
+    if (!pid) return { ok: true, rating: null, ratingCount: null, placeId: "" };
+  }
   let hit = await cacheGet("rating:" + pid, 30);
   if (!hit) {
-    const data = await gplaces(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=rating,user_ratings_total&key=${key}`);
-    if (gRefused(data) && data.status !== "NOT_FOUND" && data.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(data) };
-    const r = data?.result || {};
-    hit = { rating: typeof r.rating === "number" ? r.rating : null, ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null };
+    const d = await gDetails(pid, "rating,userRatingCount");
+    if (gRefused(d) && d.status !== "NOT_FOUND" && d.status !== "INVALID_REQUEST") return { ok: false, message: gRefused(d) };
+    const r = d.result || {};
+    hit = { rating: typeof r.rating === "number" ? r.rating : null, ratingCount: typeof r.userRatingCount === "number" ? r.userRatingCount : null };
     await cachePut("rating:" + pid, hit);
   }
   return { ok: true, rating: hit.rating, ratingCount: hit.ratingCount, placeId: pid };
@@ -200,24 +205,70 @@ async function placeRating(body: any) {
 // Google has it) transit come from Google; where it has no transit the leg
 // says so and points at the Google Maps app instead of guessing. Legs to
 // another city are flagged `long` so the app can offer the trip-advice mode.
-function legRef(r: any): string {
+function legRef(r: any, city = ""): string {
   if (!r || typeof r !== "object") return "";
   if (typeof r.placeId === "string" && r.placeId) return "place_id:" + r.placeId;
   if (Number.isFinite(r.lat) && Number.isFinite(r.lng)) return `${r.lat},${r.lng}`;
-  return typeof r.text === "string" ? r.text.slice(0, 200) : "";
+  // a name alone (a station) is looked up in the trip's city
+  return typeof r.text === "string" && r.text.trim() ? (r.text.trim() + (city ? " " + city : "")).slice(0, 200) : "";
+}
+// Routes API (the Directions API's successor). The answer is put back into
+// the old Directions shape (seconds, metres, transit steps) for rideOf.
+function rWaypoint(ref: string): any {
+  if (ref.startsWith("place_id:")) return { placeId: ref.slice(9) };
+  const m = ref.match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+  if (m) return { location: { latLng: { latitude: Number(m[1]), longitude: Number(m[2]) } } };
+  return { address: ref };
 }
 async function gDirections(o: string, d: string, mode: string, lang: string) {
   const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   if (!key) return { problem: "冇 Google key" };
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(o)}` +
-    `&destination=${encodeURIComponent(d)}&mode=${mode}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
+  const travelMode = mode === "walking" ? "WALK" : mode === "driving" ? "DRIVE" : "TRANSIT";
+  const body: Record<string, unknown> = { origin: rWaypoint(o), destination: rWaypoint(d), travelMode };
+  if (lang) body.languageCode = lang;
+  const mask = "routes.duration,routes.distanceMeters,routes.legs.startLocation,routes.legs.endLocation" +
+    (travelMode === "TRANSIT" ? ",routes.legs.steps.travelMode,routes.legs.steps.transitDetails" : "");
   try {
-    const data = await (await fetch(url)).json();
-    const leg = data?.status === "OK" && data?.routes?.[0]?.legs?.[0];
-    if (!leg) return { problem: String(data?.status || "UNKNOWN") };
-    return { seconds: Number(leg.duration?.value) || 0, meters: Number(leg.distance?.value) || 0, steps: leg.steps || [],
-      start: leg.start_location || null, end: leg.end_location || null };
+    const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST",
+      headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": mask }, body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(`Routes ${travelMode} ${res.status}: ${String(j?.error?.message || "").slice(0, 200)}`);
+      return { problem: String(j?.error?.status || res.status) };
+    }
+    const r = j?.routes?.[0], leg = r?.legs?.[0];
+    if (!r) return { problem: "ZERO_RESULTS" };
+    const ll = (x: any) => x?.latLng ? { lat: x.latLng.latitude, lng: x.latLng.longitude } : null;
+    const steps = (leg?.steps || []).map((x: any) => {
+      const t = x?.transitDetails;
+      if (!t) return { travel_mode: x?.travelMode || "" };
+      return { travel_mode: "TRANSIT", transit_details: {
+        line: { short_name: t.transitLine?.nameShort || "", name: t.transitLine?.name || "", vehicle: { type: t.transitLine?.vehicle?.type || "" } },
+        departure_stop: { name: t.stopDetails?.departureStop?.name || "" }, arrival_stop: { name: t.stopDetails?.arrivalStop?.name || "" },
+        num_stops: Number(t.stopCount) || 0 } };
+    });
+    return { seconds: parseInt(String(r.duration || "0"), 10) || 0, meters: Number(r.distanceMeters) || 0, steps,
+      start: ll(leg?.startLocation), end: ll(leg?.endLocation) };
   } catch (e) { return { problem: String(e) }; }
+}
+// Seoul's numbered lines read 「3號線」, and a few named Korean lines get the
+// name a Cantonese reader knows; anything else is Google's own name.
+const KO_LINES: Record<string, string> = {
+  "경의중앙선": "京義中央線", "수인분당선": "水仁盆唐線", "분당선": "盆唐線", "신분당선": "新盆唐線", "경춘선": "京春線",
+  "공항철도": "機場鐵路", "우이신설선": "牛耳新設線", "서해선": "西海線", "신림선": "新林線", "김포골드라인": "金浦金線",
+};
+function lineLabel(line: any): string {
+  const t = line?.vehicle?.type;
+  const short = String(line?.short_name || "").trim(), name = String(line?.name || "").trim();
+  if (t === "BUS") return short ? `${short}號巴士` : "巴士";
+  for (const pick of [short, name]) {
+    if (!pick) continue;
+    const num = pick.match(/^(\d+)\s*(호선|號線)$/);
+    if (num) return `${num[1]}號線`;
+    const known = KO_LINES[pick.replace(/\s/g, "")];
+    if (known) return known;
+  }
+  return short || name;
 }
 function rideOf(steps: any[]) {
   const rides = steps.filter((x: any) => x.travel_mode === "TRANSIT" && x.transit_details);
@@ -226,7 +277,7 @@ function rideOf(steps: any[]) {
   rides.forEach((x: any, i: number) => {
     const td = x.transit_details, t = td?.line?.vehicle?.type || "";
     if (t !== "BUS") subway = true;
-    const label = (td?.line?.short_name || td?.line?.name || (t === "BUS" ? "巴士" : "電車")).trim();
+    const label = lineLabel(td?.line) || (t === "BUS" ? "巴士" : "電車");
     if (i === 0) chain += td.departure_stop?.name || "";
     chain += ` ─${label}${td.num_stops ? `・${td.num_stops}站` : ""}─ ${td.arrival_stop?.name || ""}`;
   });
@@ -249,13 +300,12 @@ async function nearestStation(at: any): Promise<{ name: string; ref: string } | 
   await cachePut(ck, found || { name: "" });
   return found;
 }
-async function nearestStationFromGoogle(at: any, key: string): Promise<{ name: string; ref: string } | null> {
+async function nearestStationFromGoogle(at: any, _key: string): Promise<{ name: string; ref: string } | null> {
   for (const type of ["train_station", "subway_station"]) {
-    try {
-      const j = await (await fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${at.lat},${at.lng}&rankby=distance&type=${type}&language=ja&key=${key}`)).json();
-      const r = j?.results?.[0];
-      if (r?.place_id) return { name: String(r.name || ""), ref: "place_id:" + r.place_id };
-    } catch { /* next type */ }
+    const j = await gNearby({ lat: at.lat, lng: at.lng, radius: 2500, types: [type], rank: "DISTANCE", lang: "ja", max: 1,
+      fields: "places.id,places.displayName" });
+    const r = j.results?.[0];
+    if (r?.place_id) return { name: String(r.name || ""), ref: "place_id:" + r.place_id };
   }
   return null;
 }
@@ -285,9 +335,19 @@ async function trainEstimate(o: string, d: string, car: any, city: string, lang:
     text: `電車約 ${total} 分鐘${legs.length > 1 ? `・轉${legs.length - 1}次` : ""}（估計，車站係真嘅，路線出發前喺 Google 確認）`,
     route: chain, long: total >= 45 };
 }
+// The same two places, the same way of going: kept for a month, since a
+// timetable and a walk don't change between one look and the next.
 async function legBetween(body: any) {
-  const o = legRef(body?.from), d = legRef(body?.to);
+  const o = legRef(body?.from, str(body?.city, 40)), d = legRef(body?.to, str(body?.city, 40));
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
+  const ck = `leg:${str(body?.prefer, 10) || "auto"}:${str(body?.lang, 8)}:${o}|${d}`;
+  const hit = await cacheGet(ck, 30);
+  if (hit) return hit;
+  const out = await legFresh(body, o, d);
+  if (out && (out as any).ok) await cachePut(ck, out);
+  return out;
+}
+async function legFresh(body: any, o: string, d: string) {
   const prefer = ["walk", "drive", "transit"].includes(body?.prefer) ? body.prefer : "auto";
   const lang = typeof body?.lang === "string" ? body.lang.slice(0, 8) : "";
   const walkOut = (w: any) => ({ ok: true, mode: "walk", text: `步行約 ${mins(w.seconds)} 分鐘` });
@@ -333,65 +393,157 @@ async function legBetween(body: any) {
 // For the taxi card: the place's address and phone number in the local
 // language, so a driver who doesn't know the name can still find it.
 async function placeContact(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   const lang = str(body?.lang, 8) || "ja";
   let pid = str(body?.placeId, 200);
-  if (!key) return { ok: false };
   const ck = pid ? `contact:${lang}:${pid}` : "";
   if (ck) { const hit = await cacheGet(ck, 90); if (hit) return hit; }
   try {
     if (!pid) {
       const q = str(body?.query, 80);
       if (!q) return { ok: false };
-      const f = await (await fetch(`https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(q)}&inputtype=textquery&fields=place_id&language=${lang}&key=${key}`)).json();
-      pid = f?.candidates?.[0]?.place_id || "";
+      pid = (await gTextSearch(q, { fields: "places.id", max: 1, lang })).results?.[0]?.place_id || "";
       if (!pid) return { ok: false };
     }
-    const r = (await (await fetch(`https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(pid)}&fields=name,formatted_address,formatted_phone_number,international_phone_number&language=${lang}&key=${key}`)).json())?.result;
+    const r = (await gDetails(pid, "displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber", lang)).result;
     if (!r) return { ok: false };
-    const out = { ok: true, name: String(r.name || ""), address: String(r.formatted_address || "").replace(/^日本、?\s*/, "").replace(/^대한민국\s*/, ""),
-      phone: String(r.formatted_phone_number || ""), intl: String(r.international_phone_number || "") };
+    const out = { ok: true, name: String(r.displayName?.text || ""), address: String(r.formattedAddress || "").replace(/^日本、?\s*/, "").replace(/^〒\d{3}-\d{4}\s*/, "").replace(/^대한민국\s*/, ""),
+      phone: String(r.nationalPhoneNumber || ""), intl: String(r.internationalPhoneNumber || "") };
     if (ck) await cachePut(ck, out);
     return out;
   } catch { return { ok: false }; }
 }
 
-// Google Places answers 200 even when it refuses (OVER_QUERY_LIMIT when too
-// many requests arrive at once, REQUEST_DENIED for key or billing trouble),
-// with a status in the body. Read as "no results", a refusal looked exactly
-// like "nothing nearby". A busy answer is tried again; any refusal is passed on.
+// ---------- Google Places API (New) ----------
+// The same block is pasted into each edge function that asks Google about
+// places (trip-import, ai-assistant, place-photo-store, place-local-name), so
+// each can be deployed on its own; change it here and copy it across.
+//
+// Answers come back in the shape the old (legacy) Places API used —
+// place_id, name, geometry.location, rating, user_ratings_total — so the
+// code that reads them did not have to change. Every request names exactly
+// the fields it needs (X-Goog-FieldMask): Google bills by the dearest field
+// asked for, so a list never asks for reviews or photos.
+const PLACES = "https://places.googleapis.com/v1";
 const G_OK = new Set(["OK", "ZERO_RESULTS"]);
-async function gplaces(url: string): Promise<any> {
+const PRICE: Record<string, number> = { PRICE_LEVEL_FREE: 0, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
+const PRICE_NAME = ["PRICE_LEVEL_FREE", "PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"];
+// a list: who, where, what kind, open or shut for good, and how well rated
+const LIST_FIELDS = "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel";
+function gLegacy(p: any): any {
+  if (!p) return null;
+  return { place_id: p.id || "", name: p.displayName?.text || "", formatted_address: p.formattedAddress || "",
+    vicinity: p.formattedAddress || "",
+    geometry: p.location ? { location: { lat: p.location.latitude, lng: p.location.longitude } } : undefined,
+    rating: typeof p.rating === "number" ? p.rating : undefined,
+    user_ratings_total: typeof p.userRatingCount === "number" ? p.userRatingCount : undefined,
+    types: Array.isArray(p.types) ? p.types : [], business_status: p.businessStatus || undefined,
+    price_level: p.priceLevel in PRICE ? PRICE[p.priceLevel] : undefined };
+}
+// one request; a busy answer (429/5xx) is tried twice more. Refusals come
+// back as { status, error_message } with the old API's status words.
+async function gNew(path: string, mask: string, body?: unknown, lang = ""): Promise<any> {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key) return { status: "REQUEST_DENIED", error_message: "GOOGLE_PLACES_API_KEY not set" };
+  const url = `${PLACES}/${path}${!body && lang ? (path.includes("?") ? "&" : "?") + "languageCode=" + encodeURIComponent(lang) : ""}`;
   for (let k = 0; k < 3; k++) {
-    let data: any = null;
-    try { data = await (await fetch(url)).json(); } catch (e) { data = { status: "FETCH_FAILED", error_message: String(e) }; }
-    if (!data || G_OK.has(data.status) || !/OVER_QUERY_LIMIT|UNKNOWN_ERROR|FETCH_FAILED/.test(String(data.status)) || k === 2) {
-      if (data && !G_OK.has(data.status)) console.error(`Google Places ${data.status}: ${String(data.error_message || "").slice(0, 200)}`);
-      return data || {};
+    let res: Response | null = null, j: any = null;
+    try {
+      res = await fetch(url, { method: body ? "POST" : "GET",
+        headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": mask },
+        ...(body ? { body: JSON.stringify(body) } : {}) });
+      j = await res.json().catch(() => ({}));
+    } catch (e) { j = { error: { status: "FETCH_FAILED", message: String(e) } }; }
+    if (res && res.ok) return { status: "OK", data: j };
+    const code = res?.status || 0, st = String(j?.error?.status || "");
+    const busy = code === 429 || code >= 500 || /RESOURCE_EXHAUSTED|UNAVAILABLE|FETCH_FAILED|INTERNAL/.test(st);
+    if (!busy || k === 2) {
+      const status = code === 429 || /RESOURCE_EXHAUSTED/.test(st) ? "OVER_QUERY_LIMIT"
+        : code === 404 || /NOT_FOUND/.test(st) ? "NOT_FOUND"
+        : code === 403 || /PERMISSION_DENIED/.test(st) ? "REQUEST_DENIED"
+        : code === 400 ? "INVALID_REQUEST" : st || "UNKNOWN_ERROR";
+      const msg = String(j?.error?.message || "");
+      console.error(`Places (New) ${path.split("?")[0].slice(0, 40)} ${status}: ${msg.slice(0, 200)}`);
+      return { status, error_message: msg };
     }
     await new Promise(r => setTimeout(r, 900 * (k + 1)));
   }
-  return {};
+  return { status: "UNKNOWN_ERROR", error_message: "" };
 }
-const gRefused = (d: any) => d && d.status && !G_OK.has(d.status) ? `Google 地點搜尋冇答（${d.status}${d.error_message ? "：" + String(d.error_message).slice(0, 80) : ""}）` : "";
+const gRefused = (d: any) => d && d.status && !G_OK.has(d.status)
+  ? `Google 地點搜尋冇答（${d.status}${d.error_message ? "：" + String(d.error_message).slice(0, 80) : ""}）` : "";
+// words → places; around a point when one is given (a bias, not a fence)
+async function gTextSearch(q: string, o: { lat?: number; lng?: number; radius?: number; type?: string; lang?: string;
+  max?: number; prices?: number[]; fields?: string } = {}): Promise<any> {
+  const body: Record<string, unknown> = { textQuery: q, pageSize: Math.min(20, o.max || 10) };
+  if (o.lang) body.languageCode = o.lang;
+  if (Number.isFinite(o.lat) && Number.isFinite(o.lng))
+    body.locationBias = { circle: { center: { latitude: o.lat, longitude: o.lng }, radius: Math.min(50000, o.radius || 3000) } };
+  if (o.type) body.includedType = o.type;
+  if (o.prices?.length) body.priceLevels = o.prices.map(p => PRICE_NAME[p]).filter(Boolean);
+  const r = await gNew("places:searchText", o.fields || LIST_FIELDS, body);
+  if (r.status !== "OK") return { status: r.status, error_message: r.error_message, results: [] };
+  const results = (r.data?.places || []).map(gLegacy);
+  return { status: results.length ? "OK" : "ZERO_RESULTS", results };
+}
+// what is around a point, of some kinds, most popular (or nearest) first
+async function gNearby(o: { lat: number; lng: number; radius: number; types: string[]; rank?: "POPULARITY" | "DISTANCE";
+  lang?: string; max?: number; fields?: string }): Promise<any> {
+  const body: Record<string, unknown> = { includedTypes: o.types, maxResultCount: Math.min(20, o.max || 20),
+    locationRestriction: { circle: { center: { latitude: o.lat, longitude: o.lng }, radius: Math.min(50000, o.radius) } },
+    rankPreference: o.rank || "POPULARITY" };
+  if (o.lang) body.languageCode = o.lang;
+  const r = await gNew("places:searchNearby", o.fields || LIST_FIELDS, body);
+  if (r.status !== "OK") return { status: r.status, error_message: r.error_message, results: [] };
+  const results = (r.data?.places || []).map(gLegacy);
+  return { status: results.length ? "OK" : "ZERO_RESULTS", results };
+}
+// one place, only the fields asked for (no "places." prefix here)
+async function gDetails(id: string, fields: string, lang = ""): Promise<any> {
+  if (!id) return { status: "INVALID_REQUEST", error_message: "no place id" };
+  const r = await gNew(`places/${encodeURIComponent(id)}`, fields, undefined, lang);
+  return r.status === "OK" ? { status: "OK", result: r.data } : r;
+}
+// The week's hours as seven lines, 24-hour clock, Monday first:
+// 「星期一: 11:00 – 15:00, 17:00 – 22:00」, 「星期二: 休息」, 「…: 24 小時營業」.
+function gWeekLines(h: any): string[] | null {
+  const P = Array.isArray(h?.periods) ? h.periods : [];
+  if (!P.length) return null;
+  const NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+  if (P.length === 1 && P[0]?.open && !P[0]?.close) return [1, 2, 3, 4, 5, 6, 0].map(d => `星期${NAMES[d]}: 24 小時營業`);
+  const pad = (n: unknown) => String(Number(n) || 0).padStart(2, "0");
+  const by: string[][] = [[], [], [], [], [], [], []];
+  for (const p of P) {
+    if (!p?.open || !Number.isFinite(p.open.day)) continue;
+    const close = p.close ? `${pad(p.close.hour)}:${pad(p.close.minute)}` : "24:00";
+    by[p.open.day].push(`${pad(p.open.hour)}:${pad(p.open.minute)} – ${close}`);
+  }
+  return [1, 2, 3, 4, 5, 6, 0].map(d => `星期${NAMES[d]}: ${by[d].length ? by[d].join(", ") : "休息"}`);
+}
+// a photo's address: Google answers with a short-lived image URL
+async function gPhotoUri(photoName: string, maxWidth = 800): Promise<string> {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key || !photoName) return "";
+  try {
+    const j = await (await fetch(`${PLACES}/${photoName}/media?maxWidthPx=${maxWidth}&skipHttpRedirect=true&key=${key}`)).json();
+    return String(j?.photoUri || "");
+  } catch { return ""; }
+}
 
 // A name typed by hand, looked up around a point — for chains (一蘭,
 // Starbucks) Google then returns the branches close to the previous stop
 // instead of the most famous ones, each with its distance in metres.
 async function nearSearch(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   const lat = Number(body?.lat), lng = Number(body?.lng);
   const q = str(body?.query, 80);
-  if (!key || !q || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, places: [] };
+  if (!q || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, places: [] };
   const R = 6371000, toR = (x: number) => x * Math.PI / 180;
   const dist = (g: any) => {
     const a = Math.sin(toR(g.lat - lat) / 2) ** 2 + Math.cos(toR(lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - lng) / 2) ** 2;
     return Math.round(2 * R * Math.asin(Math.sqrt(a)));
   };
-  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}` +
-    `&location=${lat},${lng}&radius=3000&language=${encodeURIComponent(str(body?.lang, 8) || "zh-TW")}&key=${key}`;
   try {
-    const data = await gplaces(url);
+    const data = await gTextSearch(q, { lat, lng, radius: 3000, lang: str(body?.lang, 8) || "zh-TW", max: 12 });
     if (gRefused(data)) return { ok: false, places: [], message: gRefused(data) };
     const places = (data?.results || [])
       .filter((r: any) => r?.place_id && r?.geometry?.location && r.business_status !== "CLOSED_PERMANENTLY")
@@ -409,15 +561,12 @@ async function nearSearch(body: any) {
 // well-rated restaurants or sights within a short walk, so a suggestion is
 // a real place with a real rating, not something a model made up.
 async function nearbyPlaces(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   const lat = Number(body?.lat), lng = Number(body?.lng);
-  if (!key || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, message: "冇位置資料。" };
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, message: "冇位置資料。" };
   const eat = body?.kind === "eat";
   const lang = typeof body?.lang === "string" ? body.lang.slice(0, 8) : "";
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}` +
-    `&radius=${eat ? 700 : 1500}&type=${eat ? "restaurant" : "tourist_attraction"}${lang ? "&language=" + encodeURIComponent(lang) : ""}&key=${key}`;
   try {
-    const data = await (await fetch(url)).json();
+    const data = await gNearby({ lat, lng, radius: eat ? 700 : 1500, types: [eat ? "restaurant" : "tourist_attraction"], lang });
     const R = 6371000, toR = (x: number) => x * Math.PI / 180;
     const dist = (g: any) => {
       const a = Math.sin(toR(g.lat - lat) / 2) ** 2 + Math.cos(toR(lat)) * Math.cos(toR(g.lat)) * Math.sin(toR(g.lng - lng) / 2) ** 2;
@@ -445,19 +594,16 @@ async function nearbyPlaces(body: any) {
 // a line on what the place is and — for food — what people say to order.
 // Grounded in the reviews, so it describes this place, not a generic one.
 async function placeFacts(placeId: string) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
-  if (!key || !placeId) return null;
+  if (!placeId) return null;
   const hit = await cacheGet("facts:" + placeId, 60);
   if (hit) return hit;
   try {
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-      `&fields=name,types,formatted_address,rating,user_ratings_total,price_level,editorial_summary,reviews&reviews_sort=most_relevant&language=zh-TW&key=${key}`;
-    const r = (await (await fetch(url)).json())?.result;
+    const r = (await gDetails(placeId, "id,displayName,types,formattedAddress,rating,userRatingCount,priceLevel,editorialSummary,reviews", "zh-TW")).result;
     if (!r) return null;
-    const out = { placeId, name: String(r.name || ""), address: String(r.formatted_address || "").slice(0, 80), types: (r.types || []).slice(0, 5), rating: Number(r.rating) || null,
-      ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
-      summary: String(r.editorial_summary?.overview || "").slice(0, 200),
-      reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
+    const out = { placeId, name: String(r.displayName?.text || ""), address: String(r.formattedAddress || "").slice(0, 80), types: (r.types || []).slice(0, 5),
+      rating: Number(r.rating) || null, ratingCount: Number(r.userRatingCount) || 0, price: r.priceLevel in PRICE ? PRICE[r.priceLevel] : null,
+      summary: String(r.editorialSummary?.text || "").slice(0, 200),
+      reviews: (r.reviews || []).slice(0, 4).map((v: any) => String(v?.text?.text || v?.originalText?.text || "").replace(/\s+/g, " ").slice(0, 220)).filter(Boolean) };
     await cachePut("facts:" + placeId, out);
     return out;
   } catch { return null; }
@@ -487,79 +633,125 @@ const KIND_TYPE: Record<string, string[]> = { eat: ["restaurant"], see: ["touris
 // Places worth adding between two stops: candidates from Google around both
 // (and the middle), ranked by rating, how many rated it and how far off the
 // way it is; then the best few are described from their reviews.
+// Places worth adding between two stops, in one list that mixes two kinds of
+// good: what Google rates highly right there, and what is famous (a 名店
+// people travel for). Google gives the real places nearby; the model, which
+// knows the names, says which of them are famous, orders the list for what
+// was asked, and names up to three famous ones nearby that the list missed —
+// each checked on Google (real, not shut for good, close enough) before it
+// is shown. The whole answer is kept for a week, so asking again is free.
+const FAMOUS_PROMPT = (items: string, kind: string, area: string, ask: string) => `你係熟悉當地嘅香港旅遊達人。下面係 Google 地圖喺「${area}」附近搵到嘅${kind === "eat" ? "餐廳" : kind === "shop" ? "購物地方" : "景點"}（JSON，有評分、幾多人評、行幾耐）。
+${ask ? `佢哋嘅要求：${ask}。\n` : ""}請：
+1. order：由最值得去排到最唔值得（placeId 陣列）。有名、口碑好、真係值得專程去嘅排前；${ask ? "唔啱要求嘅唔好放入去；" : ""}評分高但人評得少嘅要小心。
+2. famous：入面邊幾間係出名嘅（例如食べログ百名店、米芝蓮、當地人或者遊客都會專程去），唔肯定就唔好寫（placeId 陣列）。
+3. fit：每間一句講點解值得去（最多 24 字，廣東話），用 {"placeId":"一句"}。
+4. extra：如果你知道附近（行 15 分鐘內）有更出名、而上面冇嘅${kind === "eat" ? "餐廳" : "地方"}，最多 3 間，寫當地語言原名 name 同一句 why；冇就空陣列。只寫你肯定存在嘅。
+${items}
+只回覆 JSON：{"order":[""],"famous":[""],"fit":{"placeId":""},"extra":[{"name":"","why":""}]}`;
 async function suggestAdd(body: any) {
-  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
   const kind = ["eat", "see", "shop"].includes(body?.kind) ? body.kind : "see";
   const pts = (Array.isArray(body?.points) ? body.points : []).map((x: any) => ({ lat: Number(x?.lat), lng: Number(x?.lng), name: str(x?.name, 40) }))
     .filter((x: any) => Number.isFinite(x.lat) && Number.isFinite(x.lng)).slice(0, 2);
-  if (!key || !pts.length) return { ok: false, message: "冇位置資料，搵唔到附近。" };
+  if (!pts.length) return { ok: false, message: "冇位置資料，搵唔到附近。" };
   const R = 6371000, toR = (x: number) => x * Math.PI / 180;
   const dist = (a: any, b: any) => {
     const h = Math.sin(toR(b.lat - a.lat) / 2) ** 2 + Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(toR(b.lng - a.lng) / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
   };
-  const centres = [...pts];
-  if (pts.length === 2 && dist(pts[0], pts[1]) > 1200) centres.push({ lat: (pts[0].lat + pts[1].lat) / 2, lng: (pts[0].lng + pts[1].lng) / 2, name: "" });
   const skip = new Set((Array.isArray(body?.skip) ? body.skip : []).map(String));
   const want = str(body?.want, 40);
   const pf = body?.prefs || {};
   const budget = [1, 2, 3].includes(Number(pf.budget)) ? Number(pf.budget) : 0;
   const near = pf.near === true;
-  // what they asked for, in words the model can rank by
   const ask = [want, budget ? ["", "平啲", "中價", "貴少少都得"][budget] : "", near ? "行 5 分鐘內" : "",
     pf.kids ? "啱小朋友" : "", pf.book ? "可以訂位或者唔使排太耐" : ""].filter(Boolean).join("、");
+  const ck = `sug2:${kind}:${want}:${budget}:${near ? 1 : 0}:${pf.kids ? 1 : 0}:${pf.book ? 1 : 0}:` +
+    pts.map((p: any) => `${p.lat.toFixed(3)},${p.lng.toFixed(3)}`).join("|");
+  let places: any[] | null = (await cacheGet(ck, 7))?.places || null;
+  if (!places) {
+    const out = await suggestFresh(kind, pts, want, budget, near, ask, dist);
+    if (!out.ok) return out;
+    places = out.places;
+    if (places!.length) await cachePut(ck, { places });
+  }
+  return { ok: true, places: places!.filter((x: any) => !skip.has(x.placeId)).slice(0, 8), ask, ranked: true };
+}
+async function suggestFresh(kind: string, pts: any[], want: string, budget: number, near: boolean, ask: string, dist: (a: any, b: any) => number) {
+  const centres = [...pts];
+  if (pts.length === 2 && dist(pts[0], pts[1]) > 1200) centres.push({ lat: (pts[0].lat + pts[1].lat) / 2, lng: (pts[0].lng + pts[1].lng) / 2, name: "" });
+  const radius = near ? (kind === "eat" ? 450 : 700) : (kind === "eat" ? 800 : 1500);
   const seen = new Map<string, any>();
   const raw = new Map<string, any>();      // everything Google returned, for the looser second look
   const minCount = want ? 30 : kind === "eat" ? 80 : kind === "shop" ? 40 : 150;
   // convenience stores and supermarkets are "stores" too, but not what 購物 means
   const notShopping = (r: any) => kind === "shop" && !want &&
     (r.types || []).some((t: string) => /^(convenience_store|supermarket|grocery_or_supermarket|gas_station|car_|atm|bank)/.test(t));
+  const priceOk = (r: any) => !(kind === "eat" && budget && Number.isFinite(r.price_level)) ||
+    (budget === 1 ? r.price_level <= 1 : budget === 2 ? r.price_level <= 2 : r.price_level >= 2);
   const keep = (r: any, rating: number, count: number) =>
-    r?.place_id && !skip.has(r.place_id) && r.business_status !== "CLOSED_PERMANENTLY" && !notShopping(r)
+    r?.place_id && r.business_status !== "CLOSED_PERMANENTLY" && !notShopping(r) && priceOk(r)
     && Number(r.rating) >= rating && Number(r.user_ratings_total) >= count;
   const refused: string[] = [];
-  await Promise.all(centres.flatMap((c: any) => KIND_TYPE[kind].map(async (type) => {
+  await Promise.all(centres.map(async (c: any) => {
     try {
-      const radius = near ? (kind === "eat" ? 450 : 700) : (kind === "eat" ? 800 : 1500);
-      const price = kind === "eat" && budget ? `&minprice=${budget === 3 ? 2 : 0}&maxprice=${budget === 1 ? 1 : budget === 2 ? 2 : 4}` : "";
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${c.lat},${c.lng}` +
-        `&radius=${radius}&type=${type}${want ? "&keyword=" + encodeURIComponent(want) : ""}${price}&language=zh-TW&key=${key}`;
-      const data = await gplaces(url);
+      // a kind of food is words, so a text search near here; otherwise what is around, most popular first
+      const data = want
+        ? await gTextSearch(want, { lat: c.lat, lng: c.lng, radius, type: KIND_TYPE[kind][0], lang: "zh-TW", max: 20,
+            prices: kind === "eat" && budget ? (budget === 1 ? [0, 1] : budget === 2 ? [1, 2] : [2, 3, 4]) : undefined })
+        : await gNearby({ lat: c.lat, lng: c.lng, radius, types: KIND_TYPE[kind], lang: "zh-TW", max: 20 });
       if (gRefused(data)) refused.push(gRefused(data));
       for (const r of data?.results || []) {
-        if (r?.place_id && !raw.has(r.place_id)) raw.set(r.place_id, r);
-        if (!seen.has(r?.place_id) && keep(r, 4, minCount)) seen.set(r.place_id, r);
+        if (!r?.geometry || dist(c, r.geometry.location) > radius * 1.6) continue;     // a bias, so fence it here
+        if (r.place_id && !raw.has(r.place_id)) raw.set(r.place_id, r);
+        if (!seen.has(r.place_id) && keep(r, 4, minCount)) seen.set(r.place_id, r);
       }
     } catch { /* one search failing leaves the others */ }
-  })));
-  // every search refused: say so, rather than "nothing nearby"
+  }));
   if (!raw.size && refused.length) return { ok: false, places: [], message: refused[0] };
-  // too few? take what Google has with a lower bar rather than say "nothing nearby"
   if (seen.size < 3) for (const r of raw.values()) if (!seen.has(r.place_id) && keep(r, 3.7, 10)) seen.set(r.place_id, r);
   const direct = pts.length === 2 ? dist(pts[0], pts[1]) : 0;
-  const cands = [...seen.values()].map((r: any) => {
+  const shape = (r: any, extra: any = {}) => {
     const g = r.geometry.location, d = pts.map((p: any) => dist(p, g));
     const detour = pts.length === 2 ? d[0] + d[1] - direct : d[0];
-    const near = d[0] <= (d[1] ?? Infinity) ? 0 : 1;
-    return { r, detour, near, walk: Math.max(1, Math.round(Math.min(...d) * 1.3 / 80)),
-      score: Number(r.rating) * Math.log(Number(r.user_ratings_total) + 1) - detour / 300 };
-  }).sort((a: any, b: any) => b.score - a.score).slice(0, ask ? 8 : 6);
-  // fast: Google's list straight away; the intros come from brief-many after
-  const fast = body?.brief === false;
-  const facts = fast ? [] : (await Promise.all(cands.map((c: any) => placeFacts(c.r.place_id)))).filter(Boolean) as any[];
-  const b: Record<string, any> = fast ? {} : await briefs(facts, kind, ask);
-  // with a request, the model's order (and its leaving out) decides
-  const ranked = ask && Object.keys(b).length
-    ? cands.filter((c: any) => b[c.r.place_id]).sort((x: any, y: any) => b[x.r.place_id].rank - b[y.r.place_id].rank)
-    : cands;
-  const places = ranked.slice(0, fast ? 8 : 6).map((c: any) => {
-    const r = c.r, x = b[r.place_id] || {};
-    return { name: String(r.name || ""), name_zh: x.name_zh || "", placeId: r.place_id, lat: r.geometry.location.lat, lng: r.geometry.location.lng,
-      rating: Number(r.rating), ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
-      types: (r.types || []).slice(0, 5), walk: c.walk, nearName: pts[c.near]?.name || "", onTheWay: pts.length === 2 && c.detour < 600,
-      what: x.what || "", mustTry: x.mustTry || "", fit: x.fit || "" };
-  });
-  return { ok: true, places, ask };
+    const nearIdx = d[0] <= (d[1] ?? Infinity) ? 0 : 1;
+    return { name: String(r.name || ""), name_zh: "", placeId: r.place_id, lat: g.lat, lng: g.lng,
+      rating: Number(r.rating) || null, ratingCount: Number(r.user_ratings_total) || 0, price: Number.isFinite(r.price_level) ? r.price_level : null,
+      types: (r.types || []).slice(0, 5), walk: Math.max(1, Math.round(Math.min(...d) * 1.3 / 80)), nearName: pts[nearIdx]?.name || "",
+      onTheWay: pts.length === 2 && detour < 600, what: "", mustTry: "", fit: "", famous: false,
+      score: Number(r.rating) * Math.log(Number(r.user_ratings_total) + 1) - detour / 300, ...extra };
+  };
+  let list = [...seen.values()].map((r: any) => shape(r)).sort((a: any, b: any) => b.score - a.score).slice(0, 10);
+  // the model's turn: famous ones marked, the order, and any famous ones missed
+  if (geminiKeys().length) {
+    try {
+      const area = pts.map((p: any) => p.name).filter(Boolean).join("、") || "呢度";
+      const items = JSON.stringify(list.map((x: any) => ({ placeId: x.placeId, name: x.name, types: x.types.slice(0, 3),
+        rating: x.rating, ratingCount: x.ratingCount, walk: x.walk })));
+      const j = parseJson(await callGemini([{ text: FAMOUS_PROMPT(items, kind, area, ask) }], false, { fast: true, ms: 30000 }));
+      const famous = new Set((Array.isArray(j?.famous) ? j.famous : []).map(String));
+      const fit = j?.fit && typeof j.fit === "object" ? j.fit : {};
+      list.forEach((x: any) => { x.famous = famous.has(x.placeId); x.fit = str(fit[x.placeId], 40); });
+      const order = (Array.isArray(j?.order) ? j.order : []).map(String);
+      if (order.length) {
+        const pos = new Map(order.map((id: string, i: number) => [id, i]));
+        const ranked = list.filter((x: any) => pos.has(x.placeId)).sort((a: any, b: any) => (pos.get(a.placeId) as number) - (pos.get(b.placeId) as number));
+        if (ranked.length >= Math.min(3, list.length)) list = ranked;
+      }
+      // famous ones Google's list missed, each looked up and kept only if real and close
+      const extra = (Array.isArray(j?.extra) ? j.extra : []).slice(0, 3).filter((e: any) => str(e?.name, 60));
+      const found = await Promise.all(extra.map(async (e: any) => {
+        const r = (await gTextSearch(str(e.name, 60), { lat: pts[0].lat, lng: pts[0].lng, radius: 1500, lang: "zh-TW", max: 1 })).results?.[0];
+        if (!r?.geometry || r.business_status === "CLOSED_PERMANENTLY" || !(Number(r.rating) >= 3.8)) return null;
+        if (Math.min(...pts.map((p: any) => dist(p, r.geometry.location))) > (near ? 600 : 1500)) return null;
+        if (list.some((x: any) => x.placeId === r.place_id)) { const x = list.find((y: any) => y.placeId === r.place_id); x.famous = true; return null; }
+        return shape(r, { famous: true, fit: str(e.why, 40) });
+      }));
+      const add = found.filter(Boolean) as any[];
+      // the famous extras go in after the first famous one already listed
+      if (add.length) list = [...list.filter((x: any) => x.famous), ...add, ...list.filter((x: any) => !x.famous)];
+    } catch (e) { console.error("famous", String(e)); }
+  }
+  return { ok: true, places: list.slice(0, 10) };
 }
 // Intros for a list already on screen: facts and reviews for each place,
 // then one model call. With a request (ask) the order the model gives back,
@@ -804,6 +996,12 @@ Deno.serve(async (req) => {
   if (body?.mode === "place-contact") return json(await placeContact(body));
   if (body?.mode === "place-hours") return json(await placeHours(body));
   if (body?.mode === "place-rating") return json(await placeRating(body));
+  // is Places API (New) and the Routes API switched on for the key?
+  if (body?.mode === "google-check") {
+    const [pl, ro] = await Promise.all([gTextSearch("Tokyo Station", { fields: "places.id", max: 1 }),
+      gDirections("35.681,139.767", "35.690,139.700", "driving", "")]);
+    return json({ ok: true, places: pl.status, placesMessage: pl.error_message || "", routes: (ro as any).problem || "OK" });
+  }
   if (body?.mode === "suggest-add") return json(await suggestAdd(body));
   if (body?.mode === "place-brief") return json(await placeBrief(body));
   if (body?.mode === "brief-many") return json(await briefMany(body));

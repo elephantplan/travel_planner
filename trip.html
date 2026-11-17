@@ -2327,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-28";
+  const BUILD = "2026-11-17-29";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -2696,8 +2696,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     try {
       // hours and ratings go through trip-import, which keeps Google's
       // answer for each place so it is only paid for once
-      const kept = body.action === "place-hours" || (body.action === "place-rating" && body.placeId);
-      if (kept) body.mode = body.action;
+      // travel times too (the Routes API), kept per pair of places
+      const kept = body.action === "place-hours" || body.action === "place-rating" || body.action === "transit";
+      if (kept) body.mode = body.action === "transit" ? "leg" : body.action;
+      if (body.action === "transit"){ body.city = m.destinationLocal || ""; body.lang = destIsJapan() ? "ja" : destIsKorea() ? "ko" : "zh-TW"; }
       res = await fetch(kept ? SUPABASE_URL + "/functions/v1/trip-import" : FUNCTIONS_URL, { method:"POST", headers: sbHeaders(), body: JSON.stringify(body), signal: ctl.signal });
     } catch (e){
       if (e && e.name === "AbortError"){
@@ -7489,7 +7491,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const r = await res.json().catch(() => null);
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       list.ask = (r && r.ask) || "";
-      if (!list.ask) list.forEach(p => { p.briefed = true; });
+      // the server has already ordered it (famous first, then what fits)
+      if (!list.ask || (r && r.ranked)) list.forEach(p => { p.briefed = true; });
       if (!r || r.ok === false){ list.failed = (r && r.message) || `伺服器答 ${res.status}`; if (/Google/.test(list.failed)) googleRefusal = list.failed; }
       if (list.length) sugCache.set(k, list);
       return list;
@@ -7522,7 +7525,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(title)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a>
         <button type="button" class="nr-add" data-pick="${esc(k)}" data-kind="${kind}" aria-label="加「${esc(title)}」入行程">${icon("plus")}</button>
       </div>
-      <div class="sc-facts">${[label ? esc(label) : "",
+      <div class="sc-facts">${[p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
         Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
       <div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>
@@ -7652,11 +7655,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const c = cuisineOf({ type: "eat", title: p.name, kr: p.name_zh || "", cuisine: p.cuisine || "", desc: p.what || "" });
         return `<div class="sugcard swcard">
           <div class="sc-top"><a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name_zh || p.name)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a></div>
-          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : "",
+          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : p.famous ? `<b class="sw-hy">名店</b>` : "",
             Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
             Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "", p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).join("・")}</div>
           ${p.openNote ? `<div class="sw-open">${icon("check")}${esc(p.openNote)}</div>` : ""}
-          ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
+          ${p.fit ? `<p class="sc-fit">${icon("check")}${esc(p.fit)}</p>` : ""}
+          ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed || p.fit ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊邊間最啱你…</span></p>`}
           ${p.mustTry ? `<p class="sc-must"><i>必食</i>${esc(p.mustTry)}</p>` : ""}
           <div class="sw-acts"><button class="btn primary" data-swpick="${k}">揀呢間</button><button class="btn" data-swalt="${k}">做後備</button>
             ${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}</div>
@@ -7709,7 +7713,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           }));
           const seen = new Set();
           lists.forEach((l, k) => l.forEach(p => { if (!seen.has(p.placeId)){ seen.add(p.placeId); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
-          cands.sort((a, b) => (b.rating || 0) * Math.log((b.ratingCount || 0) + 1) - (a.rating || 0) * Math.log((a.ratingCount || 0) + 1));
+          // famous ones first, then Google's rating and how many rated it
+          const sc = p => (p.famous ? 1000 : 0) + (p.rating || 0) * Math.log((p.ratingCount || 0) + 1);
+          cands.sort((a, b) => sc(b) - sc(a));
         }
         cands = cands.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
         // open when we'd be there

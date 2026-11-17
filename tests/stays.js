@@ -46,6 +46,7 @@ const SUGGEST = { ok: true, stays: {
     }
     if (/trip-import/.test(url) && body.mode === 'stay-areas'){ areaAsks.push(body.text || '');
       return new Promise(res => setTimeout(res, 300)).then(() => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, stays: { areas: SUGGEST.stays.areas, plan: SUGGEST.stays.plan || [] } }) })); }
+    if (/trip-import/.test(url) && body.action === 'transit') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, mode: 'walk', text: '步行約 4 分鐘' }) });
     if (/trip-import/.test(url)){ asked.push(body.mode); sentText.push(body.text || ''); suggestText.push(body.text || ''); quickFlags.push(body.quick === true);
       return new Promise(res => setTimeout(res, 600)).then(() => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SUGGEST) })); }
     if (/place-photo-store/.test(url)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'http://localhost:8799/icons/icon-v2.svg' }) });

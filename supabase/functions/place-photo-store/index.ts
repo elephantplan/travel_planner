@@ -51,31 +51,30 @@ function publicUrl(base: string, name: string): string {
 // and a place that genuinely has no pictures both arrive as 200 with an empty
 // list. Carrying the status back is what stops "your key is switched off"
 // from being reported to the family as "this place has no photos".
+// Places API (New). A refusal comes back as an HTTP error with a status
+// word, which is carried back so "your key is switched off" is never
+// reported to the family as "this place has no photos".
+const PLACES = "https://places.googleapis.com/v1";
+async function placesCall(path: string, mask: string, key: string, body?: unknown) {
+  const res = await fetch(`${PLACES}/${path}`, { method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": mask },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000) });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, data, status: res.ok ? "OK" : String(data?.error?.status || `HTTP ${res.status}`), error: String(data?.error?.message || "") };
+}
+// an id-only search, which Google does not charge for
 async function findPlaceId(query: string, hint: string, key: string) {
-  const input = hint ? `${query} ${hint}` : query;
-  const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json` +
-    `?input=${encodeURIComponent(input)}&inputtype=textquery&fields=place_id&key=${key}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  const data = await res.json();
-  return {
-    id: data?.candidates?.[0]?.place_id ?? "",
-    status: String(data?.status ?? `HTTP ${res.status}`),
-    error: String(data?.error_message ?? ""),
-  };
+  const r = await placesCall("places:searchText", "places.id", key, { textQuery: hint ? `${query} ${hint}` : query, pageSize: 1 });
+  const id = r.data?.places?.[0]?.id ?? "";
+  return { id, status: r.ok && !id ? "ZERO_RESULTS" : r.status, error: r.error };
 }
 
 async function photoReferences(placeId: string, key: string, want: number) {
-  const url = `https://maps.googleapis.com/maps/api/place/details/json` +
-    `?place_id=${encodeURIComponent(placeId)}&fields=photos&key=${key}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  const data = await res.json();
+  const r = await placesCall(`places/${encodeURIComponent(placeId)}`, "photos", key);
   return {
-    refs: (data?.result?.photos ?? [])
-      .slice(0, want)
-      .map((p: any) => p?.photo_reference)
-      .filter(Boolean) as string[],
-    status: String(data?.status ?? `HTTP ${res.status}`),
-    error: String(data?.error_message ?? ""),
+    refs: (r.data?.photos ?? []).slice(0, want).map((p: any) => p?.name).filter(Boolean) as string[],
+    status: r.status,
+    error: r.error,
   };
 }
 
@@ -99,8 +98,7 @@ async function storeOne(ref: string, name: string, base: string, serviceKey: str
   // This is the redirect whose destination expires — follow it now and keep
   // the bytes, rather than keeping the address.
   const photoRes = await fetch(
-    `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${MAX_WIDTH}` +
-    `&photo_reference=${encodeURIComponent(ref)}&key=${placesKey}`,
+    `${PLACES}/${ref}/media?maxWidthPx=${MAX_WIDTH}&key=${placesKey}`,
     { redirect: "follow", signal: AbortSignal.timeout(20000) },
   );
   if (!photoRes.ok) {

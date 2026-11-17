@@ -227,20 +227,146 @@ async function saveCachedPhotos(query: string, photos: string[]) {
   });
 }
 
-async function fetchPhotosForPlaceId(placeId: string, apiKey: string): Promise<string[]> {
-  const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=photos&key=${apiKey}`;
-  const detailsRes = await fetch(detailsUrl);
-  const detailsData = await detailsRes.json();
-  const photoRefs: string[] = (detailsData?.result?.photos ?? []).slice(0, 3).map((p: any) => p.photo_reference);
-
-  const resolvedUrls: string[] = [];
-  for (const ref of photoRefs) {
-    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=640&photo_reference=${ref}&key=${apiKey}`;
-    const photoRes = await fetch(photoUrl, { redirect: "follow" });
-    if (photoRes.ok) resolvedUrls.push(photoRes.url); // final googleusercontent.com CDN URL, no key needed to view
-    await photoRes.body?.cancel();
+// ---------- Google Places API (New) ----------
+// The same block is pasted into each edge function that asks Google about
+// places (trip-import, ai-assistant, place-photo-store, place-local-name), so
+// each can be deployed on its own; change it here and copy it across.
+//
+// Answers come back in the shape the old (legacy) Places API used —
+// place_id, name, geometry.location, rating, user_ratings_total — so the
+// code that reads them did not have to change. Every request names exactly
+// the fields it needs (X-Goog-FieldMask): Google bills by the dearest field
+// asked for, so a list never asks for reviews or photos.
+const PLACES = "https://places.googleapis.com/v1";
+const G_OK = new Set(["OK", "ZERO_RESULTS"]);
+const PRICE: Record<string, number> = { PRICE_LEVEL_FREE: 0, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
+const PRICE_NAME = ["PRICE_LEVEL_FREE", "PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE", "PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"];
+// a list: who, where, what kind, open or shut for good, and how well rated
+const LIST_FIELDS = "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel";
+function gLegacy(p: any): any {
+  if (!p) return null;
+  return { place_id: p.id || "", name: p.displayName?.text || "", formatted_address: p.formattedAddress || "",
+    vicinity: p.formattedAddress || "",
+    geometry: p.location ? { location: { lat: p.location.latitude, lng: p.location.longitude } } : undefined,
+    rating: typeof p.rating === "number" ? p.rating : undefined,
+    user_ratings_total: typeof p.userRatingCount === "number" ? p.userRatingCount : undefined,
+    types: Array.isArray(p.types) ? p.types : [], business_status: p.businessStatus || undefined,
+    price_level: p.priceLevel in PRICE ? PRICE[p.priceLevel] : undefined };
+}
+// one request; a busy answer (429/5xx) is tried twice more. Refusals come
+// back as { status, error_message } with the old API's status words.
+async function gNew(path: string, mask: string, body?: unknown, lang = ""): Promise<any> {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key) return { status: "REQUEST_DENIED", error_message: "GOOGLE_PLACES_API_KEY not set" };
+  const url = `${PLACES}/${path}${!body && lang ? (path.includes("?") ? "&" : "?") + "languageCode=" + encodeURIComponent(lang) : ""}`;
+  for (let k = 0; k < 3; k++) {
+    let res: Response | null = null, j: any = null;
+    try {
+      res = await fetch(url, { method: body ? "POST" : "GET",
+        headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": mask },
+        ...(body ? { body: JSON.stringify(body) } : {}) });
+      j = await res.json().catch(() => ({}));
+    } catch (e) { j = { error: { status: "FETCH_FAILED", message: String(e) } }; }
+    if (res && res.ok) return { status: "OK", data: j };
+    const code = res?.status || 0, st = String(j?.error?.status || "");
+    const busy = code === 429 || code >= 500 || /RESOURCE_EXHAUSTED|UNAVAILABLE|FETCH_FAILED|INTERNAL/.test(st);
+    if (!busy || k === 2) {
+      const status = code === 429 || /RESOURCE_EXHAUSTED/.test(st) ? "OVER_QUERY_LIMIT"
+        : code === 404 || /NOT_FOUND/.test(st) ? "NOT_FOUND"
+        : code === 403 || /PERMISSION_DENIED/.test(st) ? "REQUEST_DENIED"
+        : code === 400 ? "INVALID_REQUEST" : st || "UNKNOWN_ERROR";
+      const msg = String(j?.error?.message || "");
+      console.error(`Places (New) ${path.split("?")[0].slice(0, 40)} ${status}: ${msg.slice(0, 200)}`);
+      return { status, error_message: msg };
+    }
+    await new Promise(r => setTimeout(r, 900 * (k + 1)));
   }
-  return resolvedUrls;
+  return { status: "UNKNOWN_ERROR", error_message: "" };
+}
+const gRefused = (d: any) => d && d.status && !G_OK.has(d.status)
+  ? `Google 地點搜尋冇答（${d.status}${d.error_message ? "：" + String(d.error_message).slice(0, 80) : ""}）` : "";
+// words → places; around a point when one is given (a bias, not a fence)
+async function gTextSearch(q: string, o: { lat?: number; lng?: number; radius?: number; type?: string; lang?: string;
+  max?: number; prices?: number[]; fields?: string } = {}): Promise<any> {
+  const body: Record<string, unknown> = { textQuery: q, pageSize: Math.min(20, o.max || 10) };
+  if (o.lang) body.languageCode = o.lang;
+  if (Number.isFinite(o.lat) && Number.isFinite(o.lng))
+    body.locationBias = { circle: { center: { latitude: o.lat, longitude: o.lng }, radius: Math.min(50000, o.radius || 3000) } };
+  if (o.type) body.includedType = o.type;
+  if (o.prices?.length) body.priceLevels = o.prices.map(p => PRICE_NAME[p]).filter(Boolean);
+  const r = await gNew("places:searchText", o.fields || LIST_FIELDS, body);
+  if (r.status !== "OK") return { status: r.status, error_message: r.error_message, results: [] };
+  const results = (r.data?.places || []).map(gLegacy);
+  return { status: results.length ? "OK" : "ZERO_RESULTS", results };
+}
+// what is around a point, of some kinds, most popular (or nearest) first
+async function gNearby(o: { lat: number; lng: number; radius: number; types: string[]; rank?: "POPULARITY" | "DISTANCE";
+  lang?: string; max?: number; fields?: string }): Promise<any> {
+  const body: Record<string, unknown> = { includedTypes: o.types, maxResultCount: Math.min(20, o.max || 20),
+    locationRestriction: { circle: { center: { latitude: o.lat, longitude: o.lng }, radius: Math.min(50000, o.radius) } },
+    rankPreference: o.rank || "POPULARITY" };
+  if (o.lang) body.languageCode = o.lang;
+  const r = await gNew("places:searchNearby", o.fields || LIST_FIELDS, body);
+  if (r.status !== "OK") return { status: r.status, error_message: r.error_message, results: [] };
+  const results = (r.data?.places || []).map(gLegacy);
+  return { status: results.length ? "OK" : "ZERO_RESULTS", results };
+}
+// one place, only the fields asked for (no "places." prefix here)
+async function gDetails(id: string, fields: string, lang = ""): Promise<any> {
+  if (!id) return { status: "INVALID_REQUEST", error_message: "no place id" };
+  const r = await gNew(`places/${encodeURIComponent(id)}`, fields, undefined, lang);
+  return r.status === "OK" ? { status: "OK", result: r.data } : r;
+}
+// The week's hours as seven lines, 24-hour clock, Monday first:
+// 「星期一: 11:00 – 15:00, 17:00 – 22:00」, 「星期二: 休息」, 「…: 24 小時營業」.
+function gWeekLines(h: any): string[] | null {
+  const P = Array.isArray(h?.periods) ? h.periods : [];
+  if (!P.length) return null;
+  const NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+  if (P.length === 1 && P[0]?.open && !P[0]?.close) return [1, 2, 3, 4, 5, 6, 0].map(d => `星期${NAMES[d]}: 24 小時營業`);
+  const pad = (n: unknown) => String(Number(n) || 0).padStart(2, "0");
+  const by: string[][] = [[], [], [], [], [], [], []];
+  for (const p of P) {
+    if (!p?.open || !Number.isFinite(p.open.day)) continue;
+    const close = p.close ? `${pad(p.close.hour)}:${pad(p.close.minute)}` : "24:00";
+    by[p.open.day].push(`${pad(p.open.hour)}:${pad(p.open.minute)} – ${close}`);
+  }
+  return [1, 2, 3, 4, 5, 6, 0].map(d => `星期${NAMES[d]}: ${by[d].length ? by[d].join(", ") : "休息"}`);
+}
+// a photo's address: Google answers with a short-lived image URL
+async function gPhotoUri(photoName: string, maxWidth = 800): Promise<string> {
+  const key = (Deno.env.get("GOOGLE_PLACES_API_KEY") || "").trim();
+  if (!key || !photoName) return "";
+  try {
+    const j = await (await fetch(`${PLACES}/${photoName}/media?maxWidthPx=${maxWidth}&skipHttpRedirect=true&key=${key}`)).json();
+    return String(j?.photoUri || "");
+  } catch { return ""; }
+}
+
+// Answers kept per place or per search (place_cache), so the same thing is
+// only paid for once — by any trip, any family.
+async function cacheGet(key: string, maxDays: number): Promise<any> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/place_cache?key=eq.${encodeURIComponent(key)}&select=data,updated_at`, { headers: sbAdminHeaders() });
+    if (!res.ok) return null;
+    const row = (await res.json())[0];
+    if (!row || (Date.now() - new Date(row.updated_at).getTime()) / 86400000 > maxDays) return null;
+    return row.data;
+  } catch { return null; }
+}
+async function cachePut(key: string, data: unknown) {
+  try {
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/place_cache?on_conflict=key`, {
+      method: "POST", headers: { ...sbAdminHeaders(), Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key, data, updated_at: new Date().toISOString() }) });
+  } catch { /* the answer is still returned */ }
+}
+
+async function fetchPhotosForPlaceId(placeId: string, _apiKey: string): Promise<string[]> {
+  const d = await gDetails(placeId, "photos");
+  const names: string[] = (d.result?.photos ?? []).slice(0, 3).map((p: any) => p.name).filter(Boolean);
+  return (await Promise.all(names.map(n => gPhotoUri(n, 640)))).filter(Boolean);
 }
 
 // The destination's local-language name (e.g. "서울", "東京"), appended to a
@@ -255,33 +381,32 @@ function withHint(query: string, locationHint?: string): string {
 }
 
 async function searchPlacePhotos(query: string, apiKey: string, locationHint?: string): Promise<string[]> {
-  const findUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(withHint(query, locationHint))}&inputtype=textquery&fields=place_id&key=${apiKey}`;
-  const findRes = await fetch(findUrl);
-  const findData = await findRes.json();
-  const placeId = findData?.candidates?.[0]?.place_id;
+  const placeId = (await gTextSearch(withHint(query, locationHint), { fields: "places.id", max: 1 })).results?.[0]?.place_id;
   if (!placeId) return [];
   return fetchPhotosForPlaceId(placeId, apiKey);
 }
 
-async function searchPlaces(query: string, apiKey: string, locationHint?: string) {
-  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(withHint(query, locationHint))}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  return (data?.results ?? []).slice(0, 5).map((r: any) => ({
+async function searchPlaces(query: string, _apiKey: string, locationHint?: string) {
+  const q = withHint(query, locationHint);
+  // the same name asked again (the AI's check, then the app's) is free
+  const hit = await cacheGet("ts:" + q, 30);
+  if (hit) return hit;
+  const data = await gTextSearch(q, { max: 5 });
+  if (gRefused(data)) throw new Error(gRefused(data));
+  const out = (data.results ?? []).slice(0, 5).map((r: any) => ({
     placeId: r.place_id,
     name: r.name,
-    address: r.formatted_address || r.vicinity || "",
+    address: r.formatted_address || "",
     lat: r.geometry?.location?.lat,
     lng: r.geometry?.location?.lng,
-    // text search already carries these, so a rating costs no extra request
     rating: typeof r.rating === "number" ? r.rating : null,
     ratingCount: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
     // "OPERATIONAL" | "CLOSED_TEMPORARILY" | "CLOSED_PERMANENTLY" — Gemini's
-    // own knowledge of a place can be stale (it happily names a restaurant
-    // that shut down since its training data), so this is the one signal
-    // that actually catches that instead of trusting the model's say-so.
+    // own knowledge of a place can be stale, so this catches a shop that shut.
     businessStatus: r.business_status || null,
   }));
+  if (out.length) await cachePut("ts:" + q, out);
+  return out;
 }
 
 // A "give me 5 more, different from before" request can't just rely on the
@@ -370,20 +495,15 @@ async function dropPermanentlyClosed(changes: any[], apiKey: string | undefined,
 // source once a place_id is known; fall back to a text search by name.
 async function fetchRating(placeId: string, query: string, apiKey: string, locationHint?: string) {
   if (placeId) {
-    const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-      `&fields=rating,user_ratings_total,name&language=zh-TW&key=${apiKey}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data?.status === "OK") {
+    const d = await gDetails(placeId, "rating,userRatingCount");
+    if (d.status === "OK") {
       return {
-        rating: typeof data.result?.rating === "number" ? data.result.rating : null,
-        ratingCount: typeof data.result?.user_ratings_total === "number" ? data.result.user_ratings_total : null,
+        rating: typeof d.result?.rating === "number" ? d.result.rating : null,
+        ratingCount: typeof d.result?.userRatingCount === "number" ? d.result.userRatingCount : null,
         placeId,
       };
     }
-    if (data?.status !== "NOT_FOUND" && data?.status !== "ZERO_RESULTS") {
-      return { problem: problemHint(data?.status || "UNKNOWN", data?.error_message) };
-    }
+    if (d.status !== "NOT_FOUND" && d.status !== "INVALID_REQUEST") return { problem: gRefused(d) };
   }
   if (!query) return { rating: null, ratingCount: null, placeId: "" };
   const hits = await searchPlaces(query, apiKey, locationHint);
@@ -396,14 +516,9 @@ async function fetchRating(placeId: string, query: string, apiKey: string, locat
 // booking/queue impression the model gives, Google Places actually carries
 // this as real structured data — so it rides along with the rating chip as
 // something Google-verified, not a guess.
-async function fetchOpeningHours(placeId: string, apiKey: string): Promise<string[] | null> {
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-    `&fields=opening_hours&language=zh-TW&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data?.status !== "OK") return null;
-  const wd = data?.result?.opening_hours?.weekday_text;
-  return Array.isArray(wd) && wd.length === 7 ? wd : null;
+async function fetchOpeningHours(placeId: string, _apiKey: string): Promise<string[] | null> {
+  const d = await gDetails(placeId, "regularOpeningHours", "zh-TW");
+  return d.status === "OK" ? gWeekLines(d.result?.regularOpeningHours) : null;
 }
 
 // Google returns one line per day ("星期一: 上午9:00 – 下午6:00"); most places
@@ -439,13 +554,16 @@ function dmRef(p: any, locationHint?: string): string | null {
 }
 
 function problemHint(status: string, msg?: string): string {
+  // the Routes API's words for the same two refusals
+  if (status === "PERMISSION_DENIED" || status === "403") status = "REQUEST_DENIED";
+  if (status === "RESOURCE_EXHAUSTED" || status === "429") status = "OVER_QUERY_LIMIT";
   const full = `${status}${msg ? ": " + msg : ""}`;
   if (status === "REQUEST_DENIED") {
-    return `Google 拒絕咗呢個請求（${full}）。通常係個 API key 冇批准用 Directions API：` +
-           `去 Google Cloud Console → APIs & Services → Credentials → 揀返條 key → API restrictions，加埋「Directions API」，` +
-           `同埋喺 Enabled APIs 度確認 Directions API 已經開咗。`;
+    return `Google 拒絕咗呢個請求（${full}）。通常係個 API key 冇批准用 Routes API：` +
+           `去 Google Cloud Console → APIs & Services → Credentials → 揀返條 key → API restrictions，加埋「Routes API」，` +
+           `同埋喺 Enabled APIs 度確認 Routes API 已經開咗。`;
   }
-  if (status === "OVER_QUERY_LIMIT") return "Directions API 用量超咗限額，或者未開啟計費。";
+  if (status === "OVER_QUERY_LIMIT") return "Routes API 用量超咗限額，或者未開啟計費。";
   if (status === "ZERO_RESULTS") return "Google 搵唔到呢兩點之間嘅路線（可能太遠或者跨海）。";
   return full;
 }
@@ -464,18 +582,34 @@ function langOfHint(locationHint?: string): string {
   if (/[一-鿿]/.test(h)) return "zh-TW";     // Han
   return "";
 }
+// Routes API (the Directions API's successor), put back into the old
+// Directions shape (seconds, transit steps) for describeRide.
 async function directions(o: string, d: string, mode: string, apiKey: string, lang?: string) {
-  const langParam = lang ? `&language=${encodeURIComponent(lang)}` : "";
-  const url = `https://maps.googleapis.com/maps/api/directions/json` +
-    `?origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}` +
-    `&mode=${mode}${langParam}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  // Google reports failures in the body, not the HTTP status
-  if (data?.status !== "OK") return { problem: problemHint(data?.status || "UNKNOWN", data?.error_message) };
-  const leg = data?.routes?.[0]?.legs?.[0];
-  if (!leg) return { problem: problemHint("ZERO_RESULTS") };
-  return { seconds: leg.duration?.value ?? 0, steps: leg.steps ?? [] };
+  const wp = (ref: string) => {
+    if (ref.startsWith("place_id:")) return { placeId: ref.slice(9) };
+    const m = ref.match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+    return m ? { location: { latLng: { latitude: Number(m[1]), longitude: Number(m[2]) } } } : { address: ref };
+  };
+  const travelMode = mode === "walking" ? "WALK" : mode === "driving" ? "DRIVE" : "TRANSIT";
+  const body: Record<string, unknown> = { origin: wp(o), destination: wp(d), travelMode };
+  if (lang) body.languageCode = lang;
+  const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", { method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "routes.duration" + (travelMode === "TRANSIT" ? ",routes.legs.steps.travelMode,routes.legs.steps.transitDetails" : "") },
+    body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { problem: problemHint(String(data?.error?.status || res.status), data?.error?.message) };
+  const r = data?.routes?.[0];
+  if (!r) return { problem: problemHint("ZERO_RESULTS") };
+  const steps = (r.legs?.[0]?.steps ?? []).map((x: any) => {
+    const t = x?.transitDetails;
+    if (!t) return { travel_mode: x?.travelMode || "" };
+    return { travel_mode: "TRANSIT", transit_details: {
+      line: { short_name: t.transitLine?.nameShort || "", name: t.transitLine?.name || "", vehicle: { type: t.transitLine?.vehicle?.type || "" } },
+      departure_stop: { name: t.stopDetails?.departureStop?.name || "" }, arrival_stop: { name: t.stopDetails?.arrivalStop?.name || "" },
+      num_stops: Number(t.stopCount) || 0 } };
+  });
+  return { seconds: parseInt(String(r.duration || "0"), 10) || 0, steps };
 }
 
 // OPTIONAL regional niceness, not required logic: named rail lines that Google

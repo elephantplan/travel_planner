@@ -31,7 +31,7 @@ async function run(b, japan){
       if (body.want === 'ラーメン') return j({ ok: true, places: [] });
       if (/カフェ/.test(body.want)) return j({ ok: false, message: 'Google 出錯' });      // nothing by keyword in Japan
       return j({ ok: true, places: /壽司|스시|寿司/.test(body.want)
-        ? [{ placeId: 'pA', name: 'Sushi Lunch', lat: 37.551, lng: 126.988, rating: 4.7, ratingCount: 900 }, { placeId: 'pB', name: 'Sushi Night', name_zh: '夜鮨', lat: 37.5512, lng: 126.9881, rating: 4.5, ratingCount: 700, walk: 3 }]
+        ? [{ placeId: 'pA', name: 'Sushi Lunch', lat: 37.551, lng: 126.988, rating: 4.7, ratingCount: 900 }, { placeId: 'pB', name: 'Sushi Night', name_zh: '夜鮨', lat: 37.5512, lng: 126.9881, rating: 4.5, ratingCount: 700, walk: 3, famous: true, fit: '當地人專程去嘅老店' }]
         : [{ placeId: 'pC', name: 'Ramen C', lat: 37.5513, lng: 126.9883, rating: 4.3, ratingCount: 400, walk: 4 }] }); }
     if (body.mode === 'near-search' && /カフェ/.test(body.query)) return j({ ok: true, places: [] });
     if (body.mode === 'near-search'){ wants.push('near:' + body.query);
@@ -68,6 +68,8 @@ async function run(b, japan){
     ok('嗰陣冇開嘅唔出', !/Sushi Lunch/.test(txt) && /跳過咗 1 間/.test(txt), txt.slice(0, 200));
     ok('列出幾間有開嘅，講埋類型同幾時開', /夜鮨/.test(txt) && /Ramen C/.test(txt) && /嗰陣有開（17:00–23:00）/.test(txt), txt.slice(0, 300));
     ok('列表唔會為每間攞 Google 評論', manyBodies.every(b => !b.placeIds), manyBodies);
+    ok('名店有標明，講埋點解值得去', /名店/.test(txt) && /當地人專程去嘅老店/.test(txt));
+    ok('名店排先', txt.indexOf('夜鮨') >= 0 && txt.indexOf('夜鮨') < txt.indexOf('Ramen C'));
     await p.locator('.swcard', { hasText: 'Ramen C' }).locator('[data-swalt]').click(); await p.waitForTimeout(500);
     await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(1500);
     const st = last().days[1].items.find(i => i.placeId === 'pB');

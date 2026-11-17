@@ -39,11 +39,13 @@ Deno.serve(async (req) => {
   const lang = String(body?.lang ?? "").trim() || langOfHint(String(body?.destinationLocal ?? ""));
   if (!placeId || !/^(ko|ja)$/.test(lang)) return json({ ok: true, name: null });
 
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}` +
-    `&fields=name&language=${lang}&key=${key}`;
+  // Places API (New): the name only, in the local language
   try {
-    const data = await (await fetch(url)).json();
-    return json({ ok: data?.status === "OK", name: data?.result?.name ?? null });
+    const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=${lang}`,
+      { headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": "displayName" } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) console.error(`Places (New) ${res.status}: ${String(data?.error?.message || "").slice(0, 200)}`);
+    return json({ ok: res.ok, name: data?.displayName?.text ?? null });
   } catch (e) {
     return json({ ok: false, message: String(e).slice(0, 200) });
   }
