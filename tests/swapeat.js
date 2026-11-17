@@ -94,6 +94,25 @@ async function run(b, japan){
     ok('新嗰間顯示壽司', /🍣 壽司/.test(await p.locator('.meta-chip.cuisine').first().innerText().catch(() => '')));
     ok('冇 JS error', !errs.length, errs);
   }
+  // pick one, then keep the rest in one tap
+  { const { p, errs, last } = await run(b, false);
+    await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
+    ok('換一間唔用 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('.sheet').innerText()));
+    await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
+    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
+    ok('結果卡都冇 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('#sw-out').innerText()));
+    await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(600);
+    ok('揀咗之後問其他要唔要留做後備', /換咗做「夜鮨」/.test(await p.locator('.sheet h3').innerText()) && /其他 1 間都留做後備/.test(await p.locator('#sw-keeprest').innerText()));
+    await p.screenshot({ path: '/tmp/claude-0/swdone.png' });
+    await p.locator('#sw-keeprest').click(); await p.waitForTimeout(1800);
+    const st = last().days[1].items.find(i => i.placeId === 'pB');
+    const ids = st ? (st.alts || []).map(a => a.placeId) : [];
+    ok('一撳：原本嗰間同其他都做咗後備', ids.includes('pOLD') && ids.includes('pC') && !ids.includes('pB'), ids);
+    ok('閂咗個頁', await p.locator('#layer .sheet').count() === 0);
+    ok('冇 JS error（揀咗再留其他）', !errs.length, errs);
+    await p.context().close();
+  }
   // closing adds nothing by itself; 全部留低 keeps them all, tapping one again takes it out
   for (const all of [false, true]){
     const { p, errs, last } = await run(b, false);

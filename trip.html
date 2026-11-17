@@ -1965,6 +1965,10 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .swcard.kept .sw-flag{height:26px;}
 .sw-keepbtn .i{width:15px;height:15px;margin-right:5px;}
 .sw-keepbtn[aria-pressed="true"]{background:color-mix(in srgb,var(--gold) 16%,var(--surface));border-color:color-mix(in srgb,var(--gold) 55%,var(--rule));color:var(--ink);}
+.sw-done{display:flex;flex-direction:column;gap:10px;}
+.sw-done-t{display:flex;gap:8px;align-items:flex-start;margin:0 0 4px;font-size:14px;line-height:1.55;color:var(--ink-soft);}
+.sw-done-t .i{width:17px;height:17px;flex:none;margin-top:2px;color:var(--ok);}
+.sw-done .btn .i{width:16px;height:16px;margin-right:6px;}
 .sw-tray{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:8px 8px 8px 14px;
   border-radius:var(--r-lg);background:color-mix(in srgb,var(--gold) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 30%,var(--rule));font-size:13.5px;}
 .sw-tray-t{flex:1;min-width:0;display:flex;align-items:center;gap:7px;color:var(--ink-soft);}
@@ -2357,7 +2361,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-37";
+  const BUILD = "2026-11-17-38";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -7677,10 +7681,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     openSheet(`
       <h3>換「${esc(cleanPlaceName(plain(st.title)))}」</h3>
       ${stopShutThen(st, day) ? `<p class="sw-shut">${icon("warn")}${stopShutThen(st, day) === "day" ? `呢間星期${esc(weekdayCharOfDate(day.date))}休息` : `你約 ${esc(fmtMin(t))} 到嗰陣佢已經收或者就收`}，幫你搵緊同類嗰陣有開嘅。</p>` : ""}
-      <p class="sec-sub">${cur ? `而家係 ${cur.icon} ${esc(cur.name)}。` : ""}${meal ? `${esc(meal)}・約 ${esc(fmtMin(t))}，淨係搵嗰陣有開嘅。` : ""}${anchors.length ? "" : "（呢個站未有位置，會搵唔到附近）"}</p>
+      <p class="sec-sub">${cur ? `而家係${esc(cur.name)}。` : ""}${meal ? `${esc(meal)}・約 ${esc(fmtMin(t))}，淨係搵嗰陣有開嘅。` : ""}${anchors.length ? "" : "（呢個站未有位置，會搵唔到附近）"}</p>
       <div id="sw-form">
       <p class="picker-label">想食咩？（可以揀幾個）</p>
-      <div class="chips1" id="sw-kind">${list.map(([n, ic]) => `<button type="button" class="pfchip" data-v="${esc(n)}">${ic} ${esc(n)}</button>`).join("")}</div>
+      <div class="chips1" id="sw-kind">${list.map(([n]) => `<button type="button" class="pfchip" data-v="${esc(n)}">${esc(n)}</button>`).join("")}</div>
       <input class="input" id="sw-own" style="margin-top:8px;" placeholder="或者自己打，例如：湯咖哩、有包廂、素食">
       <p class="picker-label">價錢</p>
       <div class="chips1" id="sw-price">${["唔理", "平價", "中價", "貴啲都得"].map((x, k) => `<button type="button" class="pfchip${k ? "" : " on"}" data-v="${k}">${x}</button>`).join("")}</div>
@@ -7714,7 +7718,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         return `<div class="sugcard swcard${kept ? " kept" : ""}">
           <span class="sw-flag" aria-hidden="true"></span>
           <div class="sc-top"><a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name_zh || p.name)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a></div>
-          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : p.unverified ? `<b class="sw-unv">未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">名店</b>` : "",
+          <div class="sc-facts">${[c ? esc(c.name) : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : p.unverified ? `<b class="sw-unv">未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">名店</b>` : "",
             Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
             Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "", p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).join("・")}</div>
           ${p.openNote ? `<div class="sw-open">${icon("check")}${esc(p.openNote)}</div>` : ""}
@@ -7761,10 +7765,27 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         out.innerHTML = trayHtml() + (note ? `<p class="hint">${esc(note)}</p>` : "") + found.map(row).join("");
         out.querySelectorAll("[data-swpick]").forEach(b => b.addEventListener("click", async () => {
           const p = found[+b.dataset.swpick];
+          const was = cleanPlaceName(plain(st.title));
           // the chosen one is not a backup of itself; the old stop becomes one
           if (isKept(p)) st.alts = st.alts.filter(a => altKey(a) !== keyOf(p));
-          closeLayer();
           await swapStopTo(day, st, p, p.probe, "");
+          // the sheet stays to ask, once, about the rest of the list
+          const rest = found.filter(x => x !== p);
+          const loose = rest.filter(x => !isKept(x) && keyOf(x) !== st.placeId);
+          const head = sheet.querySelector("h3"); if (head) head.textContent = `換咗做「${p.name_zh || p.name}」`;
+          sheet.querySelectorAll(".sec-sub, .sw-shut").forEach(x => x.remove());
+          form.hidden = true; edit.hidden = true;
+          const box = sheet.querySelector(".sheet"); if (box) box.classList.remove("tall");
+          out.innerHTML = `<div class="sw-done">
+            <p class="sw-done-t">${icon("check")}<span>原本嘅「${esc(was)}」已經收埋做後備，想返轉頭喺行程撳「改用呢間」就得。</span></p>
+            ${loose.length ? `<button type="button" class="btn primary wide" id="sw-keeprest">${icon("ribbon")}其他 ${loose.length} 間都留做後備</button>`
+              : rest.length ? `<p class="hint">其他 ${rest.length} 間你已經留咗做後備。</p>` : ""}
+            <button type="button" class="btn wide" data-close>${loose.length ? "唔使，完成" : "完成"}</button>
+          </div>`;
+          out.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", closeLayer));
+          const kr = out.querySelector("#sw-keeprest");
+          if (kr) kr.addEventListener("click", () => { keep(loose, true); flash(`其他 ${loose.length} 間留咗做後備`); closeLayer(); });
+          sheetToTop(out);
         }));
         out.querySelectorAll("[data-swkeep]").forEach(b => b.addEventListener("click", () => {
           const p = found[+b.dataset.swkeep];
