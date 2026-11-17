@@ -2327,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-26";
+  const BUILD = "2026-11-17-27";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7485,7 +7485,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const r = await res.json().catch(() => null);
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       list.ask = (r && r.ask) || "";
-      if (!r || r.ok === false) list.failed = (r && r.message) || `伺服器答 ${res.status}`;
+      if (!r || r.ok === false){ list.failed = (r && r.message) || `伺服器答 ${res.status}`; if (/Google/.test(list.failed)) googleRefusal = list.failed; }
       if (list.length) sugCache.set(k, list);
       return list;
     } catch (e){ const l = []; l.failed = e.message || "error"; return l; }
@@ -7752,7 +7752,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         out.scrollIntoView({ block: "start", behavior: "smooth" });
         if (await briefsFor(found, "eat") && out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
       });
-      if (opts.auto) go.click();
+      // shut then: the same kind is ticked, but nothing is searched until
+      // they have had a chance to change it
+      if (opts.auto) out.innerHTML = `<p class="hint">${cur ? `已經幫你揀咗「${esc(cur.name)}」。` : ""}想食其他就改，揀好撳「幫我搵幾間」。</p>`;
     }, { tall: true });
   }
   // Tabelog 百名店 near one spot: the trip's own 百名店 list first (it was
@@ -7817,6 +7819,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // which places would be shut when we get there and offer to swap them
   // (each shut one is kept as a backup under its replacement).
   const openFixOffered = new Set();
+  // the last time Google refused a place search (daily quota and the like),
+  // so a batch that found nothing can say why
+  let googleRefusal = "";
   function offerOpenFix(day){
     if (state.readonly || openFixOffered.has(day.id)) return;
     const shut = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && stopShutThen(st, day));
@@ -7825,10 +7830,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const names = shut.map(st => cleanPlaceName(plain(st.title))).slice(0, 3).join("、") + (shut.length > 3 ? " 等" : "");
     hintBar(`${names}：你去嗰陣冇開`, `幫我換 ${shut.length} 個`, async () => {
       genBanner(`搵緊 ${shut.length} 個有開嘅…`);
+      googleRefusal = "";
       let n = 0;
       for (const st of shut) if (await replaceClosedStop(day, st).catch(() => false)) n++;
       const when = shut.map(st => `${cleanPlaceName(plain(st.title))}（${clockMin(st.time) != null ? fmtMin(clockMin(st.time)) : "時間未定"}）`).join("、");
-      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到同類又有開嘅，可以自己揀` : ""}` : `${when}：附近搵唔到同類、嗰個鐘數有開、評分好嘅。可以撳餐廳卡上嘅「換一間嗰陣有開嘅」，揀其他類型再搵。`, { done: true });
+      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到同類又有開嘅，可以自己揀` : ""}` : googleRefusal ? `搵唔到，因為${googleRefusal.slice(0, 110)}。唔係附近冇嘢開。` : `${when}：附近搵唔到同類、嗰個鐘數有開、評分好嘅。可以撳餐廳卡上嘅「換一間嗰陣有開嘅」，揀其他類型再搵。`, { done: true });
       setTimeout(() => genBanner(null), 7000);
     });
   }
@@ -12690,7 +12696,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       body: JSON.stringify({ mode: "near-search", query, lat: ref.lat, lng: ref.lng, lang: "zh-TW" }) }), 15000, null).catch(() => null);
     const j = rs ? await rs.json().catch(() => null) : null;
     const out = ((j && j.places) || []).filter(x => x.placeId);
-    if (!rs) out.failed = "timeout"; else if (!j || j.ok === false) out.failed = (j && j.message) || `伺服器答 ${rs.status}`;
+    if (!rs) out.failed = "timeout"; else if (!j || j.ok === false){ out.failed = (j && j.message) || `伺服器答 ${rs.status}`; if (/Google/.test(out.failed)) googleRefusal = out.failed; }
     return out;
   }
   async function findPlaceNear(s, query, plainQuery, refAt){

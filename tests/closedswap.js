@@ -45,8 +45,12 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('休息嗰日：餐廳卡有「換一間嗰陣有開嘅」', await p.locator('[data-swapeat][data-shut]').count() === 1);
   await p.locator('[data-swapeat][data-shut]').click();
   await p.waitForTimeout(400);
-  ok('即刻搵緊，有動畫', await p.locator('#sw-out .ldrbox, #sw-out .ldr').count() >= 1 || /韓牛乙/.test(await p.locator('#sw-out').innerText()));
+  ok('未撳「幫我搵幾間」唔會自己搵', asked.length === 0 && /燒肉/.test(await p.locator('#sw-out').innerText()), asked.length);
+  ok('同類已經揀咗', await p.locator('#sw-kind .pfchip.on').count() === 1);
   ok('講明點解要換', /星期六休息/.test(await p.locator('.sw-shut').innerText().catch(() => '')));
+  await p.locator('#sw-go').click();
+  await p.waitForTimeout(300);
+  ok('撳咗先搵，有動畫', await p.locator('#sw-out .ldrbox, #sw-out .ldr').count() >= 1 || /韓牛乙/.test(await p.locator('#sw-out').innerText()));
   await p.waitForTimeout(2000);
   await p.locator('.swcard', { hasText: '韓牛乙' }).locator('[data-swpick]').click();
   await p.waitForTimeout(1500);
