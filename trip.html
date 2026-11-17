@@ -2327,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-30";
+  const BUILD = "2026-11-17-31";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4835,10 +4835,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const needsPhoto = s => !s.photoUrl && !s.noPhoto && (s.placeId || s.mapUrl) && plain(s.title);
     const todo = (day.items || []).filter(s => s && s.kind === "stop"
       && !hoursTried.has(s.placeId || s.mapUrl || s.title)
-      && (needsPhoto(s) || (s.placeId && (!(s.eatMeta || []).some(c => c.cls === "meta-chip hours") || !plain(s.kr)))));
+      && (needsPhoto(s) || (s.placeId && ((!(s.eatMeta || []).some(c => c.cls === "meta-chip hours") && s.noHours !== s.placeId)
+        || (!plain(s.kr) && s.krTried !== s.placeId && (destIsKorea() || destIsJapan()))))));
     if (!todo.length) return;
     hoursRunning = true;
     let got = 0;
+    // "Google has none" is saved with the trip too, so no device asks again
+    const flagsOf = s => [s.noPhoto, s.noHours, s.krTried].join("|");
+    const flagsBefore = todo.map(flagsOf);
     try {
       for (const s of todo){
         hoursTried.add(s.placeId || s.mapUrl || s.title);   // one attempt per place per session
@@ -4856,10 +4860,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (await enrichLocalName(s)) got++;
       }
     } finally { hoursRunning = false; }
+    const flagged = todo.some((s, i) => flagsOf(s) !== flagsBefore[i]);
     if (got){
       if (state.view === day.id) render();
       await saveNow(`補返 ${got} 項地點資料（相／營業時間）`, true);
-    }
+    } else if (flagged) await saveNow("記低 Google 冇資料嘅地點", true);
   }
 
   // ==================================================================
@@ -7936,13 +7941,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   async function backfillCounts(day){
     if (countBusy || state.readonly || state.offline) return;
     const todo = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && Number.isFinite(st.rating)
-      && !(Number(st.ratingCount) > 0) && !countTried.has(st.placeId)).slice(0, 8);
+      && !(Number(st.ratingCount) > 0) && !countTried.has(st.placeId) && st.countTried !== st.placeId).slice(0, 8);
     if (!todo.length) return;
     countBusy = true;
     let got = 0;
     try {
       for (const st of todo){
         countTried.add(st.placeId);
+        st.countTried = st.placeId;
         try {
           const r = await withTimeout(callAi({ action:"place-rating", placeId: st.placeId }), 15000, null);
           if (r && Number(r.ratingCount) > 0){ st.ratingCount = Number(r.ratingCount); if (Number.isFinite(r.rating)) st.rating = r.rating; got++; }
@@ -7950,6 +7956,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       }
     } finally { countBusy = false; }
     if (got){ if (state.view === day.id) render(); await saveNow(`補返 ${got} 個地點嘅評價數目`, true); }
+    else await saveNow("記低冇評價數目嘅地點", true);
   }
   const briefTried = new Set();
   const briefLoading = new Set();      // stops whose intro is being written right now
@@ -7960,6 +7967,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!todo.length) return;
     briefBusy = true;
     let got = 0;
+    const firstTry = todo.some(st => !st.briefTried);
     try {
       todo.forEach(st => briefLoading.add(st));
       if (state.view === day.id) render();
@@ -7975,6 +7983,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     } finally { briefBusy = false; }
     if (state.view === day.id) render();
     if (got) await saveNow(`幫 ${got} 個地點寫咗簡介`, true);
+    else if (firstTry) await saveNow("記低冇簡介嘅地點", true);
   }
   function openInsertSheet(day, pos, opts){
     const units = toUnits(day.items);
@@ -12789,7 +12798,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // actually written in that script is kept, so a failed lookup or an English
   // echo never lands in the field.
   async function enrichLocalName(s){
-    if (!s.placeId || plain(s.kr)) return false;
+    if (!s.placeId || plain(s.kr) || s.krTried === s.placeId) return false;
     const lang = destIsKorea() ? "ko" : destIsJapan() ? "ja" : "";
     if (!lang) return false;
     try {
@@ -12800,6 +12809,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const r = await res.json();
       const n = r && r.ok !== false && plain(r.name || "");
       if (n && /[\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/.test(n)){ s.kr = n; return true; }
+      if (r && r.ok !== false) s.krTried = s.placeId;       // Google has none: don't ask again
     } catch (_){}
     return false;
   }
