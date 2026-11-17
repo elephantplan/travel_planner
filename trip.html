@@ -1942,6 +1942,9 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .btn.swapeat{min-height:30px;padding:4px 12px;font-size:12.5px;}
 .swcard .sc-top{justify-content:flex-start;}
 .sw-hy{color:var(--gold);}
+.sw-diag{margin-top:10px;font-size:12px;color:var(--ink-faint);}
+.sw-diag summary{cursor:pointer;}
+.sw-diag div{margin-top:3px;}
 .notice-scrim{position:fixed;inset:0;z-index:128;display:grid;place-items:center;padding:20px;background:color-mix(in srgb,var(--ink) 38%,transparent);animation:fadein .15s ease-out;}
 .notice{width:min(360px,100%);background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:var(--r-xl);box-shadow:var(--shadow-2);padding:22px 20px 18px;text-align:center;}
 .notice-i{display:inline-grid;place-items:center;width:52px;height:52px;border-radius:50%;margin-bottom:10px;}
@@ -2324,7 +2327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-24";
+  const BUILD = "2026-11-17-25";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7678,18 +7681,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅百名店（要半分鐘左右）…" : `搵緊附近${wants.length ? "嘅" + wants.join("、") : "好評"}餐廳…`);
         const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean).concat((st.alts || []).map(a => a.placeId).filter(Boolean));
         let cands = [];
-        const failed = [];
+        const failed = [], steps = [];
         if (hyakuOnly) cands = await hyakuNear(anchors[0], wants, day);
         else {
           const lists = await Promise.all((words.length ? words : [""]).map(async w => {
             let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near }, 45000);
+            const step = { w: w || "（任何）", kw: l.length, why: l.failed || "" };
             if (l.failed) failed.push(l.failed);
             // nothing by keyword: Google's text search around the same spot
             if (!l.length){
               const r = (await nearSearchAt(w || "レストラン", anchors[0]).catch(() => null)) || [];
+              step.text = r.length;
               l = r.filter(x => x.placeId && Number(x.rating) >= 3.5 && (!near || x.meters <= 450) && x.meters <= 2500)
                 .map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) }));
+              step.kept = l.length;
             }
+            steps.push(step);
             return l;
           }));
           const seen = new Set();
@@ -7709,16 +7716,38 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }));
         shut = cands.filter(p => p.shut).length;
         found = cands.filter(p => !p.shut).slice(0, 6);
+        // none of those kinds open then: any restaurant nearby that is, said so plainly
+        let other = false;
+        if (!found.length && !hyakuOnly){
+          out.innerHTML = loaderHtml("你揀嗰幾類冇，搵緊附近其他嗰陣有開嘅…");
+          let any = await suggestFor(anchors, "eat", skip, "", { budget: price, near }, 45000);
+          steps.push({ w: "（任何餐廳）", kw: any.length, why: any.failed || "" });
+          if (!any.length){ const r = (await nearSearchAt(destIsJapan() ? "レストラン" : "restaurant", anchors[0]).catch(() => null)) || []; any = r.filter(x => x.placeId && x.meters <= 2500).map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) })); steps[steps.length - 1].text = any.length; }
+          const extra = any.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
+          await Promise.all(extra.map(async p => {
+            const probe = { placeId: p.placeId, eatMeta: [], time: st.time };
+            await enrichHours(probe);
+            p.probe = probe;
+            if (stopShutThen(probe, day)){ p.shut = true; shut++; }
+            else if (Array.isArray(probe.weekdayText) && t != null){ const r = openRanges(probe, day); const hit = r && r.find(([o, c]) => t >= o && t <= c); p.openNote = hit ? `嗰陣有開（${fmtMin(hit[0])}–${fmtMin(hit[1] % 1440)}）` : "嗰陣有開"; }
+          }));
+          found = extra.filter(p => !p.shut).slice(0, 6);
+          other = found.length > 0;
+        }
         go.disabled = false; go.innerHTML = `${icon("refresh")}再搵過`;
+        // what each search got, small, so a screenshot says where it went wrong
+        const diag = `<details class="sw-diag"><summary>點解？睇吓搵咗乜</summary>${steps.map(x => `<div>${esc(x.w)}：Google ${x.kw} 間${x.text != null ? `；擴大搵 ${x.text} 間${x.kept != null ? `（${x.kept} 間啱）` : ""}` : ""}${x.why ? `；${esc(String(x.why).slice(0, 60))}` : ""}</div>`).join("")}<div>嗰陣冇開而跳過：${shut} 間・時間 ${t != null ? esc(fmtMin(t)) : "未定"}</div></details>`;
         if (!found.length){
-          out.innerHTML = failed.length && !shut
+          out.innerHTML = (failed.length && !shut
             ? `<p class="sw-shut">${icon("warn")}${failed.includes("timeout") ? "Google 今次太耐冇回覆" : "搵嘅時候出咗問題（" + esc(failed[0]).slice(0, 80) + "）"}，唔係附近冇嘢。撳「再搵過」再試。</p>`
-            : `<p class="hint">附近搵唔到${shut ? "嗰陣有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳。試吓揀多幾類${near ? "，或者唔揀「行 5 分鐘內」" : ""}${price ? "，或者價錢揀「唔理」" : ""}。</p>`;
+            : `<p class="hint">附近搵唔到${t != null ? " " + esc(fmtMin(t)) + " " : ""}${shut ? "有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳。試吓揀多幾類${near ? "，或者唔揀「行 5 分鐘內」" : ""}${price ? "，或者價錢揀「唔理」" : ""}。</p>`) + diag;
           return;
         }
-        paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+        const head = (other ? `附近冇${esc(wants.join("、"))}喺 ${t != null ? esc(fmtMin(t)) : "嗰陣"}有開；以下係附近嗰陣有開嘅其他餐廳。` : "") + (shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+        paint(head);
+        out.insertAdjacentHTML("beforeend", diag);
         out.scrollIntoView({ block: "start", behavior: "smooth" });
-        if (await briefsFor(found, "eat") && out.isConnected) paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+        if (await briefsFor(found, "eat") && out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
       });
       if (opts.auto) go.click();
     }, { tall: true });
@@ -7795,7 +7824,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       genBanner(`搵緊 ${shut.length} 個有開嘅…`);
       let n = 0;
       for (const st of shut) if (await replaceClosedStop(day, st).catch(() => false)) n++;
-      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到有開嘅，可以自己揀` : ""}` : "附近搵唔到嗰陣有開、評分好嘅。可以撳餐廳卡上嘅「換一間嗰陣有開嘅」自己揀類型再搵。", { done: true });
+      const when = shut.map(st => `${cleanPlaceName(plain(st.title))}（${clockMin(st.time) != null ? fmtMin(clockMin(st.time)) : "時間未定"}）`).join("、");
+      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到同類又有開嘅，可以自己揀` : ""}` : `${when}：附近搵唔到同類、嗰個鐘數有開、評分好嘅。可以撳餐廳卡上嘅「換一間嗰陣有開嘅」，揀其他類型再搵。`, { done: true });
       setTimeout(() => genBanner(null), 7000);
     });
   }

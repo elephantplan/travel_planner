@@ -87,7 +87,9 @@ async function run(b, japan){
     await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
     await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
-    ok('搵嘅時候出錯就照講，唔會話附近冇嘢', /出咗問題.*唔係附近冇嘢/.test(await p.locator('#sw-out').innerText()), await p.locator('#sw-out').innerText());
+    const tE = await p.locator('#sw-out').innerText();
+    ok('揀嗰類冇：照列附近嗰陣有開嘅其他餐廳，講明唔係嗰類', /以下係附近嗰陣有開嘅其他餐廳/.test(tE) && /揀呢間/.test(tE), tE.slice(0, 200));
+    ok('有「點解？」睇到每次搵咗幾多', await p.locator('.sw-diag').count() === 1 && /カフェ スイーツ：Google 0 間/.test(await p.locator('.sw-diag').textContent()), await p.locator('.sw-diag').textContent());
     await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
     await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
