@@ -94,6 +94,7 @@ const DAYS = {
   ok('講過「同老婆兩個人、慳錢」：住宿要求自動填好', snap().stayPrefs && snap().stayPrefs.adults === 2 && /800 以下/.test(snap().stayPrefs.budget), snap().stayPrefs);
   ok('第一日跟住落機時間排', /13:00 到 KIX/.test(plans[0] || ''), (plans[0] || '').slice(0, 200));
   ok('冇估使費（唔準）', !/每人約|今日大約每人|成個行程大約/.test(await p.locator('#app').innerText()));
+  ok('叫 AI 揀嗰陣有開嘅餐廳同景點', plans.every(q => /嗰日嗰個時間有開/.test(q)));
   ok('講過想慳錢：叫 AI 揀平嘅', plans.every(q => /想慳錢/.test(q)));
   await p.evaluate(() => document.querySelector('[data-go="day1"]').click()); await p.waitForTimeout(1000);
   await shot('day1');

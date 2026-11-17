@@ -2306,7 +2306,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-18";
+  const BUILD = "2026-11-17-19";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -5754,7 +5754,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         syncMapPoints(day);
         render();
         await saveNow(`加咗 AI 推介「${name}」去 ${day.title}`);
-        if (stopClosedOnDay(st, day)) await replaceClosedStop(day, st).catch(() => {});
+        if (stopShutThen(st, day)) await replaceClosedStop(day, st).catch(() => {});
         const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
         let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
         refreshTransit(day, [k, nx].filter(v => v > 0));
@@ -6522,6 +6522,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`,
         ...(state.readonly ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
+      .concat(!closedToday && !state.readonly && stopShutThen(s, day) === "time" ? [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間嗰陣有開嘅</button>`] : [])
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
@@ -7334,6 +7335,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     setTimeout(() => { if (state.view === day.id) backfillBriefs(day); }, 1500);
     setTimeout(() => { if (state.view === day.id) backfillCounts(day); }, 2500);
     setTimeout(() => { if (state.view === day.id) fixAirportStops(day); }, 800);
+    setTimeout(() => { if (state.view === day.id) offerOpenFix(day); }, 2500);
     setTimeout(syncCover, 3000);
   }
 
@@ -7518,8 +7520,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (!weekdayCharOfDate(day.date)) continue;
       for (const st of toUnits(day.items).map(u => u.stop).filter(x => x && x.placeId)){
         if (!Array.isArray(st.weekdayText)) await enrichHours(st);
-        if (stopClosedOnDay(st, day)){
-          onProgress && onProgress(`「${cleanPlaceName(plain(st.title))}」嗰日休息，搵緊附近有開嘅…`);
+        const why = stopShutThen(st, day);
+        if (why){
+          onProgress && onProgress(`「${cleanPlaceName(plain(st.title))}」${why === "day" ? "嗰日休息" : "嗰個時間冇開"}，搵緊附近有開嘅…`);
           await replaceClosedStop(day, st).catch(() => {});
         }
       }
@@ -7529,6 +7532,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // that is open then, of the same kind (「鰻魚飯」 for an eel lunch). The
   // shut one is kept as a backup under it, not thrown away.
   async function replaceClosedStop(day, st){
+    const why = stopShutThen(st, day) === "time" ? `${fmtMin(clockMin(st.time))} 嗰陣冇開` : `星期${weekdayCharOfDate(day.date)}休息`;
     const units = toUnits(day.items), i = units.findIndex(u => u.stop === st);
     if (i < 0) return false;
     const pt = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" ? { lat: Number(x.lat), lng: Number(x.lng), name: cleanPlaceName(plain(x.title)) } : null;
@@ -7548,7 +7552,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     for (const p of list.slice(0, 6)){
       const probe = { placeId: p.placeId, eatMeta: [] };
       await enrichHours(probe);
-      if (!Array.isArray(probe.weekdayText) || stopClosedOnDay(probe, day)) continue;
+      probe.time = st.time;
+      if (!Array.isArray(probe.weekdayText) || stopShutThen(probe, day)) continue;
       // keep the shut one as a backup, then become the new place
       const old = {};
       Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) old[k] = st[k]; });
@@ -7561,7 +7566,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
       syncMapPoints(day);
       render();
-      await saveNow(`「${plain(old.title)}」星期${weekdayCharOfDate(day.date)}休息，換咗做「${name}」（原本嗰間做咗後備）`);
+      await saveNow(`「${plain(old.title)}」${why}，換咗做「${name}」（原本嗰間做咗後備）`);
       flash(`換咗做「${name}」，原本嗰間收埋做後備`);
       const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
       let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
@@ -7577,6 +7582,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // 「澀谷 OWNDAYS」 matched to the Shinjuku branch: the name asks for one
   // area, Google's own name for the match (kept in kr) says another. Looked
   // up again inside the asked-for area; the legs either side are re-timed.
+  // A day planned before hours were checked: once per day per visit, say
+  // which places would be shut when we get there and offer to swap them
+  // (each shut one is kept as a backup under its replacement).
+  const openFixOffered = new Set();
+  function offerOpenFix(day){
+    if (state.readonly || openFixOffered.has(day.id)) return;
+    const shut = toUnits(day.items).map(u => u.stop).filter(st => st && st.placeId && stopShutThen(st, day));
+    if (!shut.length) return;
+    openFixOffered.add(day.id);
+    const names = shut.map(st => cleanPlaceName(plain(st.title))).slice(0, 3).join("、") + (shut.length > 3 ? " 等" : "");
+    hintBar(`${names}：你去嗰陣冇開`, `幫我換 ${shut.length} 個`, async () => {
+      genBanner(`搵緊 ${shut.length} 個有開嘅…`);
+      let n = 0;
+      for (const st of shut) if (await replaceClosedStop(day, st).catch(() => false)) n++;
+      genBanner(n ? `換咗 ${n} 個，原本嗰啲收埋做後備${n < shut.length ? `；${shut.length - n} 個附近搵唔到有開嘅，可以自己揀` : ""}` : "附近搵唔到嗰陣有開、評分好嘅，可以撳 ＋ 自己揀", { done: true });
+      setTimeout(() => genBanner(null), 7000);
+    });
+  }
   async function fixDistrictStops(day){
     const units = toUnits(day.items);
     const bad = units.map(u => u.stop).filter(st => {
@@ -11791,7 +11814,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     await runBounded(newStops, 4, enrichStop);
     render();
     for (const { day } of touched.values()){
-      for (const st of newStops) if (day.items.includes(st) && stopClosedOnDay(st, day)) await replaceClosedStop(day, st).catch(() => {});
+      for (const st of newStops) if (day.items.includes(st) && stopShutThen(st, day)) await replaceClosedStop(day, st).catch(() => {});
       const us = toUnits(day.items);
       const idxs = us.map((u, i) => i).filter(i => us[i].stop && newStops.some(st => us[i].stop === st || (us[i - 1] && us[i - 1].stop === st)));
       if (idxs.length) await refreshTransit(day, idxs);
@@ -11850,6 +11873,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // to choose from, so the model is asked for several for the same slot.
   // 「想行街」 is not a stop; the places to shop are. And a day should flow.
   const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
+  const HOURS_HINT = "揀地方同餐廳要啱返嗰日嗰個時間有開：留意星期幾公休；晚餐唔好揀淨係做午市（例如兩三點就收）嘅店，早餐唔好揀中午先開嘅；景點要喺關門前最少一個鐘到。唔肯定就揀營業時間長嘅。";
   // a trip that wants to save is planned that way
   function budgetHint(){
     const t = briefText(state.snapshot) + " " + (((state.snapshot.meta || {}).budget) || "");
@@ -11944,7 +11968,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + budgetHint();
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + HOURS_HINT + "\n" + budgetHint();
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
@@ -12551,17 +12575,32 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
   // "You arrive at 19:00 and it shuts at 18:00" — read from Google's own
   // hours for that weekday against the stop's planned time.
-  function hoursClashChip(s, day){
-    const t = clockMin(s.time);
-    if (t == null || !Array.isArray(s.weekdayText) || !day) return [];
+  // that weekday's opening times as minutes, or null when not known / 24h
+  function openRanges(s, day){
+    if (!Array.isArray(s.weekdayText) || !day) return null;
     const wd = weekdayCharOfDate(day.date);
     const line = wd && s.weekdayText.find(l => l.startsWith(`星期${wd}`));
-    if (!line) return [];
+    if (!line) return null;
     const txt = line.slice(line.indexOf(":") + 1);
-    if (/24\s*小時|24 hours/i.test(txt)) return [];
+    if (/24\s*小時|24 hours/i.test(txt)) return null;
     const ranges = [...txt.matchAll(/(\d{1,2})[:：](\d{2})\s*[–\-~至到]\s*(\d{1,2})[:：](\d{2})/g)]
       .map(m => { const o = +m[1] * 60 + +m[2]; let c = +m[3] * 60 + +m[4]; if (c <= o) c += 1440; return [o, c]; });
-    if (!ranges.length) return [];
+    return ranges.length ? ranges : null;
+  }
+  // shut when we'd be there: "day" (closed that weekday), "time" (not open
+  // at the planned time, or closing within 45 minutes of it — too short for
+  // a meal or a visit), or "" when fine or not known
+  function stopShutThen(s, day){
+    if (!day) return "";
+    if (stopClosedOnDay(s, day)) return "day";
+    const t = clockMin(s.time), ranges = openRanges(s, day);
+    if (t == null || !ranges) return "";
+    return ranges.some(([o, c]) => t >= o && t <= c - 45) ? "" : "time";
+  }
+  function hoursClashChip(s, day){
+    const t = clockMin(s.time);
+    const ranges = openRanges(s, day);
+    if (t == null || !ranges) return [];
     if (ranges.some(([o, c]) => t >= o && t <= c - 30)) return [];
     const near = ranges.find(([o, c]) => t > c - 30 && t <= c);
     if (near) return [`<span class="meta-chip closed">${icon("warn")}你約 ${esc(fmtMin(t))} 到，${esc(fmtMin(near[1]))} 就關門，得返 ${near[1] - t} 分鐘</span>`];
@@ -12693,7 +12732,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       render();
       await saveNow(c.reason || `加咗「${plain(stop.title) || "一個地點"}」`);
       // the AI can't know opening days; Google can
-      if (stopClosedOnDay(stop, day)) await replaceClosedStop(day, stop).catch(() => {});
+      if (stopShutThen(stop, day)) await replaceClosedStop(day, stop).catch(() => {});
       // the AI's own travel note assumed a different neighbour; ask Google instead
       await refreshTransit(day, [at, at + 1]);
       return "";
@@ -12828,7 +12867,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     { const fl = flightsOf(state.snapshot), o = fl.find(f => f.dir === "out"), bk = fl.find(f => f.dir === "back");
       if (edges && edges.first && o && (o.arr || o.to)) notes.push(`佢哋${o.arr ? " " + o.arr : ""} 到${o.to ? " " + o.to : ""}：第一日嘅行程由落機之後先開始（過關、攞行李、去酒店大約要 1.5–2 個鐘）。`);
       if (edges && edges.last && bk && (bk.dep || bk.from)) notes.push(`佢哋最尾一日${bk.dep ? " " + bk.dep : ""} 喺${bk.from ? " " + bk.from : "機場"}起飛：要預 3 個鐘前到機場，之前嘅站要早啲完。`); }
-    notes.push(SHOP_HINT, ROUTE_HINT, budgetHint());
+    notes.push(SHOP_HINT, ROUTE_HINT, HOURS_HINT, budgetHint());
     const ap = state.areaPlan || {};
     const zones = dayIds.filter(id => ap[id]).map(id => `${id}：主要喺 ${ap[id].areas}${ap[id].theme ? `（${ap[id].theme}）` : ""}`);
     if (zones.length) notes.push("每日嘅區已經分配好，嗰日嘅地點同餐廳都要喺嗰啲區入面或者隔籬，唔好走去第二日嘅區：\n" + zones.join("\n"));
