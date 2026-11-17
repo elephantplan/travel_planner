@@ -2324,7 +2324,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-23";
+  const BUILD = "2026-11-17-24";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -7470,18 +7470,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const SUG_KIND = { see: "景點", shop: "購物地方", eat: "餐廳" };
   const MUST_LABEL = { see: "必睇", shop: "必買", eat: "必食" };
   const sugCache = new Map();
-  async function suggestFor(anchors, kind, skip, want = "", prefs = {}){
+  // an empty answer says why (list.failed): it timed out, or the server said
+  // something — so "nothing nearby" is only said when Google found nothing
+  async function suggestFor(anchors, kind, skip, want = "", prefs = {}, ms = 25000){
     const k = kind + ":" + want + ":" + JSON.stringify(prefs) + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|");
     if (sugCache.has(k)) return sugCache.get(k);
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "suggest-add", brief: false, kind, skip, want, prefs, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), 25000, null);
-      const r = res ? await res.json() : null;
+        body: JSON.stringify({ mode: "suggest-add", brief: false, kind, skip, want, prefs, points: anchors.map(a => ({ lat: a.lat, lng: a.lng, name: a.name })) }) }), ms, null);
+      if (!res){ const l = []; l.failed = "timeout"; return l; }
+      const r = await res.json().catch(() => null);
       const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
       list.ask = (r && r.ask) || "";
+      if (!r || r.ok === false) list.failed = (r && r.message) || `伺服器答 ${res.status}`;
       if (list.length) sugCache.set(k, list);
       return list;
-    } catch (_){ return []; }
+    } catch (e){ const l = []; l.failed = e.message || "error"; return l; }
   }
   // the intros for a list already on screen, written from each place's
   // Google reviews; with a request, the order says which fit best
@@ -7674,14 +7678,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅百名店（要半分鐘左右）…" : `搵緊附近${wants.length ? "嘅" + wants.join("、") : "好評"}餐廳…`);
         const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean).concat((st.alts || []).map(a => a.placeId).filter(Boolean));
         let cands = [];
+        const failed = [];
         if (hyakuOnly) cands = await hyakuNear(anchors[0], wants, day);
         else {
           const lists = await Promise.all((words.length ? words : [""]).map(async w => {
-            let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near });
+            let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near }, 45000);
+            if (l.failed) failed.push(l.failed);
             // nothing by keyword: Google's text search around the same spot
-            if (!l.length && w){
-              const r = (await nearSearchAt(w, anchors[0]).catch(() => [])) || [];
-              l = r.filter(x => x.placeId && Number(x.rating) >= 3.6 && (!near || x.meters <= 450) && x.meters <= 1500)
+            if (!l.length){
+              const r = (await nearSearchAt(w || "レストラン", anchors[0]).catch(() => null)) || [];
+              l = r.filter(x => x.placeId && Number(x.rating) >= 3.5 && (!near || x.meters <= 450) && x.meters <= 2500)
                 .map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) }));
             }
             return l;
@@ -7704,7 +7710,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         shut = cands.filter(p => p.shut).length;
         found = cands.filter(p => !p.shut).slice(0, 6);
         go.disabled = false; go.innerHTML = `${icon("refresh")}再搵過`;
-        if (!found.length){ out.innerHTML = `<p class="hint">附近搵唔到${shut ? "嗰陣有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳，試吓揀多幾類，或者唔揀「行 5 分鐘內」。</p>`; return; }
+        if (!found.length){
+          out.innerHTML = failed.length && !shut
+            ? `<p class="sw-shut">${icon("warn")}${failed.includes("timeout") ? "Google 今次太耐冇回覆" : "搵嘅時候出咗問題（" + esc(failed[0]).slice(0, 80) + "）"}，唔係附近冇嘢。撳「再搵過」再試。</p>`
+            : `<p class="hint">附近搵唔到${shut ? "嗰陣有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳。試吓揀多幾類${near ? "，或者唔揀「行 5 分鐘內」" : ""}${price ? "，或者價錢揀「唔理」" : ""}。</p>`;
+          return;
+        }
         paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
         out.scrollIntoView({ block: "start", behavior: "smooth" });
         if (await briefsFor(found, "eat") && out.isConnected) paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");

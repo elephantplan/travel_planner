@@ -28,10 +28,12 @@ async function run(b, japan){
     let body = {}; try { body = JSON.parse(r.request().postData() || '{}'); } catch (_){}
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.mode === 'suggest-add'){ wants.push(body.want);
-      if (body.want === 'ラーメン') return j({ ok: true, places: [] });      // nothing by keyword in Japan
+      if (body.want === 'ラーメン') return j({ ok: true, places: [] });
+      if (/カフェ/.test(body.want)) return j({ ok: false, message: 'Google 出錯' });      // nothing by keyword in Japan
       return j({ ok: true, places: /壽司|스시|寿司/.test(body.want)
         ? [{ placeId: 'pA', name: 'Sushi Lunch', lat: 37.551, lng: 126.988, rating: 4.7, ratingCount: 900 }, { placeId: 'pB', name: 'Sushi Night', name_zh: '夜鮨', lat: 37.5512, lng: 126.9881, rating: 4.5, ratingCount: 700, walk: 3 }]
         : [{ placeId: 'pC', name: 'Ramen C', lat: 37.5513, lng: 126.9883, rating: 4.3, ratingCount: 400, walk: 4 }] }); }
+    if (body.mode === 'near-search' && /カフェ/.test(body.query)) return j({ ok: true, places: [] });
     if (body.mode === 'near-search'){ wants.push('near:' + body.query);
       return j({ ok: true, places: [{ placeId: 'pN', name: '札幌ラーメン横丁 N', lat: 37.5515, lng: 126.9885, rating: 4.1, ratingCount: 3000, meters: 300 }] }); }
     if (body.mode === 'brief-many') return j({ ok: true, briefs: { pB: { what: '夜晚先開嘅鮨店', mustTry: '海膽' } } });
@@ -83,6 +85,10 @@ async function run(b, japan){
     const t0 = await p.locator('#sw-out').innerText();
     ok('日本用日文搵（ラーメン）；搵唔到就擴大用文字搜尋', wantsJ.includes('ラーメン') && wantsJ.includes('near:ラーメン') && /札幌ラーメン横丁/.test(t0), [wantsJ, t0.slice(0, 120)]);
     await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
+    await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
+    ok('搵嘅時候出錯就照講，唔會話附近冇嘢', /出咗問題.*唔係附近冇嘢/.test(await p.locator('#sw-out').innerText()), await p.locator('#sw-out').innerText());
+    await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
     await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
     ok('百名店有標明', /百名店 2025 ラーメン/.test(txt) && /名店H/.test(txt), txt.slice(0, 200));
