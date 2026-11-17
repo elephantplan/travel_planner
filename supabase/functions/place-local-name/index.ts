@@ -45,6 +45,16 @@ Deno.serve(async (req) => {
       { headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": "displayName" } });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) console.error(`Places (New) ${res.status}: ${String(data?.error?.message || "").slice(0, 200)}`);
+    else {
+      // one billed call, counted for the admin page's usage view
+      const u = Deno.env.get("SUPABASE_URL"), k = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (u && k) {
+        const p = fetch(`${u}/rest/v1/rpc/bump_google_usage`, { method: "POST",
+          headers: { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_sku: "details:pro" }) }).catch(() => {});
+        try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* carry on */ }
+      }
+    }
     return json({ ok: res.ok, name: data?.displayName?.text ?? null });
   } catch (e) {
     return json({ ok: false, message: String(e).slice(0, 200) });

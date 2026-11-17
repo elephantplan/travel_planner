@@ -268,7 +268,7 @@ async function gNew(path: string, mask: string, body?: unknown, lang = ""): Prom
         ...(body ? { body: JSON.stringify(body) } : {}) });
       j = await res.json().catch(() => ({}));
     } catch (e) { j = { error: { status: "FETCH_FAILED", message: String(e) } }; }
-    if (res && res.ok) return { status: "OK", data: j };
+    if (res && res.ok) { gCount(`${gApi(path)}:${gTier(mask)}`); return { status: "OK", data: j }; }
     const code = res?.status || 0, st = String(j?.error?.status || "");
     const busy = code === 429 || code >= 500 || /RESOURCE_EXHAUSTED|UNAVAILABLE|FETCH_FAILED|INTERNAL/.test(st);
     if (!busy || k === 2) {
@@ -284,6 +284,26 @@ async function gNew(path: string, mask: string, body?: unknown, lang = ""): Prom
   }
   return { status: "UNKNOWN_ERROR", error_message: "" };
 }
+// One billed Google call, counted by billing tier for the admin page's usage
+// view. Fire and forget: the family's answer never waits for the count.
+function gCount(sku: string) {
+  const url = Deno.env.get("SUPABASE_URL"), k = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !k) return;
+  const p = fetch(`${url}/rest/v1/rpc/bump_google_usage`, { method: "POST",
+    headers: { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_sku: sku }) }).catch(() => {});
+  try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* counted or not, carry on */ }
+}
+// Google bills a Places request by the dearest field it asks for
+function gTier(mask: string): string {
+  const f = mask.replace(/places\./g, "");
+  if (/reviews|editorialSummary|generativeSummary/.test(f)) return "enterprise_atmosphere";
+  if (/rating|userRatingCount|priceLevel|regularOpeningHours|currentOpeningHours|PhoneNumber|websiteUri/.test(f)) return "enterprise";
+  if (/displayName|businessStatus|primaryType|googleMapsUri/.test(f)) return "pro";
+  if (/^\s*id\s*$/.test(f)) return "ids";
+  return "essentials";
+}
+const gApi = (path: string) => path.startsWith("places:searchText") ? "text_search" : path.startsWith("places:searchNearby") ? "nearby" : "details";
 const gRefused = (d: any) => d && d.status && !G_OK.has(d.status)
   ? `Google 地點搜尋冇答（${d.status}${d.error_message ? "：" + String(d.error_message).slice(0, 80) : ""}）` : "";
 // words → places; around a point when one is given (a bias, not a fence)
@@ -340,6 +360,7 @@ async function gPhotoUri(photoName: string, maxWidth = 800): Promise<string> {
   if (!key || !photoName) return "";
   try {
     const j = await (await fetch(`${PLACES}/${photoName}/media?maxWidthPx=${maxWidth}&skipHttpRedirect=true&key=${key}`)).json();
+    if (j?.photoUri) gCount("photo");
     return String(j?.photoUri || "");
   } catch { return ""; }
 }
@@ -599,6 +620,7 @@ async function directions(o: string, d: string, mode: string, apiKey: string, la
     body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { problem: problemHint(String(data?.error?.status || res.status), data?.error?.message) };
+  gCount("routes");
   const r = data?.routes?.[0];
   if (!r) return { problem: problemHint("ZERO_RESULTS") };
   const steps = (r.legs?.[0]?.steps ?? []).map((x: any) => {

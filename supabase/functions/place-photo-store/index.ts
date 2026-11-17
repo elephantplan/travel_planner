@@ -51,11 +51,21 @@ function publicUrl(base: string, name: string): string {
 // word, which is carried back so "your key is switched off" is never
 // reported to the family as "this place has no photos".
 const PLACES = "https://places.googleapis.com/v1";
+// one billed Google call, counted for the admin page's usage view
+function countCall(sku: string) {
+  const url = Deno.env.get("SUPABASE_URL"), k = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !k) return;
+  const p = fetch(`${url}/rest/v1/rpc/bump_google_usage`, { method: "POST",
+    headers: { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_sku: sku }) }).catch(() => {});
+  try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* carry on */ }
+}
 async function placesCall(path: string, mask: string, key: string, body?: unknown) {
   const res = await fetch(`${PLACES}/${path}`, { method: body ? "POST" : "GET",
     headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": mask },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000) });
   const data = await res.json().catch(() => ({}));
+  if (res.ok) countCall(path.startsWith("places:") ? (mask === "places.id" ? "text_search:ids" : "text_search:pro") : "details:essentials");
   return { ok: res.ok, data, status: res.ok ? "OK" : String(data?.error?.status || `HTTP ${res.status}`), error: String(data?.error?.message || "") };
 }
 // an id-only search, which Google does not charge for
@@ -101,6 +111,7 @@ async function storeOne(ref: string, name: string, base: string, serviceKey: str
     console.error(`photo fetch failed ${photoRes.status} for ${name}`);
     return "";
   }
+  countCall("photo");
   const bytes = new Uint8Array(await photoRes.arrayBuffer());
   if (!bytes.length) {
     console.error(`photo fetch returned 0 bytes for ${name}`);
