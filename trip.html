@@ -1938,6 +1938,13 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .tripcost{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:10px 0 0;padding:12px 14px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--gold) 9%,var(--surface));font-size:14px;}
 .meta-chip.cost .i{width:13px;height:13px;}
 .dayline-count .spin{display:inline-block;width:11px;height:11px;margin-right:5px;vertical-align:-1px;border-radius:50%;border:2px solid var(--rule);border-top-color:var(--lc,var(--gold));animation:genspin .8s linear infinite;}
+.meta-chip.cuisine{font-weight:600;}
+.btn.swapeat{min-height:30px;padding:4px 12px;font-size:12.5px;}
+.swcard .sc-top{justify-content:flex-start;}
+.sw-hy{color:var(--gold);}
+.sw-open{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ok,#2A7355);margin-top:4px;}
+.sw-open .i{width:13px;height:13px;}
+.sw-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;}
 .daytools{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
 .daytools .btn{flex:1 1 auto;justify-content:center;min-height:42px;}
 .daytools #dayai{flex:2 1 150px;}
@@ -2306,7 +2313,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-17-19";
+  const BUILD = "2026-11-17-20";
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjenlrcWxlb2FteGRla2ZzZ3FoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4ODU0MjUsImV4cCI6MjEwMDQ2MTQyNX0.Iv8diOTpiKO0LzAUMcDXaP_3HBAP4PyYGNgosGtgjCA";
@@ -6521,8 +6528,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
       .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`,
         ...(state.readonly ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
+      .concat((() => { const c = cuisineOf(s); return c ? [`<span class="meta-chip cuisine">${c.icon} ${esc(c.name)}${s.hyaku ? "・百名店" : ""}</span>`] : []; })())
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(!closedToday && !state.readonly && stopShutThen(s, day) === "time" ? [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一間嗰陣有開嘅</button>`] : [])
+      .concat(!state.readonly && (s.type === "eat" || s.isFood) && !closedToday && stopShutThen(s, day) !== "time" ? [`<button type="button" class="btn swapeat" data-swapeat="${i}">${icon("refresh")}換一間</button>`] : [])
       .concat(ratingChip(s) ? [ratingChip(s)] : [])
       // the hand-written "⭐ 4.3" chips predate live ratings; drop them once
       // Google's own number is on the card so the two can't contradict
@@ -7178,6 +7187,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       st.farOk = true; render(); saveNow(`確認「${plain(st.title)}」個位置冇錯`);
     }));
 
+    document.querySelectorAll("[data-swapeat]").forEach(el => el.addEventListener("click", ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const st = toUnits(day.items)[+el.dataset.swapeat].stop;
+      if (st) openSwapEat(day, st);
+    }));
     document.querySelectorAll("[data-findopen]").forEach(el => el.addEventListener("click", async ev => {
       ev.preventDefault(); ev.stopPropagation();
       const st = toUnits(day.items)[+el.dataset.findopen].stop;
@@ -7554,30 +7568,172 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       await enrichHours(probe);
       probe.time = st.time;
       if (!Array.isArray(probe.weekdayText) || stopShutThen(probe, day)) continue;
-      // keep the shut one as a backup, then become the new place
-      const old = {};
-      Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) old[k] = st[k]; });
-      const name = p.name_zh || p.name;
-      Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) delete st[k]; });
-      Object.assign(st, blankStop(), { kind: "stop", time: st.time, type: st.type, alts: [...(st.alts || []), old],
-        title: label ? `${label}：${name}` : name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "",
-        placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount,
-        weekdayText: probe.weekdayText, eatMeta: probe.eatMeta,
-        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
-      syncMapPoints(day);
-      render();
-      await saveNow(`「${plain(old.title)}」${why}，換咗做「${name}」（原本嗰間做咗後備）`);
-      flash(`換咗做「${name}」，原本嗰間收埋做後備`);
-      const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
-      let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
-      refreshTransit(day, [k, nx].filter(v => v > 0));
-      await Promise.all([enrichPhoto(st, name), enrichLocalName(st).catch(() => {}),
-        fetchBrief(st, kind).then(b => applyBrief(st, b, kind)).catch(() => {})]);
-      if (state.view === day.id) render();
-      await saveNow(`補返「${name}」嘅相同介紹`, true);
+      await swapStopTo(day, st, p, probe, why);
       return true;
     }
     return false;
+  }
+  // 換一間: what kind of food (a few at once), how much, how near, and in
+  // Japan whether only Tabelog 百名店 will do; then a handful nearby that are
+  // open at that time. One is picked to replace it, or kept as a backup.
+  function openSwapEat(day, st){
+    const units = toUnits(day.items), i = units.findIndex(u => u.stop === st);
+    const pt = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null ? { lat: Number(x.lat), lng: Number(x.lng), name: cleanPlaceName(plain(x.title)) } : null;
+    let prev = null, next = null;
+    for (let j = i - 1; j >= 0; j--) if (units[j].stop && pt(units[j].stop)){ prev = units[j].stop; break; }
+    for (let j = i + 1; j < units.length; j++) if (units[j].stop && pt(units[j].stop)){ next = units[j].stop; break; }
+    const anchors = [pt(st) || pt(prev), pt(st) ? null : pt(next)].filter(Boolean);
+    const cur = cuisineOf(st), t = clockMin(st.time);
+    const meal = t == null ? "" : t < 10.5 * 60 ? "早餐" : t < 15 * 60 ? "午餐" : t < 17.5 * 60 ? "下午茶" : t < 21.5 * 60 ? "晚餐" : "宵夜";
+    const jp = destIsJapan();
+    const list = jp ? CUISINES : CUISINES.filter(c => !/大阪燒|蕎麥/.test(c[0]));
+    openSheet(`
+      <h3>換「${esc(cleanPlaceName(plain(st.title)))}」</h3>
+      <p class="sec-sub">${cur ? `而家係 ${cur.icon} ${esc(cur.name)}。` : ""}${meal ? `${esc(meal)}・約 ${esc(fmtMin(t))}，淨係搵嗰陣有開嘅。` : ""}${anchors.length ? "" : "（呢個站未有位置，會搵唔到附近）"}</p>
+      <p class="picker-label">想食咩？（可以揀幾個）</p>
+      <div class="chips1" id="sw-kind">${list.map(([n, ic]) => `<button type="button" class="pfchip" data-v="${esc(n)}">${ic} ${esc(n)}</button>`).join("")}</div>
+      <input class="input" id="sw-own" style="margin-top:8px;" placeholder="或者自己打，例如：湯咖哩、有包廂、素食">
+      <p class="picker-label">價錢</p>
+      <div class="chips1" id="sw-price">${["唔理", "平價", "中價", "貴啲都得"].map((x, k) => `<button type="button" class="pfchip${k ? "" : " on"}" data-v="${k}">${x}</button>`).join("")}</div>
+      <div class="chips1" style="margin-top:10px;">
+        <button type="button" class="pfchip" id="sw-near">${icon("walk")}行 5 分鐘內</button>
+        ${jp ? `<button type="button" class="pfchip" id="sw-hyaku">${icon("star")}淨係食べログ百名店</button>` : ""}
+      </div>
+      <button class="btn primary wide" id="sw-go" style="margin-top:14px;">${icon("sparkle")}幫我搵幾間</button>
+      <div id="sw-out" style="margin-top:12px;"></div>
+    `, sheet => {
+      const kinds = new Set();
+      sheet.querySelectorAll("#sw-kind .pfchip").forEach(b => b.addEventListener("click", () => {
+        const v = b.dataset.v; if (kinds.has(v)) kinds.delete(v); else kinds.add(v); b.classList.toggle("on", kinds.has(v)); }));
+      let price = 0;
+      sheet.querySelectorAll("#sw-price .pfchip").forEach(b => b.addEventListener("click", () => {
+        price = +b.dataset.v; sheet.querySelectorAll("#sw-price .pfchip").forEach(x => x.classList.toggle("on", x === b)); }));
+      const tog = id => { const b = sheet.querySelector(id); if (b) b.addEventListener("click", () => b.classList.toggle("on")); };
+      tog("#sw-near"); tog("#sw-hyaku");
+      const out = sheet.querySelector("#sw-out"), go = sheet.querySelector("#sw-go");
+      let found = [];
+      const row = (p, k) => {
+        const g = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId }) : "";
+        const c = cuisineOf({ type: "eat", title: p.name, kr: p.name_zh || "", cuisine: p.cuisine || "", desc: p.what || "" });
+        return `<div class="sugcard swcard">
+          <div class="sc-top"><a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(p.name_zh || p.name)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a></div>
+          <div class="sc-facts">${[c ? `${c.icon} ${esc(c.name)}` : "", p.hyaku ? `<b class="sw-hy">${esc(p.hyaku)}</b>` : "",
+            Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
+            Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : "", p.walk ? `行 ${p.walk} 分鐘` : ""].filter(Boolean).join("・")}</div>
+          ${p.openNote ? `<div class="sw-open">${icon("check")}${esc(p.openNote)}</div>` : ""}
+          ${p.what ? `<p class="sc-what">${esc(p.what)}</p>` : p.briefed ? "" : `<p class="sc-wait">${loaderSvg()}<span>睇緊 Google 評論…</span></p>`}
+          ${p.mustTry ? `<p class="sc-must"><i>必食</i>${esc(p.mustTry)}</p>` : ""}
+          <div class="sw-acts"><button class="btn primary" data-swpick="${k}">揀呢間</button><button class="btn" data-swalt="${k}">做後備</button>
+            ${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}</div>
+        </div>`;
+      };
+      const paint = (note) => {
+        out.innerHTML = (note ? `<p class="hint">${esc(note)}</p>` : "") + found.map(row).join("");
+        out.querySelectorAll("[data-swpick]").forEach(b => b.addEventListener("click", async () => {
+          const p = found[+b.dataset.swpick]; closeLayer(); await swapStopTo(day, st, p, p.probe, ""); }));
+        out.querySelectorAll("[data-swalt]").forEach(b => b.addEventListener("click", async () => {
+          const p = found[+b.dataset.swalt];
+          if (!Array.isArray(st.alts)) st.alts = [];
+          st.alts.push({ title: p.name_zh || p.name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "", type: "eat", placeId: p.placeId, lat: p.lat, lng: p.lng,
+            rating: p.rating, ratingCount: p.ratingCount, desc: p.what || "", ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
+            mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+          b.disabled = true; b.textContent = "已做後備";
+          render();
+          await saveNow(`加咗「${p.name_zh || p.name}」做「${cleanPlaceName(plain(st.title))}」嘅後備`);
+        }));
+      };
+      go.addEventListener("click", async () => {
+        if (!anchors.length){ out.innerHTML = `<p class="hint">呢個站未有位置，搵唔到附近。可以撳筆改個名，等佢搵到 Google 地點先。</p>`; return; }
+        const own = sheet.querySelector("#sw-own").value.trim();
+        const wants = [...kinds].map(k => k.split("／")[0]).concat(own ? [own] : []);
+        const near = !!(sheet.querySelector("#sw-near") || {}).classList?.contains("on");
+        const hyakuOnly = !!(sheet.querySelector("#sw-hyaku") || {}).classList?.contains("on");
+        go.disabled = true;
+        out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅百名店（要半分鐘左右）…" : `搵緊附近${wants.length ? "嘅" + wants.join("、") : "好評"}餐廳…`);
+        const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean).concat((st.alts || []).map(a => a.placeId).filter(Boolean));
+        let cands = [];
+        if (hyakuOnly) cands = await hyakuNear(anchors[0], wants, day);
+        else {
+          const lists = await Promise.all((wants.length ? wants : [""]).map(w => suggestFor(anchors, "eat", skip, w, { budget: price, near })));
+          const seen = new Set();
+          lists.forEach((l, k) => l.forEach(p => { if (!seen.has(p.placeId)){ seen.add(p.placeId); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
+          cands.sort((a, b) => (b.rating || 0) * Math.log((b.ratingCount || 0) + 1) - (a.rating || 0) * Math.log((a.ratingCount || 0) + 1));
+        }
+        cands = cands.filter(p => p.placeId && !skip.includes(p.placeId)).slice(0, 10);
+        // open when we'd be there
+        let shut = 0;
+        await Promise.all(cands.map(async p => {
+          const probe = { placeId: p.placeId, eatMeta: [], time: st.time };
+          await enrichHours(probe);
+          p.probe = probe;
+          const why = stopShutThen(probe, day);
+          if (why) p.shut = true;
+          else if (Array.isArray(probe.weekdayText) && t != null){ const r = openRanges(probe, day); const hit = r && r.find(([o, c]) => t >= o && t <= c); p.openNote = hit ? `嗰陣有開（${fmtMin(hit[0])}–${fmtMin(hit[1] % 1440)}）` : "嗰陣有開"; }
+        }));
+        shut = cands.filter(p => p.shut).length;
+        found = cands.filter(p => !p.shut).slice(0, 6);
+        go.disabled = false; go.innerHTML = `${icon("refresh")}再搵過`;
+        if (!found.length){ out.innerHTML = `<p class="hint">附近搵唔到${shut ? "嗰陣有開" : ""}${wants.length ? "嘅" + esc(wants.join("、")) : "嘅"}餐廳，試吓揀多幾類，或者唔揀「行 5 分鐘內」。</p>`; return; }
+        paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+        out.scrollIntoView({ block: "start", behavior: "smooth" });
+        if (await briefsFor(found, "eat") && out.isConnected) paint(shut ? `跳過咗 ${shut} 間嗰陣冇開嘅。` : "");
+      });
+    }, { tall: true });
+  }
+  // Tabelog 百名店 near one spot: the trip's own 百名店 list first (it was
+  // searched already), else a search around this one place
+  async function hyakuNear(at, wants, day){
+    const close = h => Number.isFinite(Number(h.lat)) && metersBetween(at, h) <= 2000;
+    const genreOk = h => !wants.length || wants.some(w => (h.genre || "").includes(w) || CUISINES.some(([n, , re]) => n.startsWith(w) && re.test(h.genre || "")));
+    const mine = ((state.snapshot.hyakumeiten || {}).items || []).filter(h => close(h) && genreOk(h));
+    const asP = h => ({ name: h.name_jp, name_zh: h.name_zh || "", placeId: h.placeId, lat: h.lat, lng: h.lng, rating: h.rating, ratingCount: h.ratingCount,
+      hyaku: h.award || "百名店", cuisine: h.genre || "", what: h.why || "", walk: Math.max(1, Math.round(metersBetween(at, h) * 1.3 / 80)), briefed: !!h.why });
+    if (mine.length >= 3) return mine.map(asP);
+    const genre = wants.length ? wants.map(w => (CUISINES.find(([n]) => n.startsWith(w)) || [w])[0].split("／")[0]).join("、") : "";
+    const text = JSON.stringify({ destination: (state.snapshot.meta || {}).destinationLocal || "", ...(genre ? { genre } : {}),
+      days: [{ day: 1, title: plain(day.title), stops: [at.name].filter(Boolean) }] });
+    let r = null;
+    try {
+      const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
+        body: JSON.stringify({ mode: "hyakumeiten", text, today: localIso(new Date()) }) }), 110000, null);
+      r = res ? await res.json().catch(() => null) : null;
+    } catch (_){}
+    const got = [];
+    await runBounded(((r && r.places) || []).slice(0, 8), 4, async h => {
+      const pr = await callAi({ action: "place-search", query: [h.name_jp || h.name_zh, h.area].filter(Boolean).join(" ") }).catch(() => null);
+      const p = pr && pr.places && pr.places[0];
+      if (!p || !Number.isFinite(p.lat) || metersBetween(at, p) > 2500) return;
+      got.push(asP({ name_jp: h.name_jp || p.name, name_zh: h.name_zh, placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount, award: h.award, genre: h.genre, why: h.why }));
+    });
+    return mine.map(asP).concat(got.filter(g => !mine.some(m => m.placeId === g.placeId)));
+  }
+  // a stop becomes another place; the one it was is kept as a backup under it
+  async function swapStopTo(day, st, p, probe, why){
+    const eat = st.type === "eat" || st.isFood, kind = eat ? "eat" : "see";
+    const label = (plain(st.title).match(/^(早餐|午餐|晏晝|晚餐|宵夜|下午茶|甜品)\s*[：:]/) || [])[1] || "";
+    const old = {};
+    Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) old[k] = st[k]; });
+    const name = p.name_zh || p.name;
+    Object.keys(st).forEach(k => { if (!SLOT_KEYS.includes(k)) delete st[k]; });
+    Object.assign(st, blankStop(), { kind: "stop", time: st.time, type: st.type, alts: [...(st.alts || []), old],
+      title: label ? `${label}：${name}` : name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "",
+      placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount,
+      ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
+      ...(probe && Array.isArray(probe.weekdayText) ? { weekdayText: probe.weekdayText, eatMeta: probe.eatMeta } : {}),
+      mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+    if (st.timeAuto === undefined && old.timeAuto) st.timeAuto = true;
+    syncMapPoints(day);
+    render();
+    await saveNow(why ? `「${plain(old.title)}」${why}，換咗做「${name}」（原本嗰間做咗後備）` : `「${plain(old.title)}」換咗做「${name}」（原本嗰間做咗後備）`);
+    flash(`換咗做「${name}」，原本嗰間收埋做後備`);
+    const us = toUnits(day.items), k = us.findIndex(u => u.stop === st);
+    let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
+    refreshTransit(day, [k, nx].filter(v => v > 0));
+    await Promise.all([enrichPhoto(st, name), enrichLocalName(st).catch(() => {}),
+      probe && Array.isArray(probe.weekdayText) ? null : enrichHours(st),
+      fetchBrief(st, kind).then(b => applyBrief(st, b, kind)).catch(() => {})]);
+    if (state.view === day.id) render();
+    await saveNow(`補返「${name}」嘅相同介紹`, true);
   }
   // 「澀谷 OWNDAYS」 matched to the Shinjuku branch: the name asks for one
   // area, Google's own name for the match (kept in kr) says another. Looked
@@ -11874,6 +12030,30 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // 「想行街」 is not a stop; the places to shop are. And a day should flow.
   const SHOP_HINT = "如果佢哋想行街、買嘢或者購物：一定要推介具體嘅商場、百貨公司、商店街或者店舖（例如澀谷就係 SHIBUYA PARCO、MIYASHITA PARK、SHIBUYA109、渋谷スクランブルスクエア），每間獨立一個站，唔好淨係寫一個區名（例如「澀谷購物」）。";
   const HOURS_HINT = "揀地方同餐廳要啱返嗰日嗰個時間有開：留意星期幾公休；晚餐唔好揀淨係做午市（例如兩三點就收）嘅店，早餐唔好揀中午先開嘅；景點要喺關門前最少一個鐘到。唔肯定就揀營業時間長嘅。";
+  // ---------- what kind of restaurant ----------
+  const CUISINES = [
+    ["拉麵", "🍜", /ラーメン|拉麵|拉面|らーめん|ramen|中華そば|つけ麺|沾麵/i],
+    ["壽司", "🍣", /寿司|壽司|鮨|sushi|迴轉|回転/i],
+    ["燒肉", "🥩", /焼肉|燒肉|yakiniku|ジンギスカン|成吉思汗|烤肉|牛扒|ステーキ/i],
+    ["海鮮", "🦀", /海鮮|蟹|かに|カニ|海膽|うに|刺身|魚市場|丼/i],
+    ["壽喜燒／火鍋", "🍲", /すき焼|壽喜燒|しゃぶ|涮涮|火鍋|もつ鍋|鍋物/i],
+    ["居酒屋／串燒", "🏮", /居酒屋|izakaya|焼鳥|燒鳥|串燒|串焼|酒場/i],
+    ["湯咖哩／咖哩", "🍛", /スープカレー|湯咖哩|咖哩|カレー|curry/i],
+    ["蕎麥／烏冬", "🥢", /そば|蕎麥|蕎麦|うどん|烏冬/i],
+    ["炸物／天婦羅", "🍤", /天ぷら|天婦羅|とんかつ|吉列|炸豬扒|唐揚|炸雞/i],
+    ["大阪燒／章魚燒", "🥞", /お好み焼|大阪燒|たこ焼|章魚燒|もんじゃ/i],
+    ["韓國菜", "🥘", /韓式|韓國|kimchi|泡菜|부대|삼겹|bbq/i],
+    ["中菜／點心", "🥟", /中華料理|中菜|點心|餃子|小籠包|飲茶/i],
+    ["西餐", "🍝", /意粉|pasta|pizza|薄餅|西餐|漢堡|burger|bistro/i],
+    ["咖啡／甜品", "🍰", /カフェ|咖啡|cafe|café|甜品|パフェ|スイーツ|ケーキ|麵包|パン|bakery/i],
+  ];
+  function cuisineOf(st){
+    if (!st || !(st.type === "eat" || st.isFood)) return null;
+    const t = [plain(st.cuisine), plain(st.title), plain(st.kr), plain(st.desc).slice(0, 80)].join(" ");
+    const c = CUISINES.find(([n, , re]) => (plain(st.cuisine) && (n.includes(plain(st.cuisine)) || plain(st.cuisine).includes(n.split("／")[0]))) || re.test(t));
+    return c ? { name: c[0], icon: c[1] } : (plain(st.cuisine) ? { name: plain(st.cuisine), icon: "🍽️" } : null);
+  }
+  const CUISINE_HINT = "食飯嘅 stop（type eat）一定要加 \"cuisine\" 欄：乜嘢菜，用短嘅講法，例如「拉麵」「壽司」「燒肉」「海鮮」「居酒屋」「湯咖哩」「蕎麥」。";
   // a trip that wants to save is planned that way
   function budgetHint(){
     const t = briefText(state.snapshot) + " " + (((state.snapshot.meta || {}).budget) || "");
@@ -11968,7 +12148,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + HOURS_HINT + "\n" + budgetHint();
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + HOURS_HINT + "\n" + CUISINE_HINT + "\n" + budgetHint();
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
@@ -12867,7 +13047,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     { const fl = flightsOf(state.snapshot), o = fl.find(f => f.dir === "out"), bk = fl.find(f => f.dir === "back");
       if (edges && edges.first && o && (o.arr || o.to)) notes.push(`佢哋${o.arr ? " " + o.arr : ""} 到${o.to ? " " + o.to : ""}：第一日嘅行程由落機之後先開始（過關、攞行李、去酒店大約要 1.5–2 個鐘）。`);
       if (edges && edges.last && bk && (bk.dep || bk.from)) notes.push(`佢哋最尾一日${bk.dep ? " " + bk.dep : ""} 喺${bk.from ? " " + bk.from : "機場"}起飛：要預 3 個鐘前到機場，之前嘅站要早啲完。`); }
-    notes.push(SHOP_HINT, ROUTE_HINT, HOURS_HINT, budgetHint());
+    notes.push(SHOP_HINT, ROUTE_HINT, HOURS_HINT, CUISINE_HINT, budgetHint());
     const ap = state.areaPlan || {};
     const zones = dayIds.filter(id => ap[id]).map(id => `${id}：主要喺 ${ap[id].areas}${ap[id].theme ? `（${ap[id].theme}）` : ""}`);
     if (zones.length) notes.push("每日嘅區已經分配好，嗰日嘅地點同餐廳都要喺嗰啲區入面或者隔籬，唔好走去第二日嘅區：\n" + zones.join("\n"));
