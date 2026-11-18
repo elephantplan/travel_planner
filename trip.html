@@ -3820,8 +3820,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!me) return;
     const name = cleanPlaceName(plain(me.title)) || "呢個地點";
     const others = units.map((u, j) => ({ u, j })).filter(x => x.u.stop && x.j !== ui);
-    // the stops either side first — a backup is usually for the meal or sight next to it
-    others.sort((a, b) => Math.abs(a.j - ui) - Math.abs(b.j - ui) || a.j - b.j);
     openSheet(`
       <h3>${esc(name)}</h3>
       <p class="sec-sub">做後備：佢會由行程收起，摺喺你揀嗰個站下面，想用嗰陣撳「改用呢間」就得。</p>
