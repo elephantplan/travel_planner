@@ -2845,18 +2845,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   async function saveAiNote(kind, question, answer){
     if (!answer) return;
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/ai_notes`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes`, {
         method: "POST",
         headers: sbHeaders(),
         body: JSON.stringify({ trip_id: state.tripId, asked_by: getEditedBy(), kind, question: question || null, answer })
       });
-    } catch (e) { /* an unsaved note must never block the answer on screen */ }
+      return res.ok;
+    } catch (_) { return false; }
   }
   // 加地點's AI picks are kept here too (kind "addsug"), but listed in that
   // sheet, not on the 問過啲咩 page
-  async function fetchAiNotes(onlyKind){
+  async function fetchAiNotes(onlyKind, offset = 0){
     const k = onlyKind ? `&kind=eq.${onlyKind}` : "&kind=neq.addsug";
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?trip_id=eq.${state.tripId}${k}&select=*&order=created_at.desc&limit=100`, { headers: sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?trip_id=eq.${state.tripId}${k}&select=*&order=created_at.desc,id.desc&limit=100&offset=${offset}`, { headers: sbHeaders() });
     if (!res.ok) throw new Error("讀取紀錄失敗 " + res.status);
     return res.json();
   }
@@ -3109,7 +3110,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       undoStore();
       state.snapshot = normalizeSnapshot(JSON.parse(e.json));
       state.open.clear();
-      if (state.view !== "overview" && state.view !== "notes" && state.view !== "stays" && !dayById(state.view) && !boardById(state.view)) state.view = "overview";
+      if (state.view !== "overview" && state.view !== "notes" && state.view !== "ai-picks" && state.view !== "stays" && !dayById(state.view) && !boardById(state.view)) state.view = "overview";
       render();
       saveNow(`返上一步：取消「${e.summary || "上一個改動"}」`);
       await flushSaves("undo");
@@ -3424,7 +3425,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     syncAccommodation(snap);
 
     // a view/selection pointing at a day that no longer exists
-    if (!dayById(state.view) && state.view !== "overview" && state.view !== "notes" && !boardById(state.view)) state.view = "overview";
+    if (!dayById(state.view) && state.view !== "overview" && state.view !== "notes" && state.view !== "ai-picks" && !boardById(state.view)) state.view = "overview";
     state.open.clear(); state.mapsShut.clear(); state.mapsOpen.clear(); state.selectMode = null;
 
     const bits = [];
@@ -3819,8 +3820,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!me) return;
     const name = cleanPlaceName(plain(me.title)) || "呢個地點";
     const others = units.map((u, j) => ({ u, j })).filter(x => x.u.stop && x.j !== ui);
-    // the stops either side first — a backup is usually for the meal or sight next to it
-    others.sort((a, b) => Math.abs(a.j - ui) - Math.abs(b.j - ui) || a.j - b.j);
     openSheet(`
       <h3>${esc(name)}</h3>
       <p class="sec-sub">做後備：佢會由行程收起，摺喺你揀嗰個站下面，想用嗰陣撳「改用呢間」就得。</p>
@@ -4753,6 +4752,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${tabArea(d) ? `<span class="lt2">${esc(tabArea(d))}</span>` : ""}
           </span>
         </button>`).join("")}
+      <button class="linebtn" role="tab" data-go="ai-picks" aria-selected="${state.view === 'ai-picks'}" style="--lc:var(--gold)">
+        <span class="bullet"></span><span>AI 推介</span>
+      </button>
       <button class="linebtn" role="tab" data-go="notes" aria-selected="${state.view==='notes'}" style="--lc:var(--info)">
         <span class="bullet"></span><span>問過啲咩</span>
       </button>
@@ -4851,6 +4853,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     renderLines();
     const app = $("#app");
     if (!state.snapshot){ app.innerHTML = `<div class="loadwrap">${loaderHtml("載入緊行程…")}</div>`; return; }
+    if (state.view === "ai-picks"){
+      app.innerHTML = `<section class="sec" style="padding-top:24px"><h2 class="sec-title">AI 推介</h2>${aiPicksHtml()}</section>`;
+      wireAiPicks(app);
+      return;
+    }
     if (state.view === "notes"){ app.innerHTML = notesPageHtml(); wireNotes(); return; }
     if (state.view === "stays"){ app.innerHTML = staysPageHtml(state.snapshot); wireStaysPage(); rememberPlace(); return; }
     const board = boardById(state.view);
@@ -7899,7 +7906,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         paint(head);
         out.insertAdjacentHTML("beforeend", diag);
         sheetToTop(out);
-        if (await briefsFor(found, "eat") && out.isConnected){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
+        const results = found;
+        if (await briefsFor(results, "eat") && out.isConnected && found === results){ paint(head); out.insertAdjacentHTML("beforeend", diag); }
+        saveAiPicksWithRetry(out, day, "eat", wants.join("、"), anchors, results, () => found === results);
       });
       // shut then: the same kind is ticked, but nothing is searched until
       // they have had a chance to change it
@@ -8297,29 +8306,45 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       }));
       const go = sheet.querySelector("#ins-go");
       const run = async () => {
+        if (go.disabled) return;
         const out = sheet.querySelector("#ins-nearres");
+        const kind = sheet.querySelector("[data-sugkind].on").dataset.sugkind;
         const w = (want && want.value.trim()) || "";
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
         const hyakuOnly = kind === "eat" && destIsJapan() && prefs.hyaku;
         delete p2.hyaku;
         out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅食べログ百名店…" : `搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}…`);
         go.disabled = true;
+        go.setAttribute("aria-busy", "true");
+        const buttonHtml = go.innerHTML;
+        go.innerHTML = `${loaderSvg()}${hyakuOnly ? "搵緊百名店…" : `搵緊${SUG_KIND[kind]}…`}`;
         const runId = (run.n = (run.n || 0) + 1);
-        const list = hyakuOnly
-          ? await hyakuNear(anchors, w ? [w] : [], day, { near: p2.near, budget: p2.budget, skip: [...onDay] })
-          : await suggestFor(anchors, kind, [...onDay], w, p2);
-        go.disabled = false;
+        let list;
+        try {
+          list = await withTimeout(hyakuOnly
+            ? hyakuNear(anchors, w ? [w] : [], day, { near: p2.near, budget: p2.budget, skip: [...onDay] })
+            : suggestFor(anchors, kind, [...onDay], w, p2), hyakuOnly ? 130000 : 27000, null);
+          if (!list) list = Object.assign([], { failed: "timeout" });
+        } catch (_) {
+          list = Object.assign([], { failed: "error" });
+        } finally {
+          go.disabled = false;
+          go.removeAttribute("aria-busy");
+          go.innerHTML = buttonHtml;
+        }
         if (!out.isConnected || runId !== run.n) return;
         const paint = () => {
           out.innerHTML = list.length
             ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
                <p class="hint">${hyakuOnly ? "百名店資料由 AI 搜尋，位置以 Google 地圖配對。價錢、親子設施同排隊時間可以向餐廳確認。" : "由 Google 上面評分高嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。"}</p>`
-            : hyakuOnly ? `<p class="hint">${esc(list.failed || "附近搵唔到符合條件嘅百名店。試吓改菜式或者放寬距離。")}</p>`
+            : list.failed ? `<p class="hint" role="status">${list.failed === "timeout" ? "搜尋等得太耐，請再試一次。" : "搜尋暫時失敗，請再試一次。"}</p>`
+            : hyakuOnly ? `<p class="hint">附近搵唔到符合條件嘅百名店。試吓改菜式或者放寬距離。</p>`
             : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
           wirePicks(out);
         };
         paint();                                   // Google's list first, straight away
-        sheetToTop(out);
+        const scroller = out.closest(".sheet");
+        if (scroller) scroller.scrollTop += out.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 56;
         if (list.length && await briefsFor(list, kind) !== null && out.isConnected && runId === run.n) paint();
         // places picked before their intros arrived: give them the Chinese
         // name and the intro now, once they are in the day
@@ -8334,35 +8359,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           });
           if (n){ render(); await saveNow("補返中文名同介紹", true); }
         }).catch(() => {});
-        if (list.length) keepSuggestions(day, kind, w, anchors, list);
+        if (list.length) saveAiPicksWithRetry(out, day, kind, w, anchors, list, () => runId === run.n);
       };
-      // earlier picks (anyone's, on any day) — one tap puts one in here
       const past = sheet.querySelector("#ins-past");
-      if (past) past.addEventListener("click", async () => {
-        const out = sheet.querySelector("#ins-nearres");
-        out.innerHTML = loaderHtml("讀緊之前嘅建議…", true);
-        let rows = [];
-        try { rows = await fetchAiNotes("addsug"); } catch (e){ out.innerHTML = `<p class="hint">讀唔到：${esc(e.message)}</p>`; return; }
-        const runs = rows.map(r => { try { return Object.assign(JSON.parse(r.answer), { at: r.created_at, by: r.asked_by }); } catch (_){ return null; } })
-          .filter(x => x && Array.isArray(x.places) && x.places.length);
-        // this day's first, newest first within each
-        runs.sort((a, b) => (b.day === day.id) - (a.day === day.id));
-        if (!runs.length){ out.innerHTML = `<p class="hint">仲未有 AI 建議紀錄。撳「幫我揀」搵一次，之後就會喺度見到。</p>`; return; }
-        out.innerHTML = runs.slice(0, 20).map((x, ri) => {
-          const d = dayById(x.day);
-          const when = new Date(x.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
-          return `<details class="pastsug"${ri === 0 ? " open" : ""}><summary>
-              <span class="ps-k">${esc(SUG_KIND[x.kind] || "地方")}${x.want ? `「${esc(x.want)}」` : ""}</span>
-              <span class="ps-m">${d ? `Day ${esc(d.id.replace("day", ""))}・` : ""}${x.near ? `${esc(x.near)}附近・` : ""}${esc(when)}${x.by ? `・${esc(x.by)}` : ""}</span>
-            </summary>
-            <div class="nearlist">${x.places.map((p, k) => {
-              const id = `past${ri}-${k}`; found[id] = Object.assign({ briefed: true }, p);
-              const there = p.placeId && findInItinerary(state.snapshot, { title: p.name_zh || p.name, kr: p.name, placeId: p.placeId });
-              return suggestRowHtml(found[id], id, x.kind).replace('<div class="sc-top">', `<div class="sc-top">${there ? `<span class="ps-in" style="--lc:${dayColorVar(there.id)}">已喺 D${esc(there.id.replace("day", ""))}</span>` : ""}`);
-            }).join("")}</div></details>`;
-        }).join("");
-        wirePicks(out);
-        sheetToTop(out);
+      if (past) past.addEventListener("click", () => {
+        if (go.disabled) return;
+        openSheet(`<h3>AI 推介</h3>${aiPicksHtml()}`, history => {
+          wireAiPicks(history, kind, async (p, pickedKind) => {
+            closeLayer();
+            await insertPlaceAt(day, pos + added, p, pickedKind);
+          });
+        }, { tall: true });
       });
       if (go) go.addEventListener("click", run);
       if (opts && opts.auto && go){
@@ -8376,9 +8383,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // again from any 加地點, by anyone on the trip.
   function keepSuggestions(day, kind, want, anchors, list){
     const places = list.slice(0, 8).map(p => ({ name: p.name, name_zh: p.name_zh || "", placeId: p.placeId, lat: p.lat, lng: p.lng,
-      rating: p.rating, ratingCount: p.ratingCount, price: p.price, types: p.types, walk: p.walk, nearName: p.nearName || "",
+      rating: p.rating, ratingCount: p.ratingCount, price: p.price, address: p.address, types: p.types, walk: p.walk, nearName: p.nearName || "",
       onTheWay: !!p.onTheWay, hyaku: p.hyaku, cuisine: p.cuisine, what: p.what || "", mustTry: p.mustTry || "", fit: p.fit || "" }));
-    saveAiNote("addsug", `${SUG_KIND[kind]}${want ? "：" + want : ""}`,
+    return saveAiNote("addsug", `${SUG_KIND[kind]}${want ? "：" + want : ""}`,
       JSON.stringify({ day: day.id, kind, want, near: anchors.map(a => a.name).filter(Boolean).join("、"), places }));
   }
   // A place picked from search or 「附近」 arrives with its Google id, so it
@@ -12710,6 +12717,169 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return `<span class="qa-sg">${esc(l)}${tool}</span>`;
     }).join("\n");
   }
+  function saveAiPicksWithRetry(out, day, kind, want, anchors, list, isCurrent){
+    const status = document.createElement("div");
+    status.setAttribute("role", "status");
+    const save = async () => {
+      status.textContent = "";
+      const saved = await keepSuggestions(day, kind, want, anchors, list);
+      if (saved || !out.isConnected || !isCurrent()) return;
+      status.innerHTML = `<p class="hint">未能儲存今次推介</p><button type="button" class="btn">重試儲存</button>`;
+      status.querySelector("button").addEventListener("click", save, { once: true });
+      out.prepend(status);
+    };
+    save();
+  }
+
+  function aiPicksHtml(){
+    return `<div data-ai-picks>
+      <input type="search" class="input" data-ai-picks-query placeholder="搵店名或附近地標" aria-label="搵店名或附近地標">
+      <div class="prefchips" data-ai-picks-kinds role="group" aria-label="地方類型"></div>
+      <div class="prefchips">
+        <select class="input" data-ai-picks-area aria-label="地區" style="width:auto;max-width:100%"><option value="">全部地區</option></select>
+        <button type="button" class="pfchip" data-ai-picks-award aria-pressed="false" hidden>${icon("star")}百名店</button>
+      </div>
+      <div data-ai-picks-list></div>
+      <p class="hint" data-ai-picks-status role="status"></p>
+      <button type="button" class="btn wide" data-ai-picks-more hidden>載入更多推介</button>
+    </div>`;
+  }
+
+  function collectAiPicks(rows, hyakumeiten){
+    const runs = rows.flatMap(row => {
+      try {
+        const run = JSON.parse(row.answer);
+        return run && Array.isArray(run.places) ? [{ ...run, at: row.created_at }] : [];
+      } catch (_) { return []; }
+    });
+    if (Array.isArray(hyakumeiten?.items)){
+      runs.push({ kind: "eat", at: hyakumeiten.at, places: hyakumeiten.items.map(h => ({
+        ...h, name: h.name_jp || h.name_zh, hyaku: h.award, cuisine: h.genre, what: h.why, nearName: h.near,
+      })) });
+    }
+    runs.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    const entries = new Map();
+    runs.forEach(run => run.places.forEach(p => {
+      if (!p || typeof p.name !== "string" || !p.name.trim()) return;
+      const key = p.placeId ? `id:${p.placeId}` : Number.isFinite(p.lat) && Number.isFinite(p.lng)
+        ? `coords:${p.name.normalize("NFKC").trim().toLowerCase()}:${p.lat},${p.lng}` : Symbol();
+      const nearName = p.nearName || run.near || "";
+      const areaIndex = districtOf([p.address, p.area, p.name_zh, p.name].filter(Boolean).join(" "));
+      const area = areaIndex >= 0 ? DISTRICTS[areaIndex][0] : "";
+      const previous = entries.get(key);
+      if (previous){
+        for (const field of ["area", "hyaku", "what", "fit", "cuisine", "nearName", "name_zh"]){
+          if (!previous[field]) previous[field] = field === "area" ? area : field === "nearName" ? nearName : p[field];
+        }
+        return;
+      }
+      entries.set(key, { ...p, kind: run.kind, area, nearName });
+    }));
+    return [...entries.values()];
+  }
+
+  async function wireAiPicks(root, initialKind = "", insert){
+    const el = root.querySelector("[data-ai-picks]");
+    const query = el.querySelector("[data-ai-picks-query]");
+    const kinds = el.querySelector("[data-ai-picks-kinds]");
+    const area = el.querySelector("[data-ai-picks-area]");
+    const award = el.querySelector("[data-ai-picks-award]");
+    const list = el.querySelector("[data-ai-picks-list]");
+    const status = el.querySelector("[data-ai-picks-status]");
+    const more = el.querySelector("[data-ai-picks-more]");
+    const rows = [];
+    let entries = [], kind = initialKind, awardOnly = false, hasMore = true, loading = false, failed = false, loadAll = false;
+    const types = [["", "全部"], ["eat", "餐廳"], ["see", "景點"], ["shop", "購物"]];
+    kinds.innerHTML = types.map(([key, label]) => `<button type="button" class="pfchip" data-ai-kind="${key}">${label}</button>`).join("");
+    const paint = () => {
+      kinds.querySelectorAll("[data-ai-kind]").forEach(button => {
+        const selected = button.dataset.aiKind === kind;
+        button.classList.toggle("on", selected);
+        button.setAttribute("aria-pressed", String(selected));
+      });
+      const candidates = entries.filter(p => !kind || p.kind === kind);
+      const districts = [...new Set(candidates.map(p => p.area))].sort((a, b) => a.localeCompare(b, "zh-HK"));
+      const selected = area.value;
+      area.innerHTML = `<option value="">全部地區</option>` + districts.map(d =>
+        `<option value="${esc(d || "unknown")}">${esc(d || "未分類")}</option>`).join("");
+      if ([...area.options].some(option => option.value === selected)) area.value = selected;
+      award.hidden = !entries.some(p => p.hyaku);
+      award.classList.toggle("on", awardOnly);
+      award.setAttribute("aria-pressed", String(awardOnly));
+      const word = query.value.normalize("NFKC").trim().toLowerCase();
+      const matches = candidates.filter(p => (!area.value || (p.area || "unknown") === area.value) &&
+        (!awardOnly || p.hyaku) && (!word || [p.name, p.name_zh, p.nearName, p.area].some(v =>
+          String(v || "").normalize("NFKC").toLowerCase().includes(word))));
+      list.innerHTML = `<div class="nearlist">${matches.map((p, index) => {
+        const title = p.name_zh || p.name;
+        const there = p.placeId && (state.snapshot.days || []).find(day =>
+        (day.items || []).some(stop => stop.kind === "stop" && stop.placeId === p.placeId));
+        const mapUrl = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId })
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.name, p.area || p.nearName].filter(Boolean).join(" "))}`;
+        return `<article class="sugcard">
+          <div class="sc-top"><span class="sc-n">${esc(title)}${title !== p.name ? `<small>${esc(p.name)}</small>` : ""}</span></div>
+          <div class="sc-facts">${[SUG_KIND[p.kind] || "地方", p.area, there ? `已喺 Day ${there.id.replace("day", "")}` : ""].filter(Boolean).map(v => esc(v)).join("・")}${p.hyaku ? `・<b class="sw-hy">${icon("star")}${esc(p.hyaku)}</b>` : ""}</div>
+          ${p.nearName ? `<div class="sc-where">近 ${esc(p.nearName)}</div>` : ""}
+          ${p.what || p.fit ? `<p class="sc-what">${esc(p.what || p.fit)}</p>` : ""}
+          <a class="sc-g" href="${esc(mapUrl)}" target="_blank" rel="noopener">${icon("pin")}睇地圖</a>
+          ${state.readonly ? "" : `<button type="button" class="btn" data-ai-pick="${index}" aria-label="加「${esc(title)}」落行程">${icon("plus")}加落行程</button>`}
+        </article>`;
+      }).join("")}</div>`;
+      list.querySelectorAll("[data-ai-pick]").forEach(button => button.addEventListener("click", async () => {
+        if (state.readonly || button.disabled) return;
+        const p = matches[Number(button.dataset.aiPick)];
+        button.disabled = true;
+        if (insert){ await insert(p, p.kind); return; }
+        openAddPlaceSheetFor({ name: p.name_zh || p.name, kr: p.name_zh ? p.name : "", body: p.what || p.fit,
+          place: p, kind: p.kind, hyaku: p.hyaku, cuisine: p.cuisine });
+        button.disabled = false;
+      }));
+      status.textContent = loading ? "載入緊推介…" : failed ? "讀唔到推介紀錄。" :
+        matches.length ? "" : entries.length ? "冇符合篩選嘅推介。" : "仲未有 AI 推介紀錄。";
+      more.hidden = loading || (!hasMore && !failed);
+      more.textContent = failed ? "重試載入" : "載入更多推介";
+    };
+    const loadNext = async () => {
+      if (loading || !hasMore) return;
+      loading = true;
+      failed = false;
+      paint();
+      try {
+        do {
+          const page = await fetchAiNotes("addsug", rows.length);
+          if (!el.isConnected) return;
+          rows.push(...page);
+          hasMore = page.length === 100;
+        } while (loadAll && hasMore);
+      } catch (_) {
+        failed = true;
+      } finally {
+        loading = false;
+        if (el.isConnected){
+          entries = collectAiPicks(rows, state.snapshot.hyakumeiten);
+          paint();
+        }
+      }
+    };
+    const filter = () => {
+      paint();
+      loadAll = true;
+      if (!failed) loadNext();
+    };
+    query.addEventListener("input", filter);
+    area.addEventListener("change", filter);
+    kinds.addEventListener("click", event => {
+      const button = event.target.closest("[data-ai-kind]");
+      if (!button) return;
+      kind = button.dataset.aiKind;
+      filter();
+    });
+    award.addEventListener("click", () => { awardOnly = !awardOnly; filter(); });
+    more.addEventListener("click", loadNext);
+    entries = collectAiPicks(rows, state.snapshot.hyakumeiten);
+    await loadNext();
+  }
+
   function notesPageHtml(){
     return `
       <section class="sec" style="padding-top:24px;">
