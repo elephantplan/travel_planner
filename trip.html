@@ -5719,7 +5719,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // Every 「加去行程」 for an AI-suggested place: the place on Google (score,
   // reviews, map), the day and spot that is most on the way, and a free
   // choice of any day and any spot before it is added.
-  function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr, place, kind, after }){
+  function openAddPlaceSheetFor({ name, region, body, time, day: preDay, kr, place, kind, after, hyaku, cuisine }){
     const snap = state.snapshot;
     const boards = snap.boards || [];
     const days = snap.days || [];
@@ -5753,6 +5753,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([kr || name, region].filter(Boolean).join(" "))}` });
         if (found && found.placeId) Object.assign(st, { placeId: found.placeId, lat: found.lat, lng: found.lng },
           Number.isFinite(found.rating) ? { rating: found.rating, ratingCount: found.ratingCount } : {});
+        if (hyaku) st.hyaku = hyaku;
+        if (cuisine) st.cuisine = cuisine;
         return st;
       };
       const go = sheet.querySelector(".ap-go");
@@ -6602,7 +6604,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       .concat((s.niecepick||[]).map(n=>`<span class="niecepick">${esc(n)}</span>`))
       .concat(closedToday ? [`<span class="meta-chip closed">${icon("warn")}呢度星期${esc(weekdayCharOfDate(day.date))}公休，同排定嘅日子撞埋咗</span>`,
         ...(state.readonly || s.type === "eat" || s.isFood ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一個星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
-      .concat((() => { const c = cuisineOf(s); return c ? [`<span class="meta-chip cuisine">${c.icon} ${esc(c.name)}${s.hyaku ? "・百名店" : ""}</span>`] : []; })())
+      .concat((() => { const c = cuisineOf(s); return c ? [`<span class="meta-chip cuisine">${c.icon} ${esc(c.name)}</span>`] : []; })())
+      .concat(s.hyaku ? [`<span class="meta-chip cuisine">${icon("star")} ${esc(s.hyaku)}</span>`] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(!closedToday && !state.readonly && !(s.type === "eat" || s.isFood) && stopShutThen(s, day) === "time" ? [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一個嗰陣有開嘅</button>`] : [])
       .concat(!state.readonly && (s.type === "eat" || s.isFood) ? (stopShutThen(s, day)
@@ -7589,7 +7592,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(title)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a>
         <button type="button" class="nr-add" data-pick="${esc(k)}" data-kind="${kind}" aria-label="加「${esc(title)}」入行程">${icon("plus")}</button>
       </div>
-      <div class="sc-facts">${[p.unverified ? `<b class="sw-unv">AI 推介・未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
+      <div class="sc-facts">${[p.hyaku ? `<b class="sw-hy">${icon("star")}${esc(p.hyaku)}</b>` : p.unverified ? `<b class="sw-unv">AI 推介・未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
         Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
         Number.isFinite(p.price) && p.price > 0 ? "$".repeat(p.price) : ""].filter(Boolean).join("・")}</div>
       ${p.walk ? `<div class="sc-where">${p.onTheWay ? `<span class="sc-way">順路</span>` : ""}${p.nearName ? `離「${esc(p.nearName)}」行 ${p.walk} 分鐘` : `行 ${p.walk} 分鐘`}</div>` : ""}
@@ -7821,7 +7824,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean).concat((st.alts || []).map(a => a.placeId).filter(Boolean));
         let cands = [];
         const failed = [], steps = [];
-        if (hyakuOnly) cands = await hyakuNear(anchors[0], wants, day);
+        if (hyakuOnly) cands = await hyakuNear(anchors, wants, day, { near, budget: price, skip });
         else {
           const lists = await Promise.all((words.length ? words : [""]).map(async w => {
             let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near }, 45000);
@@ -7905,30 +7908,47 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   // Tabelog 百名店 near one spot: the trip's own 百名店 list first (it was
   // searched already), else a search around this one place
-  async function hyakuNear(at, wants, day){
-    const close = h => Number.isFinite(Number(h.lat)) && metersBetween(at, h) <= 2000;
-    const genreOk = h => !wants.length || wants.some(w => (h.genre || "").includes(w) || CUISINES.some(([n, , re]) => n.startsWith(w) && re.test(h.genre || "")));
-    const mine = ((state.snapshot.hyakumeiten || {}).items || []).filter(h => close(h) && genreOk(h));
-    const asP = h => ({ name: h.name_jp, name_zh: h.name_zh || "", placeId: h.placeId, lat: h.lat, lng: h.lng, rating: h.rating, ratingCount: h.ratingCount,
-      hyaku: h.award || "百名店", cuisine: h.genre || "", what: h.why || "", walk: Math.max(1, Math.round(metersBetween(at, h) * 1.3 / 80)), briefed: !!h.why });
-    if (mine.length >= 3) return mine.map(asP);
-    const genre = wants.length ? wants.map(w => (CUISINES.find(([n]) => n.startsWith(w)) || [w])[0].split("／")[0]).join("、") : "";
-    const text = JSON.stringify({ destination: (state.snapshot.meta || {}).destinationLocal || "", ...(genre ? { genre } : {}),
-      days: [{ day: 1, title: plain(day.title), stops: [at.name].filter(Boolean) }] });
+  async function hyakuNear(anchors, wants, day, { near = false, budget = 0, skip = [] } = {}){
+    const limit = near ? 5 * 80 / 1.3 : 2500;
+    const excluded = new Set(skip);
+    const candidates = new Map();
+    const add = (h, p) => {
+      if (!h.award || !p.placeId || excluded.has(p.placeId) || candidates.has(p.placeId)) return;
+      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
+      if (budget && Number.isFinite(p.price) &&
+          (budget === 1 ? p.price > 1 : budget === 2 ? p.price > 2 : p.price < 2)) return;
+      const closest = anchors.map(at => ({ name: at.name, meters: metersBetween(at, p) }))
+        .sort((a, b) => a.meters - b.meters)[0];
+      if (closest.meters > limit) return;
+      candidates.set(p.placeId, {
+        name: h.name_jp || p.name, name_zh: h.name_zh || "", placeId: p.placeId,
+        lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount, price: p.price,
+        hyaku: h.award, cuisine: h.genre || "", what: h.why || "",
+        walk: Math.max(1, Math.round(closest.meters * 1.3 / 80)), nearName: closest.name, briefed: true,
+      });
+    };
+    const results = () => [...candidates.values()].sort((a, b) => a.walk - b.walk);
+    const genreOk = h => !wants.length || wants.some(w => (h.genre || "").includes(w) ||
+      CUISINES.some(([n, , re]) => n.startsWith(w) && re.test(h.genre || "")));
+    ((state.snapshot.hyakumeiten || {}).items || []).filter(genreOk).forEach(h => add(h, h));
+    if (candidates.size >= 3) return results();
+    const text = JSON.stringify({ destination: (state.snapshot.meta || {}).destinationLocal || "",
+      ...(wants.length ? { genre: wants.join("、") } : {}),
+      days: [{ day: 1, title: plain(day.title), stops: anchors.map(at => at.name).filter(Boolean) }] });
     let r = null;
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
         body: JSON.stringify({ mode: "hyakumeiten", text, today: localIso(new Date()) }) }), 110000, null);
       r = res ? await res.json().catch(() => null) : null;
     } catch (_){}
-    const got = [];
-    await runBounded(((r && r.places) || []).slice(0, 8), 4, async h => {
+    await runBounded(((r && r.places) || []).filter(h => h.award).slice(0, 8), 4, async h => {
       const pr = await callAi({ action: "place-search", query: [h.name_jp || h.name_zh, h.area].filter(Boolean).join(" ") }).catch(() => null);
       const p = pr && pr.places && pr.places[0];
-      if (!p || !Number.isFinite(p.lat) || metersBetween(at, p) > 2500) return;
-      got.push(asP({ name_jp: h.name_jp || p.name, name_zh: h.name_zh, placeId: p.placeId, lat: p.lat, lng: p.lng, rating: p.rating, ratingCount: p.ratingCount, award: h.award, genre: h.genre, why: h.why }));
+      if (p) add(h, p);
     });
-    return mine.map(asP).concat(got.filter(g => !mine.some(m => m.placeId === g.placeId)));
+    const list = results();
+    if (!r || r.ok === false) list.failed = (r && r.message) || "百名店搜尋暫時讀唔到";
+    return list;
   }
   // a stop becomes another place; the one it was is kept as a backup under it
   async function swapStopTo(day, st, p, probe, why){
@@ -8156,6 +8176,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button type="button" class="pfchip" data-pft="near">行 5 分鐘內</button>
           <button type="button" class="pfchip" data-pft="kids">啱小朋友</button>
           <button type="button" class="pfchip" data-pft="book" data-only="eat">唔使排太耐</button>
+          ${destIsJapan() ? `<button type="button" class="pfchip" data-pft="hyaku" data-only="eat" aria-pressed="false">${icon("star")}淨係食べログ百名店</button>` : ""}
         </div>
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
         <button type="button" class="btn wide ins-past" id="ins-past">${icon("clock")}睇返之前 AI 建議過嘅</button>
@@ -8269,23 +8290,31 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         sheet.querySelectorAll('[data-pf="budget"] .pfchip').forEach(x => x.classList.toggle("on", +x.dataset.v === prefs.budget));
       }));
       sheet.querySelectorAll("[data-pft]").forEach(c => c.addEventListener("click", () => {
-        prefs[c.dataset.pft] = !prefs[c.dataset.pft]; c.classList.toggle("on", prefs[c.dataset.pft]);
+        const key = c.dataset.pft;
+        prefs[key] = !prefs[key];
+        c.classList.toggle("on", prefs[key]);
+        c.setAttribute("aria-pressed", String(prefs[key]));
       }));
       const go = sheet.querySelector("#ins-go");
       const run = async () => {
         const out = sheet.querySelector("#ins-nearres");
         const w = (want && want.value.trim()) || "";
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
-        out.innerHTML = loaderHtml(`搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}…`);
+        const hyakuOnly = kind === "eat" && destIsJapan() && prefs.hyaku;
+        delete p2.hyaku;
+        out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅食べログ百名店…" : `搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}…`);
         go.disabled = true;
         const runId = (run.n = (run.n || 0) + 1);
-        const list = await suggestFor(anchors, kind, [...onDay], w, p2);
+        const list = hyakuOnly
+          ? await hyakuNear(anchors, w ? [w] : [], day, { near: p2.near, budget: p2.budget, skip: [...onDay] })
+          : await suggestFor(anchors, kind, [...onDay], w, p2);
         go.disabled = false;
         if (!out.isConnected || runId !== run.n) return;
         const paint = () => {
           out.innerHTML = list.length
             ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
-               <p class="hint">由 Google 上面評分高嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。</p>`
+               <p class="hint">${hyakuOnly ? "百名店資料由 AI 搜尋，位置以 Google 地圖配對。價錢、親子設施同排隊時間可以向餐廳確認。" : "由 Google 上面評分高嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。"}</p>`
+            : hyakuOnly ? `<p class="hint">${esc(list.failed || "附近搵唔到符合條件嘅百名店。試吓改菜式或者放寬距離。")}</p>`
             : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
           wirePicks(out);
         };
@@ -8348,7 +8377,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function keepSuggestions(day, kind, want, anchors, list){
     const places = list.slice(0, 8).map(p => ({ name: p.name, name_zh: p.name_zh || "", placeId: p.placeId, lat: p.lat, lng: p.lng,
       rating: p.rating, ratingCount: p.ratingCount, price: p.price, types: p.types, walk: p.walk, nearName: p.nearName || "",
-      onTheWay: !!p.onTheWay, what: p.what || "", mustTry: p.mustTry || "", fit: p.fit || "" }));
+      onTheWay: !!p.onTheWay, hyaku: p.hyaku, cuisine: p.cuisine, what: p.what || "", mustTry: p.mustTry || "", fit: p.fit || "" }));
     saveAiNote("addsug", `${SUG_KIND[kind]}${want ? "：" + want : ""}`,
       JSON.stringify({ day: day.id, kind, want, near: anchors.map(a => a.name).filter(Boolean).join("、"), places }));
   }
@@ -8362,6 +8391,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       lat: Number.isFinite(p.lat) ? p.lat : null, lng: Number.isFinite(p.lng) ? p.lng : null });
     if (Number.isFinite(p.rating)){ st.rating = p.rating; st.ratingCount = p.ratingCount; }
     if (p.name_zh && p.name_zh !== p.name){ st.title = p.name_zh; st.kr = p.name; }
+    if (p.hyaku) st.hyaku = p.hyaku;
+    if (p.cuisine) st.cuisine = p.cuisine;
     if (p.what || p.mustTry){ st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n"); st.briefV = BRIEF_V; }
     else if (p.unverified && p.fit) st.desc = p.fit;
     units.splice(at, 0, { seg: { kind:"connector", html:"", stale:true }, stop: st });
@@ -14364,7 +14395,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const day = h && dayById(h.dayId);
     if (!h || !day) return;
     // same picker as every other AI place: suggested day and spot, free to change
-    openAddPlaceSheetFor({ name: h.name_zh || h.name_jp, kr: h.name_zh ? h.name_jp : "", body: h.why || "", day: h.dayId, kind: "eat", after: h.near,
+    openAddPlaceSheetFor({ name: h.name_zh || h.name_jp, kr: h.name_zh ? h.name_jp : "", body: h.why || "", day: h.dayId, kind: "eat", after: h.near, hyaku: h.award, cuisine: h.genre,
       place: h.placeId ? { placeId: h.placeId, name: h.name_jp, lat: h.lat, lng: h.lng, rating: h.rating, ratingCount: h.ratingCount } : null });
   }
   document.addEventListener("click", e => {
