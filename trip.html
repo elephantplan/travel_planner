@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-2";
+  const BUILD = "2026-11-19-3";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -7574,7 +7574,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // an empty answer says why (list.failed): it timed out, or the server said
   // something — so "nothing nearby" is only said when Google found nothing
   async function suggestFor(anchors, kind, skip, want = "", prefs = {}, ms = 25000){
-    const k = kind + ":" + want + ":" + JSON.stringify(prefs) + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|");
+    const k = kind + ":" + want + ":" + JSON.stringify(prefs) + ":" + anchors.map(a => `${a.lat.toFixed(4)},${a.lng.toFixed(4)}`).join("|") + ":" + [...skip].sort().join(",");
     if (sugCache.has(k)) return sugCache.get(k);
     try {
       const res = await withTimeout(fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
@@ -7715,7 +7715,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const cur = cuisineOf(st), t = clockMin(st.time);
     const meal = t == null ? "" : t < 10.5 * 60 ? "早餐" : t < 15 * 60 ? "午餐" : t < 17.5 * 60 ? "下午茶" : t < 21.5 * 60 ? "晚餐" : "宵夜";
     const jp = destIsJapan();
-    const list = jp ? CUISINES : CUISINES.filter(c => !/大阪燒|蕎麥/.test(c[0]));
+    const list = restaurantCuisineChoices(jp);
     openSheet(`
       <h3>換「${esc(cleanPlaceName(plain(st.title)))}」</h3>
       ${stopShutThen(st, day) ? `<p class="sw-shut">${icon("warn")}${stopShutThen(st, day) === "day" ? `呢間星期${esc(weekdayCharOfDate(day.date))}休息` : `你約 ${esc(fmtMin(t))} 到嗰陣佢已經收或者就收`}，幫你搵緊同類嗰陣有開嘅。</p>` : ""}
@@ -8190,11 +8190,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <div id="ins-res"></div>
       </div>
       ${anchors.length ? `<div class="inspane" data-pane="ai" hidden>
+        <div id="ins-ai-form">
         <p class="ins-lead">${anchors.length > 1 ? `喺「${esc(anchors[0].name)}」同「${esc(anchors[1].name)}」之間，揀順路嘅` : `喺「${esc(anchors[0].name)}」附近揀`}</p>
         <div class="kindtiles" role="radiogroup">
           <button type="button" class="kindtile" data-sugkind="see" role="radio">${icon("pin")}<b>景點</b></button>
           <button type="button" class="kindtile" data-sugkind="shop" role="radio">${icon("bag")}<b>購物</b></button>
           <button type="button" class="kindtile on" data-sugkind="eat" role="radio">${icon("eat")}<b>餐廳</b></button>
+        </div>
+        <div data-only="eat">
+          <p class="picker-label">想食咩？（可以揀幾個）</p>
+          <div class="chips1" role="group" aria-label="菜式">${restaurantCuisineChoices(destIsJapan()).map(([name]) =>
+            `<button type="button" class="pfchip" data-ins-cuisine="${esc(name)}" aria-pressed="false">${esc(name)}</button>`).join("")}</div>
         </div>
         <label class="picker-label" for="ins-want">有冇咩特別想要？</label>
         <input class="input" id="ins-want" placeholder="例如：壽司、拉麵、有兒童椅" autocomplete="off" maxlength="40">
@@ -8209,7 +8215,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         </div>
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
         <button type="button" class="btn wide ins-past" id="ins-past">${icon("clock")}睇返之前 AI 建議過嘅</button>
-        <p class="hint ins-multi">可以揀幾間，每撳一個 ＋ 就加一個，揀完撳「完成」。</p>
+        </div>
+        <div id="ins-ai-actions" class="sheet-row" hidden>
+          <button type="button" class="btn" id="ins-edit">${icon("pencil")}改搜尋條件</button>
+          <button type="button" class="btn" id="ins-retry" hidden>${icon("refresh")}再試一次</button>
+        </div>
         <div id="ins-nearres"></div>
         <button type="button" class="btn primary wide ins-done" id="ins-done" hidden>${icon("check")}完成（已加 <b>0</b> 個）</button>
       </div>` : ""}
@@ -8299,7 +8309,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       sheet.querySelectorAll("[data-instab]").forEach(t => t.addEventListener("click", () => {
         sheet.querySelectorAll("[data-instab]").forEach(x => x.classList.toggle("on", x === t));
         sheet.querySelectorAll("[data-pane]").forEach(pn => { pn.hidden = pn.dataset.pane !== t.dataset.instab; });
-        const f = sheet.querySelector(t.dataset.instab === "ai" ? "#ins-want" : "#ins-q"); if (f) setTimeout(() => f.focus(), 30);
+        if (t.dataset.instab === "find") setTimeout(() => q.focus(), 30);
       }));
       // AI: kind, what they fancy, a few options
       let kind = (opts && opts.kind) || "eat";
@@ -8325,34 +8335,59 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         c.setAttribute("aria-pressed", String(prefs[key]));
       }));
       const go = sheet.querySelector("#ins-go");
+      const form = sheet.querySelector("#ins-ai-form");
+      const actions = sheet.querySelector("#ins-ai-actions");
+      const retry = sheet.querySelector("#ins-retry");
+      const cuisines = new Set();
+      sheet.querySelectorAll("[data-ins-cuisine]").forEach(button => button.addEventListener("click", () => {
+        const name = button.dataset.insCuisine;
+        if (cuisines.has(name)) cuisines.delete(name);
+        else cuisines.add(name);
+        button.classList.toggle("on", cuisines.has(name));
+        button.setAttribute("aria-pressed", String(cuisines.has(name)));
+      }));
+      sheet.querySelector("#ins-edit")?.addEventListener("click", () => {
+        form.hidden = false;
+        actions.hidden = true;
+        sheet.querySelector("#ins-nearres").innerHTML = "";
+        sheetToTop(form);
+      });
       const run = async () => {
         if (go.disabled) return;
         const out = sheet.querySelector("#ins-nearres");
         const kind = sheet.querySelector("[data-sugkind].on").dataset.sugkind;
         const w = (want && want.value.trim()) || "";
+        const selected = kind === "eat" ? [...cuisines] : [];
+        const summary = [...selected, w].filter(Boolean).join("、");
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
         const hyakuOnly = kind === "eat" && destIsJapan() && prefs.hyaku;
         delete p2.hyaku;
-        out.innerHTML = loaderHtml(hyakuOnly ? "搵緊附近嘅食べログ百名店…" : `搵緊${w ? `「${w}」` : ""}${SUG_KIND[kind]}…`);
+        want.blur();
+        form.hidden = true;
+        actions.hidden = true;
         go.disabled = true;
-        go.setAttribute("aria-busy", "true");
-        const buttonHtml = go.innerHTML;
-        go.innerHTML = `${loaderSvg()}${hyakuOnly ? "搵緊百名店…" : `搵緊${SUG_KIND[kind]}…`}`;
+        out.setAttribute("aria-busy", "true");
+        out.innerHTML = kind === "eat"
+          ? foodLoaderHtml(hyakuOnly ? "搵緊附近嘅食べログ百名店…" : "搵緊附近嘅餐廳…")
+          : loaderHtml(`搵緊${SUG_KIND[kind]}…`);
+        sheetToTop(out);
         const runId = (run.n = (run.n || 0) + 1);
         let list;
         try {
-          list = await withTimeout(hyakuOnly
-            ? hyakuNear(anchors, w ? [w] : [], day, { near: p2.near, budget: p2.budget, skip: [...onDay] })
-            : suggestFor(anchors, kind, [...onDay], w, p2), hyakuOnly ? 130000 : 27000, null);
+          list = hyakuOnly
+            ? await withTimeout(hyakuNear(anchors, selected.length ? selected.map(n => n.split("／")[0]) : w ? [w] : [], day,
+                { near: p2.near, budget: p2.budget, skip: [...onDay] }), 130000, null)
+            : await searchInsertSuggestions(anchors, kind, [...onDay], selected, w, p2);
           if (!list) list = Object.assign([], { failed: "timeout" });
         } catch (_) {
           list = Object.assign([], { failed: "error" });
         } finally {
           go.disabled = false;
-          go.removeAttribute("aria-busy");
-          go.innerHTML = buttonHtml;
+          out.removeAttribute("aria-busy");
         }
         if (!out.isConnected || runId !== run.n) return;
+        actions.hidden = false;
+        retry.hidden = !!list.length;
         const paint = () => {
           out.innerHTML = list.length
             ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
@@ -8379,7 +8414,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           });
           if (n){ render(); await saveNow("補返中文名同介紹", true); }
         }).catch(() => {});
-        if (list.length) saveAiPicksWithRetry(out, day, kind, w, anchors, list, () => runId === run.n);
+        if (list.length) saveAiPicksWithRetry(out, day, kind, summary, anchors, list, () => runId === run.n);
       };
       const past = sheet.querySelector("#ins-past");
       if (past) past.addEventListener("click", () => {
@@ -8392,12 +8427,32 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         }, { tall: true });
       });
       if (go) go.addEventListener("click", run);
+      if (retry) retry.addEventListener("click", run);
       if (opts && opts.auto && go){
         const tab = sheet.querySelector('[data-instab="ai"]'); if (tab) tab.click();
         run();
       }
       if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });
     }, { tall: true });
+  }
+  async function searchInsertSuggestions(anchors, kind, skip, selected, want, prefs){
+    const queries = selected.length ? selected.map(name => [cuisineWord(name), want].filter(Boolean).join(" ").slice(0, 40)) : [want];
+    const lists = await Promise.all(queries.map(query => suggestFor(anchors, kind, skip, query, prefs, 55000)));
+    if (lists.length === 1) return lists[0];
+    const seen = new Set();
+    const results = [];
+    const longest = Math.max(...lists.map(list => list.length));
+    for (let i = 0; i < longest && results.length < 8; i++){
+      lists.forEach((list, j) => {
+        const place = list[i];
+        const key = place && (place.placeId || place.name);
+        if (!key || seen.has(key) || results.length >= 8) return;
+        seen.add(key);
+        results.push({ ...place, cuisine: selected[j] });
+      });
+    }
+    if (!results.length) results.failed = lists.find(list => list.failed)?.failed;
+    return results;
   }
   // Every 「幫我揀」 list is kept (with the intros) so it can be looked at
   // again from any 加地點, by anyone on the trip.
@@ -12402,6 +12457,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
     "蕎麥／烏冬": ["そば うどん", "우동"], "炸物／天婦羅": ["天ぷら とんかつ", "돈까스"], "大阪燒／章魚燒": ["お好み焼き", "오코노미야키"],
     "韓國菜": ["韓国料理", "한식"], "中菜／點心": ["中華料理", "중식"], "西餐": ["イタリアン 洋食", "양식"], "咖啡／甜品": ["カフェ スイーツ", "카페 디저트"],
   };
+  function restaurantCuisineChoices(japan){
+    return japan ? CUISINES : CUISINES.filter(([name]) => !/大阪燒|蕎麥/.test(name));
+  }
   function cuisineWord(name){
     const row = CUISINE_LOCAL[name];
     if (!row) return name;
