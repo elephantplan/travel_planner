@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-6";
+  const BUILD = "2026-11-19-7";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4374,9 +4374,54 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
     return segMode(seg) === "walk" && !!m && +m[1] > 20;
   }
+  function transitIsMissing(seg){
+    if (!seg || seg.stale || seg.checking || seg.noTime) return true;
+    const text = String(seg.text || segPlain(seg.html || "")).trim();
+    return !text || /睇班次|交通未計|未有路線/.test(text);
+  }
+  function missingTransitFor(day, units = toUnits(day.items)){
+    const first = firstStopUnit(units);
+    const indices = [];
+    let previous = null;
+    units.forEach((unit, i) => {
+      if (!unit.stop) return;
+      const from = previous && ((!isRealPlace(previous) && stayRef(day)) || stopRef(previous));
+      if (i > first && from && stopRef(unit.stop) && transitIsMissing(unit.seg)) indices.push(i);
+      previous = unit.stop;
+    });
+    const hotelLegs = ["hotelLeg", "backLeg"].filter(which => {
+      const info = hotelLegInfo(day, which);
+      return info && (day[which]?.key !== info.key || transitIsMissing(day[which]));
+    });
+    return { indices, hotelLegs, count: indices.length + hotelLegs.length };
+  }
+  const missingTransitBusy = new Set();
+  async function fillMissingTransit(day){
+    if (state.readonly || state.offline || missingTransitBusy.has(day.id)) return;
+    if (transitRunning || autoTransitBusy){ flash("有交通計緊，等一陣再撳"); return; }
+    const { indices, hotelLegs, count } = missingTransitFor(day);
+    if (!count) return;
+    missingTransitBusy.add(day.id);
+    state.transitProblem = "";
+    flash(`補緊 ${count} 段交通…`, true);
+    try {
+      if (indices.length) await refreshTransit(day, indices);
+      let hotelUpdated = false;
+      for (const which of hotelLegs) if (await computeHotelLeg(day, which)) hotelUpdated = true;
+      if (hotelUpdated) await saveNow("補返酒店出入嘅交通", true);
+      const pending = missingTransitFor(day).count;
+      flash(pending ? `仲有 ${pending} 段未攞到完整交通，可以撳 Google 睇班次。` : "缺少嘅交通已補齊");
+    } catch (_) {
+      flash("暫時補唔到交通，請再試一次");
+    } finally {
+      missingTransitBusy.delete(day.id);
+      if (state.view === day.id) render();
+    }
+  }
   const autoTransitTried = new Set();
   let autoTransitBusy = false;
   async function autoTransit(day){
+    if (missingTransitBusy.has(day.id)) return;
     if (autoTransitBusy || state.readonly || state.offline) return;
     if ([...state.open].some(k => String(k).startsWith(day.id + ":"))) return;
     autoTransitBusy = true;
@@ -6406,6 +6451,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const sel = inSelectMode(day) ? state.selectMode : null;
     const firstStop = firstStopUnit(units);
     const stopNums = dayStopNumbers(day);
+    const missingTransit = state.readonly || state.offline ? 0 : missingTransitFor(day, units).count;
 
     return `
       <section class="dayhead" style="--lc:${lc}">
@@ -6477,6 +6523,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ` : `
         <button class="addstop" id="addstop">＋ 喺最後加地點或者 note</button>
         <div class="toollist">
+        ${missingTransit || missingTransitBusy.has(day.id) ? `<button class="recalc" id="recalc-missing" data-stale="1" ${missingTransitBusy.has(day.id) ? "disabled" : ""}>${icon("refresh")}${missingTransitBusy.has(day.id) ? "補緊缺少嘅交通…" : `補缺少嘅交通（${missingTransit} 段）`}</button>` : ""}
         ${units.length > 1 ? `<button class="recalc" id="recalc" data-stale="${staleCount(units) ? 1 : 0}">${
           staleCount(units)
             ? `${icon("refresh")}重算全日交通（有 ${staleCount(units)} 段待確認）`
@@ -7372,6 +7419,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       flash("已重新計");
     }));
 
+    $("#recalc-missing")?.addEventListener("click", () => fillMissingTransit(day));
     const recalc = $("#recalc");
     if (recalc) recalc.addEventListener("click", async () => {
       recalc.disabled = true;
