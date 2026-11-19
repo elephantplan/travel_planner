@@ -2082,7 +2082,7 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .pp-add{min-height:30px;padding:0 10px;font-size:12.5px;}
 .sheet-row{display:flex;gap:8px;margin-top:10px;}
 .sheet-row .btn{flex:1;}
-@media (max-width:560px){ #btn-share,#btn-home{padding:0;width:34px;justify-content:center;} #btn-share span:last-child,#btn-home span:last-child{display:none;}
+@media (max-width:560px){ #btn-home{padding:0;width:34px;justify-content:center;} #btn-home span:last-child{display:none;}
   .brandmark .ko{display:none;}
   .brandmark .sys{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;font-size:13.5px;} }
 .hintbar{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:70;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
@@ -2322,8 +2322,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
       <nav class="topbtns" aria-label="行程工具">
         <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
-        <button class="topbtn" id="btn-share" aria-label="分享同管理成員" title="分享同管理成員" hidden><span class="topbtn-i"></span><span>分享</span></button>
-        <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
+        <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>分享／匯出</span></button>
         <button class="topbtn" id="btn-undo" hidden aria-label="返上一步" title="返上一步"><span class="topbtn-i"></span><span>上一步</span></button>
         <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
         <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
@@ -2603,7 +2602,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     put("#btn-export .topbtn-i", "share");
     put("#btn-reload .topbtn-i", "refresh");
     put("#btn-undo .topbtn-i", "undo");
-    put("#btn-share .topbtn-i", "link");
     put("#btn-theme .topbtn-i", "contrast");
     put("#btn-boards .dockbtn-i", "pin");
     put("#btn-history .dockbtn-i", "clock");
@@ -6806,8 +6804,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!t.ok || !t.row || !("owner_id" in t.row)) return;        // accounts not switched on yet
     state.tripRow = t.row;
     const me = TripAuth.user();
-    const sb = $("#btn-share");
-    if (sb) sb.hidden = false;
+    mountTripSharing(document.querySelector("#layer #ex-trip-sharing"));
     if (me && !t.row.owner_id){
       hintBar("呢個係開 account 之前嘅行程，未屬於任何人。撥入你個 account 之後，就淨係你同你分享咗嘅人先睇到。", "撥入我個 account", async () => {
         try { await TripAuth.rpc("claim_trip", { tid: Number(state.tripId) }); flash("撥咗入你個 account"); syncTripOwner(); }
@@ -6823,14 +6820,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }
   }
   const personHtml = p => `<span class="pp-av">${p.avatar ? `<img src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer">` : esc((p.name || "?").slice(0, 1))}</span>`;
-  async function openShareSheet(){
+  function tripInviteUrl(){
+    const url = new URL("/trip.html", location.origin);
+    url.searchParams.set("trip", state.tripId);
+    url.searchParams.set("s", state.tripRow.share_token);
+    return url.toString();
+  }
+  function mountTripSharing(sheet){
     const row = state.tripRow;
+    if (!row || !row.share_token || state.readonly || !sheet || sheet.querySelector("#sh-link")) return;
     const me = window.TripAuth && TripAuth.user();
-    if (!row){ flash("分享功能未開通"); return; }
     const mine = me && row.owner_id === me.id;
-    const link = `${location.origin}/trip.html?trip=${encodeURIComponent(state.tripId)}&s=${row.share_token}`;
-    openSheet(`
-      <h3>一齊睇、一齊改</h3>
+    let link = tripInviteUrl();
+    sheet.innerHTML = `
       <div id="sh-people">${loaderHtml("睇緊邊個喺呢個行程…", true)}</div>
       <div id="sh-contacts"></div>
       <p class="picker-label">用連結邀請</p>
@@ -6841,49 +6843,48 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ${navigator.share ? `<button class="btn" id="sh-send">${icon("share")}傳送…</button>` : ""}
       </div>
       ${mine ? `<button class="btn wide" id="sh-reset" style="margin-top:12px;">${icon("refresh")}重設連結（舊連結失效，已加入嘅人唔受影響）</button>` : `<p class="hint">只有擁有人先可以重設連結同移除成員。</p>`}
-      <p class="picker-label" style="margin-top:20px;">帶走一份</p>
-      <p class="sec-sub">冇網都睇到：文字（貼落 WhatsApp）、PDF（打印）、或者備份檔。</p>
-      <button class="btn wide" id="sh-export">${icon("share")}匯出</button>
-    `, async sheet => {
-      sheet.querySelector("#sh-export").addEventListener("click", () => { closeLayer(); openExportSheet(); });
-      sheet.querySelector("#sh-copy").addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(link); flash("複製咗"); } catch (_){ sheet.querySelector("#sh-link").select(); document.execCommand("copy"); flash("複製咗"); }
-      });
-      const send = sheet.querySelector("#sh-send");
-      if (send) send.addEventListener("click", () => navigator.share({ title: plain((state.snapshot.meta || {}).title) || "行程", url: link }).catch(() => {}));
-      const reset = sheet.querySelector("#sh-reset");
-      if (reset) reset.addEventListener("click", async () => {
-        if (!await askConfirm("重設之後，之前 send 出去嘅連結就用唔到，未登入嘅人要攞新連結。確定？")) return;
-        try { const tok = await TripAuth.rpc("reset_share_link", { tid: Number(state.tripId) }); state.tripRow.share_token = tok; closeLayer(); openShareSheet(); flash("換咗新連結"); }
-        catch (e){ flash("重設唔到：" + e.message); }
-      });
-      // who is on it, and people from earlier trips to add straight away
-      const paint = async () => {
-        const box = sheet.querySelector("#sh-people"), cbox = sheet.querySelector("#sh-contacts");
-        let people = [], contacts = [];
-        try { people = await TripAuth.rpc("trip_people", { tid: Number(state.tripId) }) || []; } catch (_){ box.innerHTML = ""; return; }
-        if (!box.isConnected) return;
-        box.innerHTML = `<p class="picker-label">喺呢個行程嘅人</p><div class="pplist">${people.map(p => `<div class="pp">${personHtml(p)}<b>${esc(p.name || "")}${me && p.id === me.id ? "（你）" : ""}</b>
-          <small>${p.role === "owner" ? "擁有人" : "可以改"}</small>${mine && p.role !== "owner" ? `<button class="pp-x" data-rm="${esc(p.id)}" aria-label="移除 ${esc(p.name || "")}">${icon("close")}</button>` : ""}</div>`).join("")
-          || `<p class="hint">未有登入咗嘅人加入。</p>`}</div>`;
-        box.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", async () => {
-          if (!await askConfirm("移除佢？佢就唔會再喺主頁見到呢個行程。")) return;
-          try { await TripAuth.rpc("remove_trip_member", { tid: Number(state.tripId), uid: b.dataset.rm }); paint(); } catch (e){ flash("移除唔到：" + e.message); }
-        }));
-        if (!me) { cbox.innerHTML = ""; return; }
-        try { contacts = await TripAuth.rpc("my_trip_contacts", {}) || []; } catch (_){ contacts = []; }
-        const on = new Set(people.map(p => p.id));
-        const rest = contacts.filter(c => c && !on.has(c.id));
-        cbox.innerHTML = rest.length ? `<p class="picker-label">之前一齊去過嘅人（直接加，唔使 send 連結）</p><div class="pplist">${rest.map(c =>
-          `<div class="pp">${personHtml(c)}<b>${esc(c.name || "")}</b><button class="btn pp-add" data-add="${esc(c.id)}">${icon("plus")}加入</button></div>`).join("")}</div>` : "";
-        cbox.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", async () => {
-          b.disabled = true;
-          try { const ok = await TripAuth.rpc("add_trip_member", { tid: Number(state.tripId), uid: b.dataset.add }); flash(ok ? "加咗，佢登入就會見到" : "加唔到"); paint(); }
-          catch (e){ b.disabled = false; flash("加唔到：" + e.message); }
-        }));
-      };
-      paint();
-    }, { tall: true });
+    `;
+    sheet.querySelector("#sh-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(link); flash("複製咗"); } catch (_){ sheet.querySelector("#sh-link").select(); document.execCommand("copy"); flash("複製咗"); }
+    });
+    const send = sheet.querySelector("#sh-send");
+    if (send) send.addEventListener("click", () => navigator.share({ title: plain((state.snapshot.meta || {}).title) || "行程", url: link }).catch(() => {}));
+    const reset = sheet.querySelector("#sh-reset");
+    if (reset) reset.addEventListener("click", async () => {
+      if (!await askConfirm("重設之後，之前 send 出去嘅連結就用唔到，未登入嘅人要攞新連結。確定？")) return;
+      try { const tok = await TripAuth.rpc("reset_share_link", { tid: Number(state.tripId) });
+        row.share_token = tok;
+        link = tripInviteUrl();
+        sheet.querySelector("#sh-link").value = link;
+        flash("換咗新連結"); }
+      catch (e){ flash("重設唔到：" + e.message); }
+    });
+    // who is on it, and people from earlier trips to add straight away
+    const paint = async () => {
+      const box = sheet.querySelector("#sh-people"), cbox = sheet.querySelector("#sh-contacts");
+      let people = [], contacts = [];
+      try { people = await TripAuth.rpc("trip_people", { tid: Number(state.tripId) }) || []; } catch (_){ box.innerHTML = `<p class="hint">暫時讀唔到行程成員。</p>`; return; }
+      if (!box.isConnected) return;
+      box.innerHTML = `<p class="picker-label">喺呢個行程嘅人</p><div class="pplist">${people.map(p => `<div class="pp">${personHtml(p)}<b>${esc(p.name || "")}${me && p.id === me.id ? "（你）" : ""}</b>
+        <small>${p.role === "owner" ? "擁有人" : "可以改"}</small>${mine && p.role !== "owner" ? `<button class="pp-x" data-rm="${esc(p.id)}" aria-label="移除 ${esc(p.name || "")}">${icon("close")}</button>` : ""}</div>`).join("")
+        || `<p class="hint">未有登入咗嘅人加入。</p>`}</div>`;
+      box.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", async () => {
+        if (!await askConfirm("移除佢？佢就唔會再喺主頁見到呢個行程。")) return;
+        try { await TripAuth.rpc("remove_trip_member", { tid: Number(state.tripId), uid: b.dataset.rm }); paint(); } catch (e){ flash("移除唔到：" + e.message); }
+      }));
+      if (!me) { cbox.innerHTML = ""; return; }
+      try { contacts = await TripAuth.rpc("my_trip_contacts", {}) || []; } catch (_){ contacts = []; }
+      const on = new Set(people.map(p => p.id));
+      const rest = contacts.filter(c => c && !on.has(c.id));
+      cbox.innerHTML = rest.length ? `<p class="picker-label">之前一齊去過嘅人（直接加，唔使 send 連結）</p><div class="pplist">${rest.map(c =>
+        `<div class="pp">${personHtml(c)}<b>${esc(c.name || "")}</b><button class="btn pp-add" data-add="${esc(c.id)}">${icon("plus")}加入</button></div>`).join("")}</div>` : "";
+      cbox.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", async () => {
+        b.disabled = true;
+        try { const ok = await TripAuth.rpc("add_trip_member", { tid: Number(state.tripId), uid: b.dataset.add }); flash(ok ? "加咗，佢登入就會見到" : "加唔到"); paint(); }
+        catch (e){ b.disabled = false; flash("加唔到：" + e.message); }
+      }));
+    };
+    paint();
   }
   // The trip list shows a picture for each trip: the first real place with
   // a photo (an airport's is skipped). Sent only when it changes.
@@ -11960,13 +11961,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function openExportSheet(){
     const snap = state.snapshot;
     openSheet(`
-      <h3>匯出行程</h3>
+      <h3>分享／匯出行程</h3>
       <p class="sec-sub">匯出係即時影一份，之後喺網頁度改嘢唔會改到已經匯出咗嘅嘢。</p>
 
       <div class="exgroup">
         <div class="exgroup-label">分享</div>
+        <div id="ex-trip-sharing">
         <button class="btn wide" id="ex-share">${icon("link")}分享／複製呢個行程嘅連結</button>
         <p class="exhint">同一條連結，全家人都改得。裝咗落主畫面就冇咗網址列，呢度攞返。</p>
+        </div>
         <button class="btn wide" id="ex-share-ro">${icon("link")}分享唯讀連結（畀長輩睇，改唔到）</button>
         <p class="exhint">撳入去只睇到，冇改嘢嘅掣，唔怕佢撳亂。（唔係密碼保護：識改網址嘅人一樣改得。）</p>
       </div>
@@ -12030,7 +12033,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
         copyInto("#ex-share", url, "複製咗連結");
       });
       sheet.querySelector("#ex-share-ro").addEventListener("click", async () => {
-        const u = new URL(location.href); u.searchParams.set("view", "1");
+        const u = new URL(location.href);
+        u.searchParams.set("view", "1");
         const url = u.toString(), title = (plain((snap.meta || {}).title) || "我嘅行程") + "（唯讀）";
         if (navigator.share){
           try { await navigator.share({ title, url }); return; }
@@ -12038,6 +12042,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         }
         copyInto("#ex-share-ro", url, "複製咗唯讀連結");
       });
+      mountTripSharing(sheet.querySelector("#ex-trip-sharing"));
       // who should be in the picture — remembered on this phone, per trip
       const charsKey = "trip_poster_chars_" + (state.tripId || "");
       const charsIn = sheet.querySelector("#ex-chars");
@@ -15051,7 +15056,6 @@ ${stayBlock}${dayBlocks}${secBlocks}
     wirePullToRefresh();
     wireReloadButton();
     $("#btn-undo").addEventListener("click", undoLast);
-    $("#btn-share").addEventListener("click", openShareSheet);
     // ⌘Z / Ctrl+Z on a computer, unless typing in a box (that's the box's own undo)
     document.addEventListener("keydown", e => {
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
