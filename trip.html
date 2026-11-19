@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-1";
+  const BUILD = "2026-11-19-2";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -6931,6 +6931,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   function suggestBetterSpot(st){
     if (!st || !Number.isFinite(Number(st.lat)) || st.lat === "") return;
+    const title = cleanPlaceName(plain(st.title));
+    if (isHotelAnchorName(title) || /^(?:酒店)?(?:入住|退房|寄放行李|寄存行李)(?:[：:\s]|$)/.test(title)) return;
+    const names = [title, plain(st.kr)].map(loose).filter(Boolean);
+    const bookedStay = (state.snapshot.stays || []).some(stay =>
+      (st.placeId && stay.placeId === st.placeId) ||
+      [plain(stay.name), plain(stay.kr)].map(loose).some(name => name && names.includes(name)));
+    if (bookedStay) return;
     const here = detourAt(st), best = bestSpotFor(st, st);
     if (here == null || !best || here - best.cost < 1500 || best.cost > here * 0.6) return;
     const where = best.afterIdx < 0 ? "最前" : `「${cleanPlaceName(plain(toUnits(best.day.items)[best.afterIdx].stop.title))}」之後`;
