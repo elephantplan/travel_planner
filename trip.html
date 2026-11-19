@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-3";
+  const BUILD = "2026-11-19-4";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -7610,6 +7610,47 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       return true;
     } catch (_){ todo.forEach(p => { p.briefed = true; }); return false; }
   }
+  function suggestionBackup(p, kind){
+    return { title: p.name_zh || p.name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "",
+      type: kind === "eat" ? "eat" : "normal", placeId: p.placeId || "", lat: p.lat, lng: p.lng,
+      rating: p.rating, ratingCount: p.ratingCount, desc: p.what || p.fit || "",
+      ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
+      ...(Array.isArray(p.probe?.weekdayText) ? { weekdayText: p.probe.weekdayText } : {}),
+      mapUrl: googlePlaceUrl({ title: p.name, placeId: p.placeId }) };
+  }
+  function showSuggestionBackups(out, { title, note, remaining, keep, unit = "個" }){
+    const head = out.closest(".sheet")?.querySelector("h3");
+    if (head) head.textContent = title;
+    const kept = new Set();
+    out.innerHTML = `<div class="sw-done">
+      <p class="sw-done-t">${icon("check")}<span>${esc(note)}</span></p>
+      ${remaining.map((p, i) => `<button type="button" class="btn wide" data-keep-suggestion="${i}">${icon("ribbon")}留「${esc(p.name_zh || p.name)}」做後備</button>`).join("")}
+      ${remaining.length > 1 ? `<button type="button" class="btn primary wide" data-keep-remaining>${icon("ribbon")}其他 ${remaining.length} ${unit}都留做後備</button>` : ""}
+      <button type="button" class="btn wide" data-close>${remaining.length ? "唔使，完成" : "完成"}</button>
+    </div>`;
+    const done = out.querySelector("[data-close]");
+    const all = out.querySelector("[data-keep-remaining]");
+    done.addEventListener("click", closeLayer);
+    out.querySelectorAll("[data-keep-suggestion]").forEach(button => button.addEventListener("click", () => {
+      const i = Number(button.dataset.keepSuggestion);
+      if (kept.has(i)) return;
+      keep([remaining[i]]);
+      kept.add(i);
+      button.disabled = true;
+      button.textContent = `已留「${remaining[i].name_zh || remaining[i].name}」做後備`;
+      done.textContent = "完成";
+      if (all && kept.size === remaining.length) all.hidden = true;
+      else if (all) all.textContent = `其餘 ${remaining.length - kept.size} ${unit}都留做後備`;
+    }));
+    all?.addEventListener("click", () => {
+      const rest = remaining.filter((_, i) => !kept.has(i));
+      if (!rest.length) return;
+      keep(rest);
+      flash(`其他 ${rest.length} ${unit}留咗做後備`);
+      closeLayer();
+    });
+    sheetToTop(out);
+  }
   function suggestRowHtml(p, k, kind){
     const label = (p.types || []).map(t => PLACE_KIND[t]).find(Boolean) || SUG_KIND[kind] || "";
     const g = p.placeId ? googlePlaceUrl({ title: p.name, placeId: p.placeId }) : "";
@@ -7617,7 +7658,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return `<div class="sugcard">
       <div class="sc-top">
         <a class="sc-n" href="${esc(g)}" target="_blank" rel="noopener">${esc(title)}${p.name_zh && p.name_zh !== p.name ? `<small>${esc(p.name)}</small>` : ""}</a>
-        <button type="button" class="nr-add" data-pick="${esc(k)}" data-kind="${kind}" aria-label="加「${esc(title)}」入行程">${icon("plus")}</button>
+        <button type="button" class="btn primary" data-pick="${esc(k)}" data-kind="${kind}" aria-label="揀「${esc(title)}」">${kind === "eat" ? "揀呢間" : "揀呢個"}</button>
       </div>
       <div class="sc-facts">${[p.hyaku ? `<b class="sw-hy">${icon("star")}${esc(p.hyaku)}</b>` : p.unverified ? `<b class="sw-unv">AI 推介・未經 Google 核實</b>` : p.famous ? `<b class="sw-hy">${icon("star")}名店</b>` : "", label ? esc(label) : "",
         Number.isFinite(p.rating) ? `${icon("star")}<b>${p.rating.toFixed(1)}</b>（${(p.ratingCount || 0).toLocaleString()} 人評）` : "",
@@ -7768,10 +7809,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${g ? `<a class="maplink" href="${esc(g)}" target="_blank" rel="noopener">${icon("pin")}地圖</a>` : ""}</div>
         </div>`;
       };
-      const asAlt = p => ({ title: p.name_zh || p.name, kr: p.name_zh && p.name_zh !== p.name ? p.name : "", type: "eat", placeId: p.placeId || "", lat: p.lat, lng: p.lng,
-        rating: p.rating, ratingCount: p.ratingCount, desc: p.what || p.fit || "", ...(p.cuisine ? { cuisine: p.cuisine } : {}), ...(p.hyaku ? { hyaku: p.hyaku } : {}),
-        ...(Array.isArray(p.probe && p.probe.weekdayText) ? { weekdayText: p.probe.weekdayText } : {}),
-        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name)}` });
+      const asAlt = p => suggestionBackup(p, "eat");
       // Backups are chosen one by one: 「留做後備」 on a card keeps it under
       // this stop at once (and tapping again takes it back out), the tray
       // at the foot counts them and offers 「全部留低」. Closing the sheet
@@ -7813,20 +7851,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           // the sheet stays to ask, once, about the rest of the list
           const rest = found.filter(x => x !== p);
           const loose = rest.filter(x => !isKept(x) && keyOf(x) !== st.placeId);
-          const head = sheet.querySelector("h3"); if (head) head.textContent = `換咗做「${p.name_zh || p.name}」`;
           sheet.querySelectorAll(".sec-sub, .sw-shut").forEach(x => x.remove());
           form.hidden = true; edit.hidden = true;
-          const box = sheet.querySelector(".sheet"); if (box) box.classList.remove("tall");
-          out.innerHTML = `<div class="sw-done">
-            <p class="sw-done-t">${icon("check")}<span>原本嘅「${esc(was)}」已經收埋做後備，想返轉頭喺行程撳「改用呢間」就得。</span></p>
-            ${loose.length ? `<button type="button" class="btn primary wide" id="sw-keeprest">${icon("ribbon")}其他 ${loose.length} 間都留做後備</button>`
-              : rest.length ? `<p class="hint">其他 ${rest.length} 間你已經留咗做後備。</p>` : ""}
-            <button type="button" class="btn wide" data-close>${loose.length ? "唔使，完成" : "完成"}</button>
-          </div>`;
-          out.querySelectorAll("[data-close]").forEach(x => x.addEventListener("click", closeLayer));
-          const kr = out.querySelector("#sw-keeprest");
-          if (kr) kr.addEventListener("click", () => { keep(loose, true); flash(`其他 ${loose.length} 間留咗做後備`); closeLayer(); });
-          sheetToTop(out);
+          showSuggestionBackups(out, {
+            title: `換咗做「${p.name_zh || p.name}」`,
+            note: `原本嘅「${was}」已留做後備，想返轉頭可以撳「改用呢間」。`,
+            remaining: loose, keep: items => keep(items, true), unit: "間",
+          });
         }));
         out.querySelectorAll("[data-swkeep]").forEach(b => b.addEventListener("click", () => {
           const p = found[+b.dataset.swkeep];
@@ -8221,7 +8252,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button type="button" class="btn" id="ins-retry" hidden>${icon("refresh")}再試一次</button>
         </div>
         <div id="ins-nearres"></div>
-        <button type="button" class="btn primary wide ins-done" id="ins-done" hidden>${icon("check")}完成（已加 <b>0</b> 個）</button>
       </div>` : ""}
       ${hotels.length ? `<div class="ins-hotels">${hotels.map((h, k) =>
         `<button class="btn inshotel" data-inshotel="${k}">${icon("bed")}<span>加酒店<b>${esc(plain(h.name))}</b></span></button>`).join("")}</div>` : ""}
@@ -8241,36 +8271,12 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
       sheet.querySelector("#ins-blank").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
       const pick = async (p, kind) => { closeLayer(); await insertPlaceAt(day, pos, p, kind); };
-      // From the AI lists several can be wanted, so the sheet stays open:
-      // each one goes in after the last one picked, and its + turns into a
-      // tick. One at a time, so two saves never race.
-      let added = 0, chain = Promise.resolve();
-      const done = sheet.querySelector("#ins-done");
-      // what has been added stays ticked when the list is drawn again (the
-      // intros arrive after it is first shown, and redraw it)
-      const picked = new Set();
-      const pickKey = p => p.placeId || p.name;
-      const tick = (b, p) => {
-        b.disabled = true; b.classList.add("added"); b.innerHTML = icon("check");
-        b.setAttribute("aria-label", `已加「${p.name_zh || p.name}」`);
-      };
-      const pickMore = (p, kind, b) => {
-        picked.add(pickKey(p));
-        tick(b, p);
-        const at = pos + added; added++;
-        if (done){ done.hidden = false; done.querySelector("b").textContent = added; }
-        flash(`加咗「${p.name_zh || p.name}」，可以繼續揀`);
-        chain = chain.then(() => insertPlaceAt(day, at, p, kind)).catch(() => {});
-      };
-      const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(b => {
-        const p0 = found[b.dataset.pick];
-        if (p0 && picked.has(pickKey(p0))){ tick(b, p0); return; }
-        b.addEventListener("click", () => {
-        const p = found[b.dataset.pick]; if (!p || picked.has(pickKey(p))) return;
-        if (b.dataset.kind && b.closest("[data-pane=ai]")) pickMore(p, b.dataset.kind, b);
-        else pick(p, b.dataset.kind || "");
-      }); });
-      if (done) done.addEventListener("click", () => closeLayer());
+      const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(button => {
+        button.addEventListener("click", () => {
+          const p = found[button.dataset.pick];
+          if (p) pick(p, button.dataset.kind || "");
+        });
+      });
       // search
       const q = sheet.querySelector("#ins-q"), res = sheet.querySelector("#ins-res");
       let t = null;
@@ -8388,6 +8394,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (!out.isConnected || runId !== run.n) return;
         actions.hidden = false;
         retry.hidden = !!list.length;
+        let pickedPlace, pickedStop;
         const paint = () => {
           out.innerHTML = list.length
             ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
@@ -8395,25 +8402,53 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             : list.failed ? `<p class="hint" role="status">${list.failed === "timeout" ? "搜尋等得太耐，請再試一次。" : "搜尋暫時失敗，請再試一次。"}</p>`
             : hyakuOnly ? `<p class="hint">附近搵唔到符合條件嘅百名店。試吓改菜式或者放寬距離。</p>`
             : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
-          wirePicks(out);
+          out.querySelectorAll("[data-pick]").forEach(button => button.addEventListener("click", () => {
+            if (pickedPlace) return;
+            const p = found[button.dataset.pick];
+            if (!p) return;
+            pickedPlace = p;
+            const key = p.placeId || p.name;
+            const seen = new Set([key]);
+            const remaining = list.filter(candidate => {
+              const candidateKey = candidate.placeId || candidate.name;
+              if (!candidateKey || seen.has(candidateKey)) return false;
+              seen.add(candidateKey);
+              return true;
+            });
+            actions.hidden = true;
+            insertPlaceAt(day, pos, p, kind, st => {
+              pickedStop = st;
+              showSuggestionBackups(out, {
+                title: `加咗「${p.name_zh || p.name}」`,
+                note: "已加落行程，可以將其他推介留喺呢個站下面做後備。",
+                remaining, unit: kind === "eat" ? "間" : "個",
+                keep: items => {
+                  st.alts = [...(st.alts || []), ...items.map(item => suggestionBackup(item, kind))];
+                  render();
+                  saveSoon(`留咗 ${items.length} 個推介做後備`);
+                },
+              });
+            }).catch(e => flash(e.message || "加唔到地點"));
+          }));
         };
         paint();                                   // Google's list first, straight away
         const scroller = out.closest(".sheet");
         if (scroller) scroller.scrollTop += out.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 56;
-        if (list.length && await briefsFor(list, kind) !== null && out.isConnected && runId === run.n) paint();
-        // places picked before their intros arrived: give them the Chinese
-        // name and the intro now, once they are in the day
-        const late = list.filter(p => picked.has(pickKey(p)) && (p.name_zh || p.what));
-        if (late.length) chain = chain.then(async () => {
-          let n = 0;
-          late.forEach(p => {
-            const st = toUnits(day.items).map(u => u.stop).find(x => x && x.placeId && x.placeId === p.placeId);
-            if (!st) return;
-            if (p.name_zh && p.name_zh !== p.name && plain(st.title) === p.name){ st.title = p.name_zh; if (!plain(st.kr)) st.kr = p.name; n++; }
-            if ((p.what || p.mustTry) && !plain(st.desc)){ st.desc = [p.what, p.mustTry ? `${MUST_LABEL[kind] || "推介"}：${p.mustTry}` : ""].filter(Boolean).join("\n"); st.briefV = BRIEF_V; n++; }
-          });
-          if (n){ render(); await saveNow("補返中文名同介紹", true); }
-        }).catch(() => {});
+        if (list.length && await briefsFor(list, kind) && out.isConnected && runId === run.n && !pickedPlace) paint();
+        if (pickedStop){
+          let updated = false;
+          if (pickedPlace.name_zh && pickedStop.title === pickedPlace.name){
+            pickedStop.title = pickedPlace.name_zh;
+            pickedStop.kr ||= pickedPlace.name;
+            updated = true;
+          }
+          if (!plain(pickedStop.desc) && (pickedPlace.what || pickedPlace.mustTry)){
+            pickedStop.desc = [pickedPlace.what, pickedPlace.mustTry ? `${MUST_LABEL[kind] || "推介"}：${pickedPlace.mustTry}` : ""].filter(Boolean).join("\n");
+            pickedStop.briefV = BRIEF_V;
+            updated = true;
+          }
+          if (updated){ render(); saveSoon("補返地點中文名同介紹"); }
+        }
         if (list.length) saveAiPicksWithRetry(out, day, kind, summary, anchors, list, () => runId === run.n);
       };
       const past = sheet.querySelector("#ins-past");
@@ -8422,7 +8457,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         openSheet(`<h3>AI 推介</h3>${aiPicksHtml()}`, history => {
           wireAiPicks(history, kind, async (p, pickedKind) => {
             closeLayer();
-            await insertPlaceAt(day, pos + added, p, pickedKind);
+            await insertPlaceAt(day, pos, p, pickedKind);
           });
         }, { tall: true });
       });
@@ -8466,7 +8501,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // A place picked from search or 「附近」 arrives with its Google id, so it
   // needs no editing: photo, hours and local name fill in behind, and the
   // legs either side are timed as soon as it lands.
-  async function insertPlaceAt(day, pos, p, kind){
+  async function insertPlaceAt(day, pos, p, kind, onInserted){
     const units = toUnits(day.items);
     const at = Math.max(0, Math.min(pos, units.length));
     const st = Object.assign(blankStop(), { title: p.name, placeId: p.placeId || "", type: kind === "eat" ? "eat" : "normal",
@@ -8482,6 +8517,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     day.items = fromUnits(units);
     syncMapPoints(day);
     render();
+    if (onInserted) onInserted(st);
     await saveNow(`加咗「${p.name}」`);
     flash(`加咗「${p.name}」，計緊交通同攞相…`);
     {
