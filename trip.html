@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-4";
+  const BUILD = "2026-11-19-5";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4112,7 +4112,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
     </div>`;
   }
-  function hotelLegHtml(day, which = "hotelLeg"){
+  function hotelLegHtml(day, which = "hotelLeg", allowInsert = false){
     const info = hotelLegInfo(day, which);
     if (!info) return "";
     const leg = day[which] && day[which].key === info.key ? day[which] : null;
@@ -4128,7 +4128,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const refresh = !state.readonly ? `<button class="segrefresh" data-legrefresh="${which}" title="重新計" aria-label="重新計呢段交通">${icon("refresh")}</button>` : "";
     const seg = `<div class="seg hotelleg" data-mode="${leg ? mode : "other"}"><div class="seg-rail"></div>
       <div class="seg-text">${body}${refresh}${links}${leg ? adviceHtml(leg, which) : ""}</div></div>`;
-    return which === "hotelLeg" ? hotelStopHtml(st, which) + seg : seg + hotelStopHtml(st, which);
+    if (which !== "hotelLeg") return seg + hotelStopHtml(st, which);
+    const add = allowInsert && !state.readonly ? insertRowHtml(info.k, true) : "";
+    return hotelStopHtml(st, which) + add + seg;
   }
   // the mode disc doubles as the switch between 行路 / 大眾運輸 / 揸車
   function segModeBtn(seg, attr){
@@ -6456,7 +6458,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           // point at rather than something you fake by adding at the end and dragging
           // (the gap after the last place has its ＋ drawn inside that unit,
           // above the 返酒店 card, so it isn't repeated here)
-          (sel || (i > 0 && i - 1 === lastStopIx) ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
+          (sel || (i === firstStop && hotelLegInfo(day)) || (i > 0 && i - 1 === lastStopIx) ? "" : insertRowHtml(i)) + unitHtml(day, u, i, units.length, sel, firstStop, stopNums)
         ).join("")}
       </div>
       ${units.length ? "" : `<p class="hint">呢日仲係空白嘅。撳上面「AI 諗行程」叫佢由早到晚幫你砌一日（佢會避開其他日子已經去緊嘅地方），或者自己加地點。</p>`}
@@ -6509,8 +6511,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
   // a ＋ sitting on the route line, so any gap between two places is somewhere
   // you can tap directly instead of adding at the end and dragging into place
-  function insertRowHtml(pos){
-    return `<button class="insertrow" data-insert="${pos}" aria-label="喺呢度加地點或者 note"><span class="ins-plus">＋</span></button>`;
+  function insertRowHtml(pos, afterHotel = false){
+    return `<button class="insertrow" data-insert="${pos}"${afterHotel ? ' data-after-hotel aria-label="由酒店出發後加地點"' : ' aria-label="喺呢度加地點或者 note"'}><span class="ins-plus">＋</span></button>`;
   }
 
   function unitHtml(day, u, i, total, sel, firstStop, stopNums){
@@ -6654,7 +6656,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 
     return `
       <div class="unit" data-i="${i}">
-        ${i === firstStop ? hotelLegHtml(day, "hotelLeg") : ""}
+        ${i === firstStop ? hotelLegHtml(day, "hotelLeg", !selecting) : ""}
         ${segHtml}
         <div class="stop">
           <div class="stop-rail">
@@ -7404,7 +7406,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     });
 
     document.querySelectorAll("[data-insert]").forEach(btn =>
-      btn.addEventListener("click", () => openInsertSheet(day, +btn.dataset.insert)));
+      btn.addEventListener("click", () => openInsertSheet(day, +btn.dataset.insert, { afterHotel: btn.hasAttribute("data-after-hotel") })));
 
     wireEditor(day);
     wireNoteEditor(day);
@@ -8189,11 +8191,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   }
   function openInsertSheet(day, pos, opts){
     const units = toUnits(day.items);
+    // The departure card is a virtual stop rendered before the first real stop.
+    const departure = opts?.afterHotel ? hotelLegInfo(day)?.st : null;
     // the stops either side — for the sentence and for 「附近」
     let prevS = null, nextS = null;
     for (let j = pos - 1; j >= 0; j--) if (units[j] && units[j].stop){ prevS = units[j].stop; break; }
     for (let j = pos; j < units.length; j++) if (units[j] && units[j].stop){ nextS = units[j].stop; break; }
     const nm = s => s ? (cleanPlaceName(s.title) || "未改名嘅地點") : "";
+    if (departure) prevS = { ...departure, title: departure.name };
     const before = nm(prevS), after = nm(nextS);
     const where = before && after ? `插喺「${before}」同「${after}」之間`
                 : before          ? `加喺「${before}」後面`
@@ -8208,6 +8213,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const a = dayIndexById(state.snapshot, s.from), b = dayIndexById(state.snapshot, s.to);
       return plain(s.name) && a >= 0 && b >= 0 && di >= Math.min(a, b) && di <= Math.max(a, b);
     }).filter(s => !units.some(u => u.stop && ((s.placeId && u.stop.placeId === s.placeId) || cleanPlaceName(plain(u.stop.title)) === cleanPlaceName(plain(s.name)))));
+    if (departure?.placeId) onDay.add(departure.placeId);
     const found = {};
     openSheet(`
       <h3>加地點</h3>
@@ -8256,7 +8262,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${hotels.length ? `<div class="ins-hotels">${hotels.map((h, k) =>
         `<button class="btn inshotel" data-inshotel="${k}">${icon("bed")}<span>加酒店<b>${esc(plain(h.name))}</b></span></button>`).join("")}</div>` : ""}
       <div class="ins-more">
-        <button class="btn" id="ins-note">${icon("note")}加一段 note</button>
+        ${departure ? "" : `<button class="btn" id="ins-note">${icon("note")}加一段 note</button>`}
         <button class="btn" id="ins-blank">${icon("pencil")}唔搵，自己打名</button>
       </div>
     `, sheet => {
@@ -8268,7 +8274,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           lat: Number.isFinite(Number(h.lat)) && h.lat !== "" && h.lat != null ? Number(h.lat) : undefined,
           lng: Number.isFinite(Number(h.lng)) && h.lng !== "" && h.lng != null ? Number(h.lng) : undefined }, "");
       }));
-      sheet.querySelector("#ins-note").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
+      sheet.querySelector("#ins-note")?.addEventListener("click", () => { closeLayer(); insertAt(day, pos, "note"); });
       sheet.querySelector("#ins-blank").addEventListener("click", () => { closeLayer(); insertAt(day, pos, "place"); });
       const pick = async (p, kind) => { closeLayer(); await insertPlaceAt(day, pos, p, kind); };
       const wirePicks = box => box.querySelectorAll("[data-pick]").forEach(button => {
