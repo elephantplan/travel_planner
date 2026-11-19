@@ -10291,6 +10291,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (!draft.length) draft = [{ name:"", desc:"", hoursChip:"", warning:"", mapUrl:"",
                                  from: days[0] ? days[0].id : "", to: days.length ? days[days.length-1].id : "" }];
 
+    const originalNames = new Map(draft.map(stay => [stay, stay.name]));
+    const selectedPlaces = new Map();
     const dayOptions = (sel) => days.map(d =>
       `<option value="${esc(d.id)}"${d.id === sel ? " selected" : ""}>Day ${d.id.replace('day','')} · ${esc(d.date)}</option>`).join("");
 
@@ -10301,7 +10303,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           ${draft.length > 1 ? `<button class="btn danger" data-staydel="${i}">刪走</button>` : ""}
         </div>
         <div class="field"><label>住邊度</label>
-          <input class="input" data-sf="name" value="${esc(s.name||"")}" placeholder="酒店／Airbnb 名或地址"></div>
+          <input class="input" data-sf="name" value="${esc(s.name||"")}" placeholder="酒店／Airbnb 名或地址" autocomplete="off">
+          <div data-stay-suggestions aria-live="polite"></div></div>
         <div class="field"><label>${destIsKorea() ? "韓文名／韓文地址" : destIsJapan() ? "日文名／日文地址" : "當地語言名／地址"}</label>
           <input class="input" data-sf="kr" value="${esc(s.kr||"")}" placeholder="${destIsKorea() ? "例：서울 마포구 연남동 562-34" : destIsJapan() ? "例：大阪府大阪市北区梅田3-1-1" : "例：當地文字嘅酒店地址"}">
           <p class="fieldhint">${destIsKorea()
@@ -10340,6 +10343,40 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     function wireBlocks(){
       document.querySelectorAll("#staysbox [data-staydel]").forEach(b =>
         b.addEventListener("click", () => { readBack(); draft.splice(+b.dataset.staydel, 1); paint(); }));
+      document.querySelectorAll("#staysbox [data-stay]").forEach(block => {
+        const stay = draft[Number(block.dataset.stay)];
+        const input = block.querySelector('[data-sf="name"]');
+        const mapInput = block.querySelector('[data-sf="mapUrl"]');
+        const results = block.querySelector("[data-stay-suggestions]");
+        let timer, sequence = 0;
+        input.addEventListener("input", () => {
+          clearTimeout(timer);
+          const request = ++sequence;
+          const previous = selectedPlaces.get(stay);
+          if (previous && mapInput.value === googlePlaceUrl({ title: previous.name, placeId: previous.placeId })) mapInput.value = "";
+          selectedPlaces.delete(stay);
+          results.innerHTML = "";
+          const query = input.value.trim();
+          if (query.length < 2) return;
+          timer = setTimeout(async () => {
+            if (!results.isConnected) return;
+            results.innerHTML = loaderHtml("搵緊住宿…", true);
+            const response = await withTimeout(callAi({ action: "place-search", query }), 12000, null).catch(() => null);
+            if (request !== sequence || !results.isConnected) return;
+            const places = (response?.places || []).filter(p => p.placeId && p.name).slice(0, 5);
+            results.innerHTML = places.length ? places.map((p, i) => `<button type="button" class="suggest-item" data-stay-place="${i}">
+              <div class="n">${esc(p.name)}</div>${p.address ? `<div class="a">${esc(p.address)}</div>` : ""}</button>`).join("")
+              : `<p class="hint">${response && response.ok !== false ? "搵唔到，可以打完整酒店名或者自己填地址。" : "暫時搵唔到地點建議，你仍然可以自己填。"}</p>`;
+            results.querySelectorAll("[data-stay-place]").forEach(button => button.addEventListener("click", () => {
+              const place = places[Number(button.dataset.stayPlace)];
+              selectedPlaces.set(stay, place);
+              input.value = place.name;
+              mapInput.value = googlePlaceUrl({ title: place.name, placeId: place.placeId });
+              results.innerHTML = `<p class="hint">已揀「${esc(place.name)}」</p>`;
+            }));
+          }, 400);
+        });
+      });
     }
 
     openSheet(`
@@ -10366,18 +10403,26 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       sheet.querySelector("[data-ecancel]").addEventListener("click", closeLayer);
       sheet.querySelector("[data-esave]").addEventListener("click", async () => {
         readBack();
-        const before = (snap.stays || []).map(s => s.name || "");
         const kept = draft.filter(s => (s.name || s.desc || "").trim());
 
-        // rename propagation, matched up by position
         let renamed = 0;
-        kept.forEach((s, i) => {
-          if (before[i] && before[i] !== s.name) renamed += renameStayInItinerary(snap, before[i], s.name);
-        });
-        // a renamed hotel is a DIFFERENT building — its old coordinate would
-        // leave the map pin sitting at the previous hotel under the new name
-        kept.forEach((s, i) => {
-          if (before[i] !== s.name){ delete s.lat; delete s.lng; delete s.noGeo; }
+        kept.forEach(stay => {
+          const before = originalNames.get(stay);
+          const place = selectedPlaces.get(stay);
+          if (before && before !== stay.name) renamed += renameStayInItinerary(snap, before, stay.name);
+          if (before !== stay.name || place){
+            delete stay.lat;
+            delete stay.lng;
+            delete stay.placeId;
+            delete stay.noGeo;
+          }
+          if (place && place.name === stay.name){
+            stay.placeId = place.placeId;
+            if (Number.isFinite(place.lat) && Number.isFinite(place.lng)){
+              stay.lat = place.lat;
+              stay.lng = place.lng;
+            }
+          }
         });
 
         snap.stays = kept;
