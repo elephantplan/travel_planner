@@ -316,7 +316,7 @@ async function trainEstimate(o: string, d: string, car: any, city: string, lang:
   if (!car?.start || !car?.end) return unavailable("missing endpoints");
   const [a, b] = await Promise.all([nearestStation(car.start), nearestStation(car.end)]);
   if (!a || !b) return unavailable("missing station");
-  if (a.name === b.name) return unavailable("same station");
+  if (a.name === b.name){ unavailable("same station"); return { noRail: true } as const; }
   const [wa, wb] = await Promise.all([gDirections(o, a.ref, "walking", lang), gDirections(b.ref, d, "walking", lang)]) as any[];
   if (!wa.seconds || !wb.seconds) return unavailable("missing station walk");
   if (wa.seconds > 1500 || wb.seconds > 1500) return unavailable("station walk too long");
@@ -329,7 +329,7 @@ async function trainEstimate(o: string, d: string, car: any, city: string, lang:
   } catch (e) { return unavailable(/429|quota|RESOURCE_EXHAUSTED/i.test(String(e)) ? "model quota" : "model request failed"); }
   const legs = Array.isArray(j?.legs) ? j.legs.filter((x: any) => x && x.line && x.from && x.to).slice(0, 4) : [];
   const ride = Math.round(Number(j?.minutes) || 0);
-  if (j?.none) return unavailable("model found no route");
+  if (j?.none === true){ unavailable("model found no route"); return { noRail: true } as const; }
   if (!legs.length || ride < 1) return unavailable("invalid model route");
   const total = mins(wa.seconds) + ride + mins(wb.seconds) + 3 * legs.length;     // + waiting
   // a train trip that takes far longer than a taxi is a wrong guess
@@ -387,7 +387,11 @@ async function legFresh(body: any, o: string, d: string) {
   // too far to walk: try the nearest real stations at each end
   if (!(w?.seconds && w.seconds <= 900)) {
     const est = await trainEstimate(o, d, c, str(body?.city, 40), lang).catch(() => null);
-    if (est) return est;
+    if (est && "noRail" in est){
+      // The route lookup completed and found no useful train option. A short
+      // verified walk is a complete answer when the user has left mode on Auto.
+      if (prefer === "auto" && w?.seconds > 0 && w.seconds <= 1200) return walkOut(w);
+    } else if (est) return est;
   }
   const bits = [c.seconds ? `的士約 ${mins(c.seconds)} 分鐘` : "", w?.seconds && w.seconds <= 2700 ? `行路約 ${mins(w.seconds)} 分鐘` : ""].filter(Boolean);
   // a trip to another city (Osaka → Kyoto) is worth asking how to do it
