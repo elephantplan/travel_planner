@@ -3069,7 +3069,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const undo = { stack: [], busy: false };
   // kept in this tab's storage, so a reload (or the phone dropping the page)
   // doesn't lose 上一步; trimmed until it fits
-  const UNDO_KEY = () => "trip_undo_" + (new URLSearchParams(location.search).get("trip") || "");
+  const UNDO_KEY = () => "trip_undo_" + (state.tripId || "");
   function undoStore(){
     for (let n = undo.stack.length; n >= 0; n--){
       try { sessionStorage.setItem(UNDO_KEY(), JSON.stringify(undo.stack.slice(undo.stack.length - n))); return; } catch (_){}
@@ -4823,7 +4823,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     try {
       if (!state.tripId || goingHome) return;
       localStorage.setItem(RESUME_KEY, JSON.stringify({
-        trip: state.tripId, view: state.view, y: Math.round(window.scrollY), t: Date.now() }));
+        trip: state.tripId, linkId: state.tripLinkId, view: state.view, y: Math.round(window.scrollY), t: Date.now() }));
     } catch (_){}
   }
   function readPlace(){
@@ -6803,6 +6803,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = await tripRow();
     if (!t.ok || !t.row || !("owner_id" in t.row)) return;        // accounts not switched on yet
     state.tripRow = t.row;
+    if (t.row.link_id){
+      state.tripLinkId = t.row.link_id;
+      const url = new URL(location.href);
+      if (url.searchParams.get("trip") !== t.row.link_id){
+        const token = TripAuth.shareToken(state.tripId);
+        if (token) TripAuth.useTrip(t.row.link_id, token);
+        TripAuth.useTrip(state.tripId, token);
+        url.searchParams.set("trip", t.row.link_id);
+        history.replaceState(null, "", url);
+        rememberPlace();
+      }
+      try { localStorage.setItem("dumbofly_link_" + t.row.link_id, String(state.tripId)); } catch (_){}
+    }
     const me = TripAuth.user();
     mountTripSharing(document.querySelector("#layer #ex-trip-sharing"));
     if (me && !t.row.owner_id){
@@ -6822,7 +6835,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const personHtml = p => `<span class="pp-av">${p.avatar ? `<img src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer">` : esc((p.name || "?").slice(0, 1))}</span>`;
   function tripInviteUrl(){
     const url = new URL("/trip.html", location.origin);
-    url.searchParams.set("trip", state.tripId);
+    url.searchParams.set("trip", state.tripLinkId || state.tripId);
     url.searchParams.set("s", state.tripRow.share_token);
     return url.toString();
   }
@@ -14141,7 +14154,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     } catch (e){
       genBanner("生成中途出咗問題：" + e.message + "（已經生成嘅內容已經存低，可以入返個別日子撳「AI 諗行程」補返）", { done:true });
     }
-    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripLinkId || state.tripId }).toString());
     setTimeout(() => genBanner(null), 6000);
   }
 
@@ -14681,7 +14694,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     pushCall({ mode: "notify", trip_id: Number(state.tripId), except,
       title: `${who} 改咗「${title}」`, editor: who, trip_name: title, items,
       body: items.length > 1 ? `${items.slice(0, 3).join("；")}${items.length > 3 ? ` 等 ${items.length} 項` : ""}` : items[0],
-      url: location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString() }, leaving).catch(() => {});
+      url: location.pathname + "?" + new URLSearchParams({ trip: state.tripLinkId || state.tripId }).toString() }, leaving).catch(() => {});
   }
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") pushFlush(true); });
   function openPushSheet(){
@@ -14777,7 +14790,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     } catch (e){
       genBanner("配地點中途出咗問題：" + e.message + "（已經做好嘅已經存低，入返個別日子撳「重算全日交通」補返）", { done:true });
     }
-    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripId }).toString());
+    history.replaceState(null, "", location.pathname + "?" + new URLSearchParams({ trip: state.tripLinkId || state.tripId }).toString());
     setTimeout(() => genBanner(null), 6000);
   }
 
@@ -14970,28 +14983,58 @@ ${stayBlock}${dayBlocks}${secBlocks}
     });
   }
 
+  async function resolveTripLink(linkId){
+    const key = "dumbofly_link_" + linkId;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/trips?link_id=eq.${encodeURIComponent(linkId)}&select=id&limit=1`, { headers: sbHeaders() });
+      if (res.ok){
+        const rows = await res.json();
+        return rows[0]?.id ? String(rows[0].id) : "";
+      }
+      if (res.status < 500) return "";
+    } catch (_){}
+    try {
+      const id = localStorage.getItem(key);
+      return /^\d+$/.test(id || "") ? id : "";
+    } catch (_) { return ""; }
+  }
+
   async function boot(){
     const params = new URLSearchParams(location.search);
-    const tripId = params.get("trip");
-    if (!tripId){
+    const linkId = params.get("trip") || "";
+    const isUuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(linkId);
+    if (!isUuid && !/^\d+$/.test(linkId)){
       location.replace("index.html");
       return;
     }
-    state.tripId = tripId;
     if (params.get("view") === "1"){ state.readonly = true; document.body.classList.add("readonly"); }
     // a share link's token: kept for this trip on this device, sent with every
     // database request, and taken out of the address bar
     if (window.TripAuth){
-      TripAuth.useTrip(tripId, params.get("s") || "");
+      TripAuth.useTrip(linkId, params.get("s") || "");
       if (params.get("s")){ params.delete("s"); history.replaceState(null, "", location.pathname + "?" + params.toString()); }
       await TripAuth.ready;
     }
+
+    const tripId = isUuid ? await resolveTripLink(linkId) : linkId;
+    if (!tripId){
+      $("#app").innerHTML = `<div class="sec"><div class="errbox">暫時睇唔到呢個行程。確認連結或者登入再試。
+        <div style="margin-top:10px;">${window.TripAuth && !TripAuth.loggedIn() ? '<button class="btn primary" id="loginhere">用 Google 登入</button>' : ""}
+        <button class="btn" id="retrylink">再試一次</button><a class="btn" href="index.html">返去主頁</a></div></div></div>`;
+      $("#loginhere")?.addEventListener("click", () => TripAuth.signIn());
+      $("#retrylink").addEventListener("click", () => boot());
+      return;
+    }
+    state.tripId = tripId;
+    state.tripLinkId = isUuid ? linkId : "";
+    if (isUuid && window.TripAuth) TripAuth.useTrip(tripId, TripAuth.shareToken(linkId));
 
     let row, bootErr = null;
     const CACHE_KEY = "dumbofly_snap_" + tripId;
     try {
       row = await fetchLatestVersion();
       if (!row) throw new Error("呢個行程重未有版本紀錄。");
+      if (isUuid) { try { localStorage.setItem("dumbofly_link_" + linkId, tripId); } catch (_){} }
       // a copy on the phone, for the subway with no signal
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), snapshot: row.snapshot })); } catch (_){}
     } catch (e){

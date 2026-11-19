@@ -627,7 +627,7 @@ html,body{overflow-x:clip;max-width:100%;}
     const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
     const r = JSON.parse(localStorage.getItem("dumbofly_resume") || "null");
     if (standalone && r && r.trip && Date.now() - r.t < 12 * 3600 * 1000 && !/[?&]home=1/.test(location.search)) {
-      location.replace("trip.html?trip=" + encodeURIComponent(r.trip));
+      location.replace("trip.html?trip=" + encodeURIComponent(r.linkId || r.trip));
       return;
     }
   } catch (_){}
@@ -1046,7 +1046,7 @@ html,body{overflow-x:clip;max-width:100%;}
       // load — it reads the requirements straight off tripBrief (already
       // seeded above and sent on every AI call automatically), no need to
       // pass them again via the URL.
-      location.href = "trip.html?" + new URLSearchParams({ trip: trip.id, new: "1" }).toString();
+      location.href = "trip.html?" + new URLSearchParams({ trip: trip.link_id || trip.id, new: "1" }).toString();
     } catch (e){
       errBox.innerHTML = `<div class="errbox">${esc(e.message || "出咗問題，試多次啦。")}</div>`;
       goBtn.disabled = false;
@@ -1263,7 +1263,7 @@ html,body{overflow-x:clip;max-width:100%;}
       body: JSON.stringify({ trip_id: trip.id, edited_by: "家人", source: "seed", summary: "導入咗行程", snapshot }),
     });
     if (!verRes.ok) throw new Error("儲存唔到導入嘅行程 " + verRes.status);
-    return trip.id;
+    return trip.link_id || trip.id;
   }
   $("#btn-import").addEventListener("click", openImportSheet);
   (function(){
@@ -1325,7 +1325,7 @@ html,body{overflow-x:clip;max-width:100%;}
     const st = passStatus(t);
     return `<article class="pass ${st.cls}${t.cover_url ? " hascover" : ""}" style="--tc:${color}">
       ${t.cover_url ? `<div class="pass-cover" style="background-image:url('${esc(t.cover_url)}')"></div>` : ""}
-      <a class="pass-link" href="trip.html?trip=${t.id}" aria-label="${esc(t.name)}"></a>
+      <a class="pass-link" href="trip.html?trip=${encodeURIComponent(t.link_id || t.id)}" aria-label="${esc(t.name)}"></a>
       <button class="tripdel" data-del="${t.id}" data-delname="${esc(dest)}" title="刪除呢個行程" aria-label="刪除呢個行程">${icon("trash")}</button>
       <div class="pass-main">
         <div class="pass-route">

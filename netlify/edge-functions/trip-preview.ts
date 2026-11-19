@@ -33,14 +33,26 @@ export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const tid = url.searchParams.get("trip") || "";
   const tok = url.searchParams.get("s") || "";
-  if (!PREVIEW_BOT.test(req.headers.get("user-agent") || "") || !/^\d+$/.test(tid) || !tok) return;
+  const isUuid = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(tid);
+  if (!PREVIEW_BOT.test(req.headers.get("user-agent") || "") || (!/^\d+$/.test(tid) && !isUuid) || !tok) return;
 
   let info: any = null;
   try {
+    let id = Number(tid);
+    if (isUuid){
+      const lookup = await fetch(`${SUPABASE_URL}/rest/v1/trips?link_id=eq.${encodeURIComponent(tid)}&select=id&limit=1`, {
+        headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "x-share-token": tok },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!lookup.ok) return;
+      const trips = await lookup.json();
+      id = trips[0]?.id;
+      if (!id) return;
+    }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/trip_preview`, {
       method: "POST",
       headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ tid: Number(tid), tok }),
+      body: JSON.stringify({ tid: id, tok }),
       signal: AbortSignal.timeout(3000),
     });
     if (r.ok) info = await r.json();
