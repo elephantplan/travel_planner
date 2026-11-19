@@ -48,7 +48,7 @@ const retryable = (m: string) =>
 // gives up before Supabase's own limit (~150 s, which answers 546 and nothing
 // the app can show), so the family gets a message instead of an empty page.
 let noThinkingLevel = false;     // a model that rejects thinkingLevel, once seen
-async function callGemini(parts: unknown[], search = false, opts: { fast?: boolean; ms?: number } = {}): Promise<string> {
+async function callGemini(parts: unknown[], search = false, opts: { fast?: boolean; ms?: number; transit?: boolean } = {}): Promise<string> {
   let last = "Gemini key 未設定";
   let firstErr = "";        // the configured model's own failure is the one worth reporting
   const models = [...new Set([model(), fallbackModel()])];
@@ -98,6 +98,7 @@ async function callGemini(parts: unknown[], search = false, opts: { fast?: boole
       throw new Error(firstErr || last);
     }
     const data = await res.json();
+    if (opts.transit) console.info(`transit estimate: model ${m}, key ${ki + 1}/${keys.length}, response ${data?.candidates?.[0]?.finishReason || "unknown"}`);
     if (data?.candidates?.[0]?.finishReason === "MAX_TOKENS") throw new Error("TRUNCATED");
     return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
   }
@@ -311,24 +312,28 @@ async function nearestStationFromGoogle(at: any, _key: string): Promise<{ name: 
   return null;
 }
 async function trainEstimate(o: string, d: string, car: any, city: string, lang: string) {
-  if (!car?.start || !car?.end) return null;
+  const unavailable = (reason: string) => { console.info(`transit estimate unavailable: ${reason}`); return null; };
+  if (!car?.start || !car?.end) return unavailable("missing endpoints");
   const [a, b] = await Promise.all([nearestStation(car.start), nearestStation(car.end)]);
-  if (!a || !b || a.name === b.name) return null;
+  if (!a || !b) return unavailable("missing station");
+  if (a.name === b.name) return unavailable("same station");
   const [wa, wb] = await Promise.all([gDirections(o, a.ref, "walking", lang), gDirections(b.ref, d, "walking", lang)]) as any[];
-  if (!wa.seconds || !wb.seconds || wa.seconds > 1500 || wb.seconds > 1500) return null;
+  if (!wa.seconds || !wb.seconds) return unavailable("missing station walk");
+  if (wa.seconds > 1500 || wb.seconds > 1500) return unavailable("station walk too long");
   let j: any = null;
   try {
     j = parseJson(await callGemini([{ text:
       `日本${city ? "「" + city + "」" : ""}：由「${a.name}」站搭電車／地鐵去「${b.name}」站，平時點搭？上網查清楚路線。\n` +
       `只回 JSON：{"legs":[{"line":"路線名（日文原名）","from":"上車站","to":"落車站","stops":站數}],"minutes":車上大約分鐘（唔計行路同等車）}\n` +
-      `如果兩個站之間冇合理嘅電車路線（例如要行好遠或者冇直接關係），回 {"none":true}。` }], true));
-  } catch { return null; }
+      `如果兩個站之間冇合理嘅電車路線（例如要行好遠或者冇直接關係），回 {"none":true}。` }], true, { transit: true }));
+  } catch (e) { return unavailable(/429|quota|RESOURCE_EXHAUSTED/i.test(String(e)) ? "model quota" : "model request failed"); }
   const legs = Array.isArray(j?.legs) ? j.legs.filter((x: any) => x && x.line && x.from && x.to).slice(0, 4) : [];
   const ride = Math.round(Number(j?.minutes) || 0);
-  if (j?.none || !legs.length || ride < 1) return null;
+  if (j?.none) return unavailable("model found no route");
+  if (!legs.length || ride < 1) return unavailable("invalid model route");
   const total = mins(wa.seconds) + ride + mins(wb.seconds) + 3 * legs.length;     // + waiting
   // a train trip that takes far longer than a taxi is a wrong guess
-  if (car.seconds && total > Math.max(25, mins(car.seconds) * 3)) return null;
+  if (car.seconds && total > Math.max(25, mins(car.seconds) * 3)) return unavailable("train estimate failed duration comparison");
   let chain = `行${mins(wa.seconds)}分 → ` + str(legs[0].from, 30);
   legs.forEach((x: any) => { chain += ` ─${str(x.line, 30)}${Number(x.stops) > 0 ? `・${Math.round(x.stops)}站` : ""}─ ${str(x.to, 30)}`; });
   chain += ` → 行${mins(wb.seconds)}分`;
