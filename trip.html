@@ -2322,7 +2322,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </div>
       <nav class="topbtns" aria-label="行程工具">
         <a class="topbtn" href="index.html" id="btn-home"><span class="topbtn-i"></span><span>主頁</span></a>
-        <button class="topbtn" id="btn-share" hidden><span class="topbtn-i"></span><span>分享</span></button>
+        <button class="topbtn" id="btn-share" aria-label="分享同管理成員" title="分享同管理成員" hidden><span class="topbtn-i"></span><span>分享</span></button>
         <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>匯出</span></button>
         <button class="topbtn" id="btn-undo" hidden aria-label="返上一步" title="返上一步"><span class="topbtn-i"></span><span>上一步</span></button>
         <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
@@ -6808,8 +6808,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const me = TripAuth.user();
     const sb = $("#btn-share");
     if (sb) sb.hidden = false;
-    const eb = $("#btn-export");
-    if (eb) eb.hidden = true;            // it's inside 分享 now
     if (me && !t.row.owner_id){
       hintBar("呢個係開 account 之前嘅行程，未屬於任何人。撥入你個 account 之後，就淨係你同你分享咗嘅人先睇到。", "撥入我個 account", async () => {
         try { await TripAuth.rpc("claim_trip", { tid: Number(state.tripId) }); flash("撥咗入你個 account"); syncTripOwner(); }
