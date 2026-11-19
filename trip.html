@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-7";
+  const BUILD = "2026-11-19-8";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4195,6 +4195,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (prefer && prefer !== "auto") seg.prefer = prefer;
     // stv 4: looked up by the build that tries the nearest real stations
     seg.stv = 4;
+    seg.checkedAt = new Date().toISOString();
     if (r.noTime) seg.noTime = true;
     if (r.estimated) seg.trainEst = true;
     if (r.long) seg.long = true;
@@ -4362,7 +4363,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // route, or — in Japan, where Google's API has no trains — a long walk that
   // was only the fallback. Each is looked up again once.
   function segSuspect(seg){
-    if (!seg || seg.prefer) return false;
+    if (!seg || seg.prefer || transitWasChecked(seg)) return false;
     if (seg.est) return true;
     if (!destIsJapan()) return false;
     // this build's own answer (a station-based estimate, or none found)
@@ -4374,10 +4375,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const m = String(seg.text || "").match(/(\d+)\s*分鐘/);
     return segMode(seg) === "walk" && !!m && +m[1] > 20;
   }
+  function transitWasChecked(seg){
+    // Older successful lookups recorded the routing version instead of a time.
+    return !!(seg?.checkedAt || Number(seg?.stv) >= 3);
+  }
   function transitIsMissing(seg){
-    if (!seg || seg.stale || seg.checking || seg.noTime) return true;
+    if (!seg || seg.stale || seg.checking) return true;
     const text = String(seg.text || segPlain(seg.html || "")).trim();
-    return !text || /睇班次|交通未計|未有路線/.test(text);
+    if (!text) return true;
+    if (transitWasChecked(seg)) return false;
+    return !!seg.noTime || /睇班次|交通未計|未有路線/.test(text);
   }
   function missingTransitFor(day, units = toUnits(day.items)){
     const first = firstStopUnit(units);
@@ -4410,7 +4417,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       for (const which of hotelLegs) if (await computeHotelLeg(day, which)) hotelUpdated = true;
       if (hotelUpdated) await saveNow("補返酒店出入嘅交通", true);
       const pending = missingTransitFor(day).count;
-      flash(pending ? `仲有 ${pending} 段未攞到完整交通，可以撳 Google 睇班次。` : "缺少嘅交通已補齊");
+      flash(pending ? `仲有 ${pending} 段未查到交通資料，可以撳 Google 睇路線。` : "缺少嘅交通已查完");
     } catch (_) {
       flash("暫時補唔到交通，請再試一次");
     } finally {
