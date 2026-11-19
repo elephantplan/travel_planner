@@ -3721,10 +3721,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return Number.isFinite(lat) && Number.isFinite(lng) && m.lat !== "" && m.lat != null && (
       (lat >= 30 && lat <= 45.8 && lng >= 129.5 && lng <= 146) || (lat >= 24 && lat < 30 && lng >= 122.9 && lng <= 131.5));
   }
-  function copyBtnHtml(s){
-    const q = plain(s && s.kr);
+  function copyBtnHtml(s, fallbackName = ""){
+    const localName = plain(s && s.kr);
+    const q = localName || plain(fallbackName);
     if (!q) return "";
-    return `<button class="maplink" data-copyname="${esc(q)}">${icon("copy")}複製${scriptLabel(q)}名</button>`;
+    return `<button class="maplink" data-copyname="${esc(q)}">${icon("copy")}複製${localName ? scriptLabel(q) + "名" : "名稱"}</button>`;
   }
   document.addEventListener("click", async e => {
     const b = e.target.closest && e.target.closest("[data-copyname]");
@@ -5099,7 +5100,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
             ${st.desc ? `<div class="d">${esc(st.desc)}</div>` : ""}
             ${st.hoursChip ? `<div class="chiprow"><span class="meta-chip hours">${esc(st.hoursChip)}</span></div>` : ""}
             ${st.warning ? `<div class="d">${esc(st.warning)}</div>` : ""}
-            ${(links.length || st.kr) ? `<div class="chiprow">${links.join("")}${copyBtnHtml({ kr: st.kr })}${taxiBtnHtml(st.kr, st.name, st.placeId)}</div>` : ""}
+            ${(links.length || st.kr || plain(st.name)) ? `<div class="chiprow">${links.join("")}${copyBtnHtml(subj, st.name)}${taxiBtnHtml(st.kr, st.name, st.placeId)}</div>` : ""}
             ${wantNaver ? `<p class="hint">Naver 搵唔到英文拼音地址。撳上面枝筆填返韓文地址，就會多一粒 Naver 掣。</p>` : ""}
             <div class="stayacts">
               <button class="btn" data-editsec="acc">${icon("pencil")}改日子／資料</button>
