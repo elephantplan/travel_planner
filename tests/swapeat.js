@@ -105,9 +105,9 @@ async function run(b, japan){
     await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
     ok('結果卡都冇 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('#sw-out').innerText()));
     await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(400);
-    ok('揀咗即刻有反應（唔等介紹）', /換咗做「夜鮨」/.test(await p.locator('.sheet h3').innerText()) && /其他 1 間都留做後備/.test(await p.locator('#sw-keeprest').innerText()));
+    ok('揀咗即刻有反應（唔等介紹）', /換咗做「夜鮨」/.test(await p.locator('.sheet h3').innerText()) && await p.locator('[data-keep-suggestion]').count() === 1);
     await p.screenshot({ path: '/tmp/claude-0/swdone.png' });
-    await p.locator('#sw-keeprest').click(); await p.waitForTimeout(1800);
+    await p.locator('[data-keep-suggestion]').click(); await p.locator('.sw-done [data-close]').click(); await p.waitForTimeout(1800);
     const st = last().days[1].items.find(i => i.placeId === 'pB');
     const ids = st ? (st.alts || []).map(a => a.placeId) : [];
     ok('一撳：原本嗰間同其他都做咗後備', ids.includes('pOLD') && ids.includes('pC') && !ids.includes('pB'), ids);

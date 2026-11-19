@@ -1,6 +1,5 @@
-// 加地點 → AI 建議: several places can be picked in one go (the sheet stays
-// open, each goes in after the last); and a photo's badge says how many
-// people gave the rating.
+// 加地點 → AI 建議: pick a primary stop and keep alternatives as backups.
+// A photo badge also shows the number of reviews.
 //
 //   node tests/aimulti.js        (needs a static server on :8799)
 const { chromium } = require('playwright');
@@ -59,19 +58,15 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('#ins-nearres [data-pick]').nth(0).click();
   await p.waitForTimeout(300);
   ok('揀咗一間個 sheet 唔會關', await p.locator('#ins-nearres').isVisible());
-  ok('揀咗嗰間變剔', await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
+  ok('其他選擇可以留做後備', await p.locator('#ins-nearres [data-keep-suggestion]').count() === 1);
   await p.waitForTimeout(2500);
-  ok('排好之後見到中文名', /壽司甲/.test(await p.locator('#ins-nearres').innerText()));
   ok('列表唔會為每間攞 Google 評論（淨係排次序）', manyBodies.length && manyBodies.every(b => Array.isArray(b.places) && !b.placeIds), manyBodies);
-  ok('揀咗嗰間仲係剔住', await p.locator('#ins-nearres .nr-add.added').count() === 1 && await p.locator('#ins-nearres [data-pick]').nth(0).isDisabled());
-  await p.locator('#ins-nearres [data-pick]').nth(1).click();
-  await p.waitForTimeout(300);
-  ok('「完成」寫住加咗幾多個', /已加 2 個/.test(await p.locator('#ins-done').textContent()), await p.locator('#ins-done').textContent());
+  await p.locator('#ins-nearres [data-keep-suggestion]').click();
   await p.waitForTimeout(3000);
-  const d2 = last().days[1].items.filter(i => i.kind === 'stop').map(i => i.title);
-  ok('兩間都加咗，跟揀嘅次序', d2[1] === '壽司甲' && d2[2] === '壽司乙', d2);
-  await p.locator('#ins-done').click();
-  await p.waitForTimeout(400);
+  const stops = last().days[1].items.filter(i => i.kind === 'stop');
+  const main = stops.find(i => i.placeId === 'sA');
+  ok('首選加入行程，其餘留做後備', main && main.title === '壽司甲' && main.alts?.some(a => a.placeId === 'sB') && !stops.some(i => i.placeId === 'sB'));
+  await p.locator('#ins-nearres [data-close]').click();
   ok('撳完成先關', await p.locator('#ins-nearres').count() === 0);
 
   // rating badge with the number of reviews
