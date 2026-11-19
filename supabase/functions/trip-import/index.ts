@@ -343,9 +343,10 @@ async function legBetween(body: any) {
   if (!o || !d) return { ok: false, message: "呢兩個地點冇足夠資料計交通。" };
   const ck = `leg:${str(body?.prefer, 10) || "auto"}:${str(body?.lang, 8)}:${o}|${d}`;
   const hit = await cacheGet(ck, 30);
-  if (hit) return hit;
+  if (hit && !hit.noTime) return hit;
   const out = await legFresh(body, o, d);
-  if (out && (out as any).ok) await cachePut(ck, out);
+  // A schedule-only answer is a fallback. Retry it instead of keeping it for a month.
+  if (out && (out as any).ok && !(out as any).noTime) await cachePut(ck, out);
   return out;
 }
 async function legFresh(body: any, o: string, d: string) {
