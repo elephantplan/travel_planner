@@ -133,7 +133,7 @@ self.addEventListener("fetch", (e) => {
   if (req.mode === "navigate") return e.respondWith(navigate(req));
   if (isStoredPhoto(url)) return e.respondWith(cacheFirst(req, PHOTOS));
   if (isFontOrLib(url)) return e.respondWith(staleWhileRevalidate(req, ASSETS));
-  if (url.origin === self.location.origin) return e.respondWith(staleWhileRevalidate(req, ASSETS));
+  if (url.origin === self.location.origin && req.cache !== "reload") return e.respondWith(staleWhileRevalidate(req, ASSETS));
 });
 
 // ---------- push ----------

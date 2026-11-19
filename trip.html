@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-18-1";
+  const BUILD = "2026-11-19-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -14893,6 +14893,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return true;
     } catch (_){ return false; }
   }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkAppUpdate();
+  });
   function wireUpdateBar(){
     const bar = $("#updatebar");
     if (!bar) return;
