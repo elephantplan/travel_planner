@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-5";
+  const BUILD = "2026-11-19-6";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -8239,6 +8239,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <div class="chips1" role="group" aria-label="菜式">${restaurantCuisineChoices(destIsJapan()).map(([name]) =>
             `<button type="button" class="pfchip" data-ins-cuisine="${esc(name)}" aria-pressed="false">${esc(name)}</button>`).join("")}</div>
         </div>
+        <label class="picker-label" for="ins-area">想喺邊區搵？</label>
+        <input class="input" id="ins-area" placeholder="例如：新宿／澀谷（留空就搵順路）" autocomplete="off" maxlength="80">
         <label class="picker-label" for="ins-want">有冇咩特別想要？</label>
         <input class="input" id="ins-want" placeholder="例如：壽司、拉麵、有兒童椅" autocomplete="off" maxlength="40">
         <div class="prefchips">
@@ -8327,6 +8329,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       let kind = (opts && opts.kind) || "eat";
       const prefs = { budget: 0, near: false, kids: false, book: false };
       const want = sheet.querySelector("#ins-want");
+      const areaInput = sheet.querySelector("#ins-area");
       const PH = { eat: "例如：壽司、拉麵、有兒童椅", see: "例如：影相靚、室內、免費", shop: "例如：藥妝、手信、波鞋" };
       const syncKind = () => {
         sheet.querySelectorAll("[data-sugkind]").forEach(x => { const on = x.dataset.sugkind === kind; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
@@ -8368,13 +8371,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         if (go.disabled) return;
         const out = sheet.querySelector("#ins-nearres");
         const kind = sheet.querySelector("[data-sugkind].on").dataset.sugkind;
-        const w = (want && want.value.trim()) || "";
+        const { areas, want: w } = insertSearchAreas(areaInput.value, want.value);
         const selected = kind === "eat" ? [...cuisines] : [];
-        const summary = [...selected, w].filter(Boolean).join("、");
+        const summary = [...areas, ...selected, w].filter(Boolean).join("、");
         const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
         const hyakuOnly = kind === "eat" && destIsJapan() && prefs.hyaku;
         delete p2.hyaku;
         want.blur();
+        areaInput.blur();
         form.hidden = true;
         actions.hidden = true;
         go.disabled = true;
@@ -8386,10 +8390,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const runId = (run.n = (run.n || 0) + 1);
         let list;
         try {
-          list = hyakuOnly
-            ? await withTimeout(hyakuNear(anchors, selected.length ? selected.map(n => n.split("／")[0]) : w ? [w] : [], day,
+          const searchAt = points => hyakuOnly
+            ? withTimeout(hyakuNear(points, selected.length ? selected.map(n => n.split("／")[0]) : w ? [w] : [], day,
                 { near: p2.near, budget: p2.budget, skip: [...onDay] }), 130000, null)
-            : await searchInsertSuggestions(anchors, kind, [...onDay], selected, w, p2);
+            : searchInsertSuggestions(points, kind, [...onDay], selected, w, p2);
+          list = areas.length ? await searchInsertAreas(areas, searchAt) : await searchAt(anchors);
           if (!list) list = Object.assign([], { failed: "timeout" });
         } catch (_) {
           list = Object.assign([], { failed: "error" });
@@ -8405,9 +8410,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           out.innerHTML = list.length
             ? `<div class="nearlist">${list.map((p, k) => { const id = `${kind}-${k}`; found[id] = p; return suggestRowHtml(p, id, kind); }).join("")}</div>
                <p class="hint">${hyakuOnly ? "百名店資料由 AI 搜尋，位置以 Google 地圖配對。價錢、親子設施同排隊時間可以向餐廳確認。" : "由 Google 上面評分高嘅地方揀，介紹係 AI 睇 Google 評論整理，去之前自己再睇下。"}</p>`
+            : list.areaNote ? `<p class="hint" role="status">${esc(list.areaNote)}</p>`
             : list.failed ? `<p class="hint" role="status">${list.failed === "timeout" ? "搜尋等得太耐，請再試一次。" : "搜尋暫時失敗，請再試一次。"}</p>`
             : hyakuOnly ? `<p class="hint">附近搵唔到符合條件嘅百名店。試吓改菜式或者放寬距離。</p>`
             : `<p class="hint">附近冇搵到啱${w ? `「${esc(w)}」` : ""}嘅${SUG_KIND[kind]}。試吓改少啲要求、揀另一類，或者去「自己搵」。</p>`;
+          if (list.length && list.areaNote) out.insertAdjacentHTML("afterbegin", `<p class="hint">${esc(list.areaNote)}</p>`);
           out.querySelectorAll("[data-pick]").forEach(button => button.addEventListener("click", () => {
             if (pickedPlace) return;
             const p = found[button.dataset.pick];
@@ -8473,8 +8480,56 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const tab = sheet.querySelector('[data-instab="ai"]'); if (tab) tab.click();
         run();
       }
-      if (want) want.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); run(); } });
+      [want, areaInput].filter(Boolean).forEach(input => input.addEventListener("keydown", e => {
+        if (e.key === "Enter"){ e.preventDefault(); run(); }
+      }));
     }, { tall: true });
+  }
+  function insertSearchAreas(areaText, preference){
+    const canonical = name => {
+      const key = name.trim().toLowerCase().replace(/^shub[ui]ya$/, "shibuya");
+      return DISTRICTS.find(words => words.includes(key))?.[0] || name.trim();
+    };
+    if (areaText.trim()){
+      const areas = areaText.split(/[/／、,，或]+/).map(canonical).filter(Boolean);
+      return { areas: [...new Set(areas)].slice(0, 3), want: preference.trim() };
+    }
+    const areas = [];
+    const want = preference.split(/[/／、,，]+/).map(part => {
+      const text = part.trim().replace(/^(?:喺|去)\s*/, "").replace(/\s*(?:都得|附近|嗰邊)$/, "");
+      const key = text.toLowerCase().replace(/^shub[ui]ya$/, "shibuya");
+      const area = DISTRICTS.find(words => words.includes(key));
+      if (area){ areas.push(area[0]); return ""; }
+      return part.trim();
+    }).filter(Boolean).join("、");
+    return { areas: [...new Set(areas)].slice(0, 3), want };
+  }
+  async function searchInsertAreas(areas, searchAt){
+    const city = plain(state.snapshot.meta?.destinationLocal);
+    const groups = await Promise.all(areas.map(async area => {
+      const aliases = DISTRICTS.find(words => words[0] === area);
+      const query = [...new Set([aliases?.[1] || area, city].filter(Boolean))].join(" ");
+      const found = await withTimeout(callAi({ action: "place-search", query }), 12000, null).catch(() => null);
+      const point = found?.places?.find(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+      if (!point) return { area, unresolved: true, places: [] };
+      const places = await searchAt([{ lat: point.lat, lng: point.lng, name: area }]);
+      return { area, places: places || [], failed: !places || places.failed };
+    }));
+    const results = [];
+    const seen = new Set();
+    for (let i = 0; i < Math.max(...groups.map(group => group.places.length)) && results.length < 8; i++){
+      for (const group of groups){
+        const p = group.places[i];
+        const key = p && (p.placeId || p.name);
+        if (!key || seen.has(key) || results.length >= 8) continue;
+        seen.add(key);
+        results.push({ ...p, nearName: group.area, onTheWay: false, briefed: true });
+      }
+    }
+    const status = groups.map(({ area, places, unresolved, failed }) =>
+      places.length ? area : unresolved ? area + "（搵唔到地區位置）" : failed ? area + "（搜尋未完成）" : area + "（冇結果）");
+    results.areaNote = "搜尋地區：" + status.join("、");
+    return results;
   }
   async function searchInsertSuggestions(anchors, kind, skip, selected, want, prefs){
     const queries = selected.length ? selected.map(name => [cuisineWord(name), want].filter(Boolean).join(" ").slice(0, 40)) : [want];
