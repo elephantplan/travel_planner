@@ -2368,7 +2368,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-19-8";
+  const BUILD = "2026-11-20-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12436,10 +12436,38 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function wireApplyButtons(out, changes, onAll, opts = {}){
     // one change → one awaited apply, so "apply all" can reuse it
     const chosen = {};              // option group → the stop that was picked
+    const lastAdded = {};
+    let pending = Promise.resolve();
+    const enqueue = button => {
+      pending = pending.then(() => button.disabled ? false : applyOne(button)).catch(() => flash("暫時加唔到地點，請再試一次"));
+    };
     async function applyOne(ab){
       let c = changes[+ab.dataset.apply];
       const g = ab.dataset.opt;
-      if (g && chosen[g]) return addAsBackup(ab, c, chosen[g]);
+      if (g && chosen[g]){
+        const siblings = [...ab.parentNode.querySelectorAll("[data-apply]")];
+        const label = ab.innerHTML;
+        siblings.forEach(button => button.disabled = true);
+        try {
+          if (ab.dataset.mode === "extra"){
+            const add = { ...c, op: "add", stop: { ...c.stop, time: "", timeAuto: false },
+              insertAfter: lastAdded[g] || chosen[g] };
+            ab.textContent = "加緊…";
+            const why = await applyAiChange(add);
+            if (why) throw new Error(why);
+            lastAdded[g] = add._stop;
+            ab.textContent = "已加落行程";
+          } else await addAsBackup(ab, c, chosen[g]);
+          ab.closest(".ai-opt").classList.add("picked");
+          siblings.forEach(button => { if (button !== ab) button.hidden = true; });
+          return true;
+        } catch (e){
+          ab.innerHTML = label;
+          siblings.forEach(button => button.disabled = false);
+          flash(e.message || "暫時加唔到地點");
+          return false;
+        }
+      }
       // "加落去": the suggested place goes in beside the old one, which stays
       if (ab.dataset.mode === "add") c = Object.assign({}, c, { op:"add" });
       const label = ab.textContent;
@@ -12456,6 +12484,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
         out.querySelectorAll(`[data-opt="${CSS.escape(g)}"]`).forEach(b => {
           if (b === ab) return;
           b.classList.remove("primary"); b.innerHTML = `${icon("plus")}加做「${esc(plain(c.stop.title))}」嘅後備`;
+          const add = document.createElement("button");
+          add.type = "button"; add.className = "btn primary";
+          add.dataset.apply = b.dataset.apply; add.dataset.opt = g; add.dataset.mode = "extra";
+          add.innerHTML = `${icon("plus")}加落行程`;
+          add.addEventListener("click", () => enqueue(add));
+          b.before(add);
         });
         return true;
       }
@@ -12478,7 +12512,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       ab.textContent = "已做後備";
       return true;
     }
-    out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => applyOne(ab)));
+    out.querySelectorAll("[data-apply]").forEach(ab => ab.addEventListener("click", () => enqueue(ab)));
     const all = out.querySelector("[data-applyall]");
     if (all && opts.fast) all.addEventListener("click", () => applyAllFast(out, changes, all, opts.onDone));
     else if (all) all.addEventListener("click", async () => {
@@ -13639,7 +13673,9 @@ ${stayBlock}${dayBlocks}${secBlocks}
       if (plain(stop.time)) stop.timeAuto = true;
       delete stop.transitBefore;          // describes a leg we are about to recompute
       // drop it in by time rather than at the end, so the day still reads in order
-      const at = slotForTime(units, stop.time);
+      const after = c.insertAfter ? units.findIndex(unit => unit.stop === c.insertAfter) : -1;
+      if (c.insertAfter && after < 0) return "原本揀嗰個地點已搬走，請開返 AI 建議再揀。";
+      const at = after >= 0 ? after + 1 : slotForTime(units, stop.time);
       units.splice(at, 0, { seg: null, stop });
       c._stop = stop;
       day.items = fromUnits(units);
