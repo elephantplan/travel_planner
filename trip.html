@@ -4018,15 +4018,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const yr = EVENT_RE.test(plain(s.title) + " " + plain(s.kr)) ? (String(m.dateStart || "").slice(0, 4) || String(new Date().getFullYear())) : "";
     return `https://www.google.com/search?q=${encodeURIComponent(q + destHint() + (yr ? " " + yr : ""))}`;
   }
-  // The Maps "search action" URL (Google's documented format) lands on the
-  // place card with its star rating and review count visible immediately.
-  function googleReviewsUrl(s){
-    const q = searchTerm(s);
-    if (!q) return null;
-    const base = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q + destHint())}`;
-    return s.placeId ? `${base}&query_place_id=${encodeURIComponent(s.placeId)}` : base;
-  }
-
   // how to name a stop to Google: its place id if we have one, else coordinates,
   // else just its name
   function stopRef(s){
@@ -7563,23 +7554,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     await saveNow(what === "note" ? "加咗一個 note" : "加咗一個新地點");
   }
 
-  // Adding a place used to drop a blank card with an empty name field. Now
-  // the sheet itself searches Google, and shows well-rated places to eat or
-  // see within a short walk of the stops either side — real places with
-  // real ratings, one tap to add.
-  const nearbyCache = new Map();
-  async function nearbyFor(pt, kind, skip){
-    const k = `${kind}:${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;
-    if (nearbyCache.has(k)) return nearbyCache.get(k);
-    try {
-      const res = await fetch(SUPABASE_URL + "/functions/v1/trip-import", { method: "POST", headers: sbHeaders(),
-        body: JSON.stringify({ mode: "nearby", lat: pt.lat, lng: pt.lng, kind, skip, lang: "zh-TW" }) });
-      const r = await res.json();
-      const list = r && r.ok !== false && Array.isArray(r.places) ? r.places : [];
-      nearbyCache.set(k, list);
-      return list;
-    } catch (_){ return []; }
-  }
+  // Google's place types, in words, for the small label on a result
   const PLACE_KIND = { cafe:"咖啡店", bakery:"麵包甜品", bar:"酒吧", meal_takeaway:"外賣小食", restaurant:"餐廳",
     museum:"博物館", park:"公園", art_gallery:"美術館", shopping_mall:"商場", department_store:"百貨公司", zoo:"動物園",
     aquarium:"水族館", amusement_park:"遊樂園", place_of_worship:"寺廟神社", church:"教堂", hindu_temple:"寺廟", tourist_attraction:"景點" };
@@ -7964,9 +7939,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       };
       const asAlt = p => suggestionBackup(p, "eat");
       // Backups are chosen one by one: 「留做後備」 on a card keeps it under
-      // this stop at once (and tapping again takes it back out), the tray
-      // at the foot counts them and offers 「全部留低」. Closing the sheet
-      // keeps exactly what was marked, nothing more.
+      // this stop at once (and tapping again takes it back out); the bar
+      // above the results counts them and offers 「全部留低」. Closing the
+      // sheet keeps exactly what was marked, nothing more.
       const keyOf = p => p.placeId || p.name_zh || p.name || p.title;
       const altKey = a => a.placeId || a.title;
       const isKept = p => (st.alts || []).some(a => altKey(a) === keyOf(p));
