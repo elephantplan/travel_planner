@@ -46,7 +46,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-swapeat][data-shut]').click();
   await p.waitForTimeout(400);
   ok('未撳「幫我搵幾間」唔會自己搵', asked.length === 0 && /燒肉/.test(await p.locator('#sw-out').innerText()), asked.length);
-  ok('同類已經揀咗', await p.locator('#sw-kind .pfchip.on').count() === 1);
+  ok('同類已經揀咗', await p.locator('[data-po-cuisine].on').count() === 1);
   ok('講明點解要換', /星期六休息/.test(await p.locator('.sw-shut').innerText().catch(() => '')));
   await p.locator('#sw-go').click();
   await p.waitForTimeout(300);

@@ -61,10 +61,10 @@ async function run(b, japan){
     ok('餐廳卡講明係咩菜', /🥩 燒肉/.test(await p.locator('.meta-chip.cuisine').first().innerText().catch(() => '')));
     ok('餐廳卡有「換一間」', await p.locator('[data-swapeat]').count() === 1);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
-    ok('問想食咩，有常見選擇', await p.locator('#sw-kind .pfchip').count() >= 10 && /晚餐・約 19:00/.test(await p.locator('.sheet').innerText()));
-    ok('韓國行程冇百名店選項', await p.locator('#sw-hyaku').count() === 0);
-    await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
-    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    ok('問想食咩，有常見選擇', await p.locator('[data-po-cuisine]').count() >= 10 && /晚餐・約 19:00/.test(await p.locator('.sheet').innerText()));
+    ok('韓國行程冇百名店選項', await p.locator('[data-po-flag="hyaku"]').count() === 0);
+    await p.locator('[data-po-cuisine]', { hasText: '壽司' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click();
     ok('撳咗搵：表格收埋，喺頂度顯示食物動畫', await p.locator('#sw-form').isHidden() && await p.locator('#sw-out .ldrfood').count() === 1);
     await p.waitForTimeout(1500);
@@ -100,8 +100,8 @@ async function run(b, japan){
   { const { p, errs, last } = await run(b, false);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
     ok('換一間唔用 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('.sheet').innerText()));
-    await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
-    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '壽司' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
     ok('結果卡都冇 emoji', !/[\u{1F300}-\u{1FAFF}]/u.test(await p.locator('#sw-out').innerText()));
     await p.locator('.swcard', { hasText: '夜鮨' }).locator('[data-swpick]').click(); await p.waitForTimeout(400);
@@ -119,8 +119,8 @@ async function run(b, japan){
   for (const all of [false, true]){
     const { p, errs, last } = await run(b, false);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
-    await p.locator('#sw-kind .pfchip', { hasText: '壽司' }).click();
-    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '壽司' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1800);
     if (all){
       await p.locator('#sw-keepall').click(); await p.waitForTimeout(300);
@@ -139,27 +139,27 @@ async function run(b, japan){
   // Japan: 百名店 only
   { const { p, errs, wants: wantsJ } = await run(b, true);
     await p.locator('[data-swapeat]').click(); await p.waitForTimeout(300);
-    ok('英文寫「Hokkaido」都認得係日本，有「淨係百名店」', await p.locator('#sw-hyaku').count() === 1);
-    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
+    ok('英文寫「Hokkaido」都認得係日本，有「淨係百名店」', await p.locator('[data-po-flag="hyaku"]').count() === 1);
+    await p.locator('[data-po-cuisine]', { hasText: '拉麵' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const t0 = await p.locator('#sw-out').innerText();
     ok('日本用日文搵（ラーメン）；搵唔到就擴大用文字搜尋', wantsJ.includes('ラーメン') && wantsJ.includes('near:ラーメン') && /札幌ラーメン横丁/.test(t0), [wantsJ, t0.slice(0, 120)]);
     await p.locator('#sw-edit').click();
-    await p.locator('#sw-kind .pfchip', { hasText: '拉麵' }).click();
-    await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '拉麵' }).click();
+    await p.locator('[data-po-cuisine]', { hasText: '咖啡' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
     const tE = await p.locator('#sw-out').innerText();
     ok('揀嗰類冇：照列附近嗰陣有開嘅其他餐廳，講明唔係嗰類', /以下係附近嗰陣有開嘅其他餐廳/.test(tE) && /揀呢間/.test(tE), tE.slice(0, 200));
-    ok('有「點解？」睇到每次搵咗幾多', await p.locator('.sw-diag').count() === 1 && /カフェ スイーツ：Google 0 間/.test(await p.locator('.sw-diag').textContent()), await p.locator('.sw-diag').textContent());
+    ok('有「點解？」睇到搵咗幾多、跳過幾多', await p.locator('.sw-diag').count() === 1 && /咖啡：搵到 \d+ 間/.test(await p.locator('.sw-diag').textContent()) && /嗰陣冇開而跳過/.test(await p.locator('.sw-diag').textContent()), await p.locator('.sw-diag').textContent());
     await p.locator('#sw-edit').click();
-    await p.locator('#sw-kind .pfchip', { hasText: '咖啡' }).click();
-    await p.locator('#sw-hyaku').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
+    await p.locator('[data-po-cuisine]', { hasText: '咖啡' }).click();
+    await p.locator('[data-po-flag="hyaku"]').click(); await p.locator('#sw-go').click(); await p.waitForTimeout(2000);
     const txt = await p.locator('#sw-out').innerText();
     ok('百名店有標明', /百名店 2025 ラーメン/.test(txt) && /名店H/.test(txt), txt.slice(0, 200));
     // Google refusing: the AI's own picks, marked, and still pickable
     await p.locator('#sw-edit').click();
-    await p.locator('#sw-hyaku').click();
-    await p.locator('#sw-kind .pfchip', { hasText: '蕎麥' }).click();
+    await p.locator('[data-po-flag="hyaku"]').click();
+    await p.locator('[data-po-cuisine]', { hasText: '蕎麥' }).click();
     await p.locator('#sw-go').click(); await p.waitForTimeout(1500);
     const tU = await p.locator('#sw-out').innerText();
     ok('Google 唔肯答：照出 AI 推介，標明未經 Google 核實', /二八蕎麥/.test(tU) && /未經 Google 核實/.test(tU) && /揀呢間/.test(tU), tU.slice(0, 200));

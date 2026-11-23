@@ -48,7 +48,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-insert="2"]').first().click();
   await p.waitForTimeout(300);
   await p.locator('[data-instab="ai"]').click();
-  await p.fill('#ins-want', '壽司');
+  await p.fill('#po-want', '壽司');
   await p.locator('#ins-go').click();
   await p.waitForTimeout(1500);
   const kept = notes.find(n => n.kind === 'addsug');
@@ -64,13 +64,13 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('#ins-past').click();
   await p.waitForTimeout(800);
   ok('只讀 AI 建議嘅紀錄', noteGets.some(u => /kind=eq\.addsug/.test(u)));
-  const box = p.locator('#ins-nearres');
-  ok('見到之前嘅建議同介紹', await box.locator('.pastsug').count() === 1 && /壽司甲/.test(await box.innerText()) && /好新鮮/.test(await box.innerText()), await box.innerText());
-  ok('講明係邊日、搵咩', /Day 2/.test(await box.innerText()) && /「壽司」/.test(await box.innerText()));
-  await box.locator('[data-pick]').first().click();
+  // the earlier picks open in a sheet of their own, one card per place
+  const box = p.locator('[data-ai-picks-list]');
+  ok('見到之前嘅建議同介紹', /壽司甲/.test(await box.innerText()) && /好新鮮/.test(await box.innerText()), await box.innerText());
+  await box.locator('[data-ai-pick]').first().click();
   await p.waitForTimeout(1500);
   const d2 = last().days[1].items.filter(i => i.kind === 'stop').map(i => i.title);
-  ok('撳 + 就加咗入呢個位', d2[1] === '壽司甲', d2);
+  ok('撳「加落行程」就加咗入呢個位', d2[1] === '壽司甲', d2);
 
   // the 問過啲咩 page doesn't list these
   await p.evaluate(() => { const b = document.querySelector('#go-notes, [data-view="notes"]'); });

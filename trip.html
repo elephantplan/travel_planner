@@ -1273,11 +1273,10 @@ img{max-width:100%;}
 .kindtile .i{width:22px;height:22px;}
 .kindtile b{font-size:14px;color:var(--ink);}
 .kindtile.on{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 12%,var(--surface));color:var(--gold);}
-#ins-want{margin:4px 0 10px;}
+.popts{margin-bottom:14px;}
+.popts .input{margin:4px 0 10px;}
+.popts [data-po-flag] .i{width:14px;height:14px;margin-right:4px;vertical-align:-2px;}
 .prefchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
-.pc-g{display:inline-flex;gap:0;border-radius:999px;overflow:hidden;border:1px solid var(--rule);}
-.pc-g .pfchip{border:0;border-radius:0;border-right:1px solid var(--rule);}
-.pc-g .pfchip:last-child{border-right:0;}
 #ins-go{margin-bottom:8px;}
 .sc-fit{display:flex;gap:5px;align-items:flex-start;margin:4px 0 0;font-size:12.5px;font-weight:700;color:var(--gold);line-height:1.5;}
 .sc-fit .i{width:13px;height:13px;flex:0 0 auto;margin-top:3px;}
@@ -2363,7 +2362,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-23-1";
+  const BUILD = "2026-11-23-2";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -3070,7 +3069,13 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       try { sessionStorage.setItem(UNDO_KEY(), JSON.stringify(undo.stack.slice(undo.stack.length - n))); return; } catch (_){}
     }
   }
-  try { const k = JSON.parse(sessionStorage.getItem(UNDO_KEY()) || "[]"); if (Array.isArray(k)) undo.stack.push(...k.slice(-30)); } catch (_){}
+  // read back once boot() knows which trip this is (a link names it by a
+  // random id that has to be looked up first, so it is not known at load)
+  function undoLoad(){
+    undo.stack.length = 0;
+    try { const k = JSON.parse(sessionStorage.getItem(UNDO_KEY()) || "[]"); if (Array.isArray(k)) undo.stack.push(...k.slice(-30)); } catch (_){}
+    undoButton();
+  }
   function undoPush(json, summary){
     undo.stack.push({ json, summary: plain(summary || "").slice(0, 60) });
     if (undo.stack.length > 30) undo.stack.shift();
@@ -7820,6 +7825,98 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // 換一間: what kind of food (a few at once), how much, how near, and in
   // Japan whether only Tabelog 百名店 will do; then a handful nearby that are
   // open at that time. One is picked to replace it, or kept as a backup.
+  // ==================================================================
+  // WHAT TO LOOK FOR — one set of options, worded the same and meaning the
+  // same, wherever the app asks for places to eat (加地點 → AI 建議 and
+  // 換一間). Sights and shops use the same form with the restaurant-only
+  // parts (cuisine, price, queue, 百名店) hidden.
+  // ==================================================================
+  const PRICE_CHOICES = ["唔理", "平價", "中價", "貴啲都得"];
+  const WANT_HINT = { eat: "例如：湯咖哩、有包廂、素食", see: "例如：影相靚、室內、免費", shop: "例如：藥妝、手信、波鞋" };
+  function placeOptionsHtml({ area = false } = {}){
+    const jp = destIsJapan();
+    const chip = (attrs, label) => `<button type="button" class="pfchip" ${attrs} aria-pressed="false">${label}</button>`;
+    return `<div class="popts">
+      <div data-eatonly>
+        <p class="picker-label">想食咩？（可以揀幾個）</p>
+        <div class="chips1" role="group" aria-label="菜式">${restaurantCuisineChoices(jp).map(([n]) => chip(`data-po-cuisine="${esc(n)}"`, esc(n))).join("")}</div>
+      </div>
+      ${area ? `<label class="picker-label" for="po-area">想喺邊區搵？</label>
+      <input class="input" id="po-area" placeholder="例如：新宿／澀谷（留空就搵順路）" autocomplete="off" maxlength="80">` : ""}
+      <label class="picker-label" for="po-want">有冇咩特別想要？</label>
+      <input class="input" id="po-want" autocomplete="off" maxlength="40">
+      <div data-eatonly>
+        <p class="picker-label">價錢</p>
+        <div class="chips1" role="radiogroup" aria-label="價錢">${PRICE_CHOICES.map((x, k) =>
+          `<button type="button" class="pfchip${k ? "" : " on"}" role="radio" aria-checked="${!k}" data-po-price="${k}">${x}</button>`).join("")}</div>
+      </div>
+      <p class="picker-label">其他</p>
+      <div class="chips1">
+        ${chip('data-po-flag="near"', `${icon("walk")}行 5 分鐘內`)}
+        ${chip('data-po-flag="kids"', "啱小朋友")}
+        ${chip('data-po-flag="book" data-eatonly', "唔使排太耐")}
+        ${jp ? chip('data-po-flag="hyaku" data-eatonly', `${icon("star")}淨係食べログ百名店`) : ""}
+      </div>
+    </div>`;
+  }
+  // wires the form inside `root`; read() gives the choices, already
+  // trimmed to what applies to the kind of place being looked for
+  function wirePlaceOptions(root, { kind = "eat", cuisines = [] } = {}){
+    const box = root.querySelector(".popts");
+    const picked = new Set(), flags = {};
+    let price = 0;
+    const press = (b, on) => { b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); };
+    box.querySelectorAll("[data-po-cuisine]").forEach(b => {
+      const n = b.dataset.poCuisine;
+      if (cuisines.includes(n)){ picked.add(n); press(b, true); }
+      b.addEventListener("click", () => { if (picked.has(n)) picked.delete(n); else picked.add(n); press(b, picked.has(n)); });
+    });
+    box.querySelectorAll("[data-po-price]").forEach(b => b.addEventListener("click", () => {
+      price = +b.dataset.poPrice;
+      box.querySelectorAll("[data-po-price]").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", String(x === b)); });
+    }));
+    box.querySelectorAll("[data-po-flag]").forEach(b => b.addEventListener("click", () => {
+      const k = b.dataset.poFlag; flags[k] = !flags[k]; press(b, flags[k]);
+    }));
+    const want = box.querySelector("#po-want"), area = box.querySelector("#po-area");
+    const setKind = k => {
+      kind = k;
+      box.querySelectorAll("[data-eatonly]").forEach(x => { x.hidden = k !== "eat"; });
+      want.placeholder = WANT_HINT[k] || "";
+    };
+    setKind(kind);
+    return {
+      setKind,
+      inputs: [want, area].filter(Boolean),
+      read(){
+        const eat = kind === "eat";
+        return { kind, cuisines: eat ? [...picked] : [], area: area ? area.value.trim() : "", want: want.value.trim(),
+          budget: eat ? price : 0, near: !!flags.near, kids: !!flags.kids, book: eat && !!flags.book, hyaku: eat && destIsJapan() && !!flags.hyaku };
+      },
+    };
+  }
+  // One restaurant search, whichever sheet asked: Tabelog 百名店 only, or
+  // Google's list for each cuisine ticked, ranked against what they want;
+  // and when that finds nothing, Google's own text search around the spot.
+  async function searchRestaurants(points, o, { skip = [], day } = {}){
+    if (o.hyaku){
+      const wants = o.cuisines.length ? o.cuisines.map(n => n.split("／")[0]) : o.want ? [o.want] : [];
+      const l = await withTimeout(hyakuNear(points, wants, day, { near: o.near, budget: o.budget, skip }), 130000, null);
+      return l || Object.assign([], { failed: "timeout" });
+    }
+    const list = await searchInsertSuggestions(points, "eat", skip, o.cuisines, o.want,
+      { budget: o.budget, near: o.near, kids: o.kids, book: o.book });
+    if (list.length) return list;
+    const q = [o.cuisines.length ? cuisineWord(o.cuisines[0]) : "", o.want].filter(Boolean).join(" ") || (destIsJapan() ? "レストラン" : "restaurant");
+    const r = (await nearSearchAt(q, points[0]).catch(() => null)) || [];
+    const near = r.filter(x => x.placeId && !skip.includes(x.placeId) && Number(x.rating) >= 3.5 && (!o.near || x.meters <= 450) && x.meters <= 2500)
+      .map(x => ({ ...x, walk: Math.max(1, Math.round(x.meters * 1.3 / 80)), ...(o.cuisines[0] ? { cuisine: o.cuisines[0] } : {}) }));
+    if (!near.length) near.failed = list.failed || r.failed || "";
+    return near;
+  }
+  // what was asked for, in words, for loaders and 「搵唔到」 lines
+  const optionWords = o => [...o.cuisines.map(n => n.split("／")[0]), o.want].filter(Boolean);
+
   function openSwapEat(day, st, opts = {}){
     const units = toUnits(day.items), i = units.findIndex(u => u.stop === st);
     const pt = x => x && Number.isFinite(Number(x.lat)) && x.lat !== "" && x.lat != null ? { lat: Number(x.lat), lng: Number(x.lng), name: cleanPlaceName(plain(x.title)) } : null;
@@ -7829,37 +7926,19 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const anchors = [pt(st) || pt(prev), pt(st) ? null : pt(next)].filter(Boolean);
     const cur = cuisineOf(st), t = clockMin(st.time);
     const meal = t == null ? "" : t < 10.5 * 60 ? "早餐" : t < 15 * 60 ? "午餐" : t < 17.5 * 60 ? "下午茶" : t < 21.5 * 60 ? "晚餐" : "宵夜";
-    const jp = destIsJapan();
-    const list = restaurantCuisineChoices(jp);
     openSheet(`
       <h3>換「${esc(cleanPlaceName(plain(st.title)))}」</h3>
       ${stopShutThen(st, day) ? `<p class="sw-shut">${icon("warn")}${stopShutThen(st, day) === "day" ? `呢間星期${esc(weekdayCharOfDate(day.date))}休息` : `你約 ${esc(fmtMin(t))} 到嗰陣佢已經收或者就收`}，幫你搵緊同類嗰陣有開嘅。</p>` : ""}
       <p class="sec-sub">${cur ? `而家係${esc(cur.name)}。` : ""}${meal ? `${esc(meal)}・約 ${esc(fmtMin(t))}，淨係搵嗰陣有開嘅。` : ""}${anchors.length ? "" : "（呢個站未有位置，會搵唔到附近）"}</p>
       <div id="sw-form">
-      <p class="picker-label">想食咩？（可以揀幾個）</p>
-      <div class="chips1" id="sw-kind">${list.map(([n]) => `<button type="button" class="pfchip" data-v="${esc(n)}">${esc(n)}</button>`).join("")}</div>
-      <input class="input" id="sw-own" style="margin-top:8px;" placeholder="或者自己打，例如：湯咖哩、有包廂、素食">
-      <p class="picker-label">價錢</p>
-      <div class="chips1" id="sw-price">${["唔理", "平價", "中價", "貴啲都得"].map((x, k) => `<button type="button" class="pfchip${k ? "" : " on"}" data-v="${k}">${x}</button>`).join("")}</div>
-      <div class="chips1" style="margin-top:10px;">
-        <button type="button" class="pfchip" id="sw-near">${icon("walk")}行 5 分鐘內</button>
-        ${jp ? `<button type="button" class="pfchip" id="sw-hyaku">${icon("star")}淨係食べログ百名店</button>` : ""}
-      </div>
+      ${placeOptionsHtml()}
       <button class="btn primary wide" id="sw-go" style="margin-top:14px;">${icon("sparkle")}幫我搵幾間</button>
       </div>
       <button class="btn wide" id="sw-edit" hidden style="margin-top:4px;">${icon("pencil")}改條件再搵</button>
       <div id="sw-out" style="margin-top:12px;"></div>
     `, sheet => {
-      const kinds = new Set();
-      sheet.querySelectorAll("#sw-kind .pfchip").forEach(b => b.addEventListener("click", () => {
-        const v = b.dataset.v; if (kinds.has(v)) kinds.delete(v); else kinds.add(v); b.classList.toggle("on", kinds.has(v)); }));
-      let price = 0;
-      sheet.querySelectorAll("#sw-price .pfchip").forEach(b => b.addEventListener("click", () => {
-        price = +b.dataset.v; sheet.querySelectorAll("#sw-price .pfchip").forEach(x => x.classList.toggle("on", x === b)); }));
-      const tog = id => { const b = sheet.querySelector(id); if (b) b.addEventListener("click", () => b.classList.toggle("on")); };
-      tog("#sw-near"); tog("#sw-hyaku");
       // the same kind as now, ticked to start with when it is being replaced for being shut
-      if (opts.auto && cur){ const b = [...sheet.querySelectorAll("#sw-kind .pfchip")].find(x => x.dataset.v === cur.name); if (b){ kinds.add(cur.name); b.classList.add("on"); } }
+      const options = wirePlaceOptions(sheet, { cuisines: opts.auto && cur ? [cur.name] : [] });
       const out = sheet.querySelector("#sw-out"), go = sheet.querySelector("#sw-go");
       const form = sheet.querySelector("#sw-form"), edit = sheet.querySelector("#sw-edit");
       edit.addEventListener("click", () => { form.hidden = false; edit.hidden = true; form.scrollIntoView({ block: "start", behavior: "smooth" }); });
@@ -7944,46 +8023,23 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       };
       go.addEventListener("click", async () => {
         if (!anchors.length){ out.innerHTML = `<p class="hint">呢個站未有位置，搵唔到附近。可以撳筆改個名，等佢搵到 Google 地點先。</p>`; return; }
-        const own = sheet.querySelector("#sw-own").value.trim();
-        const wants = [...kinds].map(k => k.split("／")[0]).concat(own ? [own] : []);
-        const words = [...kinds].map(cuisineWord).concat(own ? [own] : []);
-        const near = !!(sheet.querySelector("#sw-near") || {}).classList?.contains("on");
-        const hyakuOnly = !!(sheet.querySelector("#sw-hyaku") || {}).classList?.contains("on");
+        const o = options.read(), wants = optionWords(o);
+        options.inputs.forEach(x => x.blur());
         go.disabled = true;
         form.hidden = true; edit.hidden = true;
-        out.innerHTML = foodLoaderHtml(hyakuOnly ? "搵緊附近嘅百名店（要半分鐘左右）…" : `搵緊附近${wants.length ? "嘅" + wants.join("、") : "好評"}餐廳…`);
+        out.innerHTML = foodLoaderHtml(o.hyaku ? "搵緊附近嘅百名店（要半分鐘左右）…" : `搵緊附近${wants.length ? "嘅" + wants.join("、") : "好評"}餐廳…`);
         sheetToTop(out);
         const skip = toUnits(day.items).map(u => u.stop && u.stop.placeId).filter(Boolean).concat((st.alts || []).map(a => a.placeId).filter(Boolean));
-        let cands = [];
-        const failed = [], steps = [];
-        if (hyakuOnly) cands = await hyakuNear(anchors, wants, day, { near, budget: price, skip });
-        else {
-          const lists = await Promise.all((words.length ? words : [""]).map(async w => {
-            let l = await suggestFor(anchors, "eat", skip, w, { budget: price, near }, 45000);
-            const step = { w: w || "（任何）", kw: l.length, why: l.failed || "" };
-            if (l.failed) failed.push(l.failed);
-            // nothing by keyword: Google's text search around the same spot
-            if (!l.length){
-              const r = (await nearSearchAt(w || "レストラン", anchors[0]).catch(() => null)) || [];
-              step.text = r.length;
-              if (r.failed){ failed.push(r.failed); step.why = [step.why, r.failed].filter(Boolean).join("；"); }
-              l = r.filter(x => x.placeId && Number(x.rating) >= 3.5 && (!near || x.meters <= 450) && x.meters <= 2500)
-                .map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) }));
-              step.kept = l.length;
-            }
-            steps.push(step);
-            return l;
-          }));
-          const seen = new Set();
-          lists.forEach((l, k) => l.forEach(p => { const key = p.placeId || "n:" + p.name; if (!seen.has(key)){ seen.add(key); cands.push(Object.assign({}, p, wants[k] ? { cuisine: wants[k] } : {})); } }));
+        const failed = [];
+        const candidates = async q => {
+          const l = await searchRestaurants(anchors, q, { skip, day });
+          if (l.failed) failed.push(l.failed);
           // famous ones first, then Google's rating and how many rated it
           const sc = p => (p.famous ? 1000 : 0) + (p.rating || 0) * Math.log((p.ratingCount || 0) + 1);
-          cands.sort((a, b) => sc(b) - sc(a));
-        }
-        cands = cands.filter(p => (p.placeId || p.unverified) && !skip.includes(p.placeId)).slice(0, 10);
-        // open when we'd be there
-        // Opening hours are a dear lookup: checked three at a time, best
-        // first, only until enough are open — not for every place found.
+          return l.filter(p => (p.placeId || p.unverified) && !skip.includes(p.placeId)).sort((a, b) => sc(b) - sc(a)).slice(0, 10);
+        };
+        // open when we'd be there. Opening hours are a dear lookup: checked
+        // three at a time, best first, only until enough are open.
         const checkHours = async p => {
           const probe = { placeId: p.placeId, eatMeta: [], time: st.time };
           await enrichHours(probe);
@@ -8000,26 +8056,25 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           }
           return ok;
         };
-        let shut = 0;
+        let cands = await candidates(o);
+        let searched = cands.length;
         found = await firstOpen(cands, 5);
-        shut = cands.filter(p => p.shut).length;
+        let shut = cands.filter(p => p.shut).length;
         // none of those kinds open then: any restaurant nearby that is, said so plainly
         let other = false;
-        if (!found.length && !hyakuOnly){
+        if (!found.length && !o.hyaku && wants.length){
           out.innerHTML = foodLoaderHtml("你揀嗰幾類冇，搵緊附近其他嗰陣有開嘅…");
-          let any = await suggestFor(anchors, "eat", skip, "", { budget: price, near }, 45000);
-          steps.push({ w: "（任何餐廳）", kw: any.length, why: any.failed || "" });
-          if (any.failed) failed.push(any.failed);
-          if (!any.length){ const r = (await nearSearchAt(destIsJapan() ? "レストラン" : "restaurant", anchors[0]).catch(() => null)) || []; any = r.filter(x => x.placeId && x.meters <= 2500).map(x => Object.assign({}, x, { walk: Math.max(1, Math.round(x.meters * 1.3 / 80)) })); steps[steps.length - 1].text = any.length; }
-          const extra = any.filter(p => (p.placeId || p.unverified) && !skip.includes(p.placeId)).slice(0, 10);
-          found = await firstOpen(extra, 5);
-          shut += extra.filter(p => p.shut).length;
+          cands = await candidates({ ...o, cuisines: [], want: "" });
+          searched += cands.length;
+          found = await firstOpen(cands, 5);
+          shut += cands.filter(p => p.shut).length;
           other = found.length > 0;
         }
+        const price = o.budget, near = o.near;
         go.disabled = false; go.innerHTML = `${icon("refresh")}再搵過`;
         edit.hidden = false;
-        // what each search got, small, so a screenshot says where it went wrong
-        const diag = `<details class="sw-diag"><summary>點解？睇吓搵咗乜</summary>${steps.map(x => `<div>${esc(x.w)}：Google ${x.kw} 間${x.text != null ? `；擴大搵 ${x.text} 間${x.kept != null ? `（${x.kept} 間啱）` : ""}` : ""}${x.why ? `；${esc(String(x.why).slice(0, 60))}` : ""}</div>`).join("")}<div>嗰陣冇開而跳過：${shut} 間・時間 ${t != null ? esc(fmtMin(t)) : "未定"}</div></details>`;
+        // what the search got, small, so a screenshot says where it went wrong
+        const diag = `<details class="sw-diag"><summary>點解？睇吓搵咗乜</summary><div>${esc(wants.join("、") || "任何餐廳")}：搵到 ${searched} 間${failed.length ? `；${esc(String(failed[0]).slice(0, 60))}` : ""}</div><div>嗰陣冇開而跳過：${shut} 間・時間 ${t != null ? esc(fmtMin(t)) : "未定"}</div></details>`;
         if (!found.length){
           out.innerHTML = (failed.length && !shut
             ? `<p class="sw-shut">${icon("warn")}${failed.includes("timeout") ? "Google 今次太耐冇回覆" : "搵嘅時候出咗問題（" + esc(failed[0]).slice(0, 80) + "）"}，唔係附近冇嘢。撳「再搵過」再試。</p>`
@@ -8306,24 +8361,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           <button type="button" class="kindtile" data-sugkind="shop" role="radio">${icon("bag")}<b>購物</b></button>
           <button type="button" class="kindtile on" data-sugkind="eat" role="radio">${icon("eat")}<b>餐廳</b></button>
         </div>
-        <div data-only="eat">
-          <p class="picker-label">想食咩？（可以揀幾個）</p>
-          <div class="chips1" role="group" aria-label="菜式">${restaurantCuisineChoices(destIsJapan()).map(([name]) =>
-            `<button type="button" class="pfchip" data-ins-cuisine="${esc(name)}" aria-pressed="false">${esc(name)}</button>`).join("")}</div>
-        </div>
-        <label class="picker-label" for="ins-area">想喺邊區搵？</label>
-        <input class="input" id="ins-area" placeholder="例如：新宿／澀谷（留空就搵順路）" autocomplete="off" maxlength="80">
-        <label class="picker-label" for="ins-want">有冇咩特別想要？</label>
-        <input class="input" id="ins-want" placeholder="例如：壽司、拉麵、有兒童椅" autocomplete="off" maxlength="40">
-        <div class="prefchips">
-          <span class="pc-g" data-pf="budget">
-            <button type="button" class="pfchip" data-v="1">平啲</button><button type="button" class="pfchip" data-v="2">中價</button><button type="button" class="pfchip" data-v="3">貴啲都得</button>
-          </span>
-          <button type="button" class="pfchip" data-pft="near">行 5 分鐘內</button>
-          <button type="button" class="pfchip" data-pft="kids">啱小朋友</button>
-          <button type="button" class="pfchip" data-pft="book" data-only="eat">唔使排太耐</button>
-          ${destIsJapan() ? `<button type="button" class="pfchip" data-pft="hyaku" data-only="eat" aria-pressed="false">${icon("star")}淨係食べログ百名店</button>` : ""}
-        </div>
+        ${placeOptionsHtml({ area: true })}
         <button type="button" class="btn primary wide" id="ins-go">${icon("sparkle")}幫我揀</button>
         <button type="button" class="btn wide ins-past" id="ins-past">${icon("clock")}睇返之前 AI 建議過嘅</button>
         </div>
@@ -8399,40 +8437,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       }));
       // AI: kind, what they fancy, a few options
       let kind = (opts && opts.kind) || "eat";
-      const prefs = { budget: 0, near: false, kids: false, book: false };
-      const want = sheet.querySelector("#ins-want");
-      const areaInput = sheet.querySelector("#ins-area");
-      const PH = { eat: "例如：壽司、拉麵、有兒童椅", see: "例如：影相靚、室內、免費", shop: "例如：藥妝、手信、波鞋" };
+      const options = anchors.length ? wirePlaceOptions(sheet, { kind }) : null;
       const syncKind = () => {
         sheet.querySelectorAll("[data-sugkind]").forEach(x => { const on = x.dataset.sugkind === kind; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
-        if (want) want.placeholder = PH[kind];
-        sheet.querySelectorAll("[data-only]").forEach(x => { x.hidden = x.dataset.only !== kind; });
-        sheet.querySelectorAll('[data-pf="budget"]').forEach(x => { x.hidden = kind !== "eat"; });
+        if (options) options.setKind(kind);
       };
       syncKind();
       sheet.querySelectorAll("[data-sugkind]").forEach(btn => btn.addEventListener("click", () => { kind = btn.dataset.sugkind; syncKind(); }));
-      sheet.querySelectorAll('[data-pf="budget"] .pfchip').forEach(c => c.addEventListener("click", () => {
-        prefs.budget = prefs.budget === +c.dataset.v ? 0 : +c.dataset.v;
-        sheet.querySelectorAll('[data-pf="budget"] .pfchip').forEach(x => x.classList.toggle("on", +x.dataset.v === prefs.budget));
-      }));
-      sheet.querySelectorAll("[data-pft]").forEach(c => c.addEventListener("click", () => {
-        const key = c.dataset.pft;
-        prefs[key] = !prefs[key];
-        c.classList.toggle("on", prefs[key]);
-        c.setAttribute("aria-pressed", String(prefs[key]));
-      }));
       const go = sheet.querySelector("#ins-go");
       const form = sheet.querySelector("#ins-ai-form");
       const actions = sheet.querySelector("#ins-ai-actions");
       const retry = sheet.querySelector("#ins-retry");
-      const cuisines = new Set();
-      sheet.querySelectorAll("[data-ins-cuisine]").forEach(button => button.addEventListener("click", () => {
-        const name = button.dataset.insCuisine;
-        if (cuisines.has(name)) cuisines.delete(name);
-        else cuisines.add(name);
-        button.classList.toggle("on", cuisines.has(name));
-        button.setAttribute("aria-pressed", String(cuisines.has(name)));
-      }));
       sheet.querySelector("#ins-edit")?.addEventListener("click", () => {
         form.hidden = false;
         actions.hidden = true;
@@ -8442,15 +8457,11 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       const run = async () => {
         if (go.disabled) return;
         const out = sheet.querySelector("#ins-nearres");
-        const kind = sheet.querySelector("[data-sugkind].on").dataset.sugkind;
-        const { areas, want: w } = insertSearchAreas(areaInput.value, want.value);
-        const selected = kind === "eat" ? [...cuisines] : [];
-        const summary = [...areas, ...selected, w].filter(Boolean).join("、");
-        const p2 = Object.assign({}, prefs, { book: kind === "eat" && prefs.book, budget: kind === "eat" ? prefs.budget : 0 });
-        const hyakuOnly = kind === "eat" && destIsJapan() && prefs.hyaku;
-        delete p2.hyaku;
-        want.blur();
-        areaInput.blur();
+        const o = options.read();
+        const { areas, want: w } = insertSearchAreas(o.area, o.want);
+        const summary = [...areas, ...optionWords({ ...o, want: w })].join("、");
+        const hyakuOnly = o.hyaku;
+        options.inputs.forEach(x => x.blur());
         form.hidden = true;
         actions.hidden = true;
         go.disabled = true;
@@ -8462,10 +8473,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const runId = (run.n = (run.n || 0) + 1);
         let list;
         try {
-          const searchAt = points => hyakuOnly
-            ? withTimeout(hyakuNear(points, selected.length ? selected.map(n => n.split("／")[0]) : w ? [w] : [], day,
-                { near: p2.near, budget: p2.budget, skip: [...onDay] }), 130000, null)
-            : searchInsertSuggestions(points, kind, [...onDay], selected, w, p2);
+          const searchAt = points => kind === "eat"
+            ? searchRestaurants(points, { ...o, want: w }, { skip: [...onDay], day })
+            : searchInsertSuggestions(points, kind, [...onDay], [], w, { near: o.near, kids: o.kids });
           list = areas.length ? await searchInsertAreas(areas, searchAt) : await searchAt(anchors);
           if (!list) list = Object.assign([], { failed: "timeout" });
         } catch (_) {
@@ -8552,7 +8562,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const tab = sheet.querySelector('[data-instab="ai"]'); if (tab) tab.click();
         run();
       }
-      [want, areaInput].filter(Boolean).forEach(input => input.addEventListener("keydown", e => {
+      (options ? options.inputs : []).forEach(input => input.addEventListener("keydown", e => {
         if (e.key === "Enter"){ e.preventDefault(); run(); }
       }));
     }, { tall: true });
@@ -15343,6 +15353,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     state.tripId = tripId;
+    undoLoad();
     state.tripLinkId = isUuid ? linkId : "";
     if (isUuid && window.TripAuth) TripAuth.useTrip(tripId, TripAuth.shareToken(linkId));
 

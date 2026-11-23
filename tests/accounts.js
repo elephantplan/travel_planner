@@ -51,8 +51,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(2000);
   ok('分享連結嘅 token 跟住資料庫請求', reqs.some(x => /itinerary_versions/.test(x.url) && x.h['x-share-token'] === 'TOK1'), reqs.map(x => x.h['x-share-token']));
   ok('網址收返 token', !/s=TOK1/.test(p.url()), p.url());
-  ok('有「分享」掣', await p.locator('#btn-share').isVisible());
-  await p.locator('#btn-share').click(); await p.waitForTimeout(300);
+  ok('有「分享／匯出」掣', await p.locator('#btn-export').isVisible());
+  await p.locator('#btn-export').click(); await p.waitForTimeout(600);
   ok('分享連結有 token，擁有人可以重設', /trip=1&s=TOK1/.test(await p.inputValue('#sh-link')) && await p.locator('#sh-reset').count() === 1);
   ok('冇 JS 錯誤', errs.length === 0, errs);
   await b.close();

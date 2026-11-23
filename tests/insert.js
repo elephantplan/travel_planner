@@ -69,11 +69,11 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(200);
   ok('AI 頁唔再有搵地點名嘅格', await sh.locator('#ins-q:visible').count() === 0);
   ok('揀景點／購物／餐廳', (await sh.locator('[data-sugkind]:visible').allInnerTexts()).map(x => x.trim()).join() === '景點,購物,餐廳');
-  ok('問有冇咩特別想要', await sh.locator('#ins-want:visible').count() === 1);
+  ok('問有冇咩特別想要', await sh.locator('#po-want:visible').count() === 1);
   await sh.locator('[data-sugkind="eat"]').click();
-  await p.fill('#ins-want', '參雞湯');
-  await sh.locator('[data-pf="budget"] [data-v="2"]').click();
-  await sh.locator('[data-pft="kids"]').click();
+  await p.fill('#po-want', '參雞湯');
+  await sh.locator('[data-po-price="2"]').click();
+  await sh.locator('[data-po-flag="kids"]').click();
   await sh.locator('#ins-go').click();
   await p.waitForTimeout(800);
   const q0 = near[0] || {};
@@ -85,12 +85,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('講明順路同行幾耐', /順路/.test(st2) && /離「景福宮」行 6 分鐘/.test(st2));
   ok('有介紹同必食', /人氣參雞湯老店/.test(st2) && /必食/.test(st2) && /原隻人參雞湯/.test(st2));
   ok('可以撳去 Google 睇相同評論', await sh.locator('.sugcard a[href*="google.com/maps"]').count() >= 1);
-  await sh.locator('.sugcard', { hasText: '土俗村參雞湯' }).first().locator('.nr-add').click();
-  await p.waitForTimeout(200);
-  await p.waitForTimeout(1500);
-  // AI picks keep the sheet open for more; 完成 closes it
-  await p.locator('#ins-done').click();
-  await p.waitForTimeout(300);
+  await sh.locator('.sugcard', { hasText: '土俗村參雞湯' }).first().locator('[data-pick]').click();
+  await p.waitForTimeout(1700);
   const last = () => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
   const added = (last() || { days: [{}, { items: [] }] }).days[1].items.find(i => i.placeId === 'pN1');
   ok('一撳就加咗，唔使再填', added && added.title === '土俗村參雞湯' && added.type === 'eat' && Number.isFinite(added.lat), added);
@@ -98,6 +94,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   ok('冇開空白編輯格', await p.locator('[data-editor]').count() === 0);
   await p.waitForTimeout(1500);
   ok('前後交通自動計', transit.some(x => x.to && x.to.placeId === 'pN1'), transit.map(x => x.to));
+  // after a pick the sheet stays to offer the rest as backups
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
 
   await p.locator('[data-insert]').last().click();
   await p.waitForTimeout(500);

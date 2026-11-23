@@ -53,8 +53,9 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.waitForTimeout(2000);
   let d2 = last().days[1].items.filter(i => i.title && /^餐廳/.test(i.title));
   ok('揀咗嗰間加咗落去', d2.length === 1 && d2[0].title === '餐廳乙', d2.map(x => x.title));
-  ok('其他變成「加做後備」', /後備/.test(await p.locator('.ai-opt [data-apply]').nth(0).innerText()));
-  await p.locator('.ai-opt [data-apply]').nth(0).click();
+  const other = p.locator('.ai-opt').nth(0);
+  ok('其他有「加落行程」同「加做後備」', await other.locator('[data-apply]', { hasText: '加落行程' }).count() === 1 && await other.locator('[data-apply]', { hasText: '後備' }).count() === 1);
+  await other.locator('[data-apply]', { hasText: '後備' }).click();
   await p.waitForTimeout(2000);
   d2 = last().days[1].items.filter(i => i.title && /^餐廳/.test(i.title));
   ok('第二個做咗後備', d2.length === 1 && (d2[0].alts || []).some(a => a.title === '餐廳甲'), d2.map(x => [x.title, (x.alts || []).map(a => a.title)]));
