@@ -1,7 +1,8 @@
 // The 「Check 實時」 buttons. They used to fetch the real answer, print it, and
 // leave the section itself stale while the timestamp under it read 「啱啱」.
-// These tests are about the write-back: that it is offered, that it is never
-// automatic, and that it lands in the right field.
+// These tests are about the write-back: that the answer lands in the block
+// it belongs to as soon as it arrives, that it can be undone, and that an
+// answer with nothing in it leaves the block alone.
 //
 //   node tests/livecheck.js        (needs a static server on :8799)
 const { chromium } = require('playwright');
@@ -64,56 +65,57 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     return null;
   };
 
-  console.log('\nA. 天氣：撳 check 之後有得一撳套用');
+  console.log('\nA. 天氣：check 完即刻寫返入張表，有得還原');
   {
     const { p, errs, saved } = await boot();
     const before = await p.locator('[data-hskey="weather"] .wtable').innerText();
     ok('原本張表係 fixture 嗰啲數', /10-23/.test(before) && /19°/.test(before), before.slice(0, 40));
 
     await p.locator('[data-livecheck="weather"]').click();
-    await p.waitForTimeout(900);
-    const out = p.locator('#livecheck-weather');
-    ok('出咗實時答案', /日間 15°C/.test(await out.innerText()));
-    ok('先睇到會寫入咩', /10\/23/.test(await out.locator('.applyprev').innerText()));
-    ok('預覽用返實際預報嘅數', /16°/.test(await out.locator('.applyprev').innerText()),
-       await out.locator('.applyprev').innerText());
-    ok('有粒套用掣', await out.locator('[data-apply]').count() === 1);
-
-    // nothing may change until it is actually pressed
-    ok('未撳之前張表一個字都冇郁', (await p.locator('[data-hskey="weather"] .wtable').innerText()) === before);
-
-    await out.locator('[data-apply]').click();
-    await p.waitForTimeout(900);
+    await p.waitForTimeout(1200);
     const after = await p.locator('[data-hskey="weather"] .wtable').innerText();
-    ok('撳完張表變咗', after !== before);
-    ok('入面係實時預報嘅數字', /16°/.test(after) && /降雨機率 40%/.test(after), after.slice(0, 80));
-    ok('舊數字冇殘留', !/19°/.test(after), after.slice(0, 80));
+    ok('唔使撳多粒掣，張表已經變咗實時預報', /16°/.test(after) && /降雨機率 40%/.test(after), after.slice(0, 80));
+    ok('同一日唔會出兩行（10-23 同 10/23 係同一日）', !/10-23/.test(after) && (after.match(/10\/23/g) || []).length === 1, after.slice(0, 120));
+    ok('上面講明係實時預報', /實時預報/.test(await p.locator('[data-hskey="weather"] .sec-sub').innerText()));
+    const out = p.locator('#livecheck-weather');
+    ok('答案仲喺下面', /日間 15°C/.test(await out.innerText()) && /帶件薄羽絨/.test(await out.innerText()));
+    ok('講明更新咗咩，有還原掣', /已經更新咗上面嘅天氣表（3 日）/.test(await out.innerText()) && await out.locator('[data-liveundo]').count() === 1);
     ok('真係存返落 server', /16°/.test(JSON.stringify(lastSnap(saved) || {})));
-    ok('存低嗰版寫明做過咩',
-       /天氣表/.test(JSON.stringify((saved[saved.length - 1] || {}).summary || '')),
-       (saved[saved.length - 1] || {}).summary);
+    ok('存低嗰版寫明做過咩', saved.some(x => /天氣表/.test(String(x.summary || ''))), saved.map(x => x.summary));
+
+    await out.locator('[data-liveundo]').click();
+    await p.waitForTimeout(900);
+    const back = await p.locator('[data-hskey="weather"] .wtable').innerText();
+    ok('撳還原：返返原本嗰張', back === before, back.slice(0, 80));
+    ok('還原都有存', saved.some(x => /還原咗天氣表/.test(String(x.summary || ''))));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }
 
-  console.log('\nB. 季節提示：一樣有得套用');
+  console.log('\nB. 季節提示：一樣即刻寫返入去');
   {
     const { p, errs, saved } = await boot();
     const before = await p.locator('.sec-sub').filter({ hasText: '銀杏' }).first().innerText();
     ok('原本有段舊嘅季節提示', /轉黃/.test(before), before);
     await p.locator('[data-livecheck="foliage"]').click();
-    await p.waitForTimeout(900);
-    const out = p.locator('#livecheck-foliage');
-    ok('出咗答案', /10 月 30 日/.test(await out.innerText()));
-    ok('有粒套用掣', await out.locator('[data-apply]').count() === 1);
-    ok('季節提示冇文字預覽（答案本身就係）', await out.locator('.applyprev').count() === 0);
-
-    await out.locator('[data-apply]').click();
-    await p.waitForTimeout(900);
+    await p.waitForTimeout(1200);
     const page = await p.locator('#app').innerText();
     ok('段文字換咗做新嗰份', /銀杏絕頂 10 月 30 日/.test(page));
     ok('舊嗰句冇咗', !/下旬銀杏開始轉黃/.test(page), page.slice(0, 60));
+    ok('講明更新咗季節提示', /已經更新咗上面嘅季節提示/.test(await p.locator('#livecheck-foliage').innerText()));
     ok('真係存返落 server', /銀杏絕頂 10 月 30 日/.test(JSON.stringify(lastSnap(saved) || {})));
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+  }
+
+  console.log('\nD. AI 助手入面問天氣，都會更新張表');
+  {
+    const { p, errs } = await boot();
+    await p.locator('#btn-ai').click(); await p.waitForTimeout(300);
+    await p.locator('.sheet [data-ai="weather"]').click(); await p.waitForTimeout(1200);
+    ok('AI 助手講明更新咗天氣表', /已經更新咗上面嘅天氣表/.test(await p.locator('#ai-out').innerText()));
+    await p.locator('.sheet-close').click(); await p.waitForTimeout(300);
+    ok('閂咗睇返，張表已經係實時預報', /16°/.test(await p.locator('[data-hskey="weather"] .wtable').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }
@@ -142,7 +144,7 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
 
     await p.locator('[data-livecheck="weather"]').click();
     await p.waitForTimeout(900);
-    ok('冇預報就唔會出套用掣', await p.locator('#livecheck-weather [data-apply]').count() === 0);
+    ok('冇預報就唔會話更新咗', await p.locator('#livecheck-weather .liveapplied').count() === 0);
     ok('張表更加唔會俾人清空', (await p.locator('[data-hskey="weather"] .wtable').innerText()) === before);
     ok('但照樣話返你知發生咩事', /攞唔到實時預報/.test(await p.locator('#livecheck-weather').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);

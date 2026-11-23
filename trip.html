@@ -1936,6 +1936,10 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .askrow{display:flex;gap:8px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
+.liveapplied{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 8px 8px 12px;border-radius:var(--r-md);background:var(--ok-bg);color:var(--ok);font-size:13.5px;}
+.liveapplied .i{width:16px;height:16px;flex:none;}
+.liveapplied span{flex:1;min-width:0;}
+.liveapplied .btn{min-height:32px;padding:0 12px;font-size:12.5px;}
 .liveres{border:1.5px solid var(--accent);border-left-width:4px;border-radius:var(--r-lg);padding:12px 14px;
   background:color-mix(in srgb, var(--accent) 10%, var(--surface));}
 .liveres-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;}
@@ -2033,15 +2037,6 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .usec-by{margin-top:10px;font-size:11px;color:var(--ink-faint);}
 .lastupd{margin-top:8px;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-faint);letter-spacing:.01em;}
 .lastupd:empty{display:none;}
-/* what the live answer would write into the section, shown before the button
-   that writes it — the table is numbers, so it needs to be seen as numbers */
-.applyprev{
-  font-family:var(--f-mono);font-size:12px;line-height:2;
-  color:var(--ink-soft);background:var(--surface-2);
-  border-radius:var(--r-sm);padding:10px 12px;overflow-x:auto;
-}
-.applybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}
-.applybar .hint{margin:0;flex:1 1 180px;min-width:0;}
 .usec.lifted{z-index:30;box-shadow:var(--shadow-2);border-color:var(--ink-faint);}
 .usec.shifting{transition:transform .18s cubic-bezier(.2,.7,.3,1);}
 
@@ -2368,7 +2363,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-20-1";
+  const BUILD = "2026-11-23-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -5169,6 +5164,14 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return body;
   }
 
+  // where the weather table's numbers came from, and how fresh they are
+  function weatherSourceLine(d){
+    const rows = d.weatherRows || [], live = rows.filter(r => r.live).length;
+    const at = d.weatherAt ? `（${whenLabel(d.weatherAt)}更新）` : "";
+    if (live && live === rows.length) return `實時預報${at}。臨出發再撳一次，攞最新嗰份。`;
+    if (live) return `頭 ${live} 日係實時預報${at}，之後幾日預報未出，仲係${d.weatherFrom === "mixed" || d.weatherFrom === "lastyear" ? "去年同期" : "參考"}數字，過幾日再 check。`;
+    return `${d.weatherFrom === "lastyear" ? "去年同一段日子嘅實際天氣，做參考" : "歷年同期平均"}，出發前一週撳下面粒掣 check 返實時預報。`;
+  }
   function homeBlockHtml(d, key){
     if (isSectionHidden(d, key)) return "";
     if (key === "weather"){
@@ -5176,7 +5179,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (!(d.weatherRows || []).length) return "";
       return `<div class="hsblock" data-hskey="weather">
         <h3>${esc(weatherHeadingLabel(d.meta))}${secTools("weather")}</h3>
-        <p class="sec-sub">${d.weatherFrom === "lastyear" ? "去年同一段日子嘅實際天氣，做參考" : "歷年同期平均"}，出發前一週撳下面粒掣 check 返實時預報。</p>
+        <p class="sec-sub">${weatherSourceLine(d)}</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
           ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
@@ -5243,45 +5246,69 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const hm = t.toLocaleTimeString("zh-HK", { hour:"2-digit", minute:"2-digit", hour12:false });
     return sameDay ? "今日 " + hm : `${t.getMonth() + 1}月${t.getDate()}日 ${hm}`;
   }
-  // These buttons used to be read-only: they fetched the real answer, printed
-  // it, and left you to retype it into the section yourself. Nobody does that,
-  // so the section stayed stale while the button underneath it said 「啱啱
-  // check 咗」 — the worst of both, wrong data wearing a fresh timestamp.
+  // A live check writes its answer straight into the block it belongs to —
+  // the weather table, the season note — the moment it arrives. Leaving it
+  // in a panel underneath (first as text to retype, then behind a 「套用」
+  // button) meant the block itself kept showing last year's numbers right
+  // above today's forecast. What was there before is one tap of 「還原」
+  // away, and in 改動紀錄 as always.
   //
-  // The answer now comes with a button that writes it in. Never on its own,
-  // and never above the answer: what it replaces is something a person wrote
-  // by hand, so you read the new version first and then decide. Every save is
-  // a version, so a change of mind is one tap in 改動紀錄.
-  function offerApply(out, kind, payload){
-    const has = kind === "weather" ? (payload && payload.length) : !!String(payload || "").trim();
-    if (!has) return;
-    const preview = kind === "weather"
-      ? `<div class="applyprev">${payload.map(x =>
-          `${esc(x.date)}　${esc(x.hi)} / ${esc(x.lo)}　${esc(x.note)}`).join("<br>")}</div>`
-      : "";
-    const label = kind === "weather" ? `套用呢 ${payload.length} 日落張天氣表` : "套用做季節提示";
-    out.insertAdjacentHTML("beforeend", preview + `
-      <div class="applybar">
-        <button class="btn primary" data-apply>${esc(label)}</button>
-        <span class="hint">會換走而家嗰份，改動紀錄度還原得返。</span>
-      </div>`);
-    const btn = out.querySelector("[data-apply]");
-    if (!btn) return;
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      const d = state.snapshot;
-      if (kind === "weather"){ d.weatherRows = payload; }
-      else { d.foliageNote = String(payload); }
-      render();
-      await saveNow(kind === "weather" ? "用實時預報更新咗天氣表" : "用實時資料更新咗季節提示");
-      flash(kind === "weather" ? "天氣表更新咗" : "季節提示更新咗");
-    });
+  // Returns { what, undo } when something changed, else null.
+  function applyLiveResult(kind, r){
+    const d = state.snapshot;
+    if (kind === "weather"){
+      const rows = weatherRowsFromDaily(r && r.raw && r.raw.daily);
+      if (!rows.length) return null;
+      const before = { rows: d.weatherRows, from: d.weatherFrom, at: d.weatherAt };
+      // days the forecast does not reach yet keep what they had
+      // 「10-23」「10/23」「2026-10-23」「10月23日」 are all the same day
+      const dayKey = t => { const n = String(t || "").match(/\d+/g) || []; return n.length >= 2 ? `${+n[n.length - 2]}/${+n[n.length - 1]}` : String(t); };
+      const fresh = new Set(rows.map(x => dayKey(x.date)));
+      const rest = (d.weatherRows || []).filter(x => !fresh.has(dayKey(x.date)) && !x.live);
+      d.weatherRows = rows.concat(rest);
+      d.weatherFrom = rest.length ? "mixed" : "forecast";
+      d.weatherAt = new Date().toISOString();
+      return { what: `天氣表（${rows.length} 日）`, undo: () => { d.weatherRows = before.rows; d.weatherFrom = before.from; d.weatherAt = before.at; } };
+    }
+    const text = plain(r && r.aiSummary || "");
+    if (!text) return null;
+    const before = d.foliageNote;
+    d.foliageNote = esc(text).replace(/\n/g, "<br>");
+    return { what: "季節提示", undo: () => { d.foliageNote = before; } };
+  }
+  // write it in, save, and say so under the answer with a way back. `paint`
+  // puts the answer panel back after the page is redrawn around it.
+  async function commitLiveResult(kind, r, paint){
+    const ap = applyLiveResult(kind, r);
+    const note = ap ? `<div class="liveapplied">${icon("check")}<span>已經更新咗上面嘅${esc(ap.what)}</span><button type="button" class="btn" data-liveundo>還原</button></div>` : "";
+    render();
+    paint(note);
+    if (!ap) return;
+    const label = kind === "weather" ? "用實時預報更新咗天氣表" : "用實時資料更新咗季節提示";
+    await saveNow(label);
+    const wire = () => document.querySelectorAll("[data-liveundo]").forEach(b => b.addEventListener("click", async () => {
+      ap.undo(); render(); paint("");
+      await saveNow(kind === "weather" ? "還原咗天氣表" : "還原咗季節提示");
+      flash("還原咗");
+    }));
+    wire();
   }
 
   // The answer used to arrive as two bare boxes that looked just like the
   // section's own text, so nobody could tell which part was the AI's fresh
   // result. It is now one labelled panel with the time it was fetched, and
   // each part says what it is.
+  // what a live check said, the same wherever it was asked
+  function liveAnswerHtml(kind, r){
+    if (kind !== "weather") return liveResultHtml("季節情況", [["AI 搜尋結果", r.aiSummary || r.message || "冇回覆"]]);
+    const daily = r.raw && r.raw.daily, has = !!(daily && (daily.time || []).length);
+    const lastDay = has && daily.time.slice(-1)[0], end = (state.snapshot.meta || {}).dateEnd;
+    const tail = lastDay && end && lastDay < end ? `\n（${lastDay} 之後嘅日子預報仲未出，過幾日再 check。）` : "";
+    return liveResultHtml("天氣", [[has ? "實時預報" : "預報狀態", (r.summary || "") + tail], ["AI 建議", r.aiSummary || r.aiNotice]]);
+  }
+  function liveAnswerText(kind, r){
+    return kind === "weather" ? [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n") : (r.aiSummary || r.message || "");
+  }
   function liveResultHtml(what, parts){
     const t = new Date();
     const now = `${t.getMonth() + 1}月${t.getDate()}日 ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
@@ -5300,7 +5327,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // is reading right now
     const el = document.getElementById("lastupd-" + kind);
     if (el) el.textContent = "上次 check：啱啱";
-    saveNow("check 咗最新資料", true);
+    saveNow("check 咗最新資料", true);   // folded into the save that follows
   }
   // There used to be a 「🔄 AI 自動更新（開）」 checkbox in front of every one of
   // these buttons, gating whether the button showed at all. It never actually
@@ -5319,25 +5346,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       try {
         const r = await callAi({ action: kind });
         stop();
-        if (kind === "weather"){
-          const hasForecast = !!(r.raw && r.raw.daily && (r.raw.daily.time || []).length);
-          const m0 = state.snapshot.meta || {};
-          const lastDay = r.raw && r.raw.daily && (r.raw.daily.time || []).slice(-1)[0];
-          const tail = hasForecast && lastDay && m0.dateEnd && lastDay < m0.dateEnd
-            ? `\n（${lastDay} 之後嘅日子預報仲未出，過幾日再 check。）` : "";
-          out.innerHTML = liveResultHtml("天氣", [
-            [hasForecast ? "實時預報" : "預報狀態", (r.summary || "") + tail],
-            ["AI 建議", r.aiSummary || r.aiNotice],
-          ]);
-          saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
-          if (r.summary || r.aiSummary) markLiveChecked(kind);
-          offerApply(out, kind, weatherRowsFromDaily(r.raw && r.raw.daily));
-        } else {
-          const a = r.aiSummary || r.message || "冇回覆";
-          out.innerHTML = liveResultHtml("季節情況", [["AI 搜尋結果", a]]);
-          if (r.aiSummary){ saveAiNote("foliage", "季節情況", a); markLiveChecked(kind); }
-          offerApply(out, kind, r.aiSummary ? a : "");
-        }
+        const html = liveAnswerHtml(kind, r);
+        saveAiNote(kind, kind === "weather" ? "實時天氣" : "季節情況", liveAnswerText(kind, r));
+        if (r.summary || r.aiSummary) markLiveChecked(kind);
+        // the page is redrawn with the new numbers, so the answer is put back
+        // into the fresh block underneath them
+        await commitLiveResult(kind, r, note => {
+          const o = document.getElementById(`livecheck-${kind}`);
+          if (o) o.innerHTML = html + note;
+        });
       } catch (e){
         stop(); out.innerHTML = `<div class="ai-msg">出咗問題：${esc(e.message)}</div>`;
       }
@@ -12892,17 +12909,14 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const act = b.dataset.ai;
         busy({ weather:"問緊實時天氣", foliage:"問緊季節情況", ask:"AI 睇緊你個行程", suggest:`AI 掃緊成 ${(state.snapshot.days||[]).length} 日` }[act]);
         try {
-          if (act === "weather"){
-            const r = await callAi({ action:"weather" });
-            out.innerHTML = `<div class="ai-msg">${esc(r.summary||"")}</div>` +
-                            (r.aiSummary ? `<div class="ai-msg">${esc(r.aiSummary)}</div>` : "") +
-                            (!r.aiSummary && r.aiNotice ? `<div class="ai-msg">${esc(r.aiNotice)}</div>` : "");
-            saveAiNote("weather", "實時天氣", [r.summary, r.aiSummary || r.aiNotice].filter(Boolean).join("\n\n"));
-          } else if (act === "foliage"){
-            const r = await callAi({ action:"foliage" });
-            const a = r.aiSummary || r.message || "冇回覆";
-            out.innerHTML = `<div class="ai-msg">${esc(a)}</div>`;
-            if (r.aiSummary) saveAiNote("foliage", "季節情況", a);
+          if (act === "weather" || act === "foliage"){
+            // the same answer, written into the same block, as the button
+            // under the weather table / season note
+            const r = await callAi({ action: act });
+            const html = liveAnswerHtml(act, r);
+            saveAiNote(act, act === "weather" ? "實時天氣" : "季節情況", liveAnswerText(act, r));
+            if (r.summary || r.aiSummary) markLiveChecked(act);
+            await commitLiveResult(act, r, note => { if (out.isConnected) out.innerHTML = html + note; });
           } else if (act === "ask"){
             const question = q.value.trim();
             if (!question){ out.innerHTML = ""; q.focus(); return; }
@@ -14352,6 +14366,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         hi: hi == null ? "" : `${Math.round(hi)}°`,
         lo: lo == null ? "" : `${Math.round(lo)}°`,
         note: rain == null ? "" : `降雨機率 ${rain}%`,
+        live: true,
       };
     });
   }
