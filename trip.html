@@ -1710,6 +1710,13 @@ body.readonly .sechide{display:none;}
 .qa .qa-head{padding-right:40px;}
 .qa-sg{display:inline;}
 .qa-sg .usec-add,.qa-sg .usec-inday{display:inline-flex;margin:6px 0 2px 0;}
+.ai-chat{display:flex;flex-direction:column;gap:14px;margin:14px 0 12px;}
+.ai-chat:empty{display:none;}
+.ai-turn{display:flex;flex-direction:column;gap:6px;}
+.ai-q{align-self:flex-end;max-width:88%;padding:9px 13px;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--gold) 18%,var(--surface));color:var(--ink);font-size:14.5px;line-height:1.5;white-space:pre-wrap;}
+.ai-turn .qa-a{margin:0;}
+.ai-foot{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.ai-foot .btn{flex:1 1 auto;justify-content:center;}
 .qa-sg.qa-rec{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin:6px 0;padding:10px 12px;border-radius:12px;
   background:color-mix(in srgb,var(--gold) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--gold) 25%,var(--rule));white-space:normal;}
 .qa-rec b{font-weight:600;color:var(--ink);}
@@ -2362,7 +2369,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-23-2";
+  const BUILD = "2026-11-25-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12867,15 +12874,35 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <button class="btn" data-ai="foliage">${icon("leaf")}季節情況</button>
         <button class="btn" data-ai="suggest">${icon("sparkle")}執一執行程</button>
       </div>
+      <div class="ai-out" id="ai-out"></div>
+      <div class="ai-chat" id="ai-chat"></div>
       <div class="askrow">
-        <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點">
+        <input class="input" id="ai-q" placeholder="想問啲咩？例如：Day 3 加多個景點" enterkeyhint="send">
         <button class="btn primary" data-ai="ask">問</button>
       </div>
-      <div class="ai-out" id="ai-out"></div>
-      <button class="btn wide" id="go-notes" style="margin-top:12px;">睇返問過啲咩</button>
+      <div class="ai-foot">
+        <button class="btn" id="ai-new" hidden>${icon("plus")}新對話</button>
+        <button class="btn" id="go-notes">睇返問過啲咩</button>
+      </div>
     `, layer => {
       const out = layer.querySelector("#ai-out");
       const q = layer.querySelector("#ai-q");
+      const chat = layer.querySelector("#ai-chat"), fresh = layer.querySelector("#ai-new");
+      // the conversation: each question and answer stays on screen, and the
+      // last few go back with the next question so 「嗰間」 means something
+      const paintTurn = (t, el) => {
+        el.innerHTML = `<div class="ai-q">${esc(t.q)}</div><div class="ai-msg qa-a">${qaAnswerHtml({ answer: t.a }, 0, k => `data-askadd="${k}"`)}</div>`;
+        wireRecButtons(el, t.a);
+      };
+      const paintChat = () => {
+        chat.innerHTML = "";
+        aiChat.turns.forEach(t => { const el = document.createElement("div"); el.className = "ai-turn"; chat.append(el); paintTurn(t, el); });
+        fresh.hidden = !aiChat.turns.length;
+        q.placeholder = aiChat.turns.length ? "繼續問…（會記得上面講過嘅）" : "想問啲咩？例如：Day 3 加多個景點";
+      };
+      paintChat();
+      fresh.addEventListener("click", () => { aiChatReset(); paintChat(); out.innerHTML = ""; q.focus(); });
+      q.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); layer.querySelector('[data-ai="ask"]').click(); } });
       // was a static 「諗緊…」, which after 20 seconds reads as a hang
       let stopBusy = () => {};
       const busy = (what) => {
@@ -12892,7 +12919,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
 
       layer.querySelectorAll("[data-ai]").forEach(b => b.addEventListener("click", async () => {
         const act = b.dataset.ai;
-        busy({ weather:"問緊實時天氣", foliage:"問緊季節情況", ask:"AI 睇緊你個行程", suggest:`AI 掃緊成 ${(state.snapshot.days||[]).length} 日` }[act]);
+        if (act !== "ask") busy({ weather:"問緊實時天氣", foliage:"問緊季節情況", ask:"AI 睇緊你個行程", suggest:`AI 掃緊成 ${(state.snapshot.days||[]).length} 日` }[act]);
         try {
           if (act === "weather" || act === "foliage"){
             // the same answer, written into the same block, as the button
@@ -12904,13 +12931,23 @@ ${stayBlock}${dayBlocks}${secBlocks}
             await commitLiveResult(act, r, note => { if (out.isConnected) out.innerHTML = html + note; });
           } else if (act === "ask"){
             const question = q.value.trim();
-            if (!question){ out.innerHTML = ""; q.focus(); return; }
-            const r = await callAi({ action:"ask", question: question + REC_HINT, itinerary: state.snapshot });
-            const a = r.aiSummary || r.message || "冇回覆";
-            const rec = { answer: a };
-            out.innerHTML = `<div class="ai-msg qa-a">${qaAnswerHtml(rec, 0, k => `data-askadd="${k}"`)}</div>`;
-            wireRecButtons(out, a);
-            if (r.aiSummary) saveAiNote("ask", question, a);
+            if (!question || b.disabled){ q.focus(); return; }
+            const history = aiChat.turns.slice(-6).map(t => ({ q: t.q, a: t.a }));
+            const el = document.createElement("div"); el.className = "ai-turn";
+            el.innerHTML = `<div class="ai-q">${esc(question)}</div><div class="ai-msg qa-a"></div>`;
+            chat.append(el);
+            q.value = ""; b.disabled = true;
+            el.scrollIntoView({ block: "start" });
+            const stop = busyIn(el.querySelector(".qa-a"), { steps:["AI 睇緊你個行程"], hint:"大約 10-30 秒。" });
+            let r;
+            try { r = await callAi({ action:"ask", question: question + REC_HINT, itinerary: state.snapshot, history }); }
+            finally { stop(); b.disabled = false; }
+            const t = { q: question, a: r.aiSummary || r.message || "冇回覆" };
+            if (r.aiSummary){ aiChat.turns.push(t); aiChatStore(); saveAiNote("ask", question, t.a); }
+            paintTurn(t, el);
+            fresh.hidden = !aiChat.turns.length;
+            q.placeholder = "繼續問…（會記得上面講過嘅）";
+            const sh = el.closest(".sheet"); if (sh) sh.scrollTop += el.getBoundingClientRect().top - sh.getBoundingClientRect().top - 12;
           } else if (act === "suggest"){
             const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
             if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
@@ -12944,7 +12981,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
   // the trip (on that day, at that time), or says where it already is.
   // AI 助手 answers mark each place they recommend on its own line, so every
   // one can get a 「加去行程」 button: 【推介】名稱｜當地名｜一句介紹
-  const REC_HINT = "\n（如果你推介具體地點、餐廳或者店舖：每個獨立一行，格式係「【推介】中文名｜當地語言名｜一句介紹｜Day 幾｜放喺邊個地點之後」。睇住行程揀最順路嘅一日同位置，「放喺邊個地點之後」要照抄行程入面嗰個地點嘅名，放喺第一個就寫「最前」。其他解釋照寫。）";
+  const REC_HINT = "\n（如果你推介具體地點、餐廳或者店舖：每樣想搵嘅嘢（例如一餐、一個景點）都俾 3 至 5 個唔同選擇，等我哋揀；每個獨立一行，格式係「【推介】中文名｜當地語言名｜一句介紹｜Day 幾｜放喺邊個地點之後」。睇住行程揀最順路嘅一日同位置，「放喺邊個地點之後」要照抄行程入面嗰個地點嘅名，放喺第一個就寫「最前」。其他解釋照寫。）";
   const REC_LINE = /^\s*[-•*]?\s*【\s*推介\s*】\s*(.+?)\s*$/;
   const QA_LINE = /^【\s*Day\s*(\d+)\s*[・·]\s*(加|改)\s*】\s*(.+?)\s*(?:[（(]\s*約?\s*(\d{1,2}[:：]\d{2})\s*[)）])?\s*$/;
   function qaSuggestions(answer){
@@ -13013,12 +13050,24 @@ ${stayBlock}${dayBlocks}${secBlocks}
     let nx = -1; for (let j = k + 1; j < us.length; j++) if (us[j].stop){ nx = j; break; }
     refreshTransit(day, [k, nx].filter(v => v > 0));
   }
+  // AI 助手's conversation for this trip, kept for the tab's life
+  const aiChat = { turns: [] };
+  const AI_CHAT_KEY = () => "ai_chat_" + (state.tripId || "");
+  function aiChatStore(){ try { sessionStorage.setItem(AI_CHAT_KEY(), JSON.stringify(aiChat.turns.slice(-20))); } catch (_){} }
+  function aiChatReset(){ aiChat.turns = []; aiChatStore(); }
+  function aiChatLoad(){ try { const t = JSON.parse(sessionStorage.getItem(AI_CHAT_KEY()) || "[]"); aiChat.turns = Array.isArray(t) ? t : []; } catch (_){ aiChat.turns = []; } }
+  // The AI is asked for plain text but still writes **bold**, bullets and
+  // headings now and then; shown raw they read as stray asterisks.
+  function mdLine(l){
+    return esc(String(l).replace(/^\s*#+\s*/, "").replace(/^\s*[*\-•]\s+/, "・"))
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*\*/g, "");
+  }
   function qaAnswerHtml(r, ri, attrOf){
     const sgs = qaSuggestions(r.answer);
-    if (!sgs.length) return esc(r.answer);
+    if (!sgs.length) return String(r.answer).split(/\n/).map(mdLine).join("\n");
     const byLine = new Map(sgs.map((x, k) => [x.line, [x, k]]));
     return String(r.answer).split(/\n/).map((l, i) => {
-      if (!byLine.has(i)) return esc(l);
+      if (!byLine.has(i)) return mdLine(l);
       const [x, k] = byLine.get(i);
       const inDay = findInItinerary(state.snapshot, { title: x.name, kr: x.kr || "" });
       const tool = inDay
@@ -13026,7 +13075,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         : `<button type="button" class="usec-add" ${attrOf ? attrOf(k) : `data-noteadd="${ri}|${k}"`}>${icon("plus")}${recLabel(x)}</button>`;
       if (x.kind === "推介")
         return `<span class="qa-sg qa-rec"><b>${esc(x.name)}</b>${x.kr && x.kr !== x.name ? `<span class="kr">${esc(x.kr)}</span>` : ""}${x.body ? `<span class="qa-rec-d">${esc(x.body)}</span>` : ""}${tool}</span>`;
-      return `<span class="qa-sg">${esc(l)}${tool}</span>`;
+      return `<span class="qa-sg">${mdLine(l)}${tool}</span>`;
     }).join("\n");
   }
   function saveAiPicksWithRetry(out, day, kind, want, anchors, list, isCurrent){
@@ -15329,6 +15378,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
     }
     state.tripId = tripId;
     undoLoad();
+    aiChatLoad();
     state.tripLinkId = isUuid ? linkId : "";
     if (isUuid && window.TripAuth) TripAuth.useTrip(tripId, TripAuth.shareToken(linkId));
 

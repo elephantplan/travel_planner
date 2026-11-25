@@ -821,7 +821,15 @@ Deno.serve(async (req) => {
       if (!apiKeys.length) return json({ ok: false, message: NOT_CONFIGURED_MSG });
       const itinerary = body?.itinerary;
       const question = (body?.question ?? "").toString().slice(0, 1000);
-      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成個行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n**呢度係自由文字回覆，冇機制即時核實地方仲有冇營業**：如果你提到任何未係現有行程入面嘅新地方（餐廳／景點），你嘅知識可能已經過時（間舖有機會已經結業），唔可以講到好肯定咁話個地方一定仲開緊，要提一句「建議出發前用Google地圖或者當地慣用嘅地圖app確認吓仲有冇開」。如果想加返落行程，叫佢哋用「AI 諗行程」或者「執一執行程」，嗰邊會自動用Google核實過先至畀套用。\n\n請用廣東話回覆，回覆用純文字，唔使JSON。`;
+      // the conversation so far, oldest first, so a follow-up question can
+      // lean on what was said instead of starting from nothing each time
+      const history = (Array.isArray(body?.history) ? body.history : []).slice(-6)
+        .map((t: any) => ({ q: String(t?.q ?? "").slice(0, 500), a: String(t?.a ?? "").slice(0, 2500) }))
+        .filter((t: { q: string; a: string }) => t.q && t.a);
+      const talk = history.length
+        ? `\n\n之前同用戶傾過（由舊到新）：\n${history.map((t: { q: string; a: string }) => `用戶：${t.q}\nAI：${t.a}`).join("\n\n")}\n\n下面係佢跟住問嘅問題：接住上面講落去，佢講「嗰間」「第二個」之類就係指上面提過嘅嘢，唔使重新介紹已經講過嘅內容。`
+        : "";
+      const prompt = `${brief}\n\n你而家睇緊佢哋個行程JSON。${talk}\n\n用戶問：${question || "睇吓成個行程有冇邊度可以優化"}\n\n成個行程（只供你參考現有內容，唔使全部覆述）：\n${JSON.stringify(compactItinerary(itinerary))?.slice(0, 20000)}\n\n**呢度係自由文字回覆，冇機制即時核實地方仲有冇營業**：如果你提到任何未係現有行程入面嘅新地方（餐廳／景點），你嘅知識可能已經過時（間舖有機會已經結業），唔可以講到好肯定咁話個地方一定仲開緊，要提一句「建議出發前用Google地圖或者當地慣用嘅地圖app確認吓仲有冇開」。如果想加返落行程，叫佢哋用「AI 諗行程」或者「執一執行程」，嗰邊會自動用Google核實過先至畀套用。\n\n請用廣東話回覆，回覆用純文字，唔使JSON，唔好用 markdown 符號（# 或者 * 號）；要分點就每點開新一行，用「・」開頭。`;
       try {
         const aiText = await callGemini(apiKeys, prompt);
         return json({ ok: true, aiSummary: aiText });

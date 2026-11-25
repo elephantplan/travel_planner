@@ -23,13 +23,14 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 1, created_at: '2026-09-20T00:00:00Z',
       edited_by: 'x', source: 'seed', summary: 's', snapshot: snap, has_snapshot: true }]) });
   });
-  const asked = [];
+  const asked = [], askBodies = [];
   await p.route('**/functions/v1/**', r => {
     let body = {}; try { body = JSON.parse(r.request().postData() || '{}'); } catch (_){}
     const j = o => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (body.action === 'day-plan'){ asked.push(body.question);
       return j({ ok: true, notes: '', changes: ['甲', '乙', '丙'].map((n, k) => ({ op: 'add', dayId: 'day2', stop: { title: '餐廳' + n, time: '約 19:00', type: 'eat' }, reason: `選擇${k + 1}：好食` })) }); }
-    if (body.action === 'ask'){ asked.push(body.question);
+    if (body.action === 'ask'){ asked.push(body.question); askBodies.push(body);
+      if (/第二間/.test(body.question)) return j({ ok: true, aiSummary: '**麵包戊** 朝早 8 點開：\n* 牛油可頌必食\n* 可以外賣' });
       return j({ ok: true, aiSummary: '可以試吓呢兩間：\n【推介】喫茶丁｜喫茶ティー｜老派咖啡店｜Day 2｜景福宮\n【推介】麵包戊｜パン戊｜早餐好｜Day 2｜最前\n記得早啲去。' }); }
     if (body.mode === 'near-search') return j({ ok: true, places: body.query === '喫茶ティー' ? [{ placeId: 'pKISSA', name: '喫茶ティー', lat: 37.58, lng: 126.98, meters: 320, rating: 4.4, ratingCount: 2180 }] : [] });
     return j({ ok: true });
@@ -68,24 +69,40 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('[data-ai="ask"]').click();
   await p.waitForTimeout(1000);
   ok('問嘢會叫 AI 標住推介地點', asked.some(q => /咖啡店？/.test(q) && /【推介】/.test(q)), asked);
-  ok('每個推介地點都有「加去」', await p.locator('#ai-out [data-askadd]').count() === 2, await p.locator('#ai-out').innerText());
-  ok('講明建議加去邊日邊個位', /加去 D2・「景福宮」之後/.test(await p.locator('#ai-out').innerText()), await p.locator('#ai-out').innerText());
+  ok('每個推介地點都有「加去」', await p.locator('#ai-chat [data-askadd]').count() === 2, await p.locator('#ai-chat').innerText());
+  ok('講明建議加去邊日邊個位', /加去 D2・「景福宮」之後/.test(await p.locator('#ai-chat').innerText()), await p.locator('#ai-chat').innerText());
   await p.waitForTimeout(800);
-  ok('推介有 Google 評分、幾多人評同地圖連結', /4\.4\s*（2,180 個評價）/.test(await p.locator("#ai-out").innerText()) && await p.locator('#ai-out .rec-facts a[href*="google"]').count() >= 1, await p.locator('#ai-out').innerText());
-  await p.locator('#ai-out [data-askadd]').first().click();
+  ok('推介有 Google 評分、幾多人評同地圖連結', /4\.4\s*（2,180 個評價）/.test(await p.locator("#ai-chat").innerText()) && await p.locator('#ai-chat .rec-facts a[href*="google"]').count() >= 1, await p.locator('#ai-chat').innerText());
+  await p.locator('#ai-chat [data-askadd]').first().click();
   await p.waitForTimeout(300);
-  ok('加完個 AI 助手唔會關', await p.locator('#ai-out').isVisible() && /已加去 D2/.test(await p.locator('#ai-out').innerText()));
+  ok('加完個 AI 助手唔會關', await p.locator('#ai-chat').isVisible() && /已加去 D2/.test(await p.locator('#ai-chat').innerText()));
   // the second one: 改位置 → Day 1, after its first stop
-  await p.locator('#ai-out .rec-move').nth(1).click();
-  await p.locator('#ai-out .rw-day').nth(1).selectOption('day1');
-  await p.locator('#ai-out .rw-after').nth(1).selectOption({ index: 1 });
-  await p.locator('#ai-out .rw-go').nth(1).click();
+  await p.locator('#ai-chat .rec-move').nth(1).click();
+  await p.locator('#ai-chat .rw-day').nth(1).selectOption('day1');
+  await p.locator('#ai-chat .rw-after').nth(1).selectOption({ index: 1 });
+  await p.locator('#ai-chat .rw-go').nth(1).click();
   await p.waitForTimeout(3000);
   const sn = last();
   const r2 = sn.days[1].items.filter(i => i.kind === 'stop').map(i => i.title);
   const r1 = sn.days[0].items.filter(i => i.kind === 'stop').map(i => i.title);
   ok('第一個跟 AI 建議：Day 2 景福宮之後，連當地名', r2[1] === '喫茶丁' && sn.days[1].items.find(i => i.title === '喫茶丁').kr === '喫茶ティー' && sn.days[1].items.find(i => i.title === '喫茶丁').placeId === 'pKISSA', r2);
   ok('第二個改咗位：Day 1 第一個站之後', r1[1] === '麵包戊', r1);
+  // a follow-up question carries the conversation, and both turns stay on screen
+  await p.fill('#ai-q', '第二間幾點開？');
+  await p.locator('[data-ai="ask"]').click();
+  await p.waitForTimeout(1000);
+  const fb = askBodies[askBodies.length - 1];
+  ok('跟進問題會連埋之前講過嘅傳過去', fb && fb.history && fb.history.length === 1 && /咖啡店/.test(fb.history[0].q) && /喫茶丁/.test(fb.history[0].a), fb && fb.history);
+  ok('兩輪問答都留喺畫面', await p.locator('#ai-chat .ai-turn').count() === 2 && await p.locator('#ai-chat .ai-q').nth(1).innerText() === '第二間幾點開？');
+  const ans = await p.locator('#ai-chat .ai-turn').nth(1).locator('.qa-a').innerHTML();
+  ok('** 變粗體、* 變「・」，冇殘留星號', /<b>麵包戊<\/b>/.test(ans) && /・牛油可頌/.test(ans) && !/\*/.test(ans), ans);
+  ok('有「新對話」掣，輸入格講明會記得', await p.locator('#ai-new').isVisible() && /記得上面/.test(await p.getAttribute('#ai-q', 'placeholder')));
+  await p.locator('.sheet-close').click(); await p.waitForTimeout(300);
+  await p.locator('#btn-ai').click(); await p.waitForTimeout(300);
+  ok('閂咗再開，對話仲喺度', await p.locator('#ai-chat .ai-turn').count() === 2);
+  await p.locator('#ai-new').click(); await p.waitForTimeout(200);
+  ok('撳「新對話」就清空', await p.locator('#ai-chat .ai-turn').count() === 0 && await p.locator('#ai-new').isHidden());
+  ok('叫 AI 每樣俾幾個選擇', asked.some(q => /3 至 5 個唔同選擇/.test(q)));
   ok('冇 JS error', !errs.length, errs);
   await b.close();
   console.log(`${pass} passed, ${fail} failed`);
