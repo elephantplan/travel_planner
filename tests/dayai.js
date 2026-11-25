@@ -85,6 +85,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   await p.locator('#dayai-q').fill('壽司同 outlet');
   await p.locator('#dayai-go').click(); await p.waitForTimeout(2900);
   ok('叫 AI 唔好跟返舊主題', /清空咗/.test(asked.question) && /古宮/.test(asked.question), asked.question.slice(-200));
+  ok('每個新加嘅地方都叫 AI 俾 3 個選擇', /每一個新加嘅餐廳、咖啡店、景點或者購物地方，都要俾 3 個唔同選擇/.test(asked.question));
   await p.locator('[data-applyall]').click(); await p.waitForTimeout(500);
   ok('套用之後換埋新標題', /壽司同 outlet/.test(await p.locator('.dayhead h2').innerText()), await p.locator('.dayhead h2').innerText());
 

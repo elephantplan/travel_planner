@@ -2369,7 +2369,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-25-1";
+  const BUILD = "2026-11-25-2";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12674,8 +12674,10 @@ ${stayBlock}${dayBlocks}${secBlocks}
       ? "佢哋想慳錢：優先揀免費或者平嘅景點（公園、神社、街道、市場），食飯揀平價好食嘅（拉麵、定食、市場小食、迴轉壽司），唔好排高級餐廳或者貴嘅體驗；交通揀電車唔好揀的士。" : "";
   }
   const ROUTE_HINT = "排每日嘅地點要順路：同一區嘅放埋一齊，由一頭行去另一頭，唔好喺幾個區之間來回走。時間只係用嚟排先後，app 會顯示成上晝／下晝；如果某個地方要早啲去（例如排隊、人少、日落），喺 reason 或者 tip 講「建議早啲去」就得。";
-  const CHOICES_HINT = "\n（如果係叫你搵餐廳、咖啡店、景點或者某類地方：俾 3 至 5 個唔同選擇，每個都係獨立嘅 op add 建議，全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。如果問緊幾個唔同時段（例如上晝景點、晏晝食飯），每個時段都俾 3 至 5 個選擇。）";
-  function wantsChoices(q){ return /餐廳|食|飯|餐|cafe|café|咖啡|甜品|酒吧|bar|拉麵|壽司|燒肉|搵|推介|推薦|建議|邊度|邊間|店|去邊|去哪|哪裡|哪裏|邊個地方|逛|行街|景點|好去處|地方|睇紅葉|賞|寺|神社|公園|購物|買/i.test(q || ""); }
+  // Every place the AI adds comes as a few choices for the same slot, so the
+  // family picks one (the rest can be its backups) instead of taking the
+  // AI's single guess; when they asked for a kind of place, a few more.
+  const CHOICES_HINT = "\n（每一個新加嘅餐廳、咖啡店、景點或者購物地方，都要俾 3 個唔同選擇；用戶有講明想搵某類地方嘅話，就俾 3 至 5 個。每個選擇都係獨立嘅 op add 建議，同一個時段嘅選擇全部用同一個 time 同一個 dayId，reason 開頭寫「選擇1：」「選擇2：」…，等我揀一個，其他做後備。改時間、刪走、酒店、交通呢類唔使俾選擇。）";
   // After clearing a day (or keeping just a few): plan it again?
   function offerReplan(day, kept){
     openSheet(`
@@ -12761,7 +12763,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const freshNote = fresh.length ? fresh.map(d => `【${d.id} 係用戶清空咗、要由零重新計劃嘅一日】成日只可以跟用戶今次嘅要求去砌（佢講咩就以咩做主題，例如講 outlet 同壽司，成日就圍住 outlet 同壽司去排），唔好參考之前嘅主題、地區或者地方${d.oldTitle ? `（之前係「${d.oldTitle}」，呢個主題同入面嘅地方全部唔要）` : ""}。由早到晚排大約 4-6 個站，一定要喺 dayTitles 俾 ${d.id} 一個新標題（最多 12 字），講返新主題。`).join("\n") : "";
         let r;
         try {
-          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + (wantsChoices(asked) ? CHOICES_HINT : "") + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + HOURS_HINT + "\n" + CUISINE_HINT + "\n" + budgetHint();
+          const question = (asked ? `【最重要：用戶今次嘅要求】${asked}\n` : "") + freshNote + "\n" + CHOICES_HINT + "\n" + SHOP_HINT + "\n" + ROUTE_HINT + "\n" + HOURS_HINT + "\n" + CUISINE_HINT + "\n" + budgetHint();
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
