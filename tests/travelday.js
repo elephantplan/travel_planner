@@ -66,9 +66,21 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
       nextLabel = (earlyHour ? hm(0) : hm(Math.min(1439, nowMin + 60))).replace('約 ', '');
     });
     ok('旅程中一開就喺今日嗰日', /Day\s*2/i.test(await p.locator('.dayhead').innerText()), await p.locator('.dayhead .dno').innerText());
-    const nx = await p.locator('.todaynext').innerText();
+    const panel = p.locator('.todaywrap .nextstop');
+    const nx = await panel.innerText();
     ok('講明下一站', /下一站/.test(nx) && nx.includes(nextLabel) && (earlyHour ? /景福宮/ : /韓牛燒肉/).test(nx), nx);
-    ok('有導航掣', await p.locator('.todaynext a[href*="google.com/maps/dir"]').count() === 1);
+    ok('有導航掣', await panel.locator('a[href*="google.com/maps/dir"]').count() === 1);
+    ok('有「到咗」', await panel.locator('[data-arrive]').count() === 1);
+    await p.screenshot({ path: '/tmp/claude-0/nextstop.png' });
+    // 到咗 on the first stop of the day: the panel moves to the second
+    const names = await p.evaluate(() => [...document.querySelectorAll('.stopcard .stoptitle, .stopcard h3')].map(x => x.textContent.trim()).slice(0, 3));
+    await p.evaluate(() => { localStorage.clear(); });
+    await p.evaluate(() => document.querySelector('[data-arrive]').click());
+    await p.waitForTimeout(300);
+    const nx2 = await p.locator('.todaywrap .nextstop').innerText();
+    ok('撳「到咗」就跳去再下一個站', nx2 !== nx && /返上一站/.test(nx2), [nx.slice(0, 40), nx2.slice(0, 40)]);
+    await p.locator('[data-arrive-undo]').click(); await p.waitForTimeout(300);
+    ok('「返上一站」就返返轉頭', (await p.locator('.todaywrap .nextstop').innerText()) === nx);
     await p.evaluate(() => document.querySelector('[data-go="overview"]').click());
     await p.waitForTimeout(400);
     ok('總覽頂有今日卡', /今日/.test(await p.locator('.todaycard').innerText()));

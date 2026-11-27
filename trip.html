@@ -1505,13 +1505,23 @@ a.btn{text-decoration:none;}
 .tc-top{display:flex;align-items:center;gap:10px;}
 .tc-live{font-size:11px;font-weight:800;letter-spacing:.1em;color:#14110A;background:var(--gold);padding:3px 9px;border-radius:999px;}
 .tc-day{font-size:13px;font-weight:700;color:var(--ink-soft);}
-.tc-next{display:flex;flex-direction:column;margin-top:10px;}
-.tc-next b{font-size:20px;font-weight:800;letter-spacing:-.01em;line-height:1.3;}
-.tc-time{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;font-size:16px;color:var(--lc);margin-top:2px;}
-.tc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
-.todaynext{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border-radius:14px;
-  background:color-mix(in srgb,var(--gold) 10%,transparent);font-size:13.5px;}
-.todaynext .btn{margin-left:auto;min-height:34px;padding:0 14px;}
+.tc-top .tc-go{margin-left:auto;min-height:32px;padding:0 12px;font-size:12.5px;}
+.nextstop{margin-top:12px;display:flex;flex-direction:column;gap:4px;}
+.ns-top{display:flex;align-items:baseline;gap:10px;}
+.ns-lbl{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink-soft);}
+.ns-time{font-family:'Archivo',var(--f-mono);font-stretch:80%;font-weight:800;font-size:16px;color:var(--lc);}
+.ns-name{font-size:21px;font-weight:800;letter-spacing:-.01em;line-height:1.3;}
+.ns-kr{font-size:14px;color:var(--ink-soft);}
+.ns-facts{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:6px;font-size:13px;color:var(--ink-soft);}
+.ns-leg{display:inline-flex;align-items:center;gap:5px;}
+.ns-leg .icon .i{width:15px;height:15px;}
+.ns-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.ns-acts .btn{flex:1 1 auto;justify-content:center;min-height:42px;}
+.ns-acts .btn .i{width:16px;height:16px;margin-right:5px;}
+.ns-back{align-self:flex-start;margin-top:8px;padding:4px 0;border:0;background:none;color:var(--ink-faint);font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;}
+.nextstop.done .ns-name{font-size:17px;}
+.todaywrap{margin-top:14px;padding:14px 16px;border-radius:18px;background:color-mix(in srgb,var(--lc) 12%,var(--stock));border:1px solid color-mix(in srgb,var(--lc) 35%,var(--rule));}
+.todaywrap .nextstop{margin-top:8px;}
 
 /* ---------- 畀司機睇 ---------- */
 .taxicard{position:fixed;inset:0;z-index:120;background:#fff;color:#111;display:flex;flex-direction:column;justify-content:center;
@@ -2369,7 +2379,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-25-2";
+  const BUILD = "2026-11-27-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4540,12 +4550,24 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return localIso(d);
   }
   function todayDay(){ const t = localIso(new Date()); return ((state.snapshot && state.snapshot.days) || []).find(d => dayIso(d) === t) || null; }
-  // the stop the family is heading for now: the first one whose time has not
-  // passed by more than half an hour; with no times, the first stop of the day
+  // 「到咗」: the stops this phone has marked as reached today. Kept on the
+  // phone, not in the trip — where one person has got to is not a change
+  // to the plan for everyone.
+  const ARRIVED_KEY = day => `arrived_${state.tripId}_${day.id}`;
+  const arriveKey = s => s.placeId || plain(s.title);
+  function arrivedOf(day){ try { return new Set(JSON.parse(localStorage.getItem(ARRIVED_KEY(day)) || "[]")); } catch (_){ return new Set(); } }
+  function setArrived(day, set){ try { localStorage.setItem(ARRIVED_KEY(day), JSON.stringify([...set])); } catch (_){} }
+  // the stop the family is heading for now: the one after the last marked
+  // 「到咗」; else the first whose time has not passed by more than half an
+  // hour; with no times, the first stop of the day
   function nextStopOf(day){
     const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
     const stops = (day.items || []).filter(i => i.kind === "stop" && plain(i.title));
     if (!stops.length) return null;
+    const been = arrivedOf(day);
+    let last = -1;
+    stops.forEach((x, i) => { if (been.has(arriveKey(x))) last = i; });
+    if (last >= 0) return stops[last + 1] || null;
     const timed = stops.filter(x => clockMin(x.time) != null);
     if (!timed.length) return stops[0];
     return timed.find(x => clockMin(x.time) + 30 >= nowMin) || null;
@@ -4556,18 +4578,39 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name)}&destination_place_id=${encodeURIComponent(s.placeId)}&travelmode=transit`
       : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(hasCoord(s) ? `${s.lat},${s.lng}` : (plain(s.kr) || name))}&travelmode=transit`;
   }
+  // On a trip day the question is always where next, how, and whether it
+  // is open — one panel answers it, on the trip's front page and at the top
+  // of today's page alike.
+  function nextStopPanelHtml(day){
+    const nx = nextStopOf(day), been = arrivedOf(day);
+    const back = been.size ? `<button type="button" class="ns-back" data-arrive-undo="${day.id}">返上一站</button>` : "";
+    if (!nx) return `<div class="nextstop done"><b class="ns-name">今日嘅站行完喇</b>${back}</div>`;
+    const u = toUnits(day.items).find(x => x.stop === nx);
+    const t = clockMin(nx.time), kr = plain(nx.kr), name = plain(nx.title);
+    const facts = [
+      u && u.seg && segPlain(u.seg.html || "") || (u && u.seg && u.seg.text) ? `<span class="ns-leg">${segHtmlOf(u.seg)}</span>` : "",
+      stopClosedOnDay(nx, day) ? `<span class="meta-chip closed">${icon("warn")}今日休息</span>` : "",
+      ...dayHoursChip(nx, day), ...hoursClashChip(nx, day),
+    ].filter(Boolean).join("");
+    return `<div class="nextstop">
+      <div class="ns-top"><span class="ns-lbl">下一站</span>${t != null ? `<span class="ns-time">${esc(fmtMin(t))}</span>` : ""}</div>
+      <b class="ns-name">${esc(name)}</b>${kr && kr !== name ? `<span class="ns-kr">${esc(kr)}</span>` : ""}
+      ${facts ? `<div class="ns-facts">${facts}</div>` : ""}
+      <div class="ns-acts">
+        <a class="btn primary" href="${esc(navUrlTo(nx))}" target="_blank" rel="noopener">${icon("map")}導航</a>
+        ${kr ? `<button type="button" class="btn" data-taxi="${esc(kr)}" data-taxi-name="${esc(name)}" data-taxi-pid="${esc(nx.placeId || "")}">畀司機睇</button>` : ""}
+        <button type="button" class="btn" data-arrive="${day.id}">${icon("check")}到咗</button>
+      </div>
+      ${back}
+    </div>`;
+  }
   function todayCardHtml(d){
     const day = todayDay();
     if (!day) return "";
-    const n = day.id.replace("day", ""), nx = nextStopOf(day);
     return `<section class="todaycard" style="--lc:${dayColorVar(day.id)}">
-      <div class="tc-top"><span class="tc-live">今日</span><span class="tc-day">Day ${esc(n)} · ${esc(day.title)}</span></div>
-      ${nx ? `<div class="tc-next"><span class="tp-lbl">下一站</span><b>${esc(plain(nx.title))}</b>${clockMin(nx.time) != null ? `<span class="tc-time">${esc(fmtMin(clockMin(nx.time)))}</span>` : ""}</div>`
-           : `<div class="tc-next"><b>今日嘅站行完喇</b></div>`}
-      <div class="tc-acts">
-        <button class="btn" data-go-today="${day.id}">睇今日行程</button>
-        ${nx ? `<a class="btn primary" href="${esc(navUrlTo(nx))}" target="_blank" rel="noopener">${icon("map")}導航去下一站</a>` : ""}
-      </div>
+      <div class="tc-top"><span class="tc-live">今日</span><span class="tc-day">Day ${esc(day.id.replace("day", ""))} · ${esc(day.title)}</span>
+        <button type="button" class="btn tc-go" data-go-today="${day.id}">睇今日行程</button></div>
+      ${nextStopPanelHtml(day)}
     </section>`;
   }
 
@@ -4619,7 +4662,22 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const t = e.target.closest && e.target.closest("[data-taxi]");
     if (t){ e.preventDefault(); e.stopPropagation(); openTaxiCard(t.dataset.taxi, t.dataset.taxiName, t.dataset.taxiPid || ""); return; }
     const g = e.target.closest && e.target.closest("[data-go-today]");
-    if (g){ e.preventDefault(); state.view = g.dataset.goToday; window.scrollTo({ top: 0 }); render(); }
+    if (g){ e.preventDefault(); state.view = g.dataset.goToday; window.scrollTo({ top: 0 }); render(); return; }
+    // 到咗 moves the panel on to the stop after; 返上一站 takes the last one back
+    const ar = e.target.closest && e.target.closest("[data-arrive], [data-arrive-undo]");
+    if (ar){
+      const day = dayById(ar.dataset.arrive || ar.dataset.arriveUndo);
+      if (!day) return;
+      const been = arrivedOf(day);
+      if (ar.dataset.arrive){ const nx = nextStopOf(day); if (nx) been.add(arriveKey(nx)); }
+      else {
+        const stops = (day.items || []).filter(i => i.kind === "stop" && plain(i.title));
+        const last = [...stops].reverse().find(x => been.has(arriveKey(x)));
+        if (last) been.delete(arriveKey(last));
+      }
+      setArrived(day, been);
+      render();
+    }
   });
 
   // ---------- 夾錢 ----------
@@ -6491,9 +6549,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <h2>${esc(day.title)}</h2>
         <p class="intro">${esc(day.desc)}</p>
         ${dayFlightChipHtml(day)}
-        ${todayDay() === day ? (() => { const nx = nextStopOf(day); return nx
-          ? `<div class="todaynext"><span class="tc-live">今日</span><span>下一站 <b>${esc(plain(nx.title))}</b>${clockMin(nx.time) != null ? ` · ${esc(fmtMin(clockMin(nx.time)))}` : ""}</span><a class="btn primary" href="${esc(navUrlTo(nx))}" target="_blank" rel="noopener">${icon("map")}導航</a></div>`
-          : `<div class="todaynext"><span class="tc-live">今日</span><span>今日嘅站行完喇</span></div>`; })() : ""}
+        ${todayDay() === day ? `<div class="todaywrap" style="--lc:${dayColorVar(day.id)}"><span class="tc-live">今日</span>${nextStopPanelHtml(day)}</div>` : ""}
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
           // which hotel this day belongs to, so a multi-hotel trip is obvious
