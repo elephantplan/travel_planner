@@ -1520,6 +1520,18 @@ a.btn{text-decoration:none;}
 .ns-acts .btn .i{width:16px;height:16px;margin-right:5px;}
 .ns-back{align-self:flex-start;margin-top:8px;padding:4px 0;border:0;background:none;color:var(--ink-faint);font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;}
 .nextstop.done .ns-name{font-size:17px;}
+.dayissues{display:flex;align-items:center;gap:8px;width:100%;margin-top:12px;padding:10px 14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--rule));
+  background:var(--danger-bg);color:var(--danger);font:inherit;font-size:14px;font-weight:700;cursor:pointer;text-align:left;}
+.dayissues .i{width:17px;height:17px;flex:none;}
+.dayissues span{margin-left:auto;font-weight:500;font-size:12.5px;opacity:.8;}
+.issues{display:flex;flex-direction:column;gap:10px;}
+.issue{padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);}
+.is-t{display:flex;gap:9px;align-items:flex-start;}
+.is-t .i{width:16px;height:16px;flex:none;margin-top:3px;color:var(--danger);}
+.is-t b{display:block;font-size:15px;}
+.is-t span{display:block;font-size:13.5px;color:var(--ink-soft);line-height:1.5;}
+.is-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.unit.flashhi .stopcard{box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 60%,transparent);transition:box-shadow .3s;}
 .todaywrap{margin-top:14px;padding:14px 16px;border-radius:18px;background:color-mix(in srgb,var(--lc) 12%,var(--stock));border:1px solid color-mix(in srgb,var(--lc) 35%,var(--rule));}
 .todaywrap .nextstop{margin-top:8px;}
 
@@ -4394,6 +4406,75 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (transitWasChecked(seg)) return false;
     return !!seg.noTime || /睇班次|交通未計|未有路線/.test(text);
   }
+  // a leg that takes longer than the gap between the two planned times:
+  // { need, gap, from } in minutes, or null
+  function legTight(units, i){
+    const u = units[i], s = u && u.stop;
+    if (!s || !u.seg || u.seg.stale || u.seg.checking || u.seg.noTime) return null;
+    let prev = null;
+    for (let j = i - 1; j >= 0; j--) if (units[j] && units[j].stop){ prev = units[j].stop; break; }
+    const t1 = prev && clockMin(prev.time), t2 = clockMin(s.time);
+    const txt = String(u.seg.text != null ? u.seg.text : segPlain(u.seg.html || ""));
+    const h = txt.match(/(\d+)\s*小時/), mm = txt.match(/(\d+)\s*分鐘/);
+    const need = (h ? +h[1] * 60 : 0) + (mm ? +mm[1] : 0);
+    return t1 != null && t2 != null && need && t2 > t1 && t2 - t1 < need ? { need, gap: t2 - t1, from: t1 } : null;
+  }
+  // ---------- 要留意 ----------
+  // Everything wrong with a day in one list — shut that day, shut at the
+  // planned time, a leg longer than the gap, legs not yet worked out —
+  // each with the fix that already exists for it on the page.
+  function dayProblems(day){
+    const units = toUnits(day.items), out = [];
+    units.forEach((u, i) => {
+      const s = u.stop;
+      if (!s || !plain(s.title)) return;
+      const name = cleanPlaceName(plain(s.title));
+      const eat = s.type === "eat" || s.isFood;
+      if (stopClosedOnDay(s, day)) out.push({ i, name, text: `星期${weekdayCharOfDate(day.date) || ""}休息`, fix: eat ? "swap" : "findopen" });
+      else if (stopShutThen(s, day) === "time") out.push({ i, name, text: plain(hoursClashChip(s, day).join("")) || "到嗰陣未開或者就收", fix: eat ? "swap" : "findopen" });
+      const tl = legTight(units, i);
+      if (tl) out.push({ i, name, text: `交通要 ${tl.need} 分鐘，但同上一站只隔 ${tl.gap} 分鐘`, fix: "later", to: Math.ceil((tl.from + tl.need) / 5) * 5 });
+    });
+    if (!state.readonly && !state.offline){
+      const n = missingTransitFor(day, units).count;
+      if (n) out.push({ i: -1, name: "交通", text: `${n} 段交通未計到`, fix: "transit" });
+    }
+    return out;
+  }
+  function openDayProblems(day){
+    const list = dayProblems(day);
+    const FIX = { swap: "換一間有開嘅", findopen: "搵有開嘅", transit: "補返交通" };
+    openSheet(`
+      <h3>Day ${esc(day.id.replace("day", ""))} 要留意</h3>
+      <p class="sec-sub">${list.length ? "逐個睇，撳掣就改；改錯可以撳頂部「上一步」。" : "冇嘢要留意。"}</p>
+      <div class="issues">${list.map((x, k) => `<div class="issue">
+        <div class="is-t">${icon("warn")}<div><b>${esc(x.name)}</b><span>${esc(x.text)}</span></div></div>
+        <div class="is-acts">
+          ${state.readonly ? "" : x.fix === "later" ? `<button type="button" class="btn primary" data-fix="${k}">推後到 ${esc(fmtMin(x.to))}</button>`
+            : `<button type="button" class="btn primary" data-fix="${k}">${esc(FIX[x.fix])}</button>`}
+          ${x.i >= 0 ? `<button type="button" class="btn" data-look="${k}">去睇</button>` : ""}
+        </div></div>`).join("")}</div>
+    `, sheet => {
+      // the card's own button does the fix, so both places behave the same
+      const viaCard = (x, sel) => { closeLayer(); const b = document.querySelector(`.unit[data-i="${x.i}"] ${sel}`); if (b) b.click(); };
+      sheet.querySelectorAll("[data-look]").forEach(b => b.addEventListener("click", () => {
+        const x = list[+b.dataset.look]; closeLayer();
+        const el = document.querySelector(`.unit[data-i="${x.i}"]`);
+        if (el){ el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.add("flashhi"); setTimeout(() => el.classList.remove("flashhi"), 1600); }
+      }));
+      sheet.querySelectorAll("[data-fix]").forEach(b => b.addEventListener("click", async () => {
+        const x = list[+b.dataset.fix];
+        if (x.fix === "swap") return viaCard(x, "[data-swapeat]");
+        if (x.fix === "findopen") return viaCard(x, "[data-findopen]");
+        if (x.fix === "transit"){ closeLayer(); return fillMissingTransit(day); }
+        const st = toUnits(day.items)[x.i]?.stop;
+        if (!st) return;
+        st.time = `約 ${fmtMin(x.to)}`; st.timeAuto = false;
+        closeLayer(); render();
+        await saveNow(`「${x.name}」推後到 ${fmtMin(x.to)}`);
+      }));
+    });
+  }
   function missingTransitFor(day, units = toUnits(day.items)){
     const first = firstStopUnit(units);
     const indices = [];
@@ -6549,6 +6630,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <h2>${esc(day.title)}</h2>
         <p class="intro">${esc(day.desc)}</p>
         ${dayFlightChipHtml(day)}
+        ${(() => { const n = dayProblems(day).length; return n ? `<button type="button" class="dayissues" id="dayissues">${icon("warn")}${n} 個要留意<span>撳嚟睇</span></button>` : ""; })()}
         ${todayDay() === day ? `<div class="todaywrap" style="--lc:${dayColorVar(day.id)}"><span class="tc-live">今日</span>${nextStopPanelHtml(day)}</div>` : ""}
         <div class="chiprow">${(day.badges||[]).map(b=>`<span class="${esc(b.cls)}">${esc(b.text)}</span>`).join("")}</div>
         ${(() => {
@@ -6705,18 +6787,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       if (parts.length) segLinks = `<span class="seg-links">${parts.join("")}</span>`;
     }
     // a leg that takes longer than the gap between the two planned times
-    let tight = "";
-    if (showSeg && s && !u.seg.stale && !u.seg.checking && !u.seg.noTime){
-      const us = toUnits(day.items);
-      let prev = null;
-      for (let j = i - 1; j >= 0; j--) if (us[j] && us[j].stop){ prev = us[j].stop; break; }
-      const t1 = prev && clockMin(prev.time), t2 = clockMin(s.time);
-      const txt = String(u.seg.text != null ? u.seg.text : segPlain(u.seg.html || ""));
-      const h = txt.match(/(\d+)\s*小時/), mm = txt.match(/(\d+)\s*分鐘/);
-      const need = (h ? +h[1] * 60 : 0) + (mm ? +mm[1] : 0);
-      if (t1 != null && t2 != null && need && t2 > t1 && t2 - t1 < need)
-        tight = `<span class="seg-tight">${icon("warn")}時間好趕：交通要 ${need} 分鐘，但兩個站只隔 ${t2 - t1} 分鐘</span>`;
-    }
+    const tl = showSeg ? legTight(toUnits(day.items), i) : null;
+    const tight = tl ? `<span class="seg-tight">${icon("warn")}時間好趕：交通要 ${tl.need} 分鐘，但兩個站只隔 ${tl.gap} 分鐘</span>` : "";
     const segHtml = showSeg ? `
       <div class="seg${u.seg.stale ? " stale" : ""}${tight ? " tight" : ""}" data-mode="${u.seg.stale ? "other" : segMode(u.seg)}">
         <div class="seg-rail"></div>
@@ -7503,6 +7575,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     }));
 
     $("#recalc-missing")?.addEventListener("click", () => fillMissingTransit(day));
+    $("#dayissues")?.addEventListener("click", () => openDayProblems(day));
     const recalc = $("#recalc");
     if (recalc) recalc.addEventListener("click", async () => {
       recalc.disabled = true;

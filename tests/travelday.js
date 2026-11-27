@@ -90,7 +90,7 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
 
   console.log('\nB. 營業時間撞期同時間好趕');
   {
-    const { p, errs } = await boot(c => {
+    const { p, errs, saved } = await boot(c => {
       const st = c.days[1].items.filter(i => i.kind === 'stop');
       st[0].time = '約 19:00';
       st[0].weekdayText = ['星期一: 09:00 – 18:00','星期二: 09:00 – 18:00','星期三: 09:00 – 18:00','星期四: 09:00 – 18:00','星期五: 09:00 – 18:00','星期六: 09:00 – 18:00','星期日: 09:00 – 18:00'];
@@ -105,6 +105,18 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     const t = await p.locator('#app').innerText();
     ok('講明到嗰陣已經關門', /19:00 到，佢 18:00 已經關門/.test(t), t.match(/你約[^\n]*/) && t.match(/你約[^\n]*/)[0]);
     ok('交通長過兩站相隔就警告', /時間好趕：交通要 40 分鐘，但兩個站只隔 15 分鐘/.test(t), t.match(/時間好趕[^\n]*/) && t.match(/時間好趕[^\n]*/)[0]);
+    // the same problems, in one list at the top of the day
+    const badge = p.locator('#dayissues');
+    ok('日頂有「要留意」', await badge.count() === 1 && /個要留意/.test(await badge.innerText()), await badge.count() && await badge.innerText());
+    await badge.click(); await p.waitForTimeout(300);
+    const list = await p.locator('.issues').innerText();
+    ok('清單列出關門同時間好趕', /已經關門/.test(list) && /交通要 40 分鐘，但同上一站只隔 15 分鐘/.test(list), list);
+    await p.screenshot({ path: '/tmp/claude-0/issues.png' });
+    await p.locator('.issue', { hasText: '交通要 40 分鐘' }).locator('[data-fix]').click();
+    await p.waitForTimeout(1500);
+    const moved = lastSnap(saved).days[1].items.filter(i => i.kind === 'stop')[2];
+    ok('撳「推後到」就改咗時間', moved && moved.time === '約 19:45', moved && moved.time);
+    ok('改完唔再話時間好趕', !/時間好趕/.test(await p.locator('#app').innerText()));
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }
