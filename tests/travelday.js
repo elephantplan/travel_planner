@@ -99,6 +99,11 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     ok('講明地圖要網、點樣準備', /地圖底圖要網絡/.test(box) && /離線地圖/.test(box));
     await p.locator('.sheet-close').click(); await p.waitForTimeout(300);
     ok('準備好之後總覽講明', /冇網都睇得・.*準備好/.test(await p.locator('.offrow').innerText()), await p.locator('.offrow').innerText());
+    await p.locator('#btn-export').click(); await p.waitForTimeout(300);
+    ok('「分享／匯出」入面都有「準備離線」', /上次準備/.test(await p.locator('.sheet').innerText()) && await p.locator('.sheet [data-offline]').count() === 1);
+    await p.locator('.sheet [data-offline]').click(); await p.waitForTimeout(300);
+    ok('撳咗就開準備離線頁', await p.locator('#offline-go').count() === 1);
+    await p.locator('.sheet-close').click(); await p.waitForTimeout(200);
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }

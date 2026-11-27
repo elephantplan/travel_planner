@@ -2404,7 +2404,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-27-1";
+  const BUILD = "2026-11-27-2";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12466,6 +12466,12 @@ ${stayBlock}${dayBlocks}${secBlocks}
         </div>
         <button class="btn wide" id="ex-share-ro">${icon("link")}分享唯讀連結（畀長輩睇，改唔到）</button>
         <p class="exhint">撳入去只睇到，冇改嘢嘅掣，唔怕佢撳亂。（唔係密碼保護：識改網址嘅人一樣改得。）</p>
+      </div>
+
+      <div class="exgroup">
+        <div class="exgroup-label">冇網都睇得</div>
+        <button class="btn wide primary" data-offline>${icon("check")}準備離線</button>
+        <p class="exhint">${offlineReady() ? `上次準備：${esc(whenLabel(new Date(offlineReady().at).toISOString()))}。` : ""}下載晒所有相、存一份最新行程喺部機，出發前（同改完行程之後）撳一次。</p>
       </div>
 
       <div class="exgroup">
