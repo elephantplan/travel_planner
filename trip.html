@@ -1520,6 +1520,19 @@ a.btn{text-decoration:none;}
 .ns-acts .btn .i{width:16px;height:16px;margin-right:5px;}
 .ns-back{align-self:flex-start;margin-top:8px;padding:4px 0;border:0;background:none;color:var(--ink-faint);font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer;}
 .nextstop.done .ns-name{font-size:17px;}
+.offrow{display:flex;align-items:center;gap:9px;width:100%;margin:12px 0 4px;padding:11px 14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--gold) 40%,var(--rule));
+  background:color-mix(in srgb,var(--gold) 9%,var(--surface));color:var(--ink);font:inherit;font-size:14px;cursor:pointer;text-align:left;}
+.offrow .i{width:17px;height:17px;flex:none;color:var(--gold);}
+.offrow span{flex:1;min-width:0;}
+.offrow b{font-size:13px;color:var(--gold);}
+.offrow.ok{border-color:var(--rule);background:var(--surface);}
+.offrow.ok .i{color:var(--ok);}
+.offline-line{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--rule);}
+.offline-line .i{width:18px;height:18px;flex:none;margin-top:2px;color:var(--warn);}
+.offline-line.ok .i{color:var(--ok);}
+.offline-line b{display:block;font-size:15px;}
+.offline-line span{display:block;font-size:13px;color:var(--ink-soft);line-height:1.5;}
+#offline-box .hint{margin:12px 0;}
 .dayissues{display:flex;align-items:center;gap:8px;width:100%;margin-top:12px;padding:10px 14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--rule));
   background:var(--danger-bg);color:var(--danger);font:inherit;font-size:14px;font-weight:700;cursor:pointer;text-align:left;}
 .dayissues .i{width:17px;height:17px;flex:none;}
@@ -4685,6 +4698,75 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ${back}
     </div>`;
   }
+  // ---------- 準備離線 ----------
+  // Abroad, data drops out (the subway, roaming off). The page itself and a
+  // copy of the trip already open with no signal, but only the photos
+  // someone happened to look at were kept. 「準備離線」 fetches every
+  // photo in the trip once (the service worker keeps them), refreshes the
+  // copy, and says plainly what will and will not work without a network.
+  const OFFLINE_KEY = () => "offline_ready_" + state.tripId;
+  function offlineReady(){ try { return JSON.parse(localStorage.getItem(OFFLINE_KEY()) || "null"); } catch (_){ return null; } }
+  function tripPhotoUrls(snap){
+    const out = new Set();
+    (function walk(v){
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") Object.entries(v).forEach(([k, x]) => {
+        if (k === "photoUrl" && /^https:\/\//.test(String(x))) out.add(String(x)); else if (x && typeof x === "object") walk(x);
+      });
+    })(snap);
+    return [...out];
+  }
+  // from a week before the trip to its last day
+  function offlineWorthIt(snap){
+    const m = (snap && snap.meta) || {};
+    if (!m.dateStart) return false;
+    const t = Date.parse(localIso(new Date()) + "T00:00:00");
+    const a = Date.parse(m.dateStart + "T00:00:00"), b = Date.parse((m.dateEnd || m.dateStart) + "T00:00:00");
+    return t >= a - 7 * 86400000 && t <= b;
+  }
+  function offlineRowHtml(d){
+    if (!offlineWorthIt(d)) return "";
+    const r = offlineReady();
+    return `<button type="button" class="offrow${r ? " ok" : ""}" data-offline>${icon(r ? "check" : "warn")}<span>${r
+      ? `冇網都睇得・${esc(whenLabel(new Date(r.at).toISOString()))}準備好`
+      : "出發前撳一下：準備離線，冇網都睇得"}</span><b>${r ? "再準備" : "準備"}</b></button>`;
+  }
+  async function prepareOffline(onProgress){
+    try { localStorage.setItem("dumbofly_snap_" + state.tripId, JSON.stringify({ at: Date.now(), snapshot: state.snapshot })); } catch (_){}
+    const sw = "serviceWorker" in navigator && navigator.serviceWorker.controller;
+    const urls = tripPhotoUrls(state.snapshot);
+    let done = 0, got = 0;
+    // through the service worker, which keeps each photo for good
+    await runBounded(urls, 4, async u => {
+      try { await fetch(u, { mode: "no-cors" }); got++; } catch (_){}
+      onProgress && onProgress(++done, urls.length);
+    });
+    const rec = { at: Date.now(), photos: got, total: urls.length, sw: !!sw };
+    try { localStorage.setItem(OFFLINE_KEY(), JSON.stringify(rec)); } catch (_){}
+    return rec;
+  }
+  function openOfflineSheet(){
+    const line = (ok, t, sub) => `<div class="offline-line${ok ? " ok" : ""}">${icon(ok ? "check" : "warn")}<div><b>${t}</b>${sub ? `<span>${sub}</span>` : ""}</div></div>`;
+    const paint = (r, busy) => `
+      ${line(true, "行程內容", r ? `存喺呢部機（${esc(whenLabel(new Date(r.at).toISOString()))}）` : "撳下面掣存一份最新嘅")}
+      ${line(!!r && r.photos === r.total, "地點相片", busy ? `下載緊 ${busy[0]}／${busy[1]}` : !r ? "未下載" : r.total ? `${r.photos}／${r.total} 張已經存低` : "行程入面未有相")}
+      ${line(!!(r && r.sw), "成個 app", r && !r.sw ? "呢個瀏覽器未裝好離線功能：用 Safari 開，撳「分享 → 加至主畫面」最穩陣" : "冇網都開到")}
+      ${line(false, "地圖底圖要網絡", "去之前喺 Google Maps 下載嗰個城市嘅離線地圖：撳頭像 → 離線地圖 → 揀你自己嘅地圖")}
+      <p class="hint">冇網嗰陣只可以睇，唔可以改；有返網就會自動更新。行程改咗之後最好再撳一次。</p>`;
+    openSheet(`<h3>準備離線</h3><div id="offline-box">${paint(offlineReady())}</div>
+      <button type="button" class="btn primary wide" id="offline-go">${icon("refresh")}${offlineReady() ? "再準備一次" : "準備離線"}</button>`, sheet => {
+      const box = sheet.querySelector("#offline-box"), go = sheet.querySelector("#offline-go");
+      go.addEventListener("click", async () => {
+        go.disabled = true; go.textContent = "準備緊…";
+        const r = await prepareOffline((n, of) => { if (box.isConnected) box.innerHTML = paint(offlineReady(), [n, of]); });
+        if (!box.isConnected) return;
+        box.innerHTML = paint(r);
+        go.disabled = false; go.innerHTML = `${icon("check")}準備好喇`;
+        render();
+      });
+    });
+  }
+  document.addEventListener("click", e => { if (e.target.closest && e.target.closest("[data-offline]")){ e.preventDefault(); openOfflineSheet(); } });
   function todayCardHtml(d){
     const day = todayDay();
     if (!day) return "";
@@ -5607,6 +5689,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       </section>
 
       ${todayCardHtml(d)}
+      ${offlineRowHtml(d)}
       <nav class="linemap" aria-label="每一日">
         ${lines}
       </nav>

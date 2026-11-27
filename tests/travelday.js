@@ -38,10 +38,13 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     });
     await p.route('**tile**', r => r.abort());
+    await p.route('**/storage/v1/object/public/**', r => { photoHits.push(r.request().url());
+      r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') }); });
     await p.goto('http://localhost:8799/trip.html?trip=1' + (opts.query || ''), { waitUntil: 'domcontentloaded' });
     await p.waitForTimeout(1300);
     return { p, ctx, errs, saved, cur };
   }
+  const photoHits = [];
   const lastSnap = saved => { const x = [...saved].reverse().find(v => v.snapshot); return x && x.snapshot; };
 
   let nextLabel = '', earlyHour = false;
@@ -60,6 +63,8 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
       const hm = m => `約 ${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       stops.forEach(s => { s.time = hm(Math.max(0, nowMin - 90)); });
       stops[stops.length - 1].time = hm(Math.min(1439, nowMin + 60));
+      stops[0].photoUrl = 'https://aczykqleoamxdekfsgqh.supabase.co/storage/v1/object/public/trip-photos/p_a_0.jpg';
+      stops[1].photoUrl = 'https://aczykqleoamxdekfsgqh.supabase.co/storage/v1/object/public/trip-photos/p_b_0.jpg';
       // in the first 40 minutes after midnight nothing can be "long gone",
       // so the first stop is rightly still the next one
       earlyHour = nowMin < 40;
@@ -84,6 +89,16 @@ const label = d => `${d.getMonth() + 1}月${d.getDate()}日（${WD[d.getDay()]}�
     await p.evaluate(() => document.querySelector('[data-go="overview"]').click());
     await p.waitForTimeout(400);
     ok('總覽頂有今日卡', /今日/.test(await p.locator('.todaycard').innerText()));
+    // 準備離線: every photo fetched once, and a plain account of what works
+    photoHits.length = 0;
+    ok('旅程期間總覽有「準備離線」', /準備離線/.test(await p.locator('.offrow').innerText()));
+    await p.locator('.offrow').click(); await p.waitForTimeout(300);
+    await p.locator('#offline-go').click(); await p.waitForTimeout(1500);
+    const box = await p.locator('#offline-box').innerText();
+    ok('相片全部下載咗', /2／2 張已經存低/.test(box) && photoHits.length >= 2, [box, photoHits.length]);
+    ok('講明地圖要網、點樣準備', /地圖底圖要網絡/.test(box) && /離線地圖/.test(box));
+    await p.locator('.sheet-close').click(); await p.waitForTimeout(300);
+    ok('準備好之後總覽講明', /冇網都睇得・.*準備好/.test(await p.locator('.offrow').innerText()), await p.locator('.offrow').innerText());
     ok('冇 JS 錯誤', errs.length === 0, errs);
     await p.close();
   }
