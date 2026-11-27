@@ -23,7 +23,10 @@
 const VERSION = "v6";
 const SHELL = `dumbofly-shell-${VERSION}`;
 const ASSETS = `dumbofly-assets-${VERSION}`;
-const PHOTOS = `dumbofly-photos-${VERSION}`;
+// Photos are immutable, so a new shell version must not throw them away —
+// 「準備離線」 downloads them for a trip abroad. The name is fixed on purpose
+// (it was "v6" when it stopped following VERSION, so phones keep theirs).
+const PHOTOS = "dumbofly-photos-v6";
 
 // Everything needed to render the app with no network at all.
 const SHELL_FILES = [
