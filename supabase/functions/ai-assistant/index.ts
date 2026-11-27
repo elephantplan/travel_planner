@@ -743,7 +743,35 @@ function compactItinerary(it: any) {
   return { 酒店: stays.length ? stays : (it?.accommodation?.name ?? ""), days };
 }
 
+// A long AI job (planning a day, a question) can come with
+// notify: { job, endpoint, title, body, url } from a phone that has
+// notifications on. When the answer is ready, trip-push tells that phone —
+// unless the phone was still on screen and said so (see trip-push job-ack).
+function aiDoneNotify(n: any, res: Response) {
+  const url = Deno.env.get("SUPABASE_URL"), k = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const job = String(n?.job ?? ""), endpoint = String(n?.endpoint ?? "");
+  if (!url || !k || !/^[\w-]{8,64}$/.test(job) || !/^https:\/\//.test(endpoint)) return;
+  const p = (async () => {
+    let ok = res.ok;
+    try { const j = await res.json(); if (j?.ok === false || j?.error) ok = false; } catch { /* still say it finished */ }
+    await fetch(`${url}/functions/v1/trip-push`, { method: "POST",
+      headers: { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "job-done", job, endpoint, url: String(n.url ?? ""),
+        title: ok ? String(n.title ?? "AI 做好咗") : "AI 今次做唔到",
+        body: ok ? String(n.body ?? "撳入去睇結果") : "返去個 app 再試一次" }) });
+  })().catch(() => {});
+  try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* no notification, the answer still went back */ }
+}
+
 Deno.serve(async (req) => {
+  let notify: any = null;
+  if (req.method === "POST") { try { notify = (await req.clone().json())?.notify ?? null; } catch { /* handled below */ } }
+  const res = await handle(req);
+  if (notify) aiDoneNotify(notify, res.clone());
+  return res;
+});
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
@@ -1135,4 +1163,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
-});
+}

@@ -13,6 +13,9 @@
 // POST { mode: "test", endpoint }                        → { ok, sent }
 // POST { mode: "notify", trip_id, title, body, url, except } → { ok, sent }
 // POST { mode: "prefs", endpoint, countdown?, freq? }    → { ok }
+// POST { mode: "job-ack", job }   the phone saw an AI answer itself
+// POST { mode: "job-done", job, endpoint, title, body, url }  (ai-assistant
+//   only) → notify that phone unless it acknowledged within 8 seconds
 // POST { mode: "tick" }   (hourly, from the Netlify schedule) → { ok, … }
 //   sends the merged change notifications that are due, and the 9am countdown
 // POST { mode: "daily" }  the countdown on its own (kept for old schedules)
@@ -53,7 +56,7 @@ async function vapid() {
   }
   // Apple refuses a signature whose contact is a made-up address (403
   // BadJwtToken), so it is the app's own site
-  webpush.setVapidDetails(Deno.env.get("PUSH_CONTACT") || "https://timely-truffle-6514b7.netlify.app", keys.publicKey, keys.privateKey);
+  webpush.setVapidDetails(Deno.env.get("PUSH_CONTACT") || "https://dumbofly.netlify.app", keys.publicKey, keys.privateKey);
   return keys;
 }
 
@@ -184,6 +187,31 @@ Deno.serve(async (req) => {
       const endpoint = str(body.endpoint, 1000);
       if (endpoint) await db("push_subs?endpoint=eq." + encodeURIComponent(endpoint), { method: "DELETE" });
       return json({ ok: true });
+    }
+
+    // An AI job a phone asked for has finished. The phone says 「收到」
+    // (job-ack) if it was on screen when the answer arrived; if it hasn't
+    // within a few seconds the family member has gone off to another app,
+    // so they get a notification instead. Only ai-assistant may say a job
+    // is done (service-role key), and only to a phone that is signed up.
+    if (body.mode === "job-ack") {
+      const job = str(body.job, 64);
+      if (!/^[\w-]{8,64}$/.test(job)) return json({ ok: false }, 400);
+      await db("ai_job_acks", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates" }, body: JSON.stringify({ job }) });
+      return json({ ok: true });
+    }
+    if (body.mode === "job-done") {
+      if (!SR || req.headers.get("authorization") !== "Bearer " + SR) return json({ ok: false }, 403);
+      const job = str(body.job, 64), endpoint = str(body.endpoint, 1000);
+      if (!/^[\w-]{8,64}$/.test(job) || !endpoint) return json({ ok: false }, 400);
+      await new Promise(r => setTimeout(r, 8000));
+      const acked = await (await db("ai_job_acks?job=eq." + encodeURIComponent(job) + "&select=job")).json().catch(() => []);
+      db("ai_job_acks?created_at=lt." + new Date(Date.now() - 864e5).toISOString(), { method: "DELETE" }).catch(() => {});
+      if (Array.isArray(acked) && acked.length) return json({ ok: true, sent: 0, seen: true });
+      const subs = await (await db("push_subs?endpoint=eq." + encodeURIComponent(endpoint) + "&select=endpoint,p256dh,auth")).json();
+      if (!Array.isArray(subs) || !subs.length) return json({ ok: false, sent: 0 });
+      const sent = await sendTo(subs, { title: str(body.title, 80) || "AI 做好咗", body: str(body.body, 160), url: str(body.url, 400) || "/" });
+      return json({ ok: sent > 0, sent });
     }
 
     if (body.mode === "test") {

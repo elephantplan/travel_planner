@@ -1592,6 +1592,13 @@ a.btn{text-decoration:none;}
 .ck{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--surface-2);cursor:pointer;font-size:14px;}
 .ck input{width:20px;height:20px;accent-color:var(--gold);flex:0 0 auto;}
 .ck.done span{color:var(--ink-faint);text-decoration:line-through;}
+.ck-head{margin-top:16px;}
+.ck-head small{font-weight:400;color:var(--ink-faint);margin-left:4px;}
+.ck.bk span{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+.ck.bk small{font-size:12px;color:var(--ink-soft);}
+.ck.bk.done small{text-decoration:none;}
+.meta-chip.booked{color:var(--ok);background:var(--ok-bg);}
+.bk-soon{font-style:normal;font-size:11.5px;font-weight:700;color:var(--danger);background:var(--danger-bg);border-radius:999px;padding:2px 8px;flex:0 0 auto;}
 
 /* ---------- read-only (shared link, or offline) ---------- */
 .robar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:70;padding:9px 14px;border-radius:14px;
@@ -1974,6 +1981,26 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .exhint{font-size:12px;color:var(--ink-faint);line-height:1.65;margin:8px 2px 0;}
 
 .aibtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+/* 易睇模式: the trip itself and every sheet scale, so buttons grow with the
+   text; the top bar and the dock are already finger-sized and stay put */
+html[data-text="big"] :is(#app,#layer){zoom:1.15;}
+html[data-text="huge"] :is(#app,#layer){zoom:1.3;}
+.easysize{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.easyopt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px;border:1px solid var(--rule);border-radius:14px;background:var(--surface);color:inherit;font:inherit;font-size:13px;cursor:pointer;}
+.easyopt span{font-weight:700;line-height:1.2;}
+.easyopt.on{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.easyview{align-items:flex-start;}
+/* 問 AI: one entry, tiles for what it can do here */
+.aihub-ctx{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-weight:700;}
+.aihub-ctx .dcode{background:var(--lc,var(--gold));color:#fff;border-radius:999px;padding:2px 9px;font-size:12px;}
+.aitiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.aitile{display:grid;grid-template-columns:auto 1fr;column-gap:8px;row-gap:2px;align-items:start;text-align:left;padding:11px 12px;border:1px solid var(--rule);border-radius:14px;background:var(--surface);color:inherit;font:inherit;cursor:pointer;min-height:64px;}
+.aitile svg{grid-row:span 2;width:20px;height:20px;color:var(--gold);margin-top:1px;}
+.aitile b{font-size:14.5px;line-height:1.3;}
+.aitile span{font-size:12px;color:var(--ink-soft);line-height:1.35;}
+.aitile:active{transform:scale(.98);}
+.aitile[data-hub]{border-color:var(--gold);}
+.aihub-days{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
 .askrow{display:flex;gap:8px;}
 .askrow .input{flex:1 1 auto;}
 .ai-out{margin-top:14px;display:flex;flex-direction:column;gap:10px;}
@@ -2361,6 +2388,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <button class="topbtn" id="btn-export"><span class="topbtn-i"></span><span>分享／匯出</span></button>
         <button class="topbtn" id="btn-undo" hidden aria-label="返上一步" title="返上一步"><span class="topbtn-i"></span><span>上一步</span></button>
         <button class="topbtn icononly" id="btn-reload" hidden aria-label="重新載入行程" title="重新載入行程"><span class="topbtn-i"></span></button>
+        <button class="topbtn icononly" id="btn-text" aria-label="字體大細同只睇模式" title="字體大細同只睇模式"><span class="topbtn-i"></span></button>
         <button class="topbtn icononly" id="btn-theme" aria-label="切換深淺色" title="切換深淺色"><span class="topbtn-i"></span></button>
       </nav>
     </div>
@@ -2384,7 +2412,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
 <div class="dock">
   <button class="dockbtn" id="btn-boards"><span class="dockbtn-i"></span><span>清單</span></button>
   <button class="dockbtn" id="btn-history"><span class="dockbtn-i"></span><span>改動紀錄</span></button>
-  <button class="dockbtn accent" id="btn-ai"><span class="dockbtn-i"></span><span>AI 助手</span></button>
+  <button class="dockbtn accent" id="btn-ai"><span class="dockbtn-i"></span><span>問 AI</span></button>
 </div>
 <div class="ptr" id="ptr" aria-hidden="true"><span class="ptr-i"></span><span class="ptr-t"></span></div>
 <div class="savestate" id="savestate"></div>
@@ -2404,7 +2432,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-27-2";
+  const BUILD = "2026-11-27-3";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -2484,6 +2512,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   const ICONS = {
     home:      '<path d="M3 10.2 12 3.5l9 6.7"/><path d="M5.6 9v10.5h12.8V9"/>',
     share:     '<path d="M12 3.5v11"/><path d="m8 7.2 4-3.7 4 3.7"/><path d="M5 13.5v6h14v-6"/>',
+    text:      '<path d="M3 18.5 7.6 6.5l4.6 12"/><path d="M4.7 14.2h5.8"/><path d="M14.6 11.6a3 3 0 0 1 5.4 1.8v5.1"/><path d="M20 15.2c-3.5-.3-5.7.6-5.7 2.1 0 1.1 1 1.6 2.2 1.5 1.7-.1 3.5-1.3 3.5-3.4"/>',
     contrast:  '<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 0 1 0 16.4z" fill="currentColor" stroke="none"/>',
     ribbon:    '<path d="M7 3.5h10v17l-5-3.8-5 3.8z"/>',
     list:      '<path d="M8.5 6.5h11M8.5 12h11M8.5 17.5h11"/><path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>',
@@ -2639,6 +2668,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     put("#btn-reload .topbtn-i", "refresh");
     put("#btn-undo .topbtn-i", "undo");
     put("#btn-theme .topbtn-i", "contrast");
+    put("#btn-text .topbtn-i", "text");
     put("#btn-boards .dockbtn-i", "pin");
     put("#btn-history .dockbtn-i", "clock");
     put("#btn-ai .dockbtn-i", "sparkle");
@@ -2688,6 +2718,40 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     localStorage.setItem("seoul_theme", t);
   }
   applyTheme(localStorage.getItem("seoul_theme") || "auto");
+  // ---------- 易睇模式: bigger text, and 只睇 so nothing gets changed by
+  // mistake. Each phone chooses for itself; nothing is saved to the trip.
+  const TEXT_SIZES = { normal: 1, big: 1.15, huge: 1.3 };
+  function textSize(){ try { const v = localStorage.getItem("dumbofly_text"); return TEXT_SIZES[v] ? v : "normal"; } catch (_){ return "normal"; } }
+  function applyTextSize(){ document.documentElement.setAttribute("data-text", textSize()); }
+  applyTextSize();
+  function viewOnlyWanted(){ try { return localStorage.getItem("dumbofly_viewonly") === "1"; } catch (_){ return false; } }
+  function openEasySheet(){
+    const sizes = [["normal", "標準"], ["big", "大"], ["huge", "特大"]];
+    const shared = state.readonly && !state.viewOnly;
+    openSheet(`
+      <h3>易睇模式</h3>
+      <p class="sec-sub">只係改呢部手機，其他人睇到嘅唔會變。</p>
+      <p class="picker-label">字嘅大細</p>
+      <div class="easysize" role="radiogroup" aria-label="字嘅大細">${sizes.map(([k, t]) =>
+        `<button type="button" class="easyopt${textSize() === k ? " on" : ""}" data-size="${k}" role="radio" aria-checked="${textSize() === k}"><span style="font-size:${Math.round(18 * TEXT_SIZES[k])}px">字</span>${t}</button>`).join("")}</div>
+      ${shared ? "" : `<label class="updopt easyview"><input type="checkbox" id="easy-view"${viewOnlyWanted() ? " checked" : ""}> <span><b>只睇唔改</b><br>收埋所有改嘢嘅掣，長輩撳極都唔會改錯</span></label>`}
+    `, sheet => {
+      sheet.querySelectorAll("[data-size]").forEach(b => b.addEventListener("click", () => {
+        try { localStorage.setItem("dumbofly_text", b.dataset.size); } catch (_){}
+        applyTextSize();
+        sheet.querySelectorAll("[data-size]").forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
+      }));
+      const vo = sheet.querySelector("#easy-view");
+      if (vo) vo.addEventListener("change", async () => {
+        try { if (vo.checked) localStorage.setItem("dumbofly_viewonly", "1"); else localStorage.removeItem("dumbofly_viewonly"); } catch (_){}
+        // anything typed but not yet saved goes first, then the page starts
+        // again in the other mode
+        try { if (!state.readonly) await flushSaves("易睇模式"); } catch (_){}
+        location.reload();
+      });
+    });
+  }
+  $("#btn-text").addEventListener("click", openEasySheet);
   $("#btn-theme").addEventListener("click", () => {
     const cur = localStorage.getItem("seoul_theme") || "auto";
     const next = THEMES[(THEMES.indexOf(cur) + 1 + THEMES.length) % THEMES.length];
@@ -2738,7 +2802,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // function never needs a hardcoded city to fall back on. Read fresh off
   // meta each time (not baked into a const) so re-planning this same app for
   // a different trip is just editing 首頁 fields, no code change anywhere.
-  async function callAi(payload){
+  // note: { title, body } for a long job — see aiNotifyTicket
+  async function callAi(payload, note){
     const m = (state.snapshot && state.snapshot.meta) || {};
     const body = Object.assign({
       brief: briefForAi(state.snapshot),
@@ -2765,6 +2830,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // returns keeps it running until the platform pulls the plug), or the
     // network dropped. Both surface as a bare TypeError whose message is the
     // browser's own wording ("Load failed" / "Failed to fetch"), so translate.
+    const ticket = await aiNotifyTicket(note);
+    if (ticket) body.notify = ticket;
     const ctl = new AbortController();
     // A Gemini text call that hasn't answered in a minute is not about to.
     // Bail well before the platform's own ~150s kill, which closes the socket
@@ -2792,6 +2859,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       throw e;
     } finally {
       clearTimeout(timer);
+      aiNotifyAck(ticket);
     }
     try {
       return await res.json();
@@ -4985,17 +5053,72 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     return L.map(t => ({ t, done: false }));
   }
   function checklistOf(d){ if (!Array.isArray(d.checklist)) d.checklist = defaultChecklist(); return d.checklist; }
+
+  // 要訂位／買飛: worked out from the trip itself, so a place that needs
+  // booking can't be forgotten. Ticking one marks the stop 「已訂」.
+  const BOOK_WORD = /要\s*(預約|訂位|預訂|訂枱|買飛|買票|抽籤)|需要?\s*(預約|訂位|預訂|網上買票)|預約制|完全予約|予約(必須|制)|요\s*예약|예약\s*필수|reservation (required|only)/i;
+  function stopBooked(s){
+    const tip = plain((s && s.tip) || "");
+    return !!(s && s.booked) || (/已\s*(訂|預約|book|reserv)/i.test(tip) && !/未\s*(訂|預約|book)/i.test(tip));
+  }
+  function needsBooking(s){
+    if (!s || s.kind !== "stop" || !plain(s.title)) return false;
+    if (s.booked) return true;
+    if (s.isFood && s.booking === "walkin") return false;
+    if (s.isFood && (s.booking === "online" || s.booking === "phone")) return true;
+    if (s.hyaku) return true;
+    return BOOK_WORD.test([s.tip, s.bookingHow, s.desc].map(x => plain(x || "")).join(" "));
+  }
+  function bookingList(snap){
+    const out = [];
+    (snap.days || []).forEach(day => (day.items || []).forEach((s, idx) => {
+      if (needsBooking(s)) out.push({ day, idx, s });
+    }));
+    return out;
+  }
+  function bookingHowLine(s){
+    const how = plain(s.bookingHow || "");
+    if (how) return how;
+    if (BOOKING_LABEL[s.booking]) return BOOKING_LABEL[s.booking];
+    if (s.hyaku) return "百名店，好多要提早訂位";
+    const m = [s.tip, s.desc].map(x => plain(x || "")).join(" ").match(BOOK_WORD);
+    return m ? m[0] : "";
+  }
+  function bookingRowHtml({ day, idx, s }){
+    const done = stopBooked(s);
+    const iso = dayIso(day);
+    const left = iso ? Math.round((new Date(iso + "T00:00:00") - new Date(localIso(new Date()) + "T00:00:00")) / 864e5) : null;
+    const when = [`Day ${esc(day.id.replace("day", ""))}${plain(s.time) ? " " + esc(plain(s.time).replace(/^約\s*/, "")) : ""}`, esc(bookingHowLine(s))].filter(Boolean).join("・");
+    const soon = !done && left != null && left >= 0 && left <= 30 ? `<em class="bk-soon">${left ? `${left} 日後去` : "今日去"}</em>` : "";
+    return `<li><label class="ck bk${done ? " done" : ""}"><input type="checkbox" data-bk="${esc(day.id)}|${idx}"${done ? " checked" : ""}${state.readonly ? " disabled" : ""}><span><b>${esc(cleanPlaceName(plain(s.title)))}</b><small>${when}</small></span>${soon}</label></li>`;
+  }
   function checklistHtml(d){
     if (isSectionHidden(d, "checklist")) return "";
     const list = Array.isArray(d.checklist) ? d.checklist : defaultChecklist();
-    const done = list.filter(x => x.done).length;
+    const books = bookingList(d);
+    const done = list.filter(x => x.done).length + books.filter(b => stopBooked(b.s)).length;
+    const total = list.length + books.length;
     return `<div class="hsblock" data-hskey="checklist">
       <h3>出發前 checklist${secTools("checklist")}</h3>
-      <p class="sec-sub">搞掂咗 ${done}／${list.length}，全家人見到同一份。</p>
-      <div class="ck-bar"><i style="width:${list.length ? Math.round(done / list.length * 100) : 0}%"></i></div>
+      <p class="sec-sub">搞掂咗 ${done}／${total}，全家人見到同一份。</p>
+      <div class="ck-bar"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></div>
       <ul class="ck-list">${list.map((x, k) => `<li><label class="ck${x.done ? " done" : ""}"><input type="checkbox" data-ck="${k}"${x.done ? " checked" : ""}${state.readonly ? " disabled" : ""}><span>${esc(x.t)}</span></label></li>`).join("")}</ul>
+      ${books.length ? `<p class="picker-label ck-head">要訂位／買飛 <small>由行程自動搵出嚟，訂咗就剔</small></p>
+      <ul class="ck-list">${books.map(bookingRowHtml).join("")}</ul>
+      <p class="hint">要唔要訂、幾時開放預約係 AI 同網上資料嘅印象，出發前一個月左右自己再 check 吓。</p>` : ""}
     </div>`;
   }
+  document.addEventListener("change", async e => {
+    const c = e.target.closest && e.target.closest("[data-bk]");
+    if (!c || state.readonly) return;
+    const [dayId, idx] = c.dataset.bk.split("|");
+    const day = dayById(dayId), st = day && day.items[+idx];
+    if (!st || st.kind !== "stop") return;
+    st.booked = c.checked;
+    if (!c.checked && stopBooked(st)) st.tip = plain(st.tip || "").replace(/已\s*(訂|預約)\S*/g, "").trim();
+    render();
+    await saveNow(`${c.checked ? "訂咗" : "取消咗已訂"}「${cleanPlaceName(plain(st.title))}」`);
+  });
   document.addEventListener("change", async e => {
     const c = e.target.closest && e.target.closest("[data-ck]");
     if (!c || state.readonly) return;
@@ -6899,6 +7022,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         ...(state.readonly || s.type === "eat" || s.isFood ? [] : [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一個星期${esc(weekdayCharOfDate(day.date))}有開嘅</button>`])] : [])
       .concat((() => { const c = cuisineOf(s); return c ? [`<span class="meta-chip cuisine">${c.icon} ${esc(c.name)}</span>`] : []; })())
       .concat(s.hyaku ? [`<span class="meta-chip cuisine">${icon("star")} ${esc(s.hyaku)}</span>`] : [])
+      .concat(s.booked ? [`<span class="meta-chip booked">${icon("check")} 已訂</span>`] : [])
       .concat(closedToday ? [] : hoursClashChip(s, day))
       .concat(!closedToday && !state.readonly && !(s.type === "eat" || s.isFood) && stopShutThen(s, day) === "time" ? [`<button type="button" class="btn findopen" data-findopen="${i}">${icon("refresh")}搵過一個嗰陣有開嘅</button>`] : [])
       .concat(!state.readonly && (s.type === "eat" || s.isFood) ? (stopShutThen(s, day)
@@ -8622,13 +8746,15 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
           } catch (e){ res.innerHTML = `<p class="hint">${esc(e.message)}</p>`; }
         }, 350);
       });
-      setTimeout(() => q.focus(), 50);
+      const aiFirst = opts && opts.tab === "ai" && sheet.querySelector('[data-instab="ai"]');
+      if (!aiFirst) setTimeout(() => q.focus(), 50);
       // tabs
       sheet.querySelectorAll("[data-instab]").forEach(t => t.addEventListener("click", () => {
         sheet.querySelectorAll("[data-instab]").forEach(x => x.classList.toggle("on", x === t));
         sheet.querySelectorAll("[data-pane]").forEach(pn => { pn.hidden = pn.dataset.pane !== t.dataset.instab; });
         if (t.dataset.instab === "find") setTimeout(() => q.focus(), 30);
       }));
+      if (aiFirst) aiFirst.click();
       // AI: kind, what they fancy, a few options
       let kind = (opts && opts.kind) || "eat";
       const options = anchors.length ? wirePlaceOptions(sheet, { kind }) : null;
@@ -12228,7 +12354,6 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const days = snap.days || [];
     const dest = plain(m.destinationLocal) || plain(m.destination) || "";
     const th = posterTheme(m, snap);
-    const booked = t => /已\s*(訂|預約|book|reserv)/i.test(t) && !/未\s*(訂|預約|book)/i.test(t);
     const L = [];
 
     L.push("幫我畫一張可愛、色彩豐富嘅插畫風「旅行行程海報」，似繪本或者旅遊雜誌嘅手繪地圖海報咁，一家大細睇到都會開心。");
@@ -12269,7 +12394,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         const tip = plain(s.tip || "");
         const kind = s.type === "eat" ? "［食］" : "";
         const hh = plain(s.time).replace(/^約\s*/, "") || (tip.match(/\d{1,2}\s*[:：]\s*\d{2}/) || [""])[0];
-        const t = booked(tip) ? `（已訂${hh ? " " + hh : ""}）` : "";
+        const t = stopBooked(s) ? `（已訂${hh ? " " + hh : ""}）` : "";
         L.push(`・${kind}${cleanPlaceName(plain(s.title)) || plain(s.title)}${kr ? `（${kr}）` : ""}${t}`);
       });
       const st = stayForDay(snap, day);
@@ -12985,7 +13110,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
           // a reply that isn't valid JSON is usually fine on the next go:
           // try again quietly instead of handing the family an error
           for (let tries = 0; tries < 3; tries++){
-            r = await callAi({ action:"day-plan", dayIds, question, itinerary: state.snapshot });
+            r = await callAi({ action:"day-plan", dayIds, question, itinerary: state.snapshot },
+              { title: `AI 諗好咗 ${dayIds.map(id => "Day " + id.replace("day", "")).join("、")} 嘅行程`, body: "撳入去睇吓，啱就加落行程" });
             if (!(r && r.ok === false && /格式|截斷|太長/.test(r.message || ""))) break;
           }
         } catch (e){
@@ -13085,15 +13211,31 @@ ${stayBlock}${dayBlocks}${secBlocks}
   }
 
   // ---------- AI ----------
+  // One way in for everything AI does. What it offers depends on where you
+  // are: on a day (or, during the trip, on the overview) the first two are
+  // about that day; otherwise you pick which day to plan.
+  function aiHubDay(){ return dayById(state.view) || (state.view === "overview" ? todayDay() : null); }
+  function aiHubHtml(){
+    const day = aiHubDay(), days = state.snapshot.days || [];
+    const tile = (attr, ic, t, sub) => `<button type="button" class="aitile" ${attr}>${icon(ic)}<b>${t}</b><span>${sub}</span></button>`;
+    const n = day ? esc(day.id.replace("day", "")) : "";
+    return `
+      ${day ? `<p class="aihub-ctx" style="--lc:${dayColorVar(day.id)}"><span class="dcode">Day ${n}</span>${esc(plain(day.title))}</p>` : ""}
+      <div class="aitiles">
+        ${day ? tile('data-hub="plan"', "sparkle", `幫 Day ${n} 諗行程`, day.items.some(i => i.kind === "stop") ? "補唔夠嘅位，唔會重複" : "由早到晚砌一日")
+              + tile('data-hub="add"', "plus", `Day ${n} 加一個地點`, "食嘢、景點、購物，畀幾個揀") : ""}
+        ${tile('data-ai="suggest"', "check", "執一執成個行程", "太趕、重複、唔順路")}
+        ${tile('data-ai="weather"', "sun", "實時天氣", "更新天氣表同著衫")}
+        ${tile('data-ai="foliage"', "leaf", "季節情況", "紅葉、櫻花而家點")}
+      </div>
+      ${!day && days.length ? `<p class="picker-label">幫邊日諗行程？</p>
+      <div class="aihub-days">${days.map(d => `<button type="button" class="pfchip" data-hub-day="${esc(d.id)}" style="--lc:${dayColorVar(d.id)}">Day ${esc(d.id.replace("day", ""))}</button>`).join("")}</div>` : ""}`;
+  }
   $("#btn-ai").addEventListener("click", () => {
     openSheet(`
-      <h3>AI 助手</h3>
-      <p class="sec-sub">問實時天氣同當地季節情況，或者叫佢執一執行程。問過嘅嘢會自動存底，去頂部「問過啲咩」睇返。</p>
-      <div class="aibtns">
-        <button class="btn" data-ai="weather">${icon("sun")}實時天氣</button>
-        <button class="btn" data-ai="foliage">${icon("leaf")}季節情況</button>
-        <button class="btn" data-ai="suggest">${icon("sparkle")}執一執行程</button>
-      </div>
+      <h3>問 AI</h3>
+      <p class="sec-sub">揀一樣叫 AI 做，或者喺下面直接問。問過嘅嘢會存底，喺「問過啲咩」睇得返。</p>
+      ${aiHubHtml()}
       <div class="ai-out" id="ai-out"></div>
       <div class="ai-chat" id="ai-chat"></div>
       <div class="askrow">
@@ -13130,6 +13272,20 @@ ${stayBlock}${dayBlocks}${secBlocks}
         stopBusy = busyIn(out, { steps:[what || "AI 諗緊"], hint:"大約 10-30 秒，睇下要睇幾多資料。" });
       };
 
+      const hubDay = aiHubDay();
+      layer.querySelectorAll("[data-hub]").forEach(b => b.addEventListener("click", () => {
+        if (!hubDay) return;
+        if (b.dataset.hub === "plan") openDayAiSheet(hubDay);
+        else {
+          if (state.view !== hubDay.id){ state.view = hubDay.id; render(); }
+          openInsertSheet(hubDay, toUnits(hubDay.items).length, { tab: "ai" });
+        }
+      }));
+      layer.querySelectorAll("[data-hub-day]").forEach(b => b.addEventListener("click", () => {
+        const d = dayById(b.dataset.hubDay); if (!d) return;
+        state.view = d.id; render(); openDayAiSheet(d);
+      }));
+
       layer.querySelector("#go-notes").addEventListener("click", () => {
         closeLayer();
         state.view = "notes";
@@ -13160,7 +13316,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
             el.scrollIntoView({ block: "start" });
             const stop = busyIn(el.querySelector(".qa-a"), { steps:["AI 睇緊你個行程"], hint:"大約 10-30 秒。" });
             let r;
-            try { r = await callAi({ action:"ask", question: question + REC_HINT, itinerary: state.snapshot, history }); }
+            try { r = await callAi({ action:"ask", question: question + REC_HINT, itinerary: state.snapshot, history },
+              { title: "AI 答咗你", body: question.slice(0, 60) }); }
             finally { stop(); b.disabled = false; }
             const t = { q: question, a: r.aiSummary || r.message || "冇回覆" };
             if (r.aiSummary){ aiChat.turns.push(t); aiChatStore(); saveAiNote("ask", question, t.a); }
@@ -13169,7 +13326,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
             q.placeholder = "繼續問…（會記得上面講過嘅）";
             const sh = el.closest(".sheet"); if (sh) sh.scrollTop += el.getBoundingClientRect().top - sh.getBoundingClientRect().top - 12;
           } else if (act === "suggest"){
-            const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot });
+            const r = await callAi({ action:"suggest", question:q.value.trim(), itinerary: state.snapshot },
+              { title: "AI 執好咗行程建議", body: "撳入去睇有咩要改" });
             if (r.ok === false){ out.innerHTML = `<div class="ai-msg">${esc(r.message)}</div>`; return; }
             const changes = r.changes || [];
             if (!changes.length){
@@ -14975,7 +15133,6 @@ ${stayBlock}${dayBlocks}${secBlocks}
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
     const uid = k => `${state.tripId || "trip"}-${k}@timely-truffle-6514b7.netlify.app`;
     const addDay = (iso, n) => { const x = new Date(iso + "T00:00:00"); x.setDate(x.getDate() + n); return localIso(x); };
-    const booked = t => /已\s*(訂|預約|book|reserv)/i.test(t) && !/未\s*(訂|預約|book)/i.test(t);
     const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//trip planner//zh-HK", "CALSCALE:GREGORIAN",
       `X-WR-CALNAME:${esc2(plain(m.title) || "行程")}`];
     const ev = (k, lines) => L.push("BEGIN:VEVENT", `UID:${uid(k)}`, `DTSTAMP:${stamp}`, ...lines, "END:VEVENT");
@@ -14992,7 +15149,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         const hh = String(+t[1]).padStart(2, "0"), mm = t[2];
         const end = new Date(`${iso}T${hh}:${mm}:00`); end.setHours(end.getHours() + 1);
         const endS = `${localIso(end).replace(/-/g, "")}T${String(end.getHours()).padStart(2, "0")}${String(end.getMinutes()).padStart(2, "0")}00`;
-        const isBooked = booked(plain(x.tip || ""));
+        const isBooked = stopBooked(x);
         ev(`day${i + 1}-${j}`, [`DTSTART:${d8(iso)}T${hh}${mm}00`, `DTEND:${endS}`,
           `SUMMARY:${esc2((isBooked ? "已訂：" : "") + cleanPlaceName(plain(x.title)))}`,
           ...(plain(x.kr) ? [`LOCATION:${esc2(plain(x.kr))}`] : []),
@@ -15204,6 +15361,24 @@ ${stayBlock}${dayBlocks}${secBlocks}
   function pushSupported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; }
   function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
   function pushOn(){ try { return localStorage.getItem(pushKey()) === "1"; } catch (_){ return false; } }
+  // 「AI 做好咗」: on whenever notifications are on, unless switched off
+  function aiNotifyWanted(){ try { return pushOn() && localStorage.getItem("trip_push_ai") !== "0"; } catch (_){ return false; } }
+  // A long AI job carries this, so that if the phone has gone to another
+  // app by the time the answer is ready, the server sends a notification.
+  // Seen on screen → job-ack, and the server stays quiet.
+  async function aiNotifyTicket(note){
+    if (!note || !aiNotifyWanted()) return null;
+    try {
+      const sub = await withTimeout(mySub(), 1500, null);
+      if (!sub) return null;
+      const job = (crypto.randomUUID && crypto.randomUUID()) || (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+      return { job, endpoint: sub.endpoint, title: note.title, body: note.body || "撳入去睇結果", url: location.pathname + location.search + location.hash };
+    } catch (_){ return null; }
+  }
+  function aiNotifyAck(t){
+    if (!t || document.visibilityState !== "visible") return;
+    fetch(PUSH_URL, { method: "POST", headers: sbHeaders(), body: JSON.stringify({ mode: "job-ack", job: t.job }) }).catch(() => {});
+  }
   // the 9am countdown is about the next trip, whichever it is, so it is one
   // choice per phone (on unless switched off)
   function pushFreq(){ try { return localStorage.getItem("trip_push_freq") === "daily" ? "daily" : "batch"; } catch (_){ return "batch"; } }
@@ -15280,6 +15455,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
              <label class="updopt"><input type="radio" name="push-freq" value="batch"${pushFreq() === "batch" ? " checked" : ""}> 改完等 30 分鐘，合埋一個通知</label>
              <label class="updopt"><input type="radio" name="push-freq" value="daily"${pushFreq() === "daily" ? " checked" : ""}> 每日一次：晚上 9 點總結當日改咗咩</label>
            </div>
+           <label class="updopt"><input type="checkbox" id="push-ai"${aiNotifyWanted() ? " checked" : ""}> AI 做完嘢通知我（例如叫咗佢諗行程，你走開咗去用其他 app）</label>
            <label class="updopt"><input type="checkbox" id="push-cd"${countdownWanted() ? " checked" : ""}> 每日朝早 9 點提我仲有幾多日出發（出發前 20 日開始）</label>
            <label class="updopt"><input type="checkbox" id="push-me"${(() => { try { return localStorage.getItem(pushKey() + "_me") === "1"; } catch (_){ return false; } })() ? " checked" : ""}> 自己改都通知埋我（自己一個試用）</label>
            <button class="btn primary wide" id="push-test">${icon("sparkle")}發個測試通知俾自己</button>
@@ -15319,6 +15495,8 @@ ${stayBlock}${dayBlocks}${secBlocks}
         try { const sub = await mySub(); if (sub) await pushCall({ mode: "prefs", endpoint: sub.endpoint, countdown: cd.checked }); } catch (_){}
         flash(cd.checked ? "會每朝 9 點提你倒數" : "唔再發倒數通知");
       });
+      const aiBox = sheet.querySelector("#push-ai");
+      if (aiBox) aiBox.addEventListener("change", () => { try { localStorage.setItem("trip_push_ai", aiBox.checked ? "1" : "0"); } catch (_){} });
       const meBox = sheet.querySelector("#push-me");
       if (meBox) meBox.addEventListener("change", () => { try { if (meBox.checked) localStorage.setItem(pushKey() + "_me", "1"); else localStorage.removeItem(pushKey() + "_me"); } catch (_){} });
       const off = sheet.querySelector("#push-off");
@@ -15579,6 +15757,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       return;
     }
     if (params.get("view") === "1"){ state.readonly = true; document.body.classList.add("readonly"); }
+    else if (viewOnlyWanted()){ state.readonly = true; state.viewOnly = true; document.body.classList.add("readonly"); }
     // a share link's token: kept for this trip on this device, sent with every
     // database request, and taken out of the address bar
     if (window.TripAuth){
@@ -15646,7 +15825,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
       bar.className = "robar";
       bar.textContent = state.offline
         ? `冇網絡：顯示 ${new Date(state.offline).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} 存低嘅版本，有網就會自動更新（暫時改唔到）`
-        : "唯讀：只可以睇，唔可以改";
+        : state.viewOnly ? "只睇模式：撳頂部「Aa」可以熄" : "唯讀：只可以睇，唔可以改";
       document.body.appendChild(bar);
     }
     saver.lastPersistedJson = snapJson();
