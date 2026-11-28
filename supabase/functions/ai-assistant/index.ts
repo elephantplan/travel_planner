@@ -26,15 +26,129 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function fetchWeather(lat: number, lng: number, dateStart: string, dateEnd: string) {
+async function fetchOpenMeteo(lat: number, lng: number, dateStart: string, dateEnd: string) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode` +
     `&timezone=auto&start_date=${dateStart}&end_date=${dateEnd}`;
   const res = await fetch(url);
-  if (!res.ok) return { inForecastRange: false, daily: null };
+  if (!res.ok) return null;
   const data = await res.json();
-  const inForecastRange = Array.isArray(data?.daily?.time) && data.daily.time.length > 0;
-  return { inForecastRange, daily: data?.daily ?? null };
+  return Array.isArray(data?.daily?.time) && data.daily.time.length ? data.daily : null;
+}
+
+// In Japan the official forecast is the Japan Meteorological Agency's own
+// (what tenki.jp and the TV forecasts build on). It is published as open
+// JSON per forecast office, covers today and the next 6 days, and says how
+// sure it is (A/B/C). Days it does not reach yet stay on Open-Meteo.
+// Each office's main city, so a trip goes to the nearest one.
+const JMA_OFFICES: [string, number, number][] = [
+  ["011000", 45.41, 141.67], ["012000", 43.77, 142.37], ["013000", 44.02, 144.27], ["014030", 42.92, 143.2],
+  ["014100", 42.98, 144.38], ["015000", 42.32, 140.97], ["016000", 43.06, 141.35], ["017000", 41.77, 140.73],
+  ["020000", 40.82, 140.74], ["030000", 39.7, 141.15], ["040000", 38.27, 140.87], ["050000", 39.72, 140.1],
+  ["060000", 38.24, 140.36], ["070000", 37.75, 140.47], ["080000", 36.34, 140.45], ["090000", 36.57, 139.88],
+  ["100000", 36.39, 139.06], ["110000", 35.86, 139.65], ["120000", 35.61, 140.12], ["130000", 35.69, 139.69],
+  ["140000", 35.45, 139.64], ["150000", 37.9, 139.02], ["160000", 36.7, 137.21], ["170000", 36.59, 136.63],
+  ["180000", 36.07, 136.22], ["190000", 35.66, 138.57], ["200000", 36.65, 138.18], ["210000", 35.39, 136.72],
+  ["220000", 34.98, 138.38], ["230000", 35.18, 136.91], ["240000", 34.73, 136.51], ["250000", 35.0, 135.87],
+  ["260000", 35.02, 135.76], ["270000", 34.69, 135.52], ["280000", 34.69, 135.18], ["290000", 34.69, 135.83],
+  ["300000", 34.23, 135.17], ["310000", 35.5, 134.24], ["320000", 35.47, 133.05], ["330000", 34.66, 133.93],
+  ["340000", 34.4, 132.46], ["350000", 34.19, 131.47], ["360000", 34.07, 134.56], ["370000", 34.34, 134.04],
+  ["380000", 33.84, 132.77], ["390000", 33.56, 133.53], ["400000", 33.61, 130.42], ["410000", 33.25, 130.3],
+  ["420000", 32.74, 129.87], ["430000", 32.79, 130.74], ["440000", 33.24, 131.61], ["450000", 31.91, 131.42],
+  ["460100", 31.56, 130.56], ["460040", 28.38, 129.49], ["471000", 26.21, 127.68], ["472000", 25.83, 131.23],
+  ["473000", 24.81, 125.28], ["474000", 24.34, 124.16],
+];
+function jmaOffice(lat: number, lng: number): string | null {
+  let best: string | null = null, bestKm = 150;   // further than this: not in Japan
+  for (const [code, a, b] of JMA_OFFICES) {
+    const km = Math.hypot((lat - a) * 111, (lng - b) * 111 * Math.cos(lat * Math.PI / 180));
+    if (km < bestKm) { bestKm = km; best = code; }
+  }
+  return best;
+}
+// JMA weather codes: the hundreds say the main sky, the rest what else
+function jmaSky(code: string): string {
+  const n = Number(code), main = Math.floor(n / 100), rest = n % 100;
+  const b = ({ 1: "晴", 2: "多雲", 3: "雨", 4: "雪" } as Record<number, string>)[main] || "";
+  if (!b || !rest) return b;
+  if (rest === 1) return main === 1 ? "晴間多雲" : main === 2 ? "多雲間中天晴" : b + "間中停";
+  if (rest <= 9) return main >= 3 ? b + "間中停" : b + (rest === 4 || rest === 5 ? "間中有雪" : "間中有雨");
+  if (rest <= 19) {
+    const then = rest <= 11 ? (main === 1 ? "多雲" : "晴") : rest >= 15 && rest <= 17 ? "落雪" : main === 3 ? "多雲" : "落雨";
+    return b + "後轉" + then;
+  }
+  return b + (main >= 3 ? "" : "後有雨");
+}
+const RELIABLE: Record<string, string> = { A: "高", B: "中", C: "低" };
+async function fetchJma(lat: number, lng: number) {
+  const office = jmaOffice(lat, lng);
+  if (!office) return null;
+  try {
+    const res = await fetch(`https://www.jma.go.jp/bosai/forecast/data/forecast/${office}.json`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const out: Record<string, { hi?: number; lo?: number; pop?: number; sky?: string; rel?: string }> = {};
+    const day = (t: string) => String(t).slice(0, 10);
+    const put = (t: string, k: string, v: unknown) => { if (v === "" || v == null) return; (out[day(t)] ||= {} as any)[k] = v; };
+    // the week ahead: sky, chance of rain, how sure, low and high
+    const week = data?.[1]?.timeSeries || [];
+    const sky = week[0]?.areas?.[0], temp = week[1]?.areas?.[0];
+    (week[0]?.timeDefines || []).forEach((t: string, i: number) => {
+      if (sky?.weatherCodes?.[i]) put(t, "sky", jmaSky(sky.weatherCodes[i]));
+      if (sky?.pops?.[i] !== "" && sky?.pops?.[i] != null) put(t, "pop", Number(sky.pops[i]));
+      if (sky?.reliabilities?.[i]) put(t, "rel", RELIABLE[sky.reliabilities[i]] || "");
+    });
+    (week[1]?.timeDefines || []).forEach((t: string, i: number) => {
+      if (temp?.tempsMax?.[i]) put(t, "hi", Number(temp.tempsMax[i]));
+      if (temp?.tempsMin?.[i]) put(t, "lo", Number(temp.tempsMin[i]));
+    });
+    // today and tomorrow come from the detailed forecast, which fills the
+    // week's blanks: the sky, the highest 6-hourly chance of rain, and the
+    // morning low / daytime high for the main city
+    const near = data?.[0]?.timeSeries || [];
+    const nSky = near[0]?.areas?.[0];
+    (near[0]?.timeDefines || []).forEach((t: string, i: number) => {
+      if (nSky?.weatherCodes?.[i] && !out[day(t)]?.sky) put(t, "sky", jmaSky(nSky.weatherCodes[i]));
+    });
+    const popMax: Record<string, number> = {};
+    (near[1]?.timeDefines || []).forEach((t: string, i: number) => {
+      const v = near[1]?.areas?.[0]?.pops?.[i];
+      if (v !== "" && v != null) popMax[day(t)] = Math.max(popMax[day(t)] ?? 0, Number(v));
+    });
+    for (const [d, v] of Object.entries(popMax)) if (out[d]?.pop == null) put(d, "pop", v);
+    const nT = near[2]?.areas?.[0];
+    const byDay: Record<string, number[]> = {};
+    (near[2]?.timeDefines || []).forEach((t: string, i: number) => {
+      const v = nT?.temps?.[i];
+      if (v !== "" && v != null) (byDay[day(t)] ||= []).push(Number(v));
+    });
+    for (const [d, vs] of Object.entries(byDay)) if (vs.length >= 2 && Math.min(...vs) < Math.max(...vs) && out[d]?.hi == null) { put(d, "lo", Math.min(...vs)); put(d, "hi", Math.max(...vs)); }
+    return { office, at: String(data?.[0]?.reportDatetime || ""), days: out };
+  } catch { return null; }
+}
+
+// Open-Meteo for every day it has; the JMA's own numbers wherever it has
+// them, marked so the table can say which is which.
+async function fetchWeather(lat: number, lng: number, dateStart: string, dateEnd: string) {
+  const [om, jma] = await Promise.all([fetchOpenMeteo(lat, lng, dateStart, dateEnd), fetchJma(lat, lng)]);
+  const dates: string[] = [];
+  for (let d = new Date(dateStart + "T00:00:00Z"); d <= new Date(dateEnd + "T00:00:00Z") && dates.length < 40; d.setUTCDate(d.getUTCDate() + 1))
+    dates.push(d.toISOString().slice(0, 10));
+  const daily: any = { time: [], temperature_2m_max: [], temperature_2m_min: [], precipitation_probability_max: [], source: [], sky: [], reliability: [] };
+  for (const d of dates) {
+    const k = om ? om.time.indexOf(d) : -1, j = jma?.days?.[d];
+    const useJ = !!(j && j.hi != null && j.lo != null);
+    if (!useJ && k < 0) continue;
+    daily.time.push(d);
+    daily.temperature_2m_max.push(useJ ? j!.hi : om.temperature_2m_max[k]);
+    daily.temperature_2m_min.push(useJ ? j!.lo : om.temperature_2m_min[k]);
+    daily.precipitation_probability_max.push(useJ && j!.pop != null ? j!.pop : k >= 0 ? om.precipitation_probability_max[k] : null);
+    daily.source.push(useJ ? "jma" : "open-meteo");
+    daily.sky.push(useJ ? (j!.sky || "") : "");
+    daily.reliability.push(useJ ? (j!.rel || "") : "");
+  }
+  const inForecastRange = daily.time.length > 0;
+  return { inForecastRange, daily: inForecastRange ? daily : null, jma: jma ? { office: jma.office, at: jma.at } : null };
 }
 
 // Free-tier quota is per-key, so extra Gemini keys let a run keep going once
@@ -813,10 +927,13 @@ async function handle(req: Request): Promise<Response> {
       const weather = await fetchWeather(lat, lng, dateStart, dateEnd);
       let summary = "";
       if (weather.inForecastRange) {
-        const lines = weather.daily.time.map((d: string, i: number) =>
-          `${d}: ${weather.daily.temperature_2m_min[i]}–${weather.daily.temperature_2m_max[i]}°C，降雨機率${weather.daily.precipitation_probability_max[i]}%`
+        const w = weather.daily;
+        const lines = w.time.map((d: string, i: number) =>
+          `${d}: ${w.sky[i] ? w.sky[i] + "，" : ""}${w.temperature_2m_min[i]}–${w.temperature_2m_max[i]}°C，降雨機率${w.precipitation_probability_max[i] ?? "—"}%` +
+          `${w.reliability[i] ? `（可信度${w.reliability[i]}）` : ""}${w.source[i] === "jma" ? "［日本氣象廳］" : "［Open-Meteo］"}`
         );
-        summary = "目的地未來預報（真實數據）：\n" + lines.join("\n");
+        const nJ = w.source.filter((x: string) => x === "jma").length;
+        summary = (nJ ? `目的地未來預報（${nJ === w.time.length ? "日本氣象廳官方預報" : `頭 ${nJ} 日用日本氣象廳官方預報，之後用 Open-Meteo`}）：\n` : "目的地未來預報（真實數據）：\n") + lines.join("\n");
       } else {
         summary = "而家距離出發日仲遠，Open-Meteo暫時未有呢幾日嘅短期預報（一般得16日內），下面沿用歷史同期平均值作參考，出發前一週請再check。";
       }

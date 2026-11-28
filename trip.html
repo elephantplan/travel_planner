@@ -2432,7 +2432,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-28-1";
+  const BUILD = "2026-11-28-2";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -5515,6 +5515,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   function weatherSourceLine(d){
     const rows = d.weatherRows || [], live = rows.filter(r => r.live).length;
     const at = d.weatherAt ? `（${whenLabel(d.weatherAt)}更新）` : "";
+    const jma = rows.filter(r => r.src === "jma").length;
+    if (jma) return `${jma === rows.length ? "日本氣象廳官方預報" : `頭 ${jma} 日係日本氣象廳官方預報，${live > jma ? "之後幾日係 Open-Meteo 預報" : "之後幾日預報未出"}`}${at}。氣象廳只預報一星期，越近出發越準，臨出發再撳一次。`;
     if (live && live === rows.length) return `實時預報${at}。臨出發再撳一次，攞最新嗰份。`;
     if (live) return `頭 ${live} 日係實時預報${at}，之後幾日預報未出，仲係${d.weatherFrom === "mixed" || d.weatherFrom === "lastyear" ? "去年同期" : "參考"}數字，過幾日再 check。`;
     return `${d.weatherFrom === "lastyear" ? "去年同一段日子嘅實際天氣，做參考" : "歷年同期平均"}，出發前一週撳下面粒掣 check 返實時預報。`;
@@ -5529,7 +5531,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
         <p class="sec-sub">${weatherSourceLine(d)}</p>
         <table class="wtable">
           <tr><th>日期</th><th>日高</th><th>晨低</th><th>概況</th></tr>
-          ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${esc(r.note)}</td></tr>`).join("")}
+          ${(d.weatherRows||[]).map(r=>`<tr><td class="mono">${esc(r.date)}</td><td class="hi">${esc(r.hi)}</td><td class="lo">${esc(r.lo)}</td><td>${String(r.note || "").split("・").map(esc).join("<br>")}</td></tr>`).join("")}
         </table>
         ${liveCheckButtonHtml("weather", "Check 依家嘅實時預報")}
       </div>`;
@@ -14782,13 +14784,15 @@ ${stayBlock}${dayBlocks}${secBlocks}
     return daily.time.map((iso, i) => {
       const hi = daily.temperature_2m_max?.[i], lo = daily.temperature_2m_min?.[i];
       const rain = daily.precipitation_probability_max?.[i];
+      const sky = daily.sky?.[i] || "", rel = daily.reliability?.[i] || "";
       const d = isoToUtc(iso);
       return {
         date: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`,
         hi: hi == null ? "" : `${Math.round(hi)}°`,
         lo: lo == null ? "" : `${Math.round(lo)}°`,
-        note: rain == null ? "" : `降雨機率 ${rain}%`,
+        note: [sky, rain == null ? "" : `降雨機率 ${rain}%`, rel ? `可信度${rel}` : ""].filter(Boolean).join("・"),
         live: true,
+        ...(daily.source?.[i] === "jma" ? { src: "jma" } : {}),
       };
     });
   }

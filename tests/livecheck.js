@@ -151,6 +151,25 @@ const FOLIAGE = { aiSummary: '2026 年銀杏絕頂 10 月 30 日，首爾市區�
     await p.close();
   }
 
+  console.log('\nF. 日本：用日本氣象廳官方預報');
+  {
+    const keep = WEATHER.raw.daily;
+    WEATHER.raw.daily = { time: ['2026-10-23', '2026-10-24', '2026-10-25'],
+      temperature_2m_max: [18, 19, 15.3], temperature_2m_min: [11, 12, 10.9], precipitation_probability_max: [40, 30, 77],
+      source: ['jma', 'jma', 'open-meteo'], sky: ['多雲', '多雲間中天晴', ''], reliability: ['中', '中', ''] };
+    const { p, errs } = await boot();
+    await p.locator('[data-livecheck="weather"]').click();
+    await p.waitForTimeout(1200);
+    const t = await p.locator('[data-hskey="weather"] .wtable').innerText();
+    ok('寫埋天氣同可信度', /多雲間中天晴/.test(t) && /可信度中/.test(t), t.slice(0, 160));
+    const sub = await p.locator('[data-hskey="weather"] .sec-sub').innerText();
+    ok('講明頭 2 日係氣象廳，之後 Open-Meteo', /頭 2 日係日本氣象廳官方預報/.test(sub) && /Open-Meteo/.test(sub), sub);
+    await p.locator('[data-hskey="weather"]').screenshot({ path: '/tmp/claude-0/jma.png' });
+    ok('冇 JS 錯誤', errs.length === 0, errs);
+    await p.close();
+    WEATHER.raw.daily = keep;
+  }
+
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
