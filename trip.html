@@ -851,8 +851,7 @@ img{max-width:100%;}
    card. The icons carry no information the word does not — so they go,
    and the row fits on one line. Icons stay where they mean something:
    the rail, the connectors, the top bar. */
-.stopfoot{display:flex;gap:4px 14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
-  padding:2px 12px 13px;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);}
+.stopfoot{display:flex;gap:8px;flex-wrap:wrap;padding:2px 12px 13px;}
 .stopfoot::-webkit-scrollbar{display:none;}
 .stopfoot > *{flex:0 0 auto;white-space:nowrap;}
 .stopfoot .maplink{font-size:11.5px;}
@@ -2435,7 +2434,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-28-5";
+  const BUILD = "2026-11-28-6";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -4243,12 +4242,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const est = /・估計/.test(text);
     return `<button type="button" class="modebtn" ${attr} title="轉交通方式" aria-label="轉交通方式：${esc(text)}"><span class="icon">${icon(MODE_ICON[mode] || "walk")}</span></button>${est ? `<span title="${esc(EST_NOTE)}">${esc(text)}</span>` : esc(text)}`;
   }
-  // A card shows its map link; the rest (search, copy name, taxi card,
-  // photo…) sit behind 「更多」, so a day of cards doesn't read as a wall of buttons
-  function footLinks(links){
-    if (links.length <= 2) return links.join("");
-    return links[0] + `<button type="button" class="maplink morelinks" data-morelinks aria-expanded="false">${icon("more")}更多</button><span class="morewrap" hidden>${links.slice(1).join("")}</span>`;
-  }
+  // Every link on a card shows: map, search, copy name, taxi card, photo…
+  // (they used to sit behind 「更多」, which was one tap too many)
+  function footLinks(links){ return links.join(""); }
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-morelinks]");
     if (!b) return;

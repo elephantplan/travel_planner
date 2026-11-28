@@ -104,7 +104,7 @@ const DAYS = {
   ok('工具只得一行：AI 諗行程、落雨版、更多', await p.locator('.daytools #dayai').count() === 1 && await p.locator('#rainplan').count() === 1 && await p.locator('#selstart').count() === 0);
   await p.locator('#daymore').click(); await p.waitForTimeout(200);
   ok('撳「更多」先見其他工具', await p.locator('#selstart').count() === 1 && await p.locator('#clearday').count() === 1);
-  ok('卡上淨係地圖同「更多」', await p.locator('.stopcard').nth(1).locator('.stopfoot > .maplink:visible, .stopfoot > a:visible, .stopfoot > button:visible').count() <= 2);
+  ok('卡上所有掣都見到，唔使撳「更多」', await p.locator('.stopcard').nth(1).locator('[data-morelinks]').count() === 0 && await p.locator('.stopcard').nth(1).locator('.stopfoot > :visible').count() >= 2);
   ok('交通說明短咗', !/車站係真嘅/.test(await p.locator('#app').innerText()) && /・估計/.test(await p.locator('#app').innerText()));
   // a stop without a price gets one on request
   // rainy version
