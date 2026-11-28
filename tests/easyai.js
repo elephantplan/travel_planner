@@ -167,6 +167,7 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
   {
     const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
     const { p, errs } = await boot(c => {
+      c.days[0].items.find(i => /明洞餃子/.test(i.title || '')).type = 'eat';
       c.sections = [{ id: 'u1', icon: '', title: '去到要做', sub: '', lines: ['飲益力多', '食布甸'], links: [], source: 'manual', topic: '', aiRefresh: false, where: 'prep' }];
     }, { ctx });
     await p.locator('#btn-export').click(); await p.waitForTimeout(400);
@@ -192,6 +193,8 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('行程圖都跟同一個造型，按日子主題揀', /每個日子用唔同造型嘅卡/.test(t3) && /行李吊牌/.test(t3));
     await p.locator('[data-cards="plain"]').click();
     await p.locator('#ex-prompt').click(); await p.waitForTimeout(400);
+    ok('角色每次著唔同衫、食行程入面唔同嘅嘢', /每次出現都要著唔同嘅衫/.test(t3) && /韓服/.test(t3) && /每次食唔同嘅：[^。]*(明洞餃子|韓牛)/.test(t3), (t3.match(/3\. .*/) || [''])[0]);
+    ok('行程圖：每日欄嘅角色食嗰日嘅嘢', /食嗰日行程入面嘅嘢/.test(t3));
     ok('簡單紙卡：統一造型', /統一造型/.test(await p.evaluate(() => navigator.clipboard.readText())));
     // remembered next time the sheet opens
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);

@@ -2435,7 +2435,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-28-4";
+  const BUILD = "2026-11-28-5";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12370,8 +12370,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("2. 最頂有一個大大嘅手繪標題（用下面嘅行程名），下面一粒小牌寫日期同目的地。");
     const who = plain(chars || "");
     L.push(who
-      ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同日子之間出現，用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。`
-      : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。");
+      ? "3. " + posterCharsLine(snap, who, "日子", "輕鬆嘅說話，例如「出發啦！」「食好嘢！」") + "每日欄附近嘅角色，就食嗰日行程入面嘅嘢、著啱嗰日去嘅地方嘅衫。"
+      : "3. " + posterCharsLine(snap, "", "日子", "輕鬆嘅說話，例如「出發啦！」「食好嘢！」") + "每日欄附近嘅角色，就食嗰日行程入面嘅嘢、著啱嗰日去嘅地方嘅衫。");
     L.push("4. 一日一直欄，由左至右排，每欄頂有圓形「Day N」標記、日期同星期、當日主題。");
     L.push(`4b. ${posterCardLine(snap, "日子")}`);
     L.push("5. 每個地點左邊畫一個細細嘅彩色插圖（食物就畫嗰款食物，景點畫建築或者風景，購物畫店舖或者袋，酒店畫屋仔，交通畫車或者飛機），右邊寫地點名，下面細字寫當地語言名。");
@@ -12487,6 +12487,34 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       "字要寫喺卡中間平滑嘅位置，淺色底，清楚易讀；造型只係外框，唔好遮住字。";
   }
 
+  // The characters dress for the trip and eat what the trip eats: a
+  // different outfit and a different food each time they appear.
+  function posterFoods(snap, day){
+    const out = [];
+    ((day ? [day] : snap.days) || []).forEach(d => (d.items || []).forEach(s => {
+      if (s.kind !== "stop" || !(s.isFood || s.type === "eat")) return;
+      const f = plain(s.cuisine || "") || cleanPlaceName(plain(s.title));
+      if (f && !out.includes(f)) out.push(f);
+    }));
+    return out;
+  }
+  function posterWear(snap){
+    const th = posterTheme(snap.meta || {}, snap);
+    const mon = Number(String((snap.meta || {}).dateStart || "").slice(5, 7));
+    const cold = /冬|雪|聖誕/.test(th.season) || mon === 12 || (mon && mon <= 2);
+    const warm = mon >= 6 && mon <= 8;
+    const base = cold ? "冬天外套、頸巾、冷帽、手套" : warm ? "短袖、草帽、太陽眼鏡" : "薄外套、針織衫、貝雷帽";
+    const local = destIsJapan() ? "、和服或者浴衣（寺廟、神社嗰日）" : destIsKorea() ? "、韓服（古宮嗰日）" : "";
+    return base + local;
+  }
+  function posterCharsLine(snap, who, where, talk){
+    const cast = who ? `圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格` : "自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬）";
+    const foods = posterFoods(snap);
+    return `${cast}，喺角落同${where}之間出現，用對話氣泡講幾句${talk}。` +
+      `每次出現都要著唔同嘅衫、配合季節同嗰度做緊嘅嘢：${posterWear(snap)}、拎住購物袋行街之類。` +
+      (foods.length ? `有幾次係食緊行程入面嘅嘢，每次食唔同嘅：${foods.slice(0, 8).join("、")}。` : "有幾次係食緊當地特色小食，每次食唔同嘅。");
+  }
+
   function exportPrepPrompt(snap, chars){
     const m = snap.meta || {};
     const L = [];
@@ -12508,8 +12536,8 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push(`1d. ${posterCardLine(snap, "區塊")}`);
     L.push("2. 最頂有一個大大嘅手繪標題「出發前必讀」，下面一粒小牌寫行程名、日期同目的地。");
     L.push(who
-      ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同區塊之間出現，用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
-      : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
+      ? "3. " + posterCharsLine(snap, who, "區塊", "提醒，例如「記得帶外套！」「護照帶咗未？」")
+      : "3. " + posterCharsLine(snap, "", "區塊", "提醒，例如「記得帶外套！」「護照帶咗未？」"));
     L.push(`4. 只有 ${parts.length} 個區塊，每個區塊一個手繪標題（照抄下面「##」後面嘅名）同一個細細嘅彩色插圖；唔好將唔同區塊嘅嘢撈埋一齊：`);
     parts.forEach(p => L.push(`   ・${p.name}：${p.how}`));
     L.push("5. 只可以用下面俾你嘅資料，唔好自己加建議、加數字，亦唔好自己作天氣；冇資料嘅區塊就唔好畫。");
