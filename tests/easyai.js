@@ -175,14 +175,17 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     ok('有「## 去到要做」', /## 去到要做\n・飲益力多\n・食布甸/.test(txt), txt.slice(-200));
     ok('唔會撈入出發前準備', !/## 出發前準備[^#]*飲益力多/.test(txt));
     ok('講明有 4 個區塊，去到要做獨立一格', /只有 4 個區塊/.test(txt) && /・去到要做：/.test(txt), txt.slice(0, 900));
+    ok('預設字少啲：叫 AI 縮短句、每段最多 6 項', /12 個字以內/.test(txt) && /最多 6 項/.test(txt));
     ok('預設：每格唔同造型，配合行程', /唔同造型嘅卡/.test(txt) && /韓屋木窗格/.test(txt));
     // untick 去到要做 and 點著衫, pick 旅行小物
     await p.locator('[data-prep-part="sec:u1"]').uncheck();
     await p.locator('[data-prep-part="clothing"]').uncheck();
     await p.locator('[data-cards="travel"]').click();
+    await p.locator('#ex-short').uncheck();
     await p.locator('#ex-prep').click(); await p.waitForTimeout(400);
     const t2 = await p.evaluate(() => navigator.clipboard.readText());
     ok('剔走嘅段落唔會畫', !/去到要做/.test(t2) && !/## 點著衫/.test(t2) && /只有 2 個區塊/.test(t2), t2.slice(0, 600));
+    ok('熄咗字少啲就唔縮', !/12 個字以內/.test(t2));
     ok('揀旅行小物：用行李吊牌、登機證', /行李吊牌、登機證/.test(t2) && !/韓屋木窗格/.test(t2));
     await p.locator('#ex-prompt').click(); await p.waitForTimeout(400);
     const t3 = await p.evaluate(() => navigator.clipboard.readText());

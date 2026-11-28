@@ -2435,7 +2435,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-28-3";
+  const BUILD = "2026-11-28-4";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12442,13 +12442,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     // the family's own sections under 行前準備 (e.g. 「去到要做」) are blocks
     // of their own, under their own names
     (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep").forEach((sec, k) => {
-      const lines = (sec.lines || []).map(x => plain(x)).filter(Boolean);
+      const lines = (sec.lines || []).map(x => plain(x).replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s・•\-*]+/u, "").trim()).filter(Boolean);
       const name = plain(sec.title) || plain(sec.topic) || "其他";
       if (lines.length) parts.push({ key: "sec:" + (sec.id || k), name, lines, how: "每項一行配一個小插圖。" });
     });
     return parts;
   }
   const PREP_PICK_KEY = () => "trip_poster_prep_off_" + (state.tripId || "");
+  // 字少啲: each line boiled down to a short phrase, a few per block — a
+  // poster is looked at, not read (on unless switched off)
+  const POSTER_SHORT_KEY = "trip_poster_short";
+  function posterShort(){ try { return localStorage.getItem(POSTER_SHORT_KEY) !== "0"; } catch (_){ return true; } }
   function prepPosterOff(){ try { const v = JSON.parse(localStorage.getItem(PREP_PICK_KEY()) || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (_){ return new Set(); } }
 
   // The content cards in a poster don't all have to be the same rounded
@@ -12491,6 +12495,9 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const who = plain(chars || "");
     const off = prepPosterOff();
     const parts = prepPosterParts(snap).filter(p => !off.has(p.key));
+    // the same line in two blocks (AI tips repeat the checklist) goes once
+    const seen = new Set();
+    parts.forEach(p => { if (p.key === "weather") return; p.lines = p.lines.filter(t => { const k = t.replace(/[\s。．.!！]/g, ""); if (seen.has(k)) return false; seen.add(k); return true; }); });
 
     L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」海報，似繪本或者旅遊雜誌嘅手繪海報咁，同我嘅行程海報係一套，一家大細睇到都會開心。");
     L.push("");
@@ -12506,6 +12513,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push(`4. 只有 ${parts.length} 個區塊，每個區塊一個手繪標題（照抄下面「##」後面嘅名）同一個細細嘅彩色插圖；唔好將唔同區塊嘅嘢撈埋一齊：`);
     parts.forEach(p => L.push(`   ・${p.name}：${p.how}`));
     L.push("5. 只可以用下面俾你嘅資料，唔好自己加建議、加數字，亦唔好自己作天氣；冇資料嘅區塊就唔好畫。");
+    if (posterShort()){
+      L.push("5b. 字要少：天氣以外，每項縮做一句 12 個字以內嘅重點短句，講要做咩就得（例如「外套要防風保暖」「穿舒服波鞋」「買定日本 eSIM」），唔好抄長句、唔好寫原因。只可以刪減，唔可以加新資料。");
+      L.push("5c. 每個區塊最多 6 項；多過 6 項就揀最重要嘅 6 項，意思重複嘅只畫一次（包括唔同區塊之間重複嘅）。插圖做主角，字做配角。");
+    }
     L.push("6. 字要清楚易讀，中文唔好錯字。直向（例如 3:4），手機放大睇得清。");
     L.push("");
     L.push("【資料】");
@@ -12668,6 +12679,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <p class="picker-label" style="margin-top:14px;">出發前必讀要畫邊幾段？（太多會好逼）</p>
         <div class="prepick" id="ex-prep-pick">${(() => { const off = prepPosterOff(); return prepPosterParts(snap).map(pt =>
           `<label class="updopt"><input type="checkbox" data-prep-part="${esc(pt.key)}"${off.has(pt.key) ? "" : " checked"}> ${esc(pt.name)} <small>${pt.lines.length} 項</small></label>`).join(""); })()}</div>
+        <label class="updopt"><input type="checkbox" id="ex-short"${posterShort() ? " checked" : ""}> <span><b>字少啲</b>：每項縮做一句短嘅重點，每段最多 6 項</span></label>
         <button class="btn wide primary" id="ex-prep" style="margin-top:8px;">${icon("sparkle")}出發前必讀（揀咗嘅段落）</button>
         <p class="exhint">同行程圖一套嘅插畫風海報，淨係畫上面剔咗嘅段落，每段一個區塊，用返段落個名；同樣唔准 AI 自己作。</p>
       </div>
@@ -12743,6 +12755,7 @@ ${stayBlock}${dayBlocks}${secBlocks}
         sheet.querySelectorAll("[data-cards]").forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
         paintCardsHint();
       }));
+      sheet.querySelector("#ex-short").addEventListener("change", e => { try { localStorage.setItem(POSTER_SHORT_KEY, e.target.checked ? "1" : "0"); } catch (_){} });
       sheet.querySelectorAll("[data-prep-part]").forEach(c => c.addEventListener("change", () => {
         const off = [...sheet.querySelectorAll("[data-prep-part]")].filter(x => !x.checked).map(x => x.dataset.prepPart);
         try { localStorage.setItem(PREP_PICK_KEY(), JSON.stringify(off)); } catch (_){}
