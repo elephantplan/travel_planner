@@ -1981,6 +1981,9 @@ button.sgplan-row{width:100%;text-align:left;font:inherit;color:inherit;border:0
 .exhint{font-size:12px;color:var(--ink-faint);line-height:1.65;margin:8px 2px 0;}
 
 .aibtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.prepick{display:flex;flex-direction:column;gap:2px;}
+.prepick small{color:var(--ink-faint);margin-left:4px;}
+.prepick input{accent-color:var(--gold);}
 /* 易睇模式: the trip itself and every sheet scale, so buttons grow with the
    text; the top bar and the dock are already finger-sized and stay put */
 html[data-text="big"] :is(#app,#layer){zoom:1.15;}
@@ -2432,7 +2435,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-28-2";
+  const BUILD = "2026-11-28-3";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12362,7 +12365,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push("");
     L.push("【風格】");
     L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${th.season ? `，${th.season}` : ""}。四周用當地地標同季節元素做花邊。`);
-    L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容格用淺色紙卡浮喺背景上面，字先睇得清。`);
+    L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容放喺淺色卡上面，浮喺背景上面，字先睇得清。`);
     L.push(`1c. 季節元素：${th.flowers}。唔好畫其他季節嘅花或者裝飾。`);
     L.push("2. 最頂有一個大大嘅手繪標題（用下面嘅行程名），下面一粒小牌寫日期同目的地。");
     const who = plain(chars || "");
@@ -12370,6 +12373,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
       ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同日子之間出現，用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。`
       : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句輕鬆嘅說話，例如「出發啦！」「食好嘢！」。");
     L.push("4. 一日一直欄，由左至右排，每欄頂有圓形「Day N」標記、日期同星期、當日主題。");
+    L.push(`4b. ${posterCardLine(snap, "日子")}`);
     L.push("5. 每個地點左邊畫一個細細嘅彩色插圖（食物就畫嗰款食物，景點畫建築或者風景，購物畫店舖或者袋，酒店畫屋仔，交通畫車或者飛機），右邊寫地點名，下面細字寫當地語言名。");
     L.push("6. 唔好寫時間，唔好寫交通。只有我標咗「已訂」嘅地點先寫時間，用紅色細字。");
     L.push("7. 唔好加介紹、評分、地址，亦唔好加後備地點；地名要一字不改咁抄，唔好自己加地點。");
@@ -12419,34 +12423,88 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // weather, what to wear, and the pre-trip checklist (plus any section the
   // family filed under 行前準備). Hotels, transport cards and access marks
   // are left out: they made the card a wall of text.
+  // The blocks the 出發前必讀 poster can have, each with its own lines. The
+  // family ticks which go in (remembered per trip on this phone), since a
+  // trip with lots of AI tips is far too much for one picture.
+  function prepPosterParts(snap){
+    const parts = [];
+    const rows = snap.weatherRows || [];
+    if (rows.length && !isSectionHidden(snap, "weather"))
+      parts.push({ key: "weather", name: "天氣", lines: rows.map(r => `${plain(r.date)}｜日高 ${plain(r.hi)}｜早晚最低 ${plain(r.lo)}｜${plain(r.note)}`),
+        how: "一日一格，每格畫一個天氣小圖（太陽、雲、雨），寫日期、日間最高、早晚最低。溫差要一眼睇得出。" });
+    const wear = (snap.clothing || []).map(c => plain(c.html)).filter(Boolean);
+    if (wear.length && !isSectionHidden(snap, "clothing"))
+      parts.push({ key: "clothing", name: "點著衫", lines: wear, how: "每點配一個小插圖（外套、頸巾、波鞋、雨遮之類），一點一行。" });
+    if (!isSectionHidden(snap, "checklist")){
+      const ck = (Array.isArray(snap.checklist) ? snap.checklist : defaultChecklist()).map(c => plain(c && (c.t || c))).filter(Boolean);
+      if (ck.length) parts.push({ key: "checklist", name: "出發前準備", lines: ck, how: "做成可以剔嘅清單，每項前面一個空白剔格同一個小插圖（護照、充電器、藥之類）。" });
+    }
+    // the family's own sections under 行前準備 (e.g. 「去到要做」) are blocks
+    // of their own, under their own names
+    (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep").forEach((sec, k) => {
+      const lines = (sec.lines || []).map(x => plain(x)).filter(Boolean);
+      const name = plain(sec.title) || plain(sec.topic) || "其他";
+      if (lines.length) parts.push({ key: "sec:" + (sec.id || k), name, lines, how: "每項一行配一個小插圖。" });
+    });
+    return parts;
+  }
+  const PREP_PICK_KEY = () => "trip_poster_prep_off_" + (state.tripId || "");
+  function prepPosterOff(){ try { const v = JSON.parse(localStorage.getItem(PREP_PICK_KEY()) || "[]"); return new Set(Array.isArray(v) ? v : []); } catch (_){ return new Set(); } }
+
+  // The content cards in a poster don't all have to be the same rounded
+  // rectangle: they can be things from the trip itself.
+  const CARD_STYLES = [
+    ["auto", "配合行程"],
+    ["local", "當地特色"],
+    ["travel", "旅行小物"],
+    ["plain", "簡單紙卡"],
+  ];
+  function posterCardKey(){ return "trip_poster_cards_" + (state.tripId || ""); }
+  function posterCardStyle(){ try { const v = localStorage.getItem(posterCardKey()); return CARD_STYLES.some(c => c[0] === v) ? v : "auto"; } catch (_){ return "auto"; } }
+  function localCardShapes(){
+    if (destIsJapan()) return "繪馬木牌、御守袋、JR 車飛、和風摺扇、便當盒、暖簾布、招財貓牌";
+    if (destIsKorea()) return "韓屋木窗格、T-money 卡、韓式拌飯碗、傳統韓服布塊、地鐵站牌";
+    if (/台灣|台北|臺北|台中|台南|高雄|taiwan|taipei/i.test(plain((state.snapshot.meta || {}).destinationLocal) + plain((state.snapshot.meta || {}).destination)))
+      return "捷運悠遊卡、手搖飲杯、廟宇籤詩、夜市招牌、平溪天燈";
+    return "當地地標剪影、當地車票、當地特色小食嘅外形";
+  }
+  // 「卡」 = each day's column on the itinerary poster, each block on the
+  // 出發前必讀 one
+  function posterCardLine(snap, what){
+    const st = posterCardStyle();
+    if (st === "plain") return `每個${what}用淺色圓角紙卡，統一造型，乾淨整齊。`;
+    const th = posterTheme(snap.meta || {}, snap);
+    const season = /紅葉|楓/.test(th.season) ? "楓葉形" : /銀杏/.test(th.season) ? "銀杏葉形" : /櫻/.test(th.season) ? "櫻花形" : /聖誕/.test(th.season) ? "聖誕禮物盒" : /雪/.test(th.season) ? "雪花形" : "";
+    const travel = "行李吊牌、登機證、明信片、郵票、摺開嘅地圖、車票";
+    const shapes = st === "local" ? localCardShapes() : st === "travel" ? travel
+      : [localCardShapes(), season ? season + "卡" : "", "行李吊牌、明信片、車票"].filter(Boolean).join("、");
+    return `每個${what}用唔同造型嘅卡，唔好個個一樣：例如${shapes}。` +
+      (what === "日子" ? "揀造型要配合嗰日嘅主題（例如購物日用購物袋、食嘢日用便當盒或者碗、寺廟日用繪馬或者御守）。" : "揀造型要配合嗰個區塊講緊嘅嘢（例如天氣用晴天娃娃或者雲朵、清單用車票或者行李吊牌）。") +
+      "字要寫喺卡中間平滑嘅位置，淺色底，清楚易讀；造型只係外框，唔好遮住字。";
+  }
+
   function exportPrepPrompt(snap, chars){
     const m = snap.meta || {};
     const L = [];
     const dest = plain(m.destinationLocal) || plain(m.destination) || "";
     const th = posterTheme(m, snap);
     const who = plain(chars || "");
+    const off = prepPosterOff();
+    const parts = prepPosterParts(snap).filter(p => !off.has(p.key));
 
     L.push("幫我畫一張可愛、色彩豐富嘅插畫風「出發前必讀」海報，似繪本或者旅遊雜誌嘅手繪海報咁，同我嘅行程海報係一套，一家大細睇到都會開心。");
     L.push("");
     L.push("【風格】");
     L.push(`1. 主題配合目的地同季節${dest ? `：${dest}` : ""}${th.season ? `，${th.season}` : ""}。四周用當地地標同季節元素做花邊。`);
-    L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容格用淺色紙卡浮喺背景上面，字先睇得清。`);
+    L.push(`1b. 成張圖要有滿版背景色，唔好白底：${th.bg}。內容放喺淺色卡上面，浮喺背景上面，字先睇得清。`);
     L.push(`1c. 季節元素：${th.flowers}。唔好畫其他季節嘅花或者裝飾。`);
+    L.push(`1d. ${posterCardLine(snap, "區塊")}`);
     L.push("2. 最頂有一個大大嘅手繪標題「出發前必讀」，下面一粒小牌寫行程名、日期同目的地。");
     L.push(who
       ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同區塊之間出現，用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
       : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
-    // the family's own sections under 行前準備 (e.g. 「去到要做」) are blocks
-    // of their own, under their own names — not poured into the checklist
-    const extra = (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep")
-      .map(sec => ({ name: plain(sec.title) || plain(sec.topic) || "其他", lines: (sec.lines || []).map(x => plain(x)).filter(Boolean) }))
-      .filter(b => b.lines.length);
-    const blocks = ["天氣", "點著衫", "出發前準備"].length + extra.length;
-    L.push(`4. 只有 ${blocks} 個區塊，每個區塊一個手繪標題（照抄下面「##」後面嘅名）同一個細細嘅彩色插圖：`);
-    L.push("   ・天氣：一日一格，每格畫一個天氣小圖（太陽、雲、雨），寫日期、日間最高、早晚最低。溫差要一眼睇得出。");
-    L.push("   ・點著衫：每點配一個小插圖（外套、頸巾、波鞋、雨遮之類），一點一行。");
-    L.push("   ・出發前準備：做成可以剔嘅清單，每項前面一個空白剔格同一個小插圖（護照、充電器、藥之類）。");
-    extra.forEach(b => L.push(`   ・${b.name}：獨立一個區塊，標題就係「${b.name}」，每項一行配一個小插圖；唔好將佢哋撈埋入其他區塊。`));
+    L.push(`4. 只有 ${parts.length} 個區塊，每個區塊一個手繪標題（照抄下面「##」後面嘅名）同一個細細嘅彩色插圖；唔好將唔同區塊嘅嘢撈埋一齊：`);
+    parts.forEach(p => L.push(`   ・${p.name}：${p.how}`));
     L.push("5. 只可以用下面俾你嘅資料，唔好自己加建議、加數字，亦唔好自己作天氣；冇資料嘅區塊就唔好畫。");
     L.push("6. 字要清楚易讀，中文唔好錯字。直向（例如 3:4），手機放大睇得清。");
     L.push("");
@@ -12455,30 +12513,10 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     if (m.dateStart && m.dateEnd) L.push(`日期：${m.dateStart} 至 ${m.dateEnd}`);
     if (dest) L.push(`目的地：${dest}`);
     L.push("");
-
-    const rows = snap.weatherRows || [];
-    if (rows.length && !isSectionHidden(snap, "weather")){
-      L.push("## 天氣（歷年同期平均）");
-      rows.forEach(r => L.push(`${plain(r.date)}｜日高 ${plain(r.hi)}｜早晚最低 ${plain(r.lo)}｜${plain(r.note)}`));
-      L.push("");
-    }
-    const wear = (snap.clothing || []).map(c => plain(c.html)).filter(Boolean);
-    if (wear.length && !isSectionHidden(snap, "clothing")){
-      L.push("## 點著衫");
-      wear.forEach(t => L.push("・" + t));
-      L.push("");
-    }
-    const prep = [];
-    if (!isSectionHidden(snap, "checklist"))
-      (Array.isArray(snap.checklist) ? snap.checklist : defaultChecklist()).forEach(c => { const t = plain(c && (c.t || c)); if (t) prep.push(t); });
-    if (prep.length){
-      L.push("## 出發前準備");
-      prep.forEach(t => L.push("・" + t));
-      L.push("");
-    }
-    extra.forEach(b => {
-      L.push("## " + b.name);
-      b.lines.forEach(t => L.push("・" + t));
+    parts.forEach(p => {
+      const wHead = (snap.weatherRows || []).some(r => r.live) ? "天氣（實時預報）" : "天氣（歷年同期平均）";
+      L.push("## " + (p.key === "weather" ? wHead : p.name));
+      p.lines.forEach(t => L.push(p.key === "weather" ? t : "・" + t));
       L.push("");
     });
     return L.join("\n");
@@ -12621,10 +12659,17 @@ ${stayBlock}${dayBlocks}${secBlocks}
         <div class="exgroup-label">畀 AI 畫圖</div>
         <label class="picker-label" for="ex-chars">圖入面想加咩卡通、公仔或者人物？兩張圖都會用（可以唔填）</label>
         <input class="input" id="ex-chars" maxlength="80" autocomplete="off" placeholder="例如：我哋一家四口、柴犬、小松鼠">
+        <p class="picker-label" style="margin-top:12px;">卡嘅造型（兩張圖都會用）</p>
+        <div class="prefchips" id="ex-cards" role="radiogroup" aria-label="卡嘅造型">${CARD_STYLES.map(([k, t]) =>
+          `<button type="button" class="pfchip${posterCardStyle() === k ? " on" : ""}" data-cards="${k}" role="radio" aria-checked="${posterCardStyle() === k}">${t}</button>`).join("")}</div>
+        <p class="exhint" id="ex-cards-hint"></p>
         <button class="btn wide primary" id="ex-prompt" style="margin-top:10px;">${icon("sparkle")}行程圖（逐日去邊度）</button>
         <p class="exhint">複製咗之後，開 ChatGPT／Claude／Gemini 貼上去，佢就會照住你個行程畫一張逐日睇嘅行程圖。指令會叫佢畫成可愛插畫風海報：一日一欄、每個地點配個小插圖、配合當地季節；淨係已訂位嘅地方先寫時間，唔准自己作地點。</p>
-        <button class="btn wide primary" id="ex-prep" style="margin-top:14px;">${icon("sparkle")}出發前必讀（天氣・著衫・準備）</button>
-        <p class="exhint">同行程圖一套嘅插畫風海報，淨係畫天氣、點著衫同出發前準備清單，會用埋上面填嘅角色；同樣唔准 AI 自己作。</p>
+        <p class="picker-label" style="margin-top:14px;">出發前必讀要畫邊幾段？（太多會好逼）</p>
+        <div class="prepick" id="ex-prep-pick">${(() => { const off = prepPosterOff(); return prepPosterParts(snap).map(pt =>
+          `<label class="updopt"><input type="checkbox" data-prep-part="${esc(pt.key)}"${off.has(pt.key) ? "" : " checked"}> ${esc(pt.name)} <small>${pt.lines.length} 項</small></label>`).join(""); })()}</div>
+        <button class="btn wide primary" id="ex-prep" style="margin-top:8px;">${icon("sparkle")}出發前必讀（揀咗嘅段落）</button>
+        <p class="exhint">同行程圖一套嘅插畫風海報，淨係畫上面剔咗嘅段落，每段一個區塊，用返段落個名；同樣唔准 AI 自己作。</p>
       </div>
 
       <div class="exgroup">
@@ -12684,6 +12729,25 @@ ${stayBlock}${dayBlocks}${secBlocks}
       const charsKey = "trip_poster_chars_" + (state.tripId || "");
       const charsIn = sheet.querySelector("#ex-chars");
       try { charsIn.value = localStorage.getItem(charsKey) || ""; } catch (_){}
+      const cardsHint = sheet.querySelector("#ex-cards-hint");
+      const paintCardsHint = () => {
+        const st = posterCardStyle();
+        cardsHint.textContent = st === "plain" ? "全部用同一款圓角紙卡。"
+          : st === "local" ? `用當地嘢做卡：${localCardShapes()}。`
+          : st === "travel" ? "用旅行小物做卡：行李吊牌、登機證、明信片、郵票、車票。"
+          : "每日／每段一款，AI 按嗰日主題同季節揀，例如購物日用購物袋、寺廟日用繪馬。";
+      };
+      paintCardsHint();
+      sheet.querySelectorAll("[data-cards]").forEach(b => b.addEventListener("click", () => {
+        try { localStorage.setItem(posterCardKey(), b.dataset.cards); } catch (_){}
+        sheet.querySelectorAll("[data-cards]").forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-checked", on); });
+        paintCardsHint();
+      }));
+      sheet.querySelectorAll("[data-prep-part]").forEach(c => c.addEventListener("change", () => {
+        const off = [...sheet.querySelectorAll("[data-prep-part]")].filter(x => !x.checked).map(x => x.dataset.prepPart);
+        try { localStorage.setItem(PREP_PICK_KEY(), JSON.stringify(off)); } catch (_){}
+        sheet.querySelector("#ex-prep").disabled = off.length === sheet.querySelectorAll("[data-prep-part]").length;
+      }));
       sheet.querySelector("#ex-prompt").addEventListener("click", () => {
         try { localStorage.setItem(charsKey, charsIn.value.trim()); } catch (_){}
         copyInto("#ex-prompt", exportAiPrompt(snap, charsIn.value), "複製咗，貼落 AI 度");
