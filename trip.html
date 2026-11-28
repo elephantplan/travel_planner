@@ -2432,7 +2432,7 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
   // There is no build step here, so this is the one thing that has to be
   // changed by hand — and forgetting it means the family stops getting
   // updates, silently, which is exactly the failure this is here to end.
-  const BUILD = "2026-11-27-3";
+  const BUILD = "2026-11-28-1";
   const NEW_GOOGLE = true;
 
   const SUPABASE_URL = "https://aczykqleoamxdekfsgqh.supabase.co";
@@ -12434,10 +12434,17 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     L.push(who
       ? `3. 圖入面要有呢啲角色：${who}。畫成同海報一樣嘅可愛插畫風格，喺角落同區塊之間出現，用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。`
       : "3. 自己設計幾隻原創嘅可愛吉祥物（例如大耳仔小象、小松鼠、小豬），喺角落用對話氣泡講幾句提醒，例如「記得帶外套！」「護照帶咗未？」。");
-    L.push("4. 只有三個區塊，每個區塊一個手繪標題同一個細細嘅彩色插圖：");
+    // the family's own sections under 行前準備 (e.g. 「去到要做」) are blocks
+    // of their own, under their own names — not poured into the checklist
+    const extra = (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep")
+      .map(sec => ({ name: plain(sec.title) || plain(sec.topic) || "其他", lines: (sec.lines || []).map(x => plain(x)).filter(Boolean) }))
+      .filter(b => b.lines.length);
+    const blocks = ["天氣", "點著衫", "出發前準備"].length + extra.length;
+    L.push(`4. 只有 ${blocks} 個區塊，每個區塊一個手繪標題（照抄下面「##」後面嘅名）同一個細細嘅彩色插圖：`);
     L.push("   ・天氣：一日一格，每格畫一個天氣小圖（太陽、雲、雨），寫日期、日間最高、早晚最低。溫差要一眼睇得出。");
     L.push("   ・點著衫：每點配一個小插圖（外套、頸巾、波鞋、雨遮之類），一點一行。");
     L.push("   ・出發前準備：做成可以剔嘅清單，每項前面一個空白剔格同一個小插圖（護照、充電器、藥之類）。");
+    extra.forEach(b => L.push(`   ・${b.name}：獨立一個區塊，標題就係「${b.name}」，每項一行配一個小插圖；唔好將佢哋撈埋入其他區塊。`));
     L.push("5. 只可以用下面俾你嘅資料，唔好自己加建議、加數字，亦唔好自己作天氣；冇資料嘅區塊就唔好畫。");
     L.push("6. 字要清楚易讀，中文唔好錯字。直向（例如 3:4），手機放大睇得清。");
     L.push("");
@@ -12462,13 +12469,16 @@ footer .fbrand{font-weight:600;font-size:13px;color:var(--ink-soft);margin-botto
     const prep = [];
     if (!isSectionHidden(snap, "checklist"))
       (Array.isArray(snap.checklist) ? snap.checklist : defaultChecklist()).forEach(c => { const t = plain(c && (c.t || c)); if (t) prep.push(t); });
-    (snap.sections || []).filter(sec => sectionWhere(snap, sec) === "prep")
-      .forEach(sec => (sec.lines || []).forEach(x => { const t = plain(x); if (t) prep.push(t); }));
     if (prep.length){
       L.push("## 出發前準備");
       prep.forEach(t => L.push("・" + t));
       L.push("");
     }
+    extra.forEach(b => {
+      L.push("## " + b.name);
+      b.lines.forEach(t => L.push("・" + t));
+      L.push("");
+    });
     return L.join("\n");
   }
 

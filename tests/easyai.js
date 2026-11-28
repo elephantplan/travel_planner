@@ -163,6 +163,22 @@ const ok = (n, c, x) => { if (c){ pass++; console.log('  ok   ' + n); }
     await ctx.close();
   }
 
+  console.log('\nE. 出發前必讀海報：自己加嘅段落有自己個名');
+  {
+    const ctx = await b.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    const { p, errs } = await boot(c => {
+      c.sections = [{ id: 'u1', icon: '', title: '去到要做', sub: '', lines: ['飲益力多', '食布甸'], links: [], source: 'manual', topic: '', aiRefresh: false, where: 'prep' }];
+    }, { ctx });
+    await p.locator('#btn-export').click(); await p.waitForTimeout(400);
+    await p.locator('#ex-prep').click(); await p.waitForTimeout(400);
+    const txt = await p.evaluate(() => navigator.clipboard.readText());
+    ok('有「## 去到要做」', /## 去到要做\n・飲益力多\n・食布甸/.test(txt), txt.slice(-200));
+    ok('唔會撈入出發前準備', !/## 出發前準備[^#]*飲益力多/.test(txt));
+    ok('講明有 4 個區塊，去到要做獨立一格', /只有 4 個區塊/.test(txt) && /・去到要做：獨立一個區塊/.test(txt));
+    ok('冇 JS 錯誤', !errs.length, errs);
+    await ctx.close();
+  }
+
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
